@@ -19,19 +19,21 @@ jobs:
             -archivePath build/iPhone.xcarchive \
             -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
       - name: Package iPhone IPA
         run: |
-          mkdir -p build/iPhone_IPA/Payload
-          cp -R build/iPhone.xcarchive/Products/Applications/*.app build/iPhone_IPA/Payload/
-          cd build/iPhone_IPA && zip -r Twinskaraoke-iPhone.ipa Payload
+          mkdir -p Payload
+          cp -R build/iPhone.xcarchive/Products/Applications/*.app Payload/
+          zip -v -r Twinskaraoke-iPhone.ipa Payload
+          mkdir -p output && mv Twinskaraoke-iPhone.ipa output/
 
       - name: Upload iPhone IPA
         uses: actions/upload-artifact@v4
         with:
           name: Twinskaraoke-iPhone
-          path: build/iPhone_IPA/Twinskaraoke-iPhone.ipa
+          path: output/Twinskaraoke-iPhone.ipa
 
       - name: Archive Watch
         run: |
@@ -41,16 +43,20 @@ jobs:
             -archivePath build/Watch.xcarchive \
             -destination "generic/platform=watchOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
       - name: Package Watch IPA
         run: |
-          mkdir -p build/Watch_IPA/Payload
-          cp -R build/Watch.xcarchive/Products/Applications/*.app build/Watch_IPA/Payload/
-          cd build/Watch_IPA && zip -r Twinskaraoke-Watch.ipa Payload
+          mkdir -p Payload_Watch
+          cp -R build/Watch.xcarchive/Products/Applications/*.app Payload_Watch/
+          # Rename folder to Payload specifically for the zip
+          mv Payload_Watch Payload
+          zip -v -r Twinskaraoke-Watch.ipa Payload
+          mkdir -p output_watch && mv Twinskaraoke-Watch.ipa output_watch/
 
       - name: Upload Watch IPA
         uses: actions/upload-artifact@v4
         with:
           name: Twinskaraoke-Watch
-          path: build/Watch_IPA/Twinskaraoke-Watch.ipa
+          path: output_watch/Twinskaraoke-Watch.ipa
