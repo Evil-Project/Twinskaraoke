@@ -18,11 +18,13 @@ jobs:
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>ad-hoc</string>
+            <string>release-testing</string>
             <key>signingStyle</key>
             <string>manual</string>
             <key>compileBitcode</key>
             <false/>
+            <key>thinning</key>
+            <string>&lt;none&gt;</string>
           </dict>
           </plist>' > ExportOptions.plist
 
@@ -34,7 +36,9 @@ jobs:
             -archivePath build/iPhone.xcarchive \
             -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Export iPhone IPA
         run: |
@@ -42,7 +46,9 @@ jobs:
             -archivePath build/iPhone.xcarchive \
             -exportPath build/iPhone_IPA \
             -exportOptionsPlist ExportOptions.plist \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Upload iPhone IPA
         uses: actions/upload-artifact@v4
@@ -58,7 +64,9 @@ jobs:
             -archivePath build/Watch.xcarchive \
             -destination "generic/platform=watchOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Export Watch IPA
         run: |
@@ -66,7 +74,9 @@ jobs:
             -archivePath build/Watch.xcarchive \
             -exportPath build/Watch_IPA \
             -exportOptionsPlist ExportOptions.plist \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Upload Watch IPA
         uses: actions/upload-artifact@v4
