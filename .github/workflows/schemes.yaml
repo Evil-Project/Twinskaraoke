@@ -1,0 +1,18 @@
+name: List Schemes and Targets
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list-info:
+    name: Run xcodebuild -list
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: List Xcode Project Information
+        run: |
+          echo "Listing information for Twinskaraoke.xcodeproj..."
+          xcodebuild -list -project Twinskaraoke.xcodeproj
