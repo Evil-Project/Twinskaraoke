@@ -1,0 +1,42 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Archive iPhone
+        run: |
+          xcodebuild archive \
+            -project Twinskaraoke.xcodeproj \
+            -scheme "Twinskaraoke" \
+            -archivePath build/iPhone.xcarchive \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload iPhone Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: Twinskaraoke-iPhone
+          path: build/iPhone.xcarchive
+
+      - name: Archive Watch
+        run: |
+          xcodebuild archive \
+            -project Twinskaraoke.xcodeproj \
+            -scheme "Twinskaraoke Watch App" \
+            -archivePath build/Watch.xcarchive \
+            -destination "generic/platform=watchOS" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload Watch Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: Twinskaraoke-Watch
+          path: build/Watch.xcarchive
