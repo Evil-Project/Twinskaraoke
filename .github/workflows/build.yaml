@@ -11,6 +11,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create ExportOptions
+        run: |
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>' > ExportOptions.plist
+
       - name: Archive iPhone
         run: |
           xcodebuild archive \
@@ -19,14 +34,21 @@ jobs:
             -archivePath build/iPhone.xcarchive \
             -destination "generic/platform=iOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Upload iPhone Binary
+      - name: Export iPhone IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/iPhone.xcarchive \
+            -exportPath build/iPhone_IPA \
+            -exportOptionsPlist ExportOptions.plist \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload iPhone IPA
         uses: actions/upload-artifact@v4
         with:
           name: Twinskaraoke-iPhone
-          path: build/iPhone.xcarchive
+          path: build/iPhone_IPA/*.ipa
 
       - name: Archive Watch
         run: |
@@ -36,11 +58,18 @@ jobs:
             -archivePath build/Watch.xcarchive \
             -destination "generic/platform=watchOS" \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Upload Watch Binary
+      - name: Export Watch IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/Watch.xcarchive \
+            -exportPath build/Watch_IPA \
+            -exportOptionsPlist ExportOptions.plist \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload Watch IPA
         uses: actions/upload-artifact@v4
         with:
           name: Twinskaraoke-Watch
-          path: build/Watch.xcarchive
+          path: build/Watch_IPA/*.ipa
