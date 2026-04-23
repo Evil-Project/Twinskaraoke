@@ -1,3 +1,4 @@
+// ContentView.swift
 import SwiftUI
 
 struct ContentView: View {
@@ -5,17 +6,23 @@ struct ContentView: View {
         TabView {
             NavigationStack {
                 VStack {
-                    Image(systemName: "music.note.list")
+                    Image(systemName: "house.fill")
                         .font(.system(size: 50))
-                        .foregroundColor(.gray)
-                    Text("Playlists coming soon")
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.pink.opacity(0.8))
+                    Text("Welcome Home")
+                        .font(.headline)
+                        .padding(.top)
                 }
-                .navigationTitle("Playlists")
+                .navigationTitle("Home")
             }
             .tabItem {
-                Label("Playlists", systemImage: "music.note.list")
+                Label("Home", systemImage: "house")
             }
+            
+            iPhonePlaylistsView()
+                .tabItem {
+                    Label("Playlists", systemImage: "music.note.list")
+                }
             
             iPhoneSearchView()
                 .tabItem {

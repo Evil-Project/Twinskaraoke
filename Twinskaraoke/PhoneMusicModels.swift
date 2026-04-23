@@ -1,28 +1,20 @@
+// PhoneMusicModels.swift
 import Foundation
 import Combine
 
+// Search Models
 struct PhoneSong: Codable, Identifiable, Equatable {
     let id: String
     let title: String
     let duration: Int
     let absolutePath: String?
-    let coverArt: PhoneMedia?
+    let coverArt: Media?
     let originalArtists: [String]?
     let coverArtists: [String]?
-
-    struct PhoneMedia: Codable {
-        let absolutePath: String
-    }
 
     var imageURL: URL? {
         guard let path = coverArt?.absolutePath else { return nil }
         return URL(string: "https://images.neurokaraoke.com" + path + "/quality=95")
-    }
-
-    var audioURL: URL? {
-        guard let path = absolutePath else { return nil }
-        let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
-        return URL(string: "https://storage.neurokaraoke.com/" + encodedPath)
     }
 
     var titleAndArtist: String {
@@ -43,6 +35,27 @@ struct PhoneSong: Codable, Identifiable, Equatable {
     }
 
     static func == (lhs: PhoneSong, rhs: PhoneSong) -> Bool { lhs.id == rhs.id }
+}
+
+struct PhoneSearchResponse: Codable {
+    let items: [PhoneSong]
+}
+
+// Playlist Models
+struct Playlist: Codable, Identifiable {
+    let id: String
+    let name: String
+    let songCount: Int
+    let mosaicMedia: [Media]?
+    
+    var imageURL: URL? {
+        guard let path = mosaicMedia?.first?.absolutePath else { return nil }
+        return URL(string: "https://images.neurokaraoke.com" + path + "/quality=95")
+    }
+}
+
+struct Media: Codable {
+    let absolutePath: String
 }
 
 class PhoneSearchViewModel: ObservableObject {
@@ -86,6 +99,27 @@ class PhoneSearchViewModel: ObservableObject {
     }
 }
 
-struct PhoneSearchResponse: Codable {
-    let items: [PhoneSong]
+class PhonePlaylistsViewModel: ObservableObject {
+    @Published var playlists: [Playlist] = []
+    @Published var isLoading = false
+    
+    func fetchPlaylists() {
+        let urlString = "https://api.neurokaraoke.com/api/playlists?startIndex=0&pageSize=25&search=&sortBy=&sortDescending=False&isSetlist=True&year=0"
+        guard let url = URL(string: urlString) else { return }
+        
+        isLoading = true
+        var request = URLRequest(url: url)
+        request.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                if let data = data {
+                    if let decoded = try? JSONDecoder().decode([Playlist].self, from: data) {
+                        self.playlists = decoded
+                    }
+                }
+            }
+        }.resume()
+    }
 }
