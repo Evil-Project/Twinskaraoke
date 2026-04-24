@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -109,6 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,6 +200,7 @@
 			);
 			name = Twinskaraoke;
 			packageProductDependencies = (
+				93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */,
 			);
 			productName = Twinskaraoke;
 			productReference = D0F981B52F94C10900FD69AB /* Twinskaraoke.app */;
@@ -360,6 +363,9 @@
 			);
 			mainGroup = D0F981AC2F94C10900FD69AB;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0F981B62F94C10900FD69AB /* Products */;
 			projectDirPath = "";
@@ -1001,6 +1007,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/SDWebImageSwiftUI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
+			productName = SDWebImageSwiftUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D0F981AD2F94C10900FD69AB /* Project object */;
 }
