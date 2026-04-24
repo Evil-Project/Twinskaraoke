@@ -2,6 +2,7 @@ import SwiftUI
 
 struct iPhoneSearchView: View {
     @StateObject var viewModel = PhoneSearchViewModel()
+    @EnvironmentObject var audioManager: AudioPlayerManager
     
     var body: some View {
         NavigationStack {
@@ -27,10 +28,16 @@ struct iPhoneSearchView: View {
                     }
                 }
                 .padding(.vertical, 4)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    audioManager.play(song: song)
+                }
             }
             .listStyle(.plain)
             .navigationTitle("Search")
             .searchable(text: $viewModel.searchText, prompt: "Search songs...")
+            .padding(.bottom, audioManager.currentSong != nil ? 60 : 0)
         }
     }
 }
+
