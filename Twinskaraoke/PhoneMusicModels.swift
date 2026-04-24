@@ -13,11 +13,6 @@ struct PhoneSong: Codable, Identifiable, Equatable {
     let originalArtists: [String]?
     let coverArtists: [String]?
 
-    var fullDisplayTitle: String {
-        let artists = originalArtists?.joined(separator: ", ") ?? ""
-        return artists.isEmpty ? title : "\(title) - \(artists)"
-    }
-    
     var imageURL: URL? {
         if let cfId = cloudflareId {
             return URL(string: "https://images.neurokaraoke.com/\(cfId)/public")
@@ -89,7 +84,7 @@ struct NowPlayingBar: View {
                         .cornerRadius(6)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        MarqueeText(text: song.fullDisplayTitle, font: .system(size: 20, weight: .bold), color: .white)
+                        Text(song.displayTitle)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -139,41 +134,38 @@ struct MarqueeText: View {
     let text: String
     let font: Font
     let color: Color
-    
     @State private var animate = false
     @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
 
     var body: some View {
-        Text(text)
-            .font(font)
-            .lineLimit(1)
-            .hidden()
-            .overlay(
-                GeometryReader { geo in
-                    let needsScroll = textWidth > geo.size.width
-                    
-                    if needsScroll {
-                        Text(text + "          " + text)
-                            .font(font)
-                            .foregroundColor(color)
-                            .fixedSize()
-                            .offset(x: animate ? -(textWidth + 80) : 0)
-                            .animation(
-                                .linear(duration: Double(textWidth) / 30)
-                                .delay(1.0)
-                                .repeatForever(autoreverses: false),
-                                value: animate
-                            )
-                            .onAppear { animate = true }
-                    } else {
-                        Text(text)
-                            .font(font)
-                            .foregroundColor(color)
-                            .fixedSize()
-                    }
+        GeometryReader { geo in
+            let needsScroll = textWidth > geo.size.width
+            ZStack(alignment: .leading) {
+                if needsScroll {
+                    Text(text + "          " + text)
+                        .font(font)
+                        .foregroundColor(color)
+                        .fixedSize()
+                        .offset(x: animate ? -(textWidth + 80) : 0)
+                        .animation(
+                            .linear(duration: Double(textWidth) / 35)
+                            .delay(1.0)
+                            .repeatForever(autoreverses: false),
+                            value: animate
+                        )
+                } else {
+                    Text(text)
+                        .font(font)
+                        .foregroundColor(color)
+                        .fixedSize()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            )
+            }
+            .clipped()
+            .onAppear {
+                containerWidth = geo.size.width
+                animate = needsScroll
+            }
             .background(
                 Text(text)
                     .font(font)
@@ -185,10 +177,12 @@ struct MarqueeText: View {
             )
             .onPreferenceChange(TextWidthKey.self) { w in
                 textWidth = w
+                animate = w > containerWidth
             }
-            .clipped()
+        }
     }
 }
+
 private struct TextWidthKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
@@ -197,165 +191,136 @@ private struct TextWidthKey: PreferenceKey {
 struct FullScreenPlayerView: View {
     @EnvironmentObject var audioManager: AudioPlayerManager
     @Environment(\.dismiss) var dismiss
-    private let pad: CGFloat = 36
 
     var body: some View {
         if let song = audioManager.currentSong {
-            let artSize = UIScreen.main.bounds.width - (pad * 2)
             ZStack {
                 LoadingImage(url: song.imageURL, cornerRadius: 0)
                     .ignoresSafeArea()
                     .blur(radius: 70)
                     .scaleEffect(1.4)
                     .opacity(0.45)
+
                 Color.black.opacity(0.6).ignoresSafeArea()
 
-                SafeAreaPaddedPlayer(
-                    song: song,
-                    artSize: artSize,
-                    pad: pad,
-                    audioManager: audioManager,
-                    dismiss: dismiss
-                )
-            }
-        }
-    }
-
-    private func formattedTime(_ seconds: Double) -> String {
-        let s = Int(seconds)
-        return String(format: "%d:%02d", s / 60, s % 60)
-    }
-}
-
-private struct SafeAreaPaddedPlayer: View {
-    let song: PhoneSong
-    let artSize: CGFloat
-    let pad: CGFloat
-    let audioManager: AudioPlayerManager
-    let dismiss: DismissAction
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(Circle())
-                }
-                Spacer()
-                Text("Now Playing")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                Spacer()
-                Button {} label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(Circle())
-                }
-            }
-            .padding(.horizontal, pad)
-            .padding(.top, 16)
-
-            Spacer()
-
-            LoadingImage(url: song.imageURL, cornerRadius: 20, contentMode: .fit)
-                .frame(width: artSize, height: artSize)
-                .cornerRadius(20)
-                .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 15)
-
-            Spacer()
-
-            VStack(spacing: 20) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        MarqueeText(text: song.fullDisplayTitle, font: .system(size: 20, weight: .bold), color: .white)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                        if !song.displayCoverArtist.isEmpty {
-                            Text(song.displayCoverArtist)
-                                .font(.system(size: 15))
-                                .foregroundColor(Color.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer()
-                    Button {} label: {
-                        Image(systemName: "heart")
-                            .font(.system(size: 22))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, pad)
-
-                VStack(spacing: 4) {
-                    Slider(
-                        value: Binding(
-                            get: { audioManager.progress },
-                            set: { audioManager.seek(to: $0) }
-                        )
-                    )
-                    .accentColor(.pink)
-                    .padding(.horizontal, pad)
-
+                VStack(spacing: 0) {
                     HStack {
-                        Text(formattedTime(audioManager.progress * Double(song.duration)))
-                        Spacer()
-                        Text(formattedTime(Double(song.duration)))
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color.white.opacity(0.45))
-                    .padding(.horizontal, pad + 4)
-                }
-
-                HStack(spacing: 0) {
-                    Button { audioManager.playPrevious() } label: {
-                        Image(systemName: "backward.end.fill")
-                            .font(.system(size: 26))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                    }
-                    Button { audioManager.togglePlayPause() } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color.pink)
-                                .frame(width: 70, height: 70)
-                            Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 26))
+                        Button { dismiss() } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.white)
-                                .offset(x: audioManager.isPlaying ? 0 : 2)
+                                .frame(width: 40, height: 40)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(Circle())
+                        }
+                        Spacer()
+                        Text("Now Playing")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button {} label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 40, height: 40)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(Circle())
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    Button { audioManager.playNextOrRandom() } label: {
-                        Image(systemName: "forward.end.fill")
-                            .font(.system(size: 26))
-                            .foregroundColor(.white)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 56)
+
+                    Spacer()
+
+                    let artSize = UIScreen.main.bounds.width - 80
+                    LoadingImage(url: song.imageURL, cornerRadius: 20, contentMode: .fit)
+                        .frame(width: artSize, height: artSize)
+                        .cornerRadius(20)
+                        .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 15)
+
+                    Spacer()
+
+                    VStack(spacing: 22) {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(song.displayTitle)
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                                if !song.displayCoverArtist.isEmpty {
+                                    Text(song.displayCoverArtist)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(Color.white.opacity(0.6))
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            Button {} label: {
+                                Image(systemName: "heart")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(.horizontal, 40)
+
+                        VStack(spacing: 6) {
+                            Slider(
+                                value: Binding(
+                                    get: { audioManager.progress },
+                                    set: { audioManager.seek(to: $0) }
+                                )
+                            )
+                            .accentColor(.pink)
+                            .padding(.horizontal, 40)
+
+                            HStack {
+                                Text(formattedTime(audioManager.progress * Double(song.duration)))
+                                Spacer()
+                                Text(formattedTime(Double(song.duration)))
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color.white.opacity(0.45))
+                            .padding(.horizontal, 44)
+                        }
+
+                        HStack {
+                            Button { audioManager.playPrevious() } label: {
+                                Image(systemName: "backward.end.fill")
+                                    .font(.system(size: 26))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            Button { audioManager.togglePlayPause() } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.pink)
+                                        .frame(width: 70, height: 70)
+                                    Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
+                                        .font(.system(size: 26))
+                                        .foregroundColor(.white)
+                                        .offset(x: audioManager.isPlaying ? 0 : 2)
+                                }
+                            }
                             .frame(maxWidth: .infinity)
+                            Button { audioManager.playNextOrRandom() } label: {
+                                Image(systemName: "forward.end.fill")
+                                    .font(.system(size: 26))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .padding(.horizontal, 40)
                     }
+                    .padding(.bottom, 52)
                 }
-                .padding(.horizontal, pad)
             }
-            .padding(.bottom, 48)
         }
-        .padding(.top, safeAreaTop())
     }
 
     private func formattedTime(_ seconds: Double) -> String {
         let s = Int(seconds)
         return String(format: "%d:%02d", s / 60, s % 60)
-    }
-
-    private func safeAreaTop() -> CGFloat {
-        let scenes = UIApplication.shared.connectedScenes
-        let windowScene = scenes.first as? UIWindowScene
-        return windowScene?.windows.first?.safeAreaInsets.top ?? 44
     }
 }
 
