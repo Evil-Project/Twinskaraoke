@@ -13,6 +13,11 @@ struct PhoneSong: Codable, Identifiable, Equatable {
     let originalArtists: [String]?
     let coverArtists: [String]?
 
+    var fullDisplayTitle: String {
+        let artists = originalArtists?.joined(separator: ", ") ?? ""
+        return artists.isEmpty ? title : "\(title) - \(artists)"
+    }
+    
     var imageURL: URL? {
         if let cfId = cloudflareId {
             return URL(string: "https://images.neurokaraoke.com/\(cfId)/public")
@@ -25,6 +30,16 @@ struct PhoneSong: Codable, Identifiable, Equatable {
         guard let path = absolutePath else { return nil }
         let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
         return URL(string: "https://storage.neurokaraoke.com/\(cleanPath)")
+    }
+
+    var displayTitle: String {
+        let artists = originalArtists?.joined(separator: ", ") ?? ""
+        let full = artists.isEmpty ? title : "\(title) - \(artists)"
+        return full.count > 20 ? String(full.prefix(20)) + "…" : full
+    }
+
+    var displayCoverArtist: String {
+        coverArtists?.joined(separator: ", ") ?? ""
     }
 
     static func == (lhs: PhoneSong, rhs: PhoneSong) -> Bool { lhs.id == rhs.id }
@@ -59,12 +74,10 @@ struct NowPlayingBar: View {
             VStack(spacing: 0) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.12))
-                            .frame(height: 2)
+                        Rectangle().fill(Color.white.opacity(0.1))
                         Rectangle()
                             .fill(Color.pink)
-                            .frame(width: geo.size.width * CGFloat(audioManager.progress), height: 2)
+                            .frame(width: geo.size.width * CGFloat(audioManager.progress))
                     }
                 }
                 .frame(height: 2)
@@ -76,207 +89,134 @@ struct NowPlayingBar: View {
                         .cornerRadius(6)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(song.title)
+                        MarqueeText(text: song.fullDisplayTitle, font: .system(size: 20, weight: .bold), color: .white)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                        Text(song.originalArtists?.joined(separator: ", ") ?? "Unknown")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color.white.opacity(0.6))
-                            .lineLimit(1)
+                        if !song.displayCoverArtist.isEmpty {
+                            Text(song.displayCoverArtist)
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
                     }
 
                     Spacer()
 
-                    HStack(spacing: 20) {
-                        Button {
-                            audioManager.playPrevious()
-                        } label: {
+                    HStack(spacing: 18) {
+                        Button { audioManager.playPrevious() } label: {
                             Image(systemName: "backward.end.fill")
-                                .font(.system(size: 16))
+                                .font(.system(size: 15))
                                 .foregroundColor(.white)
                         }
-
-                        Button {
-                            audioManager.togglePlayPause()
-                        } label: {
+                        Button { audioManager.togglePlayPause() } label: {
                             Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
-                                .frame(width: 24)
+                                .frame(width: 22)
                         }
-
-                        Button {
-                            audioManager.playNextOrRandom()
-                        } label: {
+                        Button { audioManager.playNextOrRandom() } label: {
                             Image(systemName: "forward.end.fill")
-                                .font(.system(size: 16))
+                                .font(.system(size: 15))
                                 .foregroundColor(.white)
                         }
                     }
+                    .padding(.trailing, 4)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(
-                    ZStack {
-                        Color(white: 0.1)
-                        Color.pink.opacity(0.08)
-                    }
-                )
-                .cornerRadius(14)
-                .padding(.horizontal, 8)
-                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: -2)
+                .background(Color(white: 0.1))
             }
             .onTapGesture { audioManager.showFullScreen = true }
             .fullScreenCover(isPresented: $audioManager.showFullScreen) {
-                FullScreenPlayerView()
-                    .environmentObject(audioManager)
+                FullScreenPlayerView().environmentObject(audioManager)
             }
         }
     }
 }
 
+struct MarqueeText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    
+    @State private var animate = false
+    @State private var textWidth: CGFloat = 0
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .lineLimit(1)
+            .hidden()
+            .overlay(
+                GeometryReader { geo in
+                    let needsScroll = textWidth > geo.size.width
+                    
+                    if needsScroll {
+                        Text(text + "          " + text)
+                            .font(font)
+                            .foregroundColor(color)
+                            .fixedSize()
+                            .offset(x: animate ? -(textWidth + 80) : 0)
+                            .animation(
+                                .linear(duration: Double(textWidth) / 30)
+                                .delay(1.0)
+                                .repeatForever(autoreverses: false),
+                                value: animate
+                            )
+                            .onAppear { animate = true }
+                    } else {
+                        Text(text)
+                            .font(font)
+                            .foregroundColor(color)
+                            .fixedSize()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            )
+            .background(
+                Text(text)
+                    .font(font)
+                    .fixedSize()
+                    .hidden()
+                    .background(GeometryReader { t in
+                        Color.clear.preference(key: TextWidthKey.self, value: t.size.width)
+                    })
+            )
+            .onPreferenceChange(TextWidthKey.self) { w in
+                textWidth = w
+            }
+            .clipped()
+    }
+}
+private struct TextWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct FullScreenPlayerView: View {
     @EnvironmentObject var audioManager: AudioPlayerManager
     @Environment(\.dismiss) var dismiss
+    private let pad: CGFloat = 36
 
     var body: some View {
         if let song = audioManager.currentSong {
+            let artSize = UIScreen.main.bounds.width - (pad * 2)
             ZStack {
                 LoadingImage(url: song.imageURL, cornerRadius: 0)
                     .ignoresSafeArea()
-                    .blur(radius: 60)
-                    .scaleEffect(1.3)
-                    .opacity(0.5)
+                    .blur(radius: 70)
+                    .scaleEffect(1.4)
+                    .opacity(0.45)
+                Color.black.opacity(0.6).ignoresSafeArea()
 
-                Color.black.opacity(0.55).ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    HStack {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(Color.white.opacity(0.12))
-                                .clipShape(Circle())
-                        }
-
-                        Spacer()
-
-                        Text("Now Playing")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-
-                        Spacer()
-
-                        Button {
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(10)
-                                .background(Color.white.opacity(0.12))
-                                .clipShape(Circle())
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-
-                    Spacer()
-
-                    LoadingImage(url: song.imageURL, cornerRadius: 16)
-                        .frame(width: 300, height: 300)
-                        .clipped()
-                        .cornerRadius(16)
-                        .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 15)
-                        .padding(.bottom, 36)
-
-                    VStack(spacing: 20) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(song.title)
-                                    .font(.title2.bold())
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                Text(song.originalArtists?.joined(separator: ", ") ?? "Unknown")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(Color.white.opacity(0.65))
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Button {
-                            } label: {
-                                Image(systemName: "heart")
-                                    .font(.title2)
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .padding(.horizontal, 28)
-
-                        VStack(spacing: 6) {
-                            Slider(
-                                value: Binding(
-                                    get: { audioManager.progress },
-                                    set: { audioManager.seek(to: $0) }
-                                )
-                            )
-                            .accentColor(.pink)
-                            .padding(.horizontal, 28)
-
-                            HStack {
-                                Text(formattedTime(audioManager.progress * Double(song.duration)))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color.white.opacity(0.5))
-                                Spacer()
-                                Text(formattedTime(Double(song.duration)))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color.white.opacity(0.5))
-                            }
-                            .padding(.horizontal, 30)
-                        }
-
-                        HStack(spacing: 0) {
-                            Button {
-                                audioManager.playPrevious()
-                            } label: {
-                                Image(systemName: "backward.end.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                            }
-
-                            Button {
-                                audioManager.togglePlayPause()
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.pink)
-                                        .frame(width: 72, height: 72)
-                                    Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(.white)
-                                        .offset(x: audioManager.isPlaying ? 0 : 2)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            Button {
-                                audioManager.playNextOrRandom()
-                            } label: {
-                                Image(systemName: "forward.end.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-
-                    Spacer()
-                }
+                SafeAreaPaddedPlayer(
+                    song: song,
+                    artSize: artSize,
+                    pad: pad,
+                    audioManager: audioManager,
+                    dismiss: dismiss
+                )
             }
         }
     }
@@ -284,6 +224,138 @@ struct FullScreenPlayerView: View {
     private func formattedTime(_ seconds: Double) -> String {
         let s = Int(seconds)
         return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+private struct SafeAreaPaddedPlayer: View {
+    let song: PhoneSong
+    let artSize: CGFloat
+    let pad: CGFloat
+    let audioManager: AudioPlayerManager
+    let dismiss: DismissAction
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.white.opacity(0.12))
+                        .clipShape(Circle())
+                }
+                Spacer()
+                Text("Now Playing")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button {} label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.white.opacity(0.12))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.horizontal, pad)
+            .padding(.top, 16)
+
+            Spacer()
+
+            LoadingImage(url: song.imageURL, cornerRadius: 20, contentMode: .fit)
+                .frame(width: artSize, height: artSize)
+                .cornerRadius(20)
+                .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 15)
+
+            Spacer()
+
+            VStack(spacing: 20) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        MarqueeText(text: song.fullDisplayTitle, font: .system(size: 20, weight: .bold), color: .white)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if !song.displayCoverArtist.isEmpty {
+                            Text(song.displayCoverArtist)
+                                .font(.system(size: 15))
+                                .foregroundColor(Color.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    Button {} label: {
+                        Image(systemName: "heart")
+                            .font(.system(size: 22))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, pad)
+
+                VStack(spacing: 4) {
+                    Slider(
+                        value: Binding(
+                            get: { audioManager.progress },
+                            set: { audioManager.seek(to: $0) }
+                        )
+                    )
+                    .accentColor(.pink)
+                    .padding(.horizontal, pad)
+
+                    HStack {
+                        Text(formattedTime(audioManager.progress * Double(song.duration)))
+                        Spacer()
+                        Text(formattedTime(Double(song.duration)))
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.white.opacity(0.45))
+                    .padding(.horizontal, pad + 4)
+                }
+
+                HStack(spacing: 0) {
+                    Button { audioManager.playPrevious() } label: {
+                        Image(systemName: "backward.end.fill")
+                            .font(.system(size: 26))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                    }
+                    Button { audioManager.togglePlayPause() } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.pink)
+                                .frame(width: 70, height: 70)
+                            Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 26))
+                                .foregroundColor(.white)
+                                .offset(x: audioManager.isPlaying ? 0 : 2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    Button { audioManager.playNextOrRandom() } label: {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 26))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, pad)
+            }
+            .padding(.bottom, 48)
+        }
+        .padding(.top, safeAreaTop())
+    }
+
+    private func formattedTime(_ seconds: Double) -> String {
+        let s = Int(seconds)
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    private func safeAreaTop() -> CGFloat {
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = scenes.first as? UIWindowScene
+        return windowScene?.windows.first?.safeAreaInsets.top ?? 44
     }
 }
 

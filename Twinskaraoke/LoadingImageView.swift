@@ -4,23 +4,24 @@ import SDWebImageSwiftUI
 struct LoadingImage: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
+    var contentMode: ContentMode = .fill
 
     var body: some View {
         WebImage(url: url) { image in
             image
                 .resizable()
-                .scaledToFill()
+                .aspectRatio(contentMode: contentMode)
         } placeholder: {
             ZStack {
                 Color(white: 0.12)
-                AnimatedImage(name: "vedalCoding.gif")
+                AnimatedImage(name: "loading_first-time.webp")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 48, height: 48)
             }
         }
         .resizable()
-        .scaledToFill()
+        .aspectRatio(contentMode: contentMode)
         .cornerRadius(cornerRadius)
         .clipped()
     }
