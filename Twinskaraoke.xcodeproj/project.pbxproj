@@ -88,19 +88,19 @@
 			path = TwinskaraokeUITests;
 			sourceTree = "<group>";
 		};
-		D0F981DC2F94C10A00FD69AB /* Twinskaraoke Watch App */ = {
+		D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Twinskaraoke Watch App";
+			path = TwinskaraokeWatchApp;
 			sourceTree = "<group>";
 		};
-		D0F981EA2F94C10B00FD69AB /* Twinskaraoke Watch AppTests */ = {
+		D0F981EA2F94C10B00FD69AB /* TwinskaraokeWatchAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Twinskaraoke Watch AppTests";
+			path = TwinskaraokeWatchAppTests;
 			sourceTree = "<group>";
 		};
-		D0F981F42F94C10B00FD69AB /* Twinskaraoke Watch AppUITests */ = {
+		D0F981F42F94C10B00FD69AB /* TwinskaraokeWatchAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Twinskaraoke Watch AppUITests";
+			path = TwinskaraokeWatchAppUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -158,9 +158,9 @@
 				D0F981B72F94C10900FD69AB /* Twinskaraoke */,
 				D0F981C52F94C10A00FD69AB /* TwinskaraokeTests */,
 				D0F981CF2F94C10A00FD69AB /* TwinskaraokeUITests */,
-				D0F981DC2F94C10A00FD69AB /* Twinskaraoke Watch App */,
-				D0F981EA2F94C10B00FD69AB /* Twinskaraoke Watch AppTests */,
-				D0F981F42F94C10B00FD69AB /* Twinskaraoke Watch AppUITests */,
+				D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */,
+				D0F981EA2F94C10B00FD69AB /* TwinskaraokeWatchAppTests */,
+				D0F981F42F94C10B00FD69AB /* TwinskaraokeWatchAppUITests */,
 				D0F981B62F94C10900FD69AB /* Products */,
 			);
 			sourceTree = "<group>";
@@ -265,7 +265,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D0F981DC2F94C10A00FD69AB /* Twinskaraoke Watch App */,
+				D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */,
 			);
 			name = "Twinskaraoke Watch App";
 			packageProductDependencies = (
@@ -288,7 +288,7 @@
 				D0F981E92F94C10B00FD69AB /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				D0F981EA2F94C10B00FD69AB /* Twinskaraoke Watch AppTests */,
+				D0F981EA2F94C10B00FD69AB /* TwinskaraokeWatchAppTests */,
 			);
 			name = "Twinskaraoke Watch AppTests";
 			packageProductDependencies = (
@@ -311,7 +311,7 @@
 				D0F981F32F94C10B00FD69AB /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				D0F981F42F94C10B00FD69AB /* Twinskaraoke Watch AppUITests */,
+				D0F981F42F94C10B00FD69AB /* TwinskaraokeWatchAppUITests */,
 			);
 			name = "Twinskaraoke Watch AppUITests";
 			packageProductDependencies = (

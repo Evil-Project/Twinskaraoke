@@ -4,7 +4,6 @@
 //
 //  Created by xiaoyuan on 2026/4/19.
 //
-
 import Combine
 import Foundation
 import SwiftUI
@@ -79,7 +78,7 @@ struct MusicGridView: View {
                   AsyncImage(url: playlist.imageURL) { image in
                     image.resizable().scaledToFill()
                   } placeholder: {
-                    Color.gray.opacity(0.2)
+                    Color.secondary.opacity(0.15)
                   }
                   .frame(width: 60, height: 60)
                   .cornerRadius(8)

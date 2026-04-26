@@ -39,7 +39,7 @@ jobs:
         run: |
           xcodebuild archive \
             -project Twinskaraoke.xcodeproj \
-            -scheme "Twinskaraoke Watch App" \
+            -scheme "TwinskaraokeWatchApp" \
             -archivePath build/Watch.xcarchive \
             -destination "generic/platform=watchOS" \
             CODE_SIGNING_ALLOWED=NO \

@@ -4,7 +4,6 @@
 //
 //  Created by xiaoyuan on 2026/4/19.
 //
-
 import AVFoundation
 import Combine
 import SwiftUI
@@ -12,7 +11,6 @@ import SwiftUI
 enum PlaybackMode {
   case listLoop
   case singleLoop
-
   var iconName: String {
     switch self {
     case .listLoop: return "repeat"
@@ -125,7 +123,6 @@ class MusicPlayerViewModel: ObservableObject {
     }
     prepareAndPlay()
   }
-
   func playEnded() {
     if playbackMode == .singleLoop {
       player?.seek(to: .zero)
@@ -134,7 +131,6 @@ class MusicPlayerViewModel: ObservableObject {
       playNext()
     }
   }
-
   func toggleMode() {
     switch playbackMode {
     case .listLoop: playbackMode = .singleLoop
@@ -172,100 +168,101 @@ struct MusicPlayerView: View {
       wrappedValue: MusicPlayerViewModel(songs: songs, initialIndex: initialIndex))
   }
   var body: some View {
-    VStack(alignment: .center, spacing: 8) {
-      ZStack {
-        AsyncImage(url: viewModel.currentSong.imageURL) { image in
+    ZStack {
+      if let url = viewModel.currentSong.imageURL {
+        AsyncImage(url: url) { image in
           image.resizable()
             .scaledToFill()
         } placeholder: {
-          RoundedRectangle(cornerRadius: 6)
-            .fill(Color.gray.opacity(0.3))
+          Color.black
         }
-        .frame(width: 48, height: 48)
-        .cornerRadius(6)
-        .clipped()
-
-        if viewModel.isLoading {
-          Color.black.opacity(0.3).cornerRadius(6)
-          ProgressView()
-            .progressViewStyle(CircularProgressViewStyle(tint: .pink))
-            .scaleEffect(0.6)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .blur(radius: 20)
+        .opacity(0.4)
+        .ignoresSafeArea()
+      } else {
+        Color.black.ignoresSafeArea()
       }
-      .frame(width: 48, height: 48)
 
-      VStack(alignment: .center, spacing: 2) {
-        Text(viewModel.currentSong.title)
-          .font(.system(size: 14, weight: .bold))
-          .lineLimit(1)
-          .multilineTextAlignment(.center)
-        Text(viewModel.currentSong.artistName)
-          .font(.system(size: 11))
-          .foregroundColor(.secondary)
-          .lineLimit(1)
-          .multilineTextAlignment(.center)
-      }
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, 4)
-
-      VStack(spacing: 6) {
-        let totalDuration = max(viewModel.duration, 1)
-        ProgressView(value: min(viewModel.currentTime, totalDuration), total: totalDuration)
-          .progressViewStyle(LinearProgressViewStyle(tint: .pink))
-          .frame(height: 2)
-
-        HStack {
-          Text(formatTime(viewModel.currentTime))
-          Spacer()
-          Text(formatTime(viewModel.duration))
+      VStack(alignment: .center, spacing: 4) {
+        ZStack {
+          AsyncImage(url: viewModel.currentSong.imageURL) { image in
+            image.resizable()
+              .scaledToFill()
+          } placeholder: {
+            RoundedRectangle(cornerRadius: 6)
+              .fill(Color.secondary.opacity(0.25))
+          }
+          .frame(width: 56, height: 56)
+          .cornerRadius(6)
+          .clipped()
+          .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
+          if viewModel.isLoading {
+            Color.black.opacity(0.3).cornerRadius(6)
+            ProgressView()
+              .progressViewStyle(CircularProgressViewStyle(tint: .pink))
+              .scaleEffect(0.6)
+          }
         }
-        .font(.system(size: 10, design: .monospaced))
-        .foregroundColor(.secondary)
-      }
-      .padding(.vertical, 2)
+        .frame(width: 56, height: 56)
+        .padding(.top, 4)
 
-      HStack(spacing: 12) {
-        Button(action: { viewModel.toggleMode() }) {
-          Image(systemName: viewModel.playbackMode.iconName)
-            .font(.system(size: 16))
-            .foregroundColor(.secondary)
+        VStack(alignment: .center, spacing: 0) {
+          Text(viewModel.currentSong.title)
+            .font(.system(size: 15, weight: .bold))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .multilineTextAlignment(.center)
+          Text(viewModel.currentSong.artistName)
+            .font(.system(size: 12))
+            .foregroundColor(.white.opacity(0.7))
+            .lineLimit(1)
+            .multilineTextAlignment(.center)
         }
-        .buttonStyle(.plain)
-        .frame(width: 24)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
 
-        Button(action: { viewModel.playPrevious() }) {
-          Image(systemName: "backward.fill")
-            .font(.system(size: 20))
+        VStack(spacing: 2) {
+          let totalDuration = max(viewModel.duration, 1)
+          ProgressView(value: min(viewModel.currentTime, totalDuration), total: totalDuration)
+            .progressViewStyle(LinearProgressViewStyle(tint: .white.opacity(0.8)))
+            .frame(height: 2)
+          HStack {
+            Text(formatTime(viewModel.currentTime))
+            Spacer()
+            Text(formatTime(viewModel.duration))
+          }
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundColor(.white.opacity(0.6))
         }
-        .buttonStyle(.plain)
-        .disabled(viewModel.isLoading)
+        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
 
-        Button(action: { viewModel.togglePlayPause() }) {
-          Image(systemName: viewModel.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-            .font(.system(size: 36))
-            .foregroundColor(.pink)
+        HStack(spacing: 12) {
+          Button(action: { viewModel.playPrevious() }) {
+            Image(systemName: "backward.fill")
+              .font(.system(size: 22))
+              .foregroundColor(.white)
+          }
+          .buttonStyle(.plain)
+          .disabled(viewModel.isLoading)
+          Button(action: { viewModel.togglePlayPause() }) {
+            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+              .font(.system(size: 34))
+              .foregroundColor(.white)
+          }
+          .buttonStyle(.plain)
+          Button(action: { viewModel.playNext() }) {
+            Image(systemName: "forward.fill")
+              .font(.system(size: 22))
+              .foregroundColor(.white)
+          }
+          .buttonStyle(.plain)
+          .disabled(viewModel.isLoading)
         }
-        .buttonStyle(.plain)
-
-        Button(action: { viewModel.playNext() }) {
-          Image(systemName: "forward.fill")
-            .font(.system(size: 20))
-        }
-        .buttonStyle(.plain)
-        .disabled(viewModel.isLoading)
-
-        Button(action: { viewModel.toggleShuffle() }) {
-          Image(systemName: "shuffle")
-            .font(.system(size: 16))
-            .foregroundColor(viewModel.isShuffleOn ? .pink : .secondary)
-        }
-        .buttonStyle(.plain)
-        .frame(width: 24)
+        .padding(.bottom, 4)
       }
     }
-    .padding(.horizontal, 4)
-    .padding(.bottom, 32)
-    .edgesIgnoringSafeArea(.bottom)
     .navigationTitle("Now Playing")
     .navigationBarTitleDisplayMode(.inline)
   }

@@ -4,7 +4,6 @@
 //
 //  Created by xiaoyuan on 2026/4/19.
 //
-
 import AVFoundation
 import Combine
 import Foundation
@@ -45,7 +44,6 @@ struct Song: Codable, Identifiable, Equatable {
     let seconds = duration % 60
     return String(format: "%d:%02d", minutes, seconds)
   }
-
   static func == (lhs: Song, rhs: Song) -> Bool {
     lhs.id == rhs.id
   }
@@ -112,7 +110,7 @@ struct MusicListView: View {
               AsyncImage(url: song.imageURL) { image in
                 image.resizable().scaledToFill()
               } placeholder: {
-                Color.gray.opacity(0.2)
+                Color.secondary.opacity(0.15)
               }
               .frame(width: 40, height: 40)
               .cornerRadius(4)

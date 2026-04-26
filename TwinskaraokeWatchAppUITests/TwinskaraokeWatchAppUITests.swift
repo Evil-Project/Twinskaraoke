@@ -1,12 +1,12 @@
 //
-//  TwinskaraokeUITests.swift
-//  TwinskaraokeUITests
+//  TwinskaraokeWatchAppUITests.swift
+//  TwinskaraokeWatchAppUITests
 //
 //  Created by xiaoyuan on 2026/4/19.
 //
 import XCTest
 
-final class TwinskaraokeUITests: XCTestCase {
+final class Twinskaraoke_Watch_AppUITests: XCTestCase {
   override func setUpWithError() throws {
     continueAfterFailure = false
   }
