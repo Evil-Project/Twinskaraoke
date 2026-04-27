@@ -11,7 +11,7 @@ struct iPhoneSearchView: View {
   @EnvironmentObject var audioManager: AudioPlayerManager
   var body: some View {
     NavigationStack {
-      Group {
+      ZStack {
         if viewModel.isSearching {
           List {
             ForEach(0..<8, id: \.self) { _ in
@@ -21,6 +21,7 @@ struct iPhoneSearchView: View {
             }
           }
           .listStyle(.plain)
+          .transition(.opacity)
         } else if viewModel.results.isEmpty && !viewModel.searchText.isEmpty {
           VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
@@ -31,6 +32,7 @@ struct iPhoneSearchView: View {
               .multilineTextAlignment(.center)
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .transition(.opacity)
         } else if viewModel.results.isEmpty {
           VStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
@@ -40,16 +42,24 @@ struct iPhoneSearchView: View {
               .foregroundColor(.secondary)
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .transition(.opacity)
         } else {
           List(viewModel.results) { song in
-            SearchResultRow(song: song)
-              .onTapGesture { audioManager.play(song: song, context: viewModel.results) }
-              .listRowBackground(Color.clear)
-              .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            Button {
+              audioManager.play(song: song, context: viewModel.results)
+            } label: {
+              SearchResultRow(song: song)
+            }
+            .buttonStyle(PressableButtonStyle())
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
           }
           .listStyle(.plain)
+          .transition(.opacity)
         }
       }
+      .animation(.easeInOut(duration: 0.3), value: viewModel.isSearching)
+      .animation(.easeInOut(duration: 0.3), value: viewModel.results.isEmpty)
       .navigationTitle("Search")
       .searchable(text: $viewModel.searchText, prompt: "Songs, artists…")
     }

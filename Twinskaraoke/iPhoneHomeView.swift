@@ -12,21 +12,26 @@ struct iPhoneHomeView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
+        ZStack {
           if viewModel.isLoading {
             HomeSkeletonView()
+              .transition(.opacity)
           } else {
-            if let recent = viewModel.recentPlaylist {
-              RecentPlaylistSection(playlist: recent)
+            VStack(alignment: .leading, spacing: 28) {
+              if let recent = viewModel.recentPlaylist {
+                RecentPlaylistSection(playlist: recent)
+              }
+              if !viewModel.trending.isEmpty {
+                HomeSongSection(title: "Trending", songs: viewModel.trending)
+              }
+              if !viewModel.suggestions.isEmpty {
+                HomeSongSection(title: "Suggestions", songs: viewModel.suggestions)
+              }
             }
-            if !viewModel.trending.isEmpty {
-              HomeSongSection(title: "Trending", songs: viewModel.trending)
-            }
-            if !viewModel.suggestions.isEmpty {
-              HomeSongSection(title: "Suggestions", songs: viewModel.suggestions)
-            }
+            .transition(.opacity)
           }
         }
+        .animation(.easeInOut(duration: 0.35), value: viewModel.isLoading)
         .padding(.vertical)
         .padding(.bottom, 16)
       }
@@ -41,9 +46,15 @@ struct RecentPlaylistSection: View {
   @EnvironmentObject var audioManager: AudioPlayerManager
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text("Recent Playlist")
-        .font(.title2.bold())
-        .padding(.horizontal)
+      HStack(alignment: .firstTextBaseline) {
+        Text("Recent Playlist")
+          .font(.title2.bold())
+        Spacer()
+        Image(systemName: "chevron.right")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundColor(.pink)
+      }
+      .padding(.horizontal)
       NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
         VStack(spacing: 0) {
           HStack(spacing: 16) {
@@ -68,8 +79,12 @@ struct RecentPlaylistSection: View {
           if let songs = playlist.songListDTOs {
             ForEach(songs.prefix(10)) { song in
               Divider().padding(.leading, 76)
-              PlaylistRow(song: song)
-                .onTapGesture { audioManager.play(song: song, context: songs) }
+              Button {
+                audioManager.play(song: song, context: songs)
+              } label: {
+                PlaylistRow(song: song)
+              }
+              .buttonStyle(PressableButtonStyle())
             }
           }
         }
@@ -77,7 +92,7 @@ struct RecentPlaylistSection: View {
         .cornerRadius(16)
         .padding(.horizontal)
       }
-      .buttonStyle(.plain)
+      .buttonStyle(PressableButtonStyle())
     }
   }
 }
@@ -113,30 +128,68 @@ struct PlaylistDetailView: View {
   @EnvironmentObject var audioManager: AudioPlayerManager
   var body: some View {
     ScrollView {
-      VStack(spacing: 20) {
-        LoadingImage(url: playlist.imageURL, cornerRadius: 12)
+      VStack(spacing: 18) {
+        LoadingImage(url: playlist.imageURL, cornerRadius: 14)
           .frame(width: 240, height: 240)
-          .clipped()
-          .cornerRadius(12)
           .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 8)
         VStack(spacing: 4) {
           Text(playlist.name)
-            .font(.title.bold())
+            .font(.title2.bold())
             .multilineTextAlignment(.center)
           Text("\(playlist.songCount) songs")
+            .font(.subheadline)
             .foregroundColor(.secondary)
         }
-        if let songs = playlist.songListDTOs {
+        if let songs = playlist.songListDTOs, !songs.isEmpty {
+          HStack(spacing: 12) {
+            Button {
+              if let first = songs.first {
+                audioManager.play(song: first, context: songs)
+              }
+            } label: {
+              HStack(spacing: 6) {
+                Image(systemName: "play.fill")
+                Text("Play").fontWeight(.semibold)
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 12)
+              .foregroundColor(.pink)
+              .background(Color(.tertiarySystemFill))
+              .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(PressableButtonStyle())
+            Button {
+              if let random = songs.randomElement() {
+                audioManager.play(song: random, context: songs.shuffled())
+              }
+            } label: {
+              HStack(spacing: 6) {
+                Image(systemName: "shuffle")
+                Text("Shuffle").fontWeight(.semibold)
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 12)
+              .foregroundColor(.pink)
+              .background(Color(.tertiarySystemFill))
+              .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(PressableButtonStyle())
+          }
+          .padding(.horizontal)
           LazyVStack(spacing: 0) {
             ForEach(songs) { song in
-              PlaylistRow(song: song)
-                .onTapGesture { audioManager.play(song: song, context: songs) }
+              Button {
+                audioManager.play(song: song, context: songs)
+              } label: {
+                PlaylistRow(song: song)
+              }
+              .buttonStyle(PressableButtonStyle())
               Divider().padding(.leading, 76)
             }
           }
         }
       }
-      .padding(.vertical)
+      .padding(.top, 12)
       .padding(.bottom, 16)
     }
     .navigationTitle(playlist.name)
@@ -150,9 +203,15 @@ struct HomeSongSection: View {
   @EnvironmentObject var audioManager: AudioPlayerManager
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Text(title)
-        .font(.title2.bold())
-        .padding(.horizontal)
+      HStack(alignment: .firstTextBaseline) {
+        Text(title)
+          .font(.title2.bold())
+        Spacer()
+        Image(systemName: "chevron.right")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundColor(.pink)
+      }
+      .padding(.horizontal)
       ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 16) {
           ForEach(songs) { song in
@@ -175,7 +234,7 @@ struct HomeSongSection: View {
               }
               .frame(width: 140)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressableButtonStyle())
           }
         }
         .padding(.horizontal)

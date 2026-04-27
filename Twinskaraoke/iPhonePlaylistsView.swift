@@ -12,30 +12,36 @@ struct iPhonePlaylistsView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        if viewModel.isLoading {
-          PlaylistsSkeletonView(cols: cols)
-        } else if viewModel.playlists.isEmpty {
-          VStack(spacing: 16) {
-            Image(systemName: "music.note.list")
-              .font(.system(size: 48))
-              .foregroundColor(.secondary)
-            Text("No playlists yet")
-              .foregroundColor(.secondary)
-          }
-          .frame(maxWidth: .infinity)
-          .padding(.top, 80)
-        } else {
-          LazyVGrid(columns: cols, spacing: 16) {
-            ForEach(viewModel.playlists) { playlist in
-              NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-                PlaylistGridCell(playlist: playlist)
-              }
-              .buttonStyle(.plain)
+        ZStack {
+          if viewModel.isLoading {
+            PlaylistsSkeletonView(cols: cols)
+              .transition(.opacity)
+          } else if viewModel.playlists.isEmpty {
+            VStack(spacing: 16) {
+              Image(systemName: "music.note.list")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+              Text("No playlists yet")
+                .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 80)
+            .transition(.opacity)
+          } else {
+            LazyVGrid(columns: cols, spacing: 16) {
+              ForEach(viewModel.playlists) { playlist in
+                NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                  PlaylistGridCell(playlist: playlist)
+                }
+                .buttonStyle(PressableButtonStyle())
+              }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .transition(.opacity)
           }
-          .padding(.horizontal, 16)
-          .padding(.vertical, 12)
         }
+        .animation(.easeInOut(duration: 0.35), value: viewModel.isLoading)
       }
       .navigationTitle("Your Library")
       .onAppear { viewModel.fetchPlaylists() }
