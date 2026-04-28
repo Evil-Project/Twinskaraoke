@@ -25,6 +25,9 @@ struct ContentView: View {
       iPhoneSearchView()
         .safeAreaInset(edge: .bottom) { NowPlayingBarContainer() }
         .tabItem { Label("Search", systemImage: "magnifyingglass") }
+    iPhoneAccountView()
+        .safeAreaInset(edge: .bottom) { NowPlayingBarContainer() }
+        .tabItem { Label("Account", systemImage: "person") }
     }
     .accentColor(.pink)
     .fullScreenCover(isPresented: $audioManager.showFullScreen) {
