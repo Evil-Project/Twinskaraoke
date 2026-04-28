@@ -6,6 +6,7 @@
 //
 import AVFoundation
 import Combine
+import MediaPlayer
 import SwiftUI
 
 enum PlaybackMode {
@@ -22,7 +23,9 @@ enum PlaybackMode {
 class MusicPlayerViewModel: ObservableObject {
   private var player: AVPlayer?
   private var timeObserver: Any?
+  private var endTimeObserver: NSObjectProtocol?
   private var cancellables = Set<AnyCancellable>()
+  private var downloadTask: URLSessionDownloadTask?
   @Published var isPlaying = false
   @Published var currentTime: Double = 0
   @Published var duration: Double = 0
@@ -35,10 +38,82 @@ class MusicPlayerViewModel: ObservableObject {
   var currentSong: Song {
     songs[currentIndex]
   }
+
+  private static let audioCacheDir: URL = {
+    let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+      .appendingPathComponent("AudioCache")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }()
+
+  private func localCacheURL(for songID: String) -> URL {
+    MusicPlayerViewModel.audioCacheDir.appendingPathComponent("\(songID).mp3")
+  }
+
   init(songs: [Song], initialIndex: Int) {
     self.songs = songs
     self.currentIndex = initialIndex
+    setupRemoteCommands()
+    setupInterruptionHandler()
     prepareAndPlay()
+  }
+  private func setupInterruptionHandler() {
+    NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+      .sink { [weak self] note in self?.handleInterruption(note) }
+      .store(in: &cancellables)
+  }
+  private func handleInterruption(_ note: Notification) {
+    guard let info = note.userInfo,
+      let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+      let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+    else { return }
+    switch type {
+    case .began:
+      if isPlaying {
+        player?.pause()
+        isPlaying = false
+        updateNowPlayingInfo()
+      }
+    case .ended:
+      guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
+      let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
+      if opts.contains(.shouldResume) {
+        do {
+          try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+          print("Failed to reactivate audio session: \(error)")
+        }
+        player?.play()
+        isPlaying = true
+        updateNowPlayingInfo()
+      }
+    @unknown default: break
+    }
+  }
+  private func setupRemoteCommands() {
+    let cc = MPRemoteCommandCenter.shared()
+    cc.playCommand.addTarget { [weak self] _ in
+      guard let self = self, !self.isPlaying else { return .commandFailed }
+      self.togglePlayPause()
+      return .success
+    }
+    cc.pauseCommand.addTarget { [weak self] _ in
+      guard let self = self, self.isPlaying else { return .commandFailed }
+      self.togglePlayPause()
+      return .success
+    }
+    cc.togglePlayPauseCommand.addTarget { [weak self] _ in
+      self?.togglePlayPause()
+      return .success
+    }
+    cc.nextTrackCommand.addTarget { [weak self] _ in
+      self?.playNext()
+      return .success
+    }
+    cc.previousTrackCommand.addTarget { [weak self] _ in
+      self?.playPrevious()
+      return .success
+    }
   }
   private func prepareAndPlay() {
     player?.pause()
@@ -46,16 +121,39 @@ class MusicPlayerViewModel: ObservableObject {
       player?.removeTimeObserver(observer)
       timeObserver = nil
     }
+    if let observer = endTimeObserver {
+      NotificationCenter.default.removeObserver(observer)
+      endTimeObserver = nil
+    }
     player = nil
     currentTime = 0
     duration = 0
     isPlaying = false
     cancellables.removeAll()
-    guard let url = currentSong.audioURL else { return }
+    setupInterruptionHandler()
+    downloadTask?.cancel()
+
+    let localURL = localCacheURL(for: currentSong.id)
+    if FileManager.default.fileExists(atPath: localURL.path) {
+      setupPlayer(with: localURL)
+      return
+    }
+
+    guard let remoteURL = currentSong.audioURL else { return }
     isLoading = true
-    setupPlayer(with: url)
+    downloadTask = URLSession.shared.downloadTask(with: remoteURL) { [weak self] tempURL, _, error in
+      DispatchQueue.main.async {
+        self?.isLoading = false
+        guard let self = self, let tempURL = tempURL, error == nil else { return }
+        try? FileManager.default.moveItem(at: tempURL, to: localURL)
+        guard self.currentSong.id == self.songs[self.currentIndex].id else { return }
+        self.setupPlayer(with: localURL)
+      }
+    }
+    downloadTask?.resume()
   }
-  private func setupPlayer(with url: URL) {
+
+  private func setupPlayer(with localURL: URL) {
     do {
       try AVAudioSession.sharedInstance().setCategory(
         .playback, mode: .default, policy: .longFormAudio)
@@ -63,8 +161,11 @@ class MusicPlayerViewModel: ObservableObject {
     } catch {
       print("Audio Session Error: \(error)")
     }
-    let playerItem = AVPlayerItem(url: url)
+    let playerItem = AVPlayerItem(url: localURL)
     self.player = AVPlayer(playerItem: playerItem)
+    if #available(watchOS 8.0, *) {
+      self.player?.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+    }
     playerItem.publisher(for: \.duration)
       .receive(on: DispatchQueue.main)
       .sink { [weak self] duration in
@@ -81,6 +182,8 @@ class MusicPlayerViewModel: ObservableObject {
           self?.isLoading = false
           self?.player?.play()
           self?.isPlaying = true
+          self?.updateNowPlayingInfo()
+
         } else if status == .failed {
           self?.isLoading = false
           print("Player item failed: \(String(describing: self?.player?.currentItem?.error))")
@@ -97,19 +200,38 @@ class MusicPlayerViewModel: ObservableObject {
         self.currentTime = max(0, seconds)
       }
     }
-    NotificationCenter.default.addObserver(
+    if let oldObserver = endTimeObserver {
+      NotificationCenter.default.removeObserver(oldObserver)
+    }
+    endTimeObserver = NotificationCenter.default.addObserver(
       forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main
     ) { [weak self] _ in
       self?.playEnded()
     }
   }
+  private func updateNowPlayingInfo() {
+    var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+    info[MPMediaItemPropertyTitle] = currentSong.title
+    info[MPMediaItemPropertyArtist] = currentSong.artistName
+    info[MPMediaItemPropertyPlaybackDuration] = Double(duration)
+    info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+    info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+  }
   func togglePlayPause() {
     if isPlaying {
       player?.pause()
+
     } else {
+      do {
+        try AVAudioSession.sharedInstance().setActive(true)
+      } catch {
+        print("Failed to reactivate audio session: \(error)")
+      }
       player?.play()
     }
     isPlaying.toggle()
+    updateNowPlayingInfo()
   }
   func playNext() {
     if isShuffleOn && songs.count > 1 {
@@ -152,10 +274,15 @@ class MusicPlayerViewModel: ObservableObject {
   }
   func seek(to time: Double) {
     player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
+    updateNowPlayingInfo()
   }
   deinit {
+    downloadTask?.cancel()
     if let observer = timeObserver {
       player?.removeTimeObserver(observer)
+    }
+    if let observer = endTimeObserver {
+      NotificationCenter.default.removeObserver(observer)
     }
     player?.pause()
   }
@@ -195,7 +322,6 @@ struct MusicPlayerView: View {
           }
           .frame(width: 56, height: 56)
           .cornerRadius(6)
-          .clipped()
           .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
           if viewModel.isLoading {
             Color.black.opacity(0.3).cornerRadius(6)

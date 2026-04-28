@@ -5,9 +5,14 @@
 //  Created by xiaoyuan on 2026/4/26.
 //
 import AVFoundation
+import AVKit
 import Combine
 import Foundation
+import MediaPlayer
 import SwiftUI
+#if canImport(UIKit)
+  import UIKit
+#endif
 
 struct PhoneSong: Codable, Identifiable, Equatable {
   let id: String
@@ -78,8 +83,8 @@ struct AppleMusicProgressBar: View {
   let onSeekEnd: (Double) -> Void
   var trackColor: Color = .white.opacity(0.28)
   var fillColor: Color = .white
-  var idleHeight: CGFloat = 5
-  var activeHeight: CGFloat = 9
+  var idleHeight: CGFloat = 7
+  var activeHeight: CGFloat = 12
   var body: some View {
     GeometryReader { geo in
       let height: CGFloat = isScrubbing ? activeHeight : idleHeight
@@ -109,6 +114,248 @@ struct AppleMusicProgressBar: View {
   }
 }
 
+#if canImport(UIKit)
+struct SystemVolumeBridge: UIViewRepresentable {
+  @Binding var volume: Double
+  @Binding var isUserScrubbing: Bool
+  func makeUIView(context: Context) -> MPVolumeView {
+    let view = MPVolumeView(frame: .zero)
+    view.alpha = 0.0001
+    view.showsRouteButton = false
+    return view
+  }
+  func updateUIView(_ uiView: MPVolumeView, context: Context) {
+    guard isUserScrubbing else { return }
+    DispatchQueue.main.async {
+      guard let slider = uiView.subviews.compactMap({ $0 as? UISlider }).first else { return }
+      let target = Float(max(0, min(1, volume)))
+      if abs(slider.value - target) > 0.005 { slider.value = target }
+    }
+  }
+}
+
+struct AirPlayRoutePickerView: UIViewRepresentable {
+  func makeUIView(context: Context) -> AVRoutePickerView {
+    let view = AVRoutePickerView()
+    view.tintColor = .clear
+    view.activeTintColor = .clear
+    view.prioritizesVideoDevices = false
+    view.backgroundColor = .clear
+    return view
+  }
+  func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
+    uiView.tintColor = .clear
+    uiView.activeTintColor = .clear
+  }
+}
+#endif
+
+struct QueueView: View {
+  @EnvironmentObject var audioManager: AudioPlayerManager
+  @Environment(\.dismiss) private var dismiss
+  var body: some View {
+    ZStack {
+      LinearGradient(
+        colors: [Color(red: 0.10, green: 0.10, blue: 0.12), Color.black],
+        startPoint: .top, endPoint: .bottom
+      )
+      .ignoresSafeArea()
+
+      VStack(spacing: 0) {
+        HStack {
+          Text("Playing Next")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white)
+          Spacer()
+          Button {
+            dismiss()
+          } label: {
+            Image(systemName: "xmark")
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundColor(.white)
+              .frame(width: 30, height: 30)
+              .background(.white.opacity(0.18), in: Circle())
+          }
+          .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.7))
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+
+        HStack(spacing: 24) {
+          QueueModeButton(
+            symbol: "shuffle",
+            isActive: audioManager.isShuffled
+          ) {
+            audioManager.toggleShuffle()
+          }
+          QueueModeButton(
+            symbol: audioManager.repeatMode.symbol,
+            isActive: audioManager.repeatMode.isActive
+          ) {
+            audioManager.toggleRepeat()
+          }
+          QueueModeButton(
+            symbol: "infinity",
+            isActive: audioManager.autoplayEnabled
+          ) {
+            audioManager.toggleAutoplay()
+          }
+          Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 14)
+
+        if let current = audioManager.currentSong {
+          HStack(spacing: 12) {
+            LoadingImage(url: current.imageURL, cornerRadius: 6)
+              .frame(width: 48, height: 48)
+            VStack(alignment: .leading, spacing: 2) {
+              Text(current.title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+              Text(current.originalArtists?.joined(separator: ", ") ?? "")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.6))
+                .lineLimit(1)
+            }
+            Spacer()
+            EqualizerBars(isAnimating: audioManager.isPlaying)
+              .frame(width: 16, height: 16)
+              .foregroundColor(.pink)
+          }
+          .padding(.horizontal, 20)
+          .padding(.bottom, 14)
+          Divider()
+            .background(.white.opacity(0.12))
+            .padding(.horizontal, 20)
+        }
+
+        if upNextSongs.isEmpty {
+          VStack(spacing: 8) {
+            Image(systemName: "music.note.list")
+              .font(.system(size: 32))
+              .foregroundColor(.white.opacity(0.35))
+            Text("No songs queued")
+              .font(.system(size: 14))
+              .foregroundColor(.white.opacity(0.55))
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          List {
+            ForEach(upNextSongs) { song in
+              QueueRow(song: song)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                  audioManager.play(song: song, context: audioManager.queue)
+                }
+            }
+            .onMove { source, destination in
+              audioManager.moveInUpNext(from: source, to: destination)
+            }
+            .onDelete { indices in
+              audioManager.removeFromUpNext(at: indices)
+            }
+          }
+          .listStyle(.plain)
+          .scrollContentBackground(.hidden)
+          .environment(\.editMode, .constant(.active))
+        }
+      }
+    }
+    .preferredColorScheme(.dark)
+  }
+  private var upNextSongs: [PhoneSong] {
+    guard let current = audioManager.currentSong,
+      let idx = audioManager.queue.firstIndex(of: current),
+      idx + 1 < audioManager.queue.count
+    else { return [] }
+    return Array(audioManager.queue[(idx + 1)...])
+  }
+}
+
+struct QueueRow: View {
+  let song: PhoneSong
+  var body: some View {
+    HStack(spacing: 12) {
+      LoadingImage(url: song.imageURL, cornerRadius: 6)
+        .frame(width: 48, height: 48)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(song.title)
+          .font(.system(size: 15, weight: .medium))
+          .foregroundColor(.white)
+          .lineLimit(1)
+        Text(song.originalArtists?.joined(separator: ", ") ?? "")
+          .font(.system(size: 13))
+          .foregroundColor(.white.opacity(0.6))
+          .lineLimit(1)
+      }
+      Spacer()
+    }
+  }
+}
+
+struct QueueModeButton: View {
+  let symbol: String
+  let isActive: Bool
+  let action: () -> Void
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundColor(isActive ? .black : .white)
+        .frame(width: 38, height: 38)
+        .background(
+          Circle()
+            .fill(isActive ? Color.white : Color.white.opacity(0.16))
+        )
+    }
+    .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.75))
+  }
+}
+
+struct EqualizerBars: View {
+  let isAnimating: Bool
+  @State private var phase: Double = 0
+  var body: some View {
+    GeometryReader { geo in
+      let barWidth = geo.size.width / 5
+      HStack(alignment: .bottom, spacing: barWidth / 2) {
+        ForEach(0..<3) { i in
+          Capsule()
+            .fill(Color.pink)
+            .frame(
+              width: barWidth,
+              height: barHeight(for: i, total: geo.size.height)
+            )
+        }
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+    .onAppear {
+      if isAnimating { startAnimating() }
+    }
+    .onChange(of: isAnimating) { _, new in
+      if new { startAnimating() }
+    }
+  }
+  private func startAnimating() {
+    withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+      phase = 1
+    }
+  }
+  private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
+    guard isAnimating else { return total * 0.3 }
+    let offsets: [Double] = [0.0, 0.33, 0.66]
+    let v = (sin((phase + offsets[index]) * .pi * 2) + 1) / 2
+    return total * (0.35 + 0.65 * v)
+  }
+}
+
 struct NowPlayingBar: View {
   @EnvironmentObject var audioManager: AudioPlayerManager
   var body: some View {
@@ -131,7 +378,6 @@ struct NowPlayingBar: View {
             Rectangle()
               .fill(.pink)
               .frame(width: geo.size.width * CGFloat(audioManager.progress))
-              .animation(.linear(duration: 0.5), value: audioManager.progress)
           }
         }
         .frame(height: 2)
@@ -140,6 +386,8 @@ struct NowPlayingBar: View {
             .frame(width: 36, height: 36)
             .clipped()
             .cornerRadius(4)
+            .id(song.id)
+            .transition(.opacity)
           VStack(alignment: .leading, spacing: 1) {
             MarqueeText(
               text: song.displayTitle, font: .system(size: 13, weight: .semibold), color: .primary)
@@ -282,6 +530,7 @@ struct FullScreenPlayerView: View {
   @State private var isFavorite = false
   @State private var dragOffset: CGFloat = 0
   @State private var isVolumeScrubbing = false
+  @State private var showingQueue = false
   var body: some View {
     if let song = audioManager.currentSong {
       GeometryReader { geo in
@@ -303,21 +552,32 @@ struct FullScreenPlayerView: View {
 
             Spacer(minLength: 12)
 
-            LoadingImage(url: song.imageURL, cornerRadius: 12, contentMode: .fill)
-              .frame(width: artSize, height: artSize)
-              .scaleEffect(audioManager.isPlaying ? 1.0 : 0.82)
-              .shadow(
-                color: .black.opacity(audioManager.isPlaying ? 0.45 : 0.2),
-                radius: audioManager.isPlaying ? 28 : 14,
-                y: audioManager.isPlaying ? 18 : 8
-              )
-              .animation(
-                .spring(response: 0.55, dampingFraction: 0.72), value: audioManager.isPlaying
-              )
-              .id(song.id)
-              .transition(.opacity.combined(with: .scale(scale: 0.92)))
-              .animation(.easeInOut(duration: 0.35), value: song.id)
-              .frame(maxWidth: .infinity)
+            ZStack {
+              LoadingImage(url: song.imageURL, cornerRadius: 12, contentMode: .fill)
+                .frame(width: artSize, height: artSize)
+                .cornerRadius(12)
+                .id(song.id)
+                .transition(.opacity)
+                .scaleEffect(audioManager.isPlaying ? 1.0 : 0.82)
+                .shadow(
+                  color: .black.opacity(audioManager.isPlaying ? 0.45 : 0.2),
+                  radius: audioManager.isPlaying ? 28 : 14,
+                  y: audioManager.isPlaying ? 18 : 8
+                )
+                .animation(
+                  .spring(response: 0.42, dampingFraction: 0.78), value: audioManager.isPlaying
+                )
+                .frame(maxWidth: .infinity)
+
+              if audioManager.isBuffering {
+                ProgressView()
+                  .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                  .scaleEffect(2.0)
+                  .frame(width: artSize, height: artSize)
+                  .background(Color.black.opacity(0.4))
+                  .cornerRadius(12)
+              }
+            }
 
             Spacer(minLength: 16)
 
@@ -356,8 +616,7 @@ struct FullScreenPlayerView: View {
             }
             .padding(.horizontal, 32)
             .id(song.id)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-            .animation(.easeInOut(duration: 0.35), value: song.id)
+            .transition(.opacity)
 
             AppleMusicProgressBar(
               progress: $audioManager.progress,
@@ -428,9 +687,9 @@ struct FullScreenPlayerView: View {
 
             Spacer(minLength: 12)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
               Image(systemName: "speaker.fill")
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.55))
               AppleMusicProgressBar(
                 progress: $audioManager.volume,
@@ -438,14 +697,21 @@ struct FullScreenPlayerView: View {
                 onSeekEnd: { _ in },
                 trackColor: .white.opacity(0.28),
                 fillColor: .white,
-                idleHeight: 5,
-                activeHeight: 9
+                idleHeight: 7,
+                activeHeight: 12
               )
               Image(systemName: "speaker.wave.3.fill")
-                .font(.system(size: 12))
+                .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.55))
             }
             .padding(.horizontal, 32)
+            #if canImport(UIKit)
+              .background(
+                SystemVolumeBridge(
+                  volume: $audioManager.volume,
+                  isUserScrubbing: $isVolumeScrubbing
+                ).frame(width: 0, height: 0))
+            #endif
 
             HStack(spacing: 0) {
               Button {
@@ -456,15 +722,20 @@ struct FullScreenPlayerView: View {
                   .frame(maxWidth: .infinity)
               }
               .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
-              Button {
-              } label: {
-                Image(systemName: "airplayaudio")
+
+              #if canImport(UIKit)
+              ZStack {
+                Image(systemName: routeSymbolName(audioManager.routeIcon))
                   .font(.system(size: 22))
                   .foregroundColor(.white.opacity(0.85))
-                  .frame(maxWidth: .infinity)
+                AirPlayRoutePickerView()
+                  .frame(width: 44, height: 44)
               }
-              .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
+              .frame(maxWidth: .infinity)
+              #endif
+
               Button {
+                showingQueue = true
               } label: {
                 Image(systemName: "list.bullet")
                   .font(.system(size: 22))
@@ -494,23 +765,25 @@ struct FullScreenPlayerView: View {
           .ignoresSafeArea()
         )
         .offset(y: max(0, dragOffset))
-        .scaleEffect(1 - min(0.04, dragOffset / 2000))
-        .opacity(1 - min(0.18, dragOffset / 1200))
+        .scaleEffect(1 - min(0.05, dragOffset / 1800), anchor: .center)
+        .opacity(1 - min(0.22, dragOffset / 1100))
         .gesture(
           DragGesture(minimumDistance: 12)
             .onChanged { value in
               let v = value.translation.height
               let h = abs(value.translation.width)
-              if v > 0 && v > h * 1.5 {
+              guard v > 0 && v > h * 1.5 else { return }
+              if v < 280 {
                 dragOffset = v
+              } else {
+                dragOffset = 280 + sqrt(v - 280) * 6
               }
             }
             .onEnded { value in
               if value.translation.height > 120 || value.predictedEndTranslation.height > 220 {
                 audioManager.showFullScreen = false
-                dragOffset = 0
               } else {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                withAnimation(.interactiveSpring(response: 0.45, dampingFraction: 0.82)) {
                   dragOffset = 0
                 }
               }
@@ -518,11 +791,23 @@ struct FullScreenPlayerView: View {
         )
       }
       .colorScheme(.dark)
+      .sheet(isPresented: $showingQueue) {
+        QueueView()
+          .environmentObject(audioManager)
+          .presentationDetents([.medium, .large])
+          .presentationDragIndicator(.visible)
+      }
     }
   }
   private func formattedTime(_ seconds: Double) -> String {
     let s = Int(seconds)
     return String(format: "%d:%02d", s / 60, s % 60)
+  }
+  private func routeSymbolName(_ name: String) -> String {
+    #if canImport(UIKit)
+      if UIImage(systemName: name) != nil { return name }
+    #endif
+    return "airplayaudio"
   }
 }
 

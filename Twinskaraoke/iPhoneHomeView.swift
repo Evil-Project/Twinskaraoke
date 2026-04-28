@@ -60,7 +60,6 @@ struct RecentPlaylistSection: View {
           HStack(spacing: 16) {
             LoadingImage(url: playlist.imageURL, cornerRadius: 8)
               .frame(width: 60, height: 60)
-              .clipped()
               .cornerRadius(8)
             VStack(alignment: .leading, spacing: 3) {
               Text(playlist.name)
@@ -126,11 +125,14 @@ struct PlaylistRow: View {
 struct PlaylistDetailView: View {
   let playlist: Playlist
   @EnvironmentObject var audioManager: AudioPlayerManager
+  @StateObject private var loader = PlaylistDetailLoader()
   var body: some View {
+    let songs: [PhoneSong] = loader.songs ?? playlist.songListDTOs ?? []
     ScrollView {
       VStack(spacing: 18) {
         LoadingImage(url: playlist.imageURL, cornerRadius: 14)
           .frame(width: 240, height: 240)
+          .cornerRadius(14)
           .shadow(color: .black.opacity(0.3), radius: 16, x: 0, y: 8)
         VStack(spacing: 4) {
           Text(playlist.name)
@@ -140,7 +142,7 @@ struct PlaylistDetailView: View {
             .font(.subheadline)
             .foregroundColor(.secondary)
         }
-        if let songs = playlist.songListDTOs, !songs.isEmpty {
+        if !songs.isEmpty {
           HStack(spacing: 12) {
             Button {
               if let first = songs.first {
@@ -187,6 +189,22 @@ struct PlaylistDetailView: View {
               Divider().padding(.leading, 76)
             }
           }
+        } else if loader.isLoading {
+          VStack(spacing: 0) {
+            ForEach(0..<8, id: \.self) { _ in
+              HStack(spacing: 12) {
+                ShimmerBox(cornerRadius: 4).frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 6) {
+                  ShimmerBox(cornerRadius: 4).frame(width: 160, height: 14)
+                  ShimmerBox(cornerRadius: 4).frame(width: 100, height: 12)
+                }
+                Spacer()
+              }
+              .padding(.horizontal)
+              .padding(.vertical, 8)
+              Divider().padding(.leading, 76)
+            }
+          }
         }
       }
       .padding(.top, 12)
@@ -194,6 +212,44 @@ struct PlaylistDetailView: View {
     }
     .navigationTitle(playlist.name)
     .navigationBarTitleDisplayMode(.inline)
+    .onAppear { loader.load(playlistID: playlist.id, fallback: playlist.songListDTOs) }
+  }
+}
+
+class PlaylistDetailLoader: ObservableObject {
+  @Published var songs: [PhoneSong]?
+  @Published var isLoading = false
+  private var loadedID: String?
+  func load(playlistID: String, fallback: [PhoneSong]?) {
+    if loadedID == playlistID { return }
+    loadedID = playlistID
+    if let fallback = fallback, fallback.count > 1 {
+      self.songs = fallback
+    }
+    guard
+      let url = URL(string: "https://api.neurokaraoke.com/api/playlist/\(playlistID)")
+    else { return }
+    isLoading = true
+    var r = URLRequest(url: url)
+    r.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    URLSession.shared.dataTask(with: r) { [weak self] data, _, _ in
+      guard let self = self else { return }
+      if let data = data, let dec = try? JSONDecoder().decode(Playlist.self, from: data),
+        let list = dec.songListDTOs
+      {
+        DispatchQueue.main.async {
+          self.songs = list
+          self.isLoading = false
+        }
+      } else if let data = data, let list = try? JSONDecoder().decode([PhoneSong].self, from: data) {
+        DispatchQueue.main.async {
+          self.songs = list
+          self.isLoading = false
+        }
+      } else {
+        DispatchQueue.main.async { self.isLoading = false }
+      }
+    }.resume()
   }
 }
 

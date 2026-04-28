@@ -72,7 +72,6 @@ struct SearchResultRow: View {
     HStack(spacing: 12) {
       LoadingImage(url: song.imageURL, cornerRadius: 6)
         .frame(width: 52, height: 52)
-        .clipped()
         .cornerRadius(6)
       VStack(alignment: .leading, spacing: 3) {
         Text(song.title)

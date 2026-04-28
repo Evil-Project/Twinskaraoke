@@ -56,7 +56,6 @@ struct PlaylistGridCell: View {
       VStack(alignment: .leading, spacing: 6) {
         LoadingImage(url: playlist.imageURL, cornerRadius: 10)
           .frame(width: geo.size.width, height: geo.size.width)
-          .clipped()
           .cornerRadius(10)
         Text(playlist.name)
           .font(.system(size: 14, weight: .bold))

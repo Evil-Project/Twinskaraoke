@@ -120,7 +120,6 @@ struct SongSearchView: View {
                   }
                   .frame(width: 48, height: 48)
                   .cornerRadius(6)
-                  .clipped()
                 } else {
                   Image(systemName: "music.note")
                     .frame(width: 48, height: 48)
