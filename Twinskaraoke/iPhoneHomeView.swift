@@ -4,6 +4,7 @@
 //
 //  Created by xiaoyuan on 2026/4/26.
 //
+import Combine
 import SwiftUI
 
 struct iPhoneHomeView: View {

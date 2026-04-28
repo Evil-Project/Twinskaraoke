@@ -339,7 +339,7 @@ struct EqualizerBars: View {
     .onAppear {
       if isAnimating { startAnimating() }
     }
-    .onChange(of: isAnimating) { _, new in
+    .onChange(of: isAnimating) { new in
       if new { startAnimating() }
     }
   }
