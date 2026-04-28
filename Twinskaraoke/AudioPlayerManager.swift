@@ -1,9 +1,3 @@
-//
-//  AudioPlayerManager.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import AVFoundation
 import Combine
 import Foundation
@@ -22,6 +16,7 @@ enum RepeatMode {
     }
   }
   var isActive: Bool { self != .off }
+
   func next() -> RepeatMode {
     switch self {
     case .off: return .all
@@ -105,7 +100,6 @@ class AudioPlayerManager: ObservableObject {
   #if canImport(UIKit)
   private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
   #endif
-
   static let audioCacheDir: URL = {
     let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
       .appendingPathComponent("AudioCache")
@@ -167,19 +161,16 @@ class AudioPlayerManager: ObservableObject {
       }
     }
     downloadSession?.cancel()
-
     let cacheURL = AudioPlayerManager.audioCacheDir.appendingPathComponent("\(song.id).mp3")
     if FileManager.default.fileExists(atPath: cacheURL.path) {
       startPlaying(url: cacheURL)
       return
     }
-
     guard let remoteURL = song.audioURL else { return }
     // Stream from remote URL — AVPlayer handles HTTP streaming and background
     // playback natively. The download below populates the cache for next time.
     isBuffering = true
     startPlaying(url: remoteURL)
-
     let session = AudioDownloadSession(songID: song.id)
     downloadSession = session
     session.start(from: remoteURL)
@@ -203,7 +194,6 @@ class AudioPlayerManager: ObservableObject {
     }
     player?.play()
     isPlaying = true
-
     playerItem.publisher(for: \.isPlaybackBufferEmpty)
       .receive(on: DispatchQueue.main)
       .sink { [weak self] empty in
@@ -216,11 +206,10 @@ class AudioPlayerManager: ObservableObject {
         if likely { self?.isBuffering = false }
       }
       .store(in: &itemObservers)
-
     updateNowPlayingInfo(reloadArtwork: true)
   }
-
   #if canImport(UIKit)
+
   private func handleBackgroundTransition() {
     if bgTaskID != .invalid {
       UIApplication.shared.endBackgroundTask(bgTaskID)
@@ -234,6 +223,7 @@ class AudioPlayerManager: ObservableObject {
     }
   }
   #endif
+
   func togglePlayPause() {
     if isPlaying {
       player?.pause()
@@ -243,6 +233,7 @@ class AudioPlayerManager: ObservableObject {
     isPlaying.toggle()
     updateNowPlayingInfo(reloadArtwork: false)
   }
+
   func playNextOrRandom() {
     if repeatMode == .one, let current = currentSong {
       play(song: current)
@@ -262,6 +253,7 @@ class AudioPlayerManager: ObservableObject {
       updateNowPlayingInfo(reloadArtwork: false)
     }
   }
+
   func playPrevious() {
     if let current = currentSong, !queue.isEmpty, let idx = queue.firstIndex(of: current),
       idx - 1 >= 0
@@ -271,9 +263,11 @@ class AudioPlayerManager: ObservableObject {
       seek(to: 0)
     }
   }
+
   func toggleRepeat() {
     repeatMode = repeatMode.next()
   }
+
   func toggleShuffle() {
     isShuffled.toggle()
     if isShuffled {
@@ -287,9 +281,11 @@ class AudioPlayerManager: ObservableObject {
       originalQueue = []
     }
   }
+
   func toggleAutoplay() {
     autoplayEnabled.toggle()
   }
+
   func moveInUpNext(from source: IndexSet, to destination: Int) {
     guard let current = currentSong,
       let baseIdx = queue.firstIndex(of: current)
@@ -300,6 +296,7 @@ class AudioPlayerManager: ObservableObject {
     upNext.move(fromOffsets: source, toOffset: destination)
     queue = Array(queue[..<upNextStart]) + upNext
   }
+
   func removeFromUpNext(at offsets: IndexSet) {
     guard let current = currentSong,
       let baseIdx = queue.firstIndex(of: current)
@@ -310,11 +307,13 @@ class AudioPlayerManager: ObservableObject {
     upNext.remove(atOffsets: offsets)
     queue = Array(queue[..<upNextStart]) + upNext
   }
+
   func seek(to percentage: Double) {
     guard let duration = player?.currentItem?.duration.seconds, duration.isFinite else { return }
     player?.seek(to: CMTime(seconds: duration * percentage, preferredTimescale: 600))
     updateNowPlayingInfo(reloadArtwork: false)
   }
+
   private func setupTimeObserver() {
     timeObserver = player?.addPeriodicTimeObserver(
       forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main
@@ -327,6 +326,7 @@ class AudioPlayerManager: ObservableObject {
       self.updateNowPlayingElapsed(time.seconds)
     }
   }
+
   private func configureAudioSessionCategory() {
     do {
       if #available(iOS 13.0, *) {
@@ -339,6 +339,7 @@ class AudioPlayerManager: ObservableObject {
       print("Audio session category setup failed: \(error)")
     }
   }
+
   private func activateAudioSession() {
     do {
       try AVAudioSession.sharedInstance().setActive(true, options: [])
@@ -346,6 +347,7 @@ class AudioPlayerManager: ObservableObject {
       print("Audio session activation failed: \(error)")
     }
   }
+
   private func logBackgroundAudioDiagnostics() {
     let bg = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
     let session = AVAudioSession.sharedInstance()
@@ -359,6 +361,7 @@ class AudioPlayerManager: ObservableObject {
     print("Output route: \(session.currentRoute.outputs.map(\.portName))")
     print("====================================")
   }
+
   private func handleInterruption(_ note: Notification) {
     guard let info = note.userInfo,
       let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -383,6 +386,7 @@ class AudioPlayerManager: ObservableObject {
     @unknown default: break
     }
   }
+
   private func handleRouteChange(_ note: Notification) {
     updateRouteIcon()
     guard let info = note.userInfo,
@@ -395,6 +399,7 @@ class AudioPlayerManager: ObservableObject {
       updateNowPlayingInfo(reloadArtwork: false)
     }
   }
+
   func updateRouteIcon() {
     let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
     guard let primary = outputs.first else {
@@ -437,6 +442,7 @@ class AudioPlayerManager: ObservableObject {
       routeIcon = "airplayaudio"
     }
   }
+
   private func setupRemoteCommands() {
     let cc = MPRemoteCommandCenter.shared()
     cc.playCommand.addTarget { [weak self] _ in
@@ -471,6 +477,7 @@ class AudioPlayerManager: ObservableObject {
       return .success
     }
   }
+
   private func updateNowPlayingInfo(reloadArtwork: Bool) {
     guard let song = currentSong else {
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -489,12 +496,14 @@ class AudioPlayerManager: ObservableObject {
     }
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
   }
+
   private func updateNowPlayingElapsed(_ elapsed: Double) {
     var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
     info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
     info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
   }
+
   private func loadArtworkAsync(for song: PhoneSong) {
     guard let url = song.imageURL else { return }
     URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
@@ -513,11 +522,12 @@ class AudioPlayerManager: ObservableObject {
       #endif
     }.resume()
   }
+
   private func fetchRandomTrending() {
     guard let url = URL(string: "https://api.neurokaraoke.com/api/explore/trendings?days=7&take=50")
     else { return }
     var request = URLRequest(url: url)
-    request.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    request.setValue(GuestIdentity.current, forHTTPHeaderField: "x-guest-id")
     URLSession.shared.dataTask(with: request) { data, _, _ in
       if let data = data, let songs = try? JSONDecoder().decode([PhoneSong].self, from: data),
         let random = songs.randomElement()
@@ -527,8 +537,8 @@ class AudioPlayerManager: ObservableObject {
     }.resume()
   }
 }
-
 #if canImport(UIKit)
+
 extension UIImage {
   func croppedToSquare() -> UIImage {
     let originalWidth = size.width

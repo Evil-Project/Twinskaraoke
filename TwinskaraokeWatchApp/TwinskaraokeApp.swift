@@ -1,9 +1,3 @@
-//
-//  TwinskaraokeApp.swift
-//  TwinskaraokeWatchApp
-//
-//  Created by xiaoyuan on 2026/4/19.
-//
 import SwiftUI
 
 @main

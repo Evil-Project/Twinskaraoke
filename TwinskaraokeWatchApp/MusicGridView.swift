@@ -1,9 +1,3 @@
-//
-//  MusicGridView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/19.
-//
 import Combine
 import Foundation
 import SwiftUI

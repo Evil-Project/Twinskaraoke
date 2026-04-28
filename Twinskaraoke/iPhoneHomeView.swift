@@ -1,9 +1,3 @@
-//
-//  iPhoneHomeView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import Combine
 import SwiftUI
 
@@ -221,10 +215,12 @@ class PlaylistDetailLoader: ObservableObject {
   @Published var songs: [PhoneSong]?
   @Published var isLoading = false
   private var loadedID: String?
+
   func load(playlistID: String, fallback: [PhoneSong]?) {
-    if loadedID == playlistID { return }
+    let alreadyFullyLoaded = (loadedID == playlistID) && (songs?.isEmpty == false)
+    if alreadyFullyLoaded { return }
     loadedID = playlistID
-    if let fallback = fallback, fallback.count > 1 {
+    if (songs?.isEmpty ?? true), let fallback = fallback, !fallback.isEmpty {
       self.songs = fallback
     }
     guard
@@ -232,25 +228,62 @@ class PlaylistDetailLoader: ObservableObject {
     else { return }
     isLoading = true
     var r = URLRequest(url: url)
-    r.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    r.setValue(GuestIdentity.current, forHTTPHeaderField: "x-guest-id")
     URLSession.shared.dataTask(with: r) { [weak self] data, _, _ in
       guard let self = self else { return }
-      if let data = data, let dec = try? JSONDecoder().decode(Playlist.self, from: data),
-        let list = dec.songListDTOs
-      {
-        DispatchQueue.main.async {
+      let list = Self.decodeSongs(from: data)
+      DispatchQueue.main.async {
+        if let list = list, !list.isEmpty {
           self.songs = list
-          self.isLoading = false
         }
-      } else if let data = data, let list = try? JSONDecoder().decode([PhoneSong].self, from: data) {
-        DispatchQueue.main.async {
-          self.songs = list
-          self.isLoading = false
-        }
-      } else {
-        DispatchQueue.main.async { self.isLoading = false }
+        self.isLoading = false
       }
     }.resume()
+  }
+
+  private static func decodeSongs(from data: Data?) -> [PhoneSong]? {
+    guard let data = data else { return nil }
+    let decoder = JSONDecoder()
+    if let playlist = try? decoder.decode(Playlist.self, from: data),
+      let list = playlist.songListDTOs, !list.isEmpty
+    {
+      return list
+    }
+    if let list = try? decoder.decode([PhoneSong].self, from: data), !list.isEmpty {
+      return list
+    }
+    if let wrapped = try? decoder.decode(PlaylistSongsWrapper.self, from: data),
+      !wrapped.songs.isEmpty
+    {
+      return wrapped.songs
+    }
+    return nil
+  }
+}
+
+private struct PlaylistSongsWrapper: Codable {
+  let songs: [PhoneSong]
+
+  enum CodingKeys: String, CodingKey {
+    case items, songListDTOs, songs
+  }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    if let v = try? c.decode([PhoneSong].self, forKey: .songListDTOs) {
+      songs = v
+    } else if let v = try? c.decode([PhoneSong].self, forKey: .items) {
+      songs = v
+    } else if let v = try? c.decode([PhoneSong].self, forKey: .songs) {
+      songs = v
+    } else {
+      songs = []
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(songs, forKey: .songs)
   }
 }
 

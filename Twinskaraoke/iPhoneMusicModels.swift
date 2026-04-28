@@ -1,9 +1,3 @@
-//
-//  iPhoneMusicModels.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import AVFoundation
 import AVKit
 import Combine
@@ -13,6 +7,19 @@ import SwiftUI
 #if canImport(UIKit)
   import UIKit
 #endif
+
+enum GuestIdentity {
+  private static let storageKey = "nk.guestId"
+  static let current: String = {
+    let defaults = UserDefaults.standard
+    if let existing = defaults.string(forKey: storageKey), !existing.isEmpty {
+      return existing
+    }
+    let generated = UUID().uuidString.lowercased()
+    defaults.set(generated, forKey: storageKey)
+    return generated
+  }()
+}
 
 struct PhoneSong: Codable, Identifiable, Equatable {
   let id: String
@@ -42,6 +49,7 @@ struct PhoneSong: Codable, Identifiable, Equatable {
   var displayCoverArtist: String {
     coverArtists?.joined(separator: ", ") ?? ""
   }
+
   static func == (lhs: PhoneSong, rhs: PhoneSong) -> Bool { lhs.id == rhs.id }
 }
 
@@ -68,6 +76,7 @@ struct PhoneSearchResponse: Codable {
 struct PressableButtonStyle: ButtonStyle {
   var scale: CGFloat = 0.97
   var dim: Double = 0.7
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .scaleEffect(configuration.isPressed ? scale : 1.0)
@@ -113,8 +122,8 @@ struct AppleMusicProgressBar: View {
     .frame(height: 24)
   }
 }
-
 #if canImport(UIKit)
+
 struct SystemVolumeBridge: UIViewRepresentable {
   @Binding var volume: Double
   @Binding var isUserScrubbing: Bool
@@ -124,6 +133,7 @@ struct SystemVolumeBridge: UIViewRepresentable {
     view.showsRouteButton = false
     return view
   }
+
   func updateUIView(_ uiView: MPVolumeView, context: Context) {
     guard isUserScrubbing else { return }
     DispatchQueue.main.async {
@@ -143,6 +153,7 @@ struct AirPlayRoutePickerView: UIViewRepresentable {
     view.backgroundColor = .clear
     return view
   }
+
   func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
     uiView.tintColor = .clear
     uiView.activeTintColor = .clear
@@ -160,7 +171,6 @@ struct QueueView: View {
         startPoint: .top, endPoint: .bottom
       )
       .ignoresSafeArea()
-
       VStack(spacing: 0) {
         HStack {
           Text("Playing Next")
@@ -181,7 +191,6 @@ struct QueueView: View {
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 12)
-
         HStack(spacing: 24) {
           QueueModeButton(
             symbol: "shuffle",
@@ -205,7 +214,6 @@ struct QueueView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 14)
-
         if let current = audioManager.currentSong {
           HStack(spacing: 12) {
             LoadingImage(url: current.imageURL, cornerRadius: 6)
@@ -231,7 +239,6 @@ struct QueueView: View {
             .background(.white.opacity(0.12))
             .padding(.horizontal, 20)
         }
-
         if upNextSongs.isEmpty {
           VStack(spacing: 8) {
             Image(systemName: "music.note.list")
@@ -343,11 +350,13 @@ struct EqualizerBars: View {
       if new { startAnimating() }
     }
   }
+
   private func startAnimating() {
     withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
       phase = 1
     }
   }
+
   private func barHeight(for index: Int, total: CGFloat) -> CGFloat {
     guard isAnimating else { return total * 0.3 }
     let offsets: [Double] = [0.0, 0.33, 0.66]
@@ -451,7 +460,6 @@ struct MarqueeText: View {
   @State private var textWidth: CGFloat = 0
   @State private var containerWidth: CGFloat = 0
   private let gap: CGFloat = 48
-
   var body: some View {
     Text(text)
       .font(font)
@@ -522,6 +530,7 @@ struct MarqueeText: View {
 
 private struct TextWidthKey: PreferenceKey {
   static var defaultValue: CGFloat = 0
+
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
@@ -535,7 +544,6 @@ struct FullScreenPlayerView: View {
     if let song = audioManager.currentSong {
       GeometryReader { geo in
         let artSize = min(geo.size.width - 64, geo.size.height * 0.45, 360)
-
         VStack(spacing: 0) {
             Button {
               audioManager.showFullScreen = false
@@ -549,9 +557,7 @@ struct FullScreenPlayerView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
             Spacer(minLength: 12)
-
             ZStack {
               LoadingImage(url: song.imageURL, cornerRadius: 12, contentMode: .fill)
                 .frame(width: artSize, height: artSize)
@@ -568,7 +574,6 @@ struct FullScreenPlayerView: View {
                   .spring(response: 0.42, dampingFraction: 0.78), value: audioManager.isPlaying
                 )
                 .frame(maxWidth: .infinity)
-
               if audioManager.isBuffering {
                 ProgressView()
                   .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -578,9 +583,7 @@ struct FullScreenPlayerView: View {
                   .cornerRadius(12)
               }
             }
-
             Spacer(minLength: 16)
-
             HStack(alignment: .center, spacing: 12) {
               VStack(alignment: .leading, spacing: 4) {
                 MarqueeText(
@@ -617,7 +620,6 @@ struct FullScreenPlayerView: View {
             .padding(.horizontal, 32)
             .id(song.id)
             .transition(.opacity)
-
             AppleMusicProgressBar(
               progress: $audioManager.progress,
               isScrubbing: $audioManager.isEditingProgress,
@@ -625,7 +627,6 @@ struct FullScreenPlayerView: View {
             )
             .padding(.horizontal, 32)
             .padding(.top, 16)
-
             HStack {
               Text(formattedTime(audioManager.progress * Double(song.duration)))
               Spacer()
@@ -644,7 +645,6 @@ struct FullScreenPlayerView: View {
             )
             .padding(.horizontal, 32)
             .padding(.top, 2)
-
             HStack(spacing: 0) {
               Button {
                 audioManager.playPrevious()
@@ -684,9 +684,7 @@ struct FullScreenPlayerView: View {
             }
             .padding(.horizontal, 32)
             .padding(.top, 20)
-
             Spacer(minLength: 12)
-
             HStack(spacing: 12) {
               Image(systemName: "speaker.fill")
                 .font(.system(size: 13))
@@ -712,7 +710,6 @@ struct FullScreenPlayerView: View {
                   isUserScrubbing: $isVolumeScrubbing
                 ).frame(width: 0, height: 0))
             #endif
-
             HStack(spacing: 0) {
               Button {
               } label: {
@@ -722,7 +719,6 @@ struct FullScreenPlayerView: View {
                   .frame(maxWidth: .infinity)
               }
               .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
-
               #if canImport(UIKit)
               ZStack {
                 Image(systemName: routeSymbolName(audioManager.routeIcon))
@@ -733,7 +729,6 @@ struct FullScreenPlayerView: View {
               }
               .frame(maxWidth: .infinity)
               #endif
-
               Button {
                 showingQueue = true
               } label: {
@@ -746,7 +741,6 @@ struct FullScreenPlayerView: View {
             }
             .padding(.horizontal, 48)
             .padding(.top, 16)
-
             Spacer(minLength: 8)
           }
         .frame(width: geo.size.width, height: geo.size.height)
@@ -799,10 +793,12 @@ struct FullScreenPlayerView: View {
       }
     }
   }
+
   private func formattedTime(_ seconds: Double) -> String {
     let s = Int(seconds)
     return String(format: "%d:%02d", s / 60, s % 60)
   }
+
   private func routeSymbolName(_ name: String) -> String {
     #if canImport(UIKit)
       if UIImage(systemName: name) != nil { return name }
@@ -838,13 +834,14 @@ class HomeViewModel: ObservableObject {
     }
     group.notify(queue: .main) { self.isLoading = false }
   }
+
   private func fetchData<T: Codable>(url: String, completion: @escaping (T?) -> Void) {
     guard let u = URL(string: url) else {
       completion(nil)
       return
     }
     var r = URLRequest(url: u)
-    r.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    r.setValue(GuestIdentity.current, forHTTPHeaderField: "x-guest-id")
     URLSession.shared.dataTask(with: r) { d, _, _ in
       if let d = d, let dec = try? JSONDecoder().decode(T.self, from: d) {
         completion(dec)
@@ -867,7 +864,7 @@ class PhonePlaylistsViewModel: ObservableObject {
     else { return }
     isLoading = true
     var r = URLRequest(url: url)
-    r.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    r.setValue(GuestIdentity.current, forHTTPHeaderField: "x-guest-id")
     URLSession.shared.dataTask(with: r) { d, _, _ in
       if let d = d, let dec = try? JSONDecoder().decode([Playlist].self, from: d) {
         DispatchQueue.main.async {
@@ -886,6 +883,7 @@ class PhoneSearchViewModel: ObservableObject {
   @Published var searchText = ""
   @Published var isSearching = false
   private var cancellables = Set<AnyCancellable>()
+
   init() {
     $searchText
       .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
@@ -895,13 +893,14 @@ class PhoneSearchViewModel: ObservableObject {
       }
       .store(in: &cancellables)
   }
+
   func search(_ q: String) {
     guard let u = URL(string: "https://api.neurokaraoke.com/api/songs") else { return }
     isSearching = true
     var r = URLRequest(url: u)
     r.httpMethod = "POST"
     r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    r.setValue("75f57152-9f21-44a5-8c65-e74cc5710cb8", forHTTPHeaderField: "x-guest-id")
+    r.setValue(GuestIdentity.current, forHTTPHeaderField: "x-guest-id")
     r.httpBody = try? JSONSerialization.data(withJSONObject: [
       "page": 1, "pageSize": 30, "search": q,
     ])

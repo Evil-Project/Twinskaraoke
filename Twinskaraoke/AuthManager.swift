@@ -1,11 +1,3 @@
-//
-//  AuthManager.swift
-//  Twinskaraoke
-//
-//  Created by Sebastian Reid on 28/4/2026.
-//
-
-
 import AuthenticationServices
 import CryptoKit
 import Foundation
@@ -14,16 +6,13 @@ import Combine
 
 @MainActor
 final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
-
     @Published private(set) var isLoggedIn        = false
     @Published private(set) var currentUsername: String?
     @Published private(set) var currentUserId:   String?
     @Published private(set) var currentAvatar:   String?
     @Published private(set) var isLoading        = false
     @Published private(set) var errorMessage:    String?
-
     private(set) var authToken: String?
-
     private let defaults = UserDefaults.standard
 
     private enum K {
@@ -89,18 +78,15 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 "username": username,
                 "password": password
             ])
-
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
                 let body = String(data: data, encoding: .utf8) ?? ""
                 throw NKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, body)
             }
-
             guard
                 let json  = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let token = json["token"] as? String
             else { throw NKError.parse }
-
             let parsed = parseJwt(token)
             commit(
                 token:    token,
@@ -120,7 +106,6 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
         do {
             let verifier  = makeVerifier()
             let challenge = makeChallenge(verifier)
-
             var comps = URLComponents(string: Endpoint.discordAuth)!
             comps.queryItems = [
                 .init(name: "client_id",             value: Endpoint.discordClientId),
@@ -130,7 +115,6 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 .init(name: "code_challenge",        value: challenge),
                 .init(name: "code_challenge_method", value: "S256"),
             ]
-
             let callbackURL = try await withCheckedThrowingContinuation {
                 (cont: CheckedContinuation<URL, Error>) in
                 let session = ASWebAuthenticationSession(
@@ -145,16 +129,13 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
                 session.prefersEphemeralWebBrowserSession = true
                 session.start()
             }
-
             guard
                 let cbComps = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
                 let code    = cbComps.queryItems?.first(where: { $0.name == "code" })?.value
             else { throw NKError.invalidCallback }
-
             let discordToken = try await exchangeDiscordCode(code, verifier: verifier)
             let nkToken      = try await exchangeForNKToken(discordToken)
             let profile      = try await fetchDiscordProfile(discordToken)
-
             commit(
                 token:    nkToken ?? discordToken,
                 userId:   profile.id,
@@ -176,7 +157,6 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
             .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? Endpoint.redirectUri
         req.httpBody = "client_id=\(Endpoint.discordClientId)&grant_type=authorization_code&code=\(code)&redirect_uri=\(encoded)&code_verifier=\(verifier)"
             .data(using: .utf8)
-
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
             throw NKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0,
@@ -194,10 +174,8 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["accessToken": discordToken])
-
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else { return nil }
-
         let raw = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if raw.hasPrefix("{"),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -211,7 +189,6 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
     private func fetchDiscordProfile(_ token: String) async throws -> DiscordProfile {
         var req = URLRequest(url: URL(string: Endpoint.discordUser)!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
             throw NKError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, "")

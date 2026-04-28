@@ -1,9 +1,3 @@
-//
-//  iPhoneSearchView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import SwiftUI
 
 struct iPhoneSearchView: View {

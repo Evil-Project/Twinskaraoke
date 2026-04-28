@@ -1,9 +1,3 @@
-//
-//  iPhonePlaylistsView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import SwiftUI
 
 struct iPhonePlaylistsView: View {
@@ -52,21 +46,19 @@ struct iPhonePlaylistsView: View {
 struct PlaylistGridCell: View {
   let playlist: Playlist
   var body: some View {
-    GeometryReader { geo in
-      VStack(alignment: .leading, spacing: 6) {
-        LoadingImage(url: playlist.imageURL, cornerRadius: 10)
-          .frame(width: geo.size.width, height: geo.size.width)
-          .cornerRadius(10)
-        Text(playlist.name)
-          .font(.system(size: 14, weight: .bold))
-          .foregroundColor(.primary)
-          .lineLimit(1)
-        Text("\(playlist.songCount) songs")
-          .font(.system(size: 12))
-          .foregroundColor(.secondary)
-      }
+    VStack(alignment: .leading, spacing: 6) {
+      LoadingImage(url: playlist.imageURL, cornerRadius: 10)
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+      Text(playlist.name)
+        .font(.system(size: 14, weight: .bold))
+        .foregroundColor(.primary)
+        .lineLimit(1)
+      Text("\(playlist.songCount) songs")
+        .font(.system(size: 12))
+        .foregroundColor(.secondary)
     }
-    .aspectRatio(0.78, contentMode: .fit)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -75,15 +67,18 @@ struct PlaylistsSkeletonView: View {
   var body: some View {
     LazyVGrid(columns: cols, spacing: 16) {
       ForEach(0..<8, id: \.self) { _ in
-        GeometryReader { geo in
-          VStack(alignment: .leading, spacing: 6) {
-            ShimmerBox(cornerRadius: 10)
-              .frame(width: geo.size.width, height: geo.size.width)
-            ShimmerBox(cornerRadius: 4).frame(width: geo.size.width * 0.8, height: 14)
-            ShimmerBox(cornerRadius: 4).frame(width: geo.size.width * 0.5, height: 12)
+        VStack(alignment: .leading, spacing: 6) {
+          ShimmerBox(cornerRadius: 10)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+          ShimmerBox(cornerRadius: 4)
+            .frame(height: 14)
+          HStack {
+            ShimmerBox(cornerRadius: 4).frame(width: 80, height: 12)
+            Spacer()
           }
         }
-        .aspectRatio(0.78, contentMode: .fit)
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
     }
     .padding(.horizontal, 16)

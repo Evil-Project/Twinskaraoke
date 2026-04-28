@@ -1,9 +1,3 @@
-//
-//  ContentView.swift
-//  TwinskaraokeWatchApp
-//
-//  Created by xiaoyuan on 2026/4/26.
-//
 import Combine
 import Foundation
 import SwiftUI
@@ -45,6 +39,7 @@ class SearchViewModel: ObservableObject {
   @Published var isLoading = false
   @Published var searchText = ""
   private var cancellables = Set<AnyCancellable>()
+
   init() {
     $searchText
       .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
@@ -58,6 +53,7 @@ class SearchViewModel: ObservableObject {
       }
       .store(in: &cancellables)
   }
+
   func performSearch(query: String) {
     guard let url = URL(string: "https://api.neurokaraoke.com/api/songs") else { return }
     isLoading = true
@@ -168,6 +164,7 @@ struct ContentView: View {
     }
   }
 }
+
 #Preview {
   ContentView()
 }

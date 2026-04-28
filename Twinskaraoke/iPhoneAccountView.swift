@@ -30,11 +30,9 @@ private struct UploadLimits: Decodable {
 struct iPhoneAccountView: View {
     @StateObject private var auth = AuthManager()
     @EnvironmentObject var audioManager: AudioPlayerManager
-
     @State private var showLoginSheet = false
     @State private var profile: NKProfileInfo?
     @State private var limits: UploadLimits?
-
     var body: some View {
         NavigationStack {
             List {
@@ -52,7 +50,6 @@ struct iPhoneAccountView: View {
             }
         }
     }
-
     @ViewBuilder
     private var accountSection: some View {
         if auth.isLoggedIn {
@@ -116,7 +113,6 @@ struct iPhoneAccountView: View {
             }
         }
     }
-
     private var generalSection: some View {
         Section {
             NavigationLink {
@@ -162,7 +158,6 @@ struct iPhoneAccountView: View {
 private struct ProfileHeaderRow: View {
     let profile: NKProfileInfo
     let auth: AuthManager
-
     var body: some View {
         HStack(spacing: 14) {
             avatarView
@@ -186,7 +181,6 @@ private struct ProfileHeaderRow: View {
         }
         .padding(.vertical, 6)
     }
-
     @ViewBuilder
     private var avatarView: some View {
         let urlStr = profile.avatarUrl ?? auth.currentAvatar ?? ""
@@ -201,7 +195,6 @@ private struct ProfileHeaderRow: View {
             initials
         }
     }
-
     private var initials: some View {
         ZStack {
             LinearGradient(colors: [Color(hex: "7C5CFC"), Color(hex: "B47BFF")],
@@ -218,7 +211,6 @@ private struct IconLabelRow: View {
     let color: Color
     let label: String
     let value: String?
-
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -240,9 +232,7 @@ private struct IconLabelRow: View {
 private struct StorageProgressRow: View {
     let used: Int
     let max: Int
-
     private var fraction: Double { max > 0 ? min(Double(used) / Double(max), 1.0) : 0 }
-
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "internaldrive.fill")
@@ -277,14 +267,11 @@ private struct StorageProgressRow: View {
 private struct LoginSheet: View {
     @ObservedObject var auth: AuthManager
     @Environment(\.dismiss) private var dismiss
-
     @State private var username = ""
     @State private var password = ""
     @State private var showPassword = false
     @FocusState private var focus: LoginField?
-
     private enum LoginField { case username, password }
-
     var body: some View {
         NavigationStack {
             List {
@@ -295,7 +282,6 @@ private struct LoginSheet: View {
                         .focused($focus, equals: .username)
                         .submitLabel(.next)
                         .onSubmit { focus = .password }
-
                     HStack {
                         Group {
                             if showPassword {
@@ -309,14 +295,12 @@ private struct LoginSheet: View {
                         .focused($focus, equals: .password)
                         .submitLabel(.go)
                         .onSubmit { signIn() }
-
                         Button { showPassword.toggle() } label: {
                             Image(systemName: showPassword ? "eye.slash" : "eye")
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
-
                 if let err = auth.errorMessage, !err.isEmpty {
                     Section {
                         Label(err, systemImage: "exclamationmark.circle.fill")
@@ -325,7 +309,6 @@ private struct LoginSheet: View {
                     }
                     .listRowBackground(Color.red.opacity(0.07))
                 }
-
                 Section {
                     Button(action: signIn) {
                         HStack {
@@ -353,7 +336,6 @@ private struct LoginSheet: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 0, leading: 0, bottom: 0, trailing: 0))
                 }
-
                 Section {
                     Button {
                         Task { await auth.loginWithDiscord() }
@@ -402,7 +384,6 @@ private struct LoginSheet: View {
 private struct DiscordIcon: View {
     var size: CGFloat = 20
     var color: Color = .white
-
     var body: some View {
         DiscordShape()
             .fill(color, style: FillStyle(eoFill: true))
@@ -415,7 +396,6 @@ private struct DiscordShape: Shape {
         let w = rect.width
         let h = rect.height
         var p = Path()
-
         p.move(to: .init(x: w * 0.847, y: h * 0.089))
         p.addCurve(to: .init(x: w * 0.643, y: 0),
                    control1: .init(x: w * 0.820, y: h * 0.040),
@@ -454,10 +434,8 @@ private struct DiscordShape: Shape {
                    control1: .init(x: w * 1.043, y: h * 0.580),
                    control2: .init(x: w * 1.028, y: h * 0.237))
         p.closeSubpath()
-
         p.addEllipse(in: .init(x: w * 0.245, y: h * 0.418, width: w * 0.178, height: h * 0.254))
         p.addEllipse(in: .init(x: w * 0.577, y: h * 0.418, width: w * 0.178, height: h * 0.254))
-
         return p
     }
 }

@@ -1,9 +1,3 @@
-//
-//  MusicPlayerView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/19.
-//
 import AVFoundation
 import Combine
 import MediaPlayer
@@ -38,7 +32,6 @@ class MusicPlayerViewModel: ObservableObject {
   var currentSong: Song {
     songs[currentIndex]
   }
-
   private static let audioCacheDir: URL = {
     let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
       .appendingPathComponent("AudioCache")
@@ -57,11 +50,13 @@ class MusicPlayerViewModel: ObservableObject {
     setupInterruptionHandler()
     prepareAndPlay()
   }
+
   private func setupInterruptionHandler() {
     NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
       .sink { [weak self] note in self?.handleInterruption(note) }
       .store(in: &cancellables)
   }
+
   private func handleInterruption(_ note: Notification) {
     guard let info = note.userInfo,
       let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -90,6 +85,7 @@ class MusicPlayerViewModel: ObservableObject {
     @unknown default: break
     }
   }
+
   private func setupRemoteCommands() {
     let cc = MPRemoteCommandCenter.shared()
     cc.playCommand.addTarget { [weak self] _ in
@@ -115,6 +111,7 @@ class MusicPlayerViewModel: ObservableObject {
       return .success
     }
   }
+
   private func prepareAndPlay() {
     player?.pause()
     if let observer = timeObserver {
@@ -132,13 +129,11 @@ class MusicPlayerViewModel: ObservableObject {
     cancellables.removeAll()
     setupInterruptionHandler()
     downloadTask?.cancel()
-
     let localURL = localCacheURL(for: currentSong.id)
     if FileManager.default.fileExists(atPath: localURL.path) {
       setupPlayer(with: localURL)
       return
     }
-
     guard let remoteURL = currentSong.audioURL else { return }
     isLoading = true
     downloadTask = URLSession.shared.downloadTask(with: remoteURL) { [weak self] tempURL, _, error in
@@ -183,7 +178,6 @@ class MusicPlayerViewModel: ObservableObject {
           self?.player?.play()
           self?.isPlaying = true
           self?.updateNowPlayingInfo()
-
         } else if status == .failed {
           self?.isLoading = false
           print("Player item failed: \(String(describing: self?.player?.currentItem?.error))")
@@ -209,6 +203,7 @@ class MusicPlayerViewModel: ObservableObject {
       self?.playEnded()
     }
   }
+
   private func updateNowPlayingInfo() {
     var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
     info[MPMediaItemPropertyTitle] = currentSong.title
@@ -218,10 +213,10 @@ class MusicPlayerViewModel: ObservableObject {
     info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
   }
+
   func togglePlayPause() {
     if isPlaying {
       player?.pause()
-
     } else {
       do {
         try AVAudioSession.sharedInstance().setActive(true)
@@ -233,6 +228,7 @@ class MusicPlayerViewModel: ObservableObject {
     isPlaying.toggle()
     updateNowPlayingInfo()
   }
+
   func playNext() {
     if isShuffleOn && songs.count > 1 {
       var nextIndex = currentIndex
@@ -245,6 +241,7 @@ class MusicPlayerViewModel: ObservableObject {
     }
     prepareAndPlay()
   }
+
   func playEnded() {
     if playbackMode == .singleLoop {
       player?.seek(to: .zero)
@@ -253,15 +250,18 @@ class MusicPlayerViewModel: ObservableObject {
       playNext()
     }
   }
+
   func toggleMode() {
     switch playbackMode {
     case .listLoop: playbackMode = .singleLoop
     case .singleLoop: playbackMode = .listLoop
     }
   }
+
   func toggleShuffle() {
     isShuffleOn.toggle()
   }
+
   func playPrevious() {
     if currentTime > 3.0 {
       player?.seek(to: .zero)
@@ -272,6 +272,7 @@ class MusicPlayerViewModel: ObservableObject {
       player?.seek(to: .zero)
     }
   }
+
   func seek(to time: Double) {
     player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
     updateNowPlayingInfo()
@@ -310,7 +311,6 @@ struct MusicPlayerView: View {
       } else {
         Color.black.ignoresSafeArea()
       }
-
       VStack(alignment: .center, spacing: 4) {
         ZStack {
           AsyncImage(url: viewModel.currentSong.imageURL) { image in
@@ -332,7 +332,6 @@ struct MusicPlayerView: View {
         }
         .frame(width: 56, height: 56)
         .padding(.top, 4)
-
         VStack(alignment: .center, spacing: 0) {
           Text(viewModel.currentSong.title)
             .font(.system(size: 15, weight: .bold))
@@ -347,7 +346,6 @@ struct MusicPlayerView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 4)
-
         VStack(spacing: 2) {
           let totalDuration = max(viewModel.duration, 1)
           ProgressView(value: min(viewModel.currentTime, totalDuration), total: totalDuration)
@@ -363,7 +361,6 @@ struct MusicPlayerView: View {
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 8)
-
         HStack(spacing: 12) {
           Button(action: { viewModel.playPrevious() }) {
             Image(systemName: "backward.fill")
@@ -392,6 +389,7 @@ struct MusicPlayerView: View {
     .navigationTitle("Now Playing")
     .navigationBarTitleDisplayMode(.inline)
   }
+
   private func formatTime(_ time: Double) -> String {
     if time.isNaN || time.isInfinite { return "0:00" }
     let mins = Int(time) / 60

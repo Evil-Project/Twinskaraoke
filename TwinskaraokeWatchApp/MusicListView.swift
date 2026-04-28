@@ -1,9 +1,3 @@
-//
-//  MusicListView.swift
-//  Twinskaraoke
-//
-//  Created by xiaoyuan on 2026/4/19.
-//
 import AVFoundation
 import Combine
 import Foundation
@@ -44,6 +38,7 @@ struct Song: Codable, Identifiable, Equatable {
     let seconds = duration % 60
     return String(format: "%d:%02d", minutes, seconds)
   }
+
   static func == (lhs: Song, rhs: Song) -> Bool {
     lhs.id == rhs.id
   }
@@ -53,9 +48,11 @@ class PlaylistViewModel: ObservableObject {
   @Published var songs: [Song] = []
   @Published var isLoading = false
   let playlistID: String
+
   init(playlistID: String) {
     self.playlistID = playlistID
   }
+
   func fetchSongs() {
     guard let url = URL(string: "https://api.neurokaraoke.com/api/playlist/\(playlistID)") else {
       return
@@ -87,6 +84,7 @@ class PlaylistViewModel: ObservableObject {
 struct MusicListView: View {
   @StateObject var viewModel: PlaylistViewModel
   let playlistName: String
+
   init(playlistID: String, playlistName: String) {
     self.playlistName = playlistName
     _viewModel = StateObject(wrappedValue: PlaylistViewModel(playlistID: playlistID))
