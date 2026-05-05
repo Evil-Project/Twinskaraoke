@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -18,6 +21,7 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest
+      # ------------------------
 
       - name: Archive iPhone
         run: |
@@ -35,9 +39,7 @@ jobs:
           mkdir -p Payload
           cp -R build/iPhone.xcarchive/Products/Applications/*.app Payload/
           
-          # --- COPE FIX ---
-          # remove Watch app from folder.
-          # fix for WKCompanionAppBundleIdentifier error
+          # --- sideload fix ---
           rm -rf Payload/*.app/Watch
           # ---------------------
           
@@ -75,3 +77,23 @@ jobs:
         with:
           name: Twinskaraoke-Watch
           path: output_watch/Twinskaraoke-Watch.ipa
+
+      # --- NIGHTLYS ---
+      
+      - name: Update "nightly" Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly
+          git push -f origin nightly
+
+      - name: Publish Nightly Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: "Nightly Build"
+          body: "This is an auto-generated build containing the latest bleeding-edge changes. It automatically rebuilds and overwrites this release every time new code is pushed to the `main` branch."
+          artifacts: "output/Twinskaraoke-iPhone-Sideload.ipa,output_watch/Twinskaraoke-Watch.ipa"
+          allowUpdates: true
+          prerelease: true
+          replacesArtifacts: true
