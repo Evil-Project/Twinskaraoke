@@ -3,7 +3,6 @@ import SwiftUI
 /// Vertical fill bar reminiscent of the Apple Music "Sing" vocal-level control:
 /// drag anywhere on the track to set the value. Empty when value is 0, fills
 /// from the bottom up.
-
 struct VerticalKaraokeLevel: View {
   @Binding var value: Double  // 0...1
   var enabled: Bool = true

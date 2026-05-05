@@ -4,7 +4,6 @@ import SwiftUI
 /// without remote artwork (including the synthesized "Favorites" playlist).
 /// White background with an Apple Music-style pink-to-red gradient star
 /// that scales proportionally with the container size.
-
 struct FavoritesArtworkTile: View {
   /// Star size as a fraction of the smaller container dimension. Matches
   /// Apple Music's Favorites tile proportions so the icon looks identical

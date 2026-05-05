@@ -3,7 +3,6 @@ import Foundation
 import SwiftUI
 
 @MainActor
-
 final class FavoritesManager: ObservableObject {
   static let shared = FavoritesManager()
   @Published private(set) var favoriteIDs: Set<String> = []

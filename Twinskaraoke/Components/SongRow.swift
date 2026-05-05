@@ -8,17 +8,17 @@ enum SongRowSize {
     case .regular: return 48
     }
   }
-  var cornerRadius: CGFloat { 6 }
+  var cornerRadius: CGFloat { AM.Radius.thumb }
   var titleFont: Font {
     switch self {
-    case .compact: return .system(size: 14, weight: .regular)
-    case .regular: return .system(size: 15, weight: .regular)
+    case .compact: return .system(size: 15, weight: .regular)
+    case .regular: return AM.Font.rowTitle
     }
   }
   var subtitleFont: Font {
     switch self {
     case .compact: return .system(size: 12)
-    case .regular: return .system(size: 13)
+    case .regular: return AM.Font.rowSubtitle
     }
   }
   var indicatorSize: CGFloat {

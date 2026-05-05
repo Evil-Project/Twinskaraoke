@@ -90,170 +90,41 @@ private struct RecentlyAddedCarousel: View {
   @ObservedObject var viewModel: PlaylistsViewModel
   @ObservedObject var savedStore: SavedPlaylistsStore = .shared
   @ObservedObject var addedTracker: RecentlyAddedTracker = .shared
-  @State private var showAll = false
   private let rows = [
-    GridItem(.fixed(220), spacing: 16),
-    GridItem(.fixed(220), spacing: 16),
+    GridItem(.fixed(220), spacing: AM.Spacing.l),
+    GridItem(.fixed(220), spacing: AM.Spacing.l),
   ]
   var body: some View {
     let recents = viewModel.recentlyAddedPlaylists(saved: savedStore.playlists)
-    VStack(alignment: .leading, spacing: 12) {
-      Button {
-        showAll = true
-      } label: {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-          Text("Recently Added")
-            .font(.system(size: 20, weight: .bold))
-            .foregroundColor(.primary)
-          Image(systemName: "chevron.right")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(.secondary)
-          Spacer()
-        }
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .padding(.horizontal, 12)
-      .background(
-        NavigationLink(destination: RecentlyAddedView(viewModel: viewModel), isActive: $showAll) {
-          EmptyView()
-        }
-        .opacity(0)
-      )
+    VStack(alignment: .leading, spacing: AM.Spacing.m) {
+      AMSectionHeader("Recently Added")
       ScrollView(.horizontal, showsIndicators: false) {
-        LazyHGrid(rows: rows, spacing: 16) {
+        LazyHGrid(rows: rows, spacing: AM.Spacing.l) {
           ForEach(recents) { playlist in
             NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-              VStack(alignment: .leading, spacing: 6) {
-                PlaylistArtwork(playlist: playlist, cornerRadius: 10)
-                  .frame(width: 170, height: 170)
-                  .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+              VStack(alignment: .leading, spacing: AM.Spacing.s) {
+                PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.card)
+                  .frame(width: AM.Spacing.shelfTile, height: AM.Spacing.shelfTile)
+                  .clipShape(
+                    RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
+                  .amShadow(AM.Shadow.card)
                 Text(playlist.name)
-                  .font(.system(size: 15, weight: .semibold))
+                  .font(AM.Font.tileTitle)
                   .foregroundColor(.primary)
                   .lineLimit(1)
                 Text("\(playlist.songCount) songs")
-                  .font(.system(size: 12))
+                  .font(AM.Font.tileCaption)
                   .foregroundColor(.secondary)
                   .lineLimit(1)
               }
-              .frame(width: 170)
+              .frame(width: AM.Spacing.shelfTile)
             }
             .buttonStyle(PressableButtonStyle())
           }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, AM.Spacing.screenMargin)
       }
     }
-  }
-}
-
-private struct RecentlyAddedTile: View {
-  let playlist: Playlist
-  var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      PlaylistArtwork(playlist: playlist, cornerRadius: 6)
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
-          RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-        )
-      Text(playlist.name)
-        .font(.system(size: 15, weight: .regular))
-        .foregroundColor(.primary)
-        .lineLimit(1)
-        .padding(.top, 2)
-      Text(playlist.isFavorites ? "Playlist" : "Playlist")
-        .font(.system(size: 13))
-        .foregroundColor(.secondary)
-        .lineLimit(1)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-}
-
-private struct RecentlyAddedSection: View {
-  @ObservedObject var viewModel: PlaylistsViewModel
-  @ObservedObject var savedStore: SavedPlaylistsStore = .shared
-  @ObservedObject var addedTracker: RecentlyAddedTracker = .shared
-  let cols: [GridItem]
-  var body: some View {
-    let recents = viewModel.recentlyAddedPlaylists(saved: savedStore.playlists)
-    VStack(alignment: .leading, spacing: 16) {
-      NavigationLink {
-        RecentlyAddedView(viewModel: viewModel)
-      } label: {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-          Text("Recently Added")
-            .font(.system(size: 22, weight: .bold))
-            .foregroundColor(.primary)
-          Spacer()
-          Image(systemName: "chevron.right")
-            .font(.system(size: 16, weight: .bold))
-            .foregroundColor(.secondary)
-        }
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      if viewModel.isLoading && recents.isEmpty {
-        LoadingIndicator(size: 48)
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 40)
-      } else if recents.isEmpty {
-        Text("Playlists you add will appear here.")
-          .font(.system(size: 14))
-          .foregroundColor(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.vertical, 12)
-      } else {
-        LazyVGrid(columns: cols, spacing: 18) {
-          ForEach(recents.prefix(8)) { playlist in
-            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-              PlaylistGridCell(playlist: playlist)
-            }
-            .buttonStyle(PressableButtonStyle())
-          }
-        }
-      }
-    }
-  }
-}
-
-struct RecentlyAddedView: View {
-  @ObservedObject var viewModel: PlaylistsViewModel
-  @ObservedObject var savedStore: SavedPlaylistsStore = .shared
-  @ObservedObject var addedTracker: RecentlyAddedTracker = .shared
-  private let cols = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
-  var body: some View {
-    let recents = viewModel.recentlyAddedPlaylists(saved: savedStore.playlists)
-    ScrollView {
-      if recents.isEmpty {
-        VStack(spacing: 16) {
-          Image(systemName: "clock")
-            .font(.system(size: 48))
-            .foregroundColor(.secondary)
-          Text("Nothing here yet")
-            .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
-      } else {
-        LazyVGrid(columns: cols, spacing: 18) {
-          ForEach(recents) { playlist in
-            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-              PlaylistGridCell(playlist: playlist)
-            }
-            .buttonStyle(PressableButtonStyle())
-          }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-      }
-    }
-    .navigationTitle("Recently Added")
-    .navigationBarTitleDisplayMode(.large)
   }
 }
 

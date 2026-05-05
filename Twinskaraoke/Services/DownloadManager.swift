@@ -3,7 +3,6 @@ import Foundation
 import SwiftUI
 
 @MainActor
-
 final class DownloadManager: ObservableObject {
   static let shared = DownloadManager()
   @Published private(set) var downloadedIDs: Set<String> = []

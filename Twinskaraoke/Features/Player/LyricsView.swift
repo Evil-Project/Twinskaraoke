@@ -103,7 +103,6 @@ private struct InstrumentalDots: View {
 /// sequence as the gap to the next lyric line elapses. When `progress` is nil
 /// (e.g. loading state with no known timing), dots fall back to a free-running
 /// sequential fade.
-
 struct LyricsBouncingDots: View {
   let isActive: Bool
   var progress: Double? = nil

@@ -7,7 +7,6 @@ import MediaToolbox
 ///
 /// This is a global processor (single attenuation value) because the tap's
 /// process callback must be `@convention(c)` and cannot capture state.
-
 enum KaraokeAudioProcessor {
   /// 0 = vocals untouched, 1 = vocals fully cancelled.
   static var vocalAttenuation: Float = 0
@@ -50,7 +49,6 @@ enum KaraokeAudioProcessor {
     }
   }
 }
-
 private let karaokeTapProcess: MTAudioProcessingTapProcessCallback = {
   tap, numFrames, _, bufferList, framesProcessedOut, flagsOut in
   var timeRange = CMTimeRange()

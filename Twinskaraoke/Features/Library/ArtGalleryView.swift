@@ -357,9 +357,9 @@ private struct ArtThumbnail: View {
 struct ArtDetailView: View {
   let art: GalleryArt
   let artist: GalleryArtist
+
   @State private var showFullScreen = false
   @State private var saveStatus: SaveStatus = .idle
-
   enum SaveStatus { case idle, saving, success, failed(String) }
   private var fullResURL: URL? {
     guard let path = art.absolutePath else { return art.imageURL }
@@ -461,7 +461,6 @@ struct ArtDetailView: View {
     }.resume()
   }
 }
-
 #if canImport(UIKit)
   import UIKit
 

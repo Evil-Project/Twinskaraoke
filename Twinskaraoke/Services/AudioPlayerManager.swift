@@ -3,10 +3,8 @@ import Combine
 import Foundation
 import MediaPlayer
 import SwiftUI
-
 #if canImport(UIKit)
   import UIKit
-
 #endif
 
 enum RepeatMode {
@@ -26,7 +24,6 @@ enum RepeatMode {
     }
   }
 }
-
 private final class AudioDownloadSession: NSObject, URLSessionDataDelegate {
   private let songID: String
   private let cacheURL: URL
@@ -125,7 +122,6 @@ class AudioPlayerManager: ObservableObject {
   #if canImport(UIKit)
     @Published var nowPlayingArtwork: UIImage?
   #endif
-
   private var crossfadePlayer: AVPlayer?
   private var crossfadeTimer: Timer?
   private var crossfadeRampTimer: Timer?
@@ -148,6 +144,7 @@ class AudioPlayerManager: ObservableObject {
   private var cancellables = Set<AnyCancellable>()
   private var itemObservers = Set<AnyCancellable>()
   private var artworkURL: URL?
+  private var artworkTask: URLSessionDataTask?
   private var downloadSession: AudioDownloadSession?
   #if canImport(UIKit)
     private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -158,7 +155,15 @@ class AudioPlayerManager: ObservableObject {
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
   }()
-
+  #if canImport(UIKit)
+    private static let artworkCache: NSCache<NSURL, UIImage> = {
+      let cache = NSCache<NSURL, UIImage>()
+      cache.countLimit = 32
+      cache.totalCostLimit = 32 * 1024 * 1024
+      return cache
+    }()
+    private static let artworkMaxPixel: CGFloat = 600
+  #endif
   init() {
     configureAudioSessionCategory()
     activateAudioSession()
@@ -192,9 +197,23 @@ class AudioPlayerManager: ObservableObject {
       NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
         .sink { [weak self] _ in self?.handleBackgroundTransition() }
         .store(in: &cancellables)
+      NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+        .sink { _ in AudioPlayerManager.artworkCache.removeAllObjects() }
+        .store(in: &cancellables)
     #endif
   }
-
+  deinit {
+    if let existing = timeObserver {
+      existing.player.removeTimeObserver(existing.token)
+    }
+    crossfadeTimer?.invalidate()
+    crossfadeRampTimer?.invalidate()
+    crossfadeFallback?.cancel()
+    artworkTask?.cancel()
+    downloadSession?.cancel()
+    player?.pause()
+    crossfadePlayer?.pause()
+  }
   func play(song: Song, context: [Song] = []) {
     if isRadioMode {
       RadioController.shared.stop()
@@ -275,7 +294,6 @@ class AudioPlayerManager: ObservableObject {
     updateNowPlayingInfo(reloadArtwork: true)
     scheduleAutoMixIfNeeded()
   }
-
   private func cancelAutoMix() {
     crossfadeTimer?.invalidate()
     crossfadeTimer = nil
@@ -530,7 +548,6 @@ class AudioPlayerManager: ObservableObject {
       }
     }
   #endif
-
   func togglePlayPause() {
     if isPlaying {
       player?.pause()
@@ -580,7 +597,6 @@ class AudioPlayerManager: ObservableObject {
     }
     return song.imageURL
   }
-
   func playNextOrRandom() {
     if isRadioMode { return }
     if repeatMode == .one, let current = currentSong {
@@ -630,7 +646,6 @@ class AudioPlayerManager: ObservableObject {
   func toggleAutoplay() {
     autoplayEnabled.toggle()
   }
-
   func moveInUpNext(from source: IndexSet, to destination: Int) {
     guard let current = currentSong,
       let baseIdx = queue.firstIndex(of: current)
@@ -651,7 +666,6 @@ class AudioPlayerManager: ObservableObject {
     upNext.remove(atOffsets: offsets)
     queue = Array(queue[..<upNextStart]) + upNext
   }
-
   func seek(to fraction: Double) {
     guard fraction.isFinite, (0.0...1.0).contains(fraction) else { return }
     guard let duration = player?.currentItem?.duration.seconds,
@@ -680,7 +694,6 @@ class AudioPlayerManager: ObservableObject {
     }
     timeObserver = (player, token)
   }
-
   private func configureAudioSessionCategory() {
     do {
       if #available(iOS 13.0, *) {
@@ -731,7 +744,6 @@ class AudioPlayerManager: ObservableObject {
       updateNowPlayingInfo(reloadArtwork: false)
     }
   }
-
   func updateRouteIcon() {
     let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
     guard let primary = outputs.first else {
@@ -774,7 +786,6 @@ class AudioPlayerManager: ObservableObject {
       routeIcon = "airplayaudio"
     }
   }
-
   private func setupRemoteCommands() {
     let cc = MPRemoteCommandCenter.shared()
     cc.playCommand.addTarget { [weak self] _ in
@@ -809,7 +820,6 @@ class AudioPlayerManager: ObservableObject {
       return .success
     }
   }
-
   private func updateNowPlayingInfo(reloadArtwork: Bool) {
     guard let song = currentSong else {
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -849,24 +859,43 @@ class AudioPlayerManager: ObservableObject {
   }
   private func loadArtworkAsync(from url: URL) {
     let songID = currentSong?.id
-    URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+    artworkTask?.cancel()
+    artworkTask = nil
+    #if canImport(UIKit)
+      if let cached = AudioPlayerManager.artworkCache.object(forKey: url as NSURL) {
+        applyArtwork(cached, for: songID)
+        return
+      }
+    #endif
+    let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
       guard let self = self, let data = data,
         self.currentSong?.id == songID
       else { return }
       #if canImport(UIKit)
         guard let image = UIImage(data: data) else { return }
-        let squareImage = image.croppedToSquare()
-        let artwork = MPMediaItemArtwork(boundsSize: squareImage.size) { _ in squareImage }
-        DispatchQueue.main.async {
-          var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-          info[MPMediaItemPropertyArtwork] = artwork
-          MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-          self.nowPlayingArtwork = squareImage
-        }
+        let squareImage = image.croppedToSquare().downscaled(
+          maxPixel: AudioPlayerManager.artworkMaxPixel)
+        let cost = Int(squareImage.size.width * squareImage.size.height * squareImage.scale
+          * squareImage.scale * 4)
+        AudioPlayerManager.artworkCache.setObject(squareImage, forKey: url as NSURL, cost: cost)
+        self.applyArtwork(squareImage, for: songID)
       #endif
-    }.resume()
+    }
+    artworkTask = task
+    task.resume()
   }
-
+  #if canImport(UIKit)
+    private func applyArtwork(_ image: UIImage, for songID: String?) {
+      let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, self.currentSong?.id == songID else { return }
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+        info[MPMediaItemPropertyArtwork] = artwork
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        self.nowPlayingArtwork = image
+      }
+    }
+  #endif
   private func fetchRandomTrending() {
     guard let url = URL(string: "https://api.neurokaraoke.com/api/explore/trendings?days=7&take=50")
     else { return }
@@ -881,7 +910,6 @@ class AudioPlayerManager: ObservableObject {
     }.resume()
   }
 }
-
 #if canImport(UIKit)
 
   extension UIImage {
@@ -894,6 +922,21 @@ class AudioPlayerManager: ObservableObject {
       let cropRect = CGRect(x: xOffset, y: yOffset, width: sideLength, height: sideLength)
       guard let cgImage = cgImage?.cropping(to: cropRect) else { return self }
       return UIImage(cgImage: cgImage, scale: scale, orientation: imageOrientation)
+    }
+    func downscaled(maxPixel: CGFloat) -> UIImage {
+      let pixelW = size.width * scale
+      let pixelH = size.height * scale
+      let longest = max(pixelW, pixelH)
+      guard longest > maxPixel else { return self }
+      let ratio = maxPixel / longest
+      let newSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+      let format = UIGraphicsImageRendererFormat()
+      format.scale = 1
+      format.opaque = true
+      let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+      return renderer.image { _ in
+        draw(in: CGRect(origin: .zero, size: newSize))
+      }
     }
   }
 #endif

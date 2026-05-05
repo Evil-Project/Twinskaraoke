@@ -14,8 +14,8 @@ enum PlaybackMode {
     }
   }
 }
-@MainActor
 
+@MainActor
 class AudioManager: ObservableObject {
   static let shared = AudioManager()
   @Published var currentSong: Song?

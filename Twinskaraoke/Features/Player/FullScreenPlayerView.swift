@@ -1,8 +1,6 @@
 import SwiftUI
-
 #if canImport(UIKit)
   import UIKit
-
 #endif
 
 struct FullScreenPlayerView: View {
@@ -129,7 +127,7 @@ struct FullScreenPlayerView: View {
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 6) {
             Circle()
-              .fill(.red)
+              .fill(Color.appAccent)
               .frame(width: 7, height: 7)
               .scaleEffect(audioManager.isPlaying ? 1.0 : 0.6)
               .animation(
@@ -140,7 +138,7 @@ struct FullScreenPlayerView: View {
               )
             Text("LIVE RADIO")
               .font(.system(size: 11, weight: .bold))
-              .foregroundColor(.red)
+              .foregroundColor(.appAccent)
               .tracking(1.2)
             if let listeners = RadioController.shared.nowPlaying?.listeners {
               Text("·")
@@ -246,10 +244,11 @@ struct FullScreenPlayerView: View {
   private func artwork(song: Song, size: CGFloat) -> some View {
     ZStack {
       LoadingImage(
-        url: audioManager.displayImageURL(for: song), cornerRadius: 12, contentMode: .fill
+        url: audioManager.displayImageURL(for: song), cornerRadius: AM.Radius.hero,
+        contentMode: .fill
       )
       .frame(width: size, height: size)
-      .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
       .id(song.id)
       .shadow(
         color: .black.opacity(audioManager.isPlaying ? 0.45 : 0.22),
@@ -259,7 +258,7 @@ struct FullScreenPlayerView: View {
       .scaleEffect(audioManager.isPlaying ? 1.0 : 0.86)
       .animation(.spring(response: 0.5, dampingFraction: 0.78), value: audioManager.isPlaying)
       if audioManager.isBuffering {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
+        RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous)
           .fill(Color.black.opacity(0.4))
           .frame(width: size, height: size)
         LoadingIndicator(size: 64)
@@ -271,17 +270,35 @@ struct FullScreenPlayerView: View {
   private func titleRow(song: Song) -> some View {
     HStack(alignment: .center, spacing: 12) {
       VStack(alignment: .leading, spacing: 4) {
-        MarqueeText(
-          text: song.title,
-          font: .system(size: 22, weight: .bold),
-          color: .primary
-        )
+        Text(song.title)
+          .font(.system(size: 22, weight: .bold))
+          .foregroundColor(.primary)
+          .lineLimit(1)
+          .truncationMode(.tail)
         Text(song.displayArtist)
           .font(.system(size: 17))
           .foregroundColor(.secondary)
           .lineLimit(1)
       }
       Spacer(minLength: 8)
+      Button {
+        favorites.toggle(songID: song.id)
+      } label: {
+        Group {
+          let isFav = favorites.isFavorite(song.id)
+          if #available(iOS 17.0, *) {
+            Image(systemName: isFav ? "star.fill" : "star")
+              .contentTransition(.symbolEffect(.replace))
+          } else {
+            Image(systemName: isFav ? "star.fill" : "star")
+          }
+        }
+        .font(.system(size: 24, weight: .regular))
+        .foregroundColor(favorites.isFavorite(song.id) ? .appAccent : .primary)
+        .frame(width: 36, height: 36)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
     }
     .padding(.horizontal, 32)
   }
@@ -492,8 +509,11 @@ struct FullScreenPlayerView: View {
     radioFavoriteID != nil
   }
   private func backgroundView(song: Song) -> some View {
-    PlayerAmbientBackground(artworkURL: audioManager.displayImageURL(for: song))
-      .id(song.id)
+    PlayerAmbientBackground(
+      artworkURL: audioManager.displayImageURL(for: song),
+      isPlaying: audioManager.isPlaying
+    )
+    .id(song.id)
   }
   private func formattedTime(_ seconds: Double) -> String {
     let s = Int(seconds)
