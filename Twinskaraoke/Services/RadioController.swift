@@ -2,7 +2,6 @@ import Combine
 import Foundation
 
 @MainActor
-
 final class RadioController: ObservableObject {
   static let shared = RadioController()
   static let metadataURL = URL(

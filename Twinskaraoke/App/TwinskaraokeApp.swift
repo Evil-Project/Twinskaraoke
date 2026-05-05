@@ -1,11 +1,9 @@
 import SwiftUI
-
 #if canImport(UIKit)
   import UIKit
 #endif
 
 @main
-
 struct TwinskaraokeApp: App {
   init() {
     #if canImport(UIKit)

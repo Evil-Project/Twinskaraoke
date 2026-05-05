@@ -3,7 +3,6 @@ import Foundation
 import SwiftUI
 
 @MainActor
-
 final class RecentlyPlayedStore: ObservableObject {
   static let shared = RecentlyPlayedStore()
   private static let storageKey = "nk.recentlyPlayed.playlists.v1"

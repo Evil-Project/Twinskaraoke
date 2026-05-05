@@ -2,7 +2,6 @@ import Foundation
 import Testing
 
 @testable import Twinskaraoke_Watch_App
-
 struct WatchSongModelTests {
   @Test func songImageURL_withCloudflareId() {
     let song = Song(

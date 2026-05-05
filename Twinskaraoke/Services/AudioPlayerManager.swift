@@ -3,10 +3,8 @@ import Combine
 import Foundation
 import MediaPlayer
 import SwiftUI
-
 #if canImport(UIKit)
   import UIKit
-
 #endif
 
 enum RepeatMode {
@@ -26,7 +24,6 @@ enum RepeatMode {
     }
   }
 }
-
 private final class AudioDownloadSession: NSObject, URLSessionDataDelegate {
   private let songID: String
   private let cacheURL: URL
@@ -125,7 +122,6 @@ class AudioPlayerManager: ObservableObject {
   #if canImport(UIKit)
     @Published var nowPlayingArtwork: UIImage?
   #endif
-
   private var crossfadePlayer: AVPlayer?
   private var crossfadeTimer: Timer?
   private var crossfadeRampTimer: Timer?
@@ -158,7 +154,6 @@ class AudioPlayerManager: ObservableObject {
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
   }()
-
   init() {
     configureAudioSessionCategory()
     activateAudioSession()
@@ -194,7 +189,6 @@ class AudioPlayerManager: ObservableObject {
         .store(in: &cancellables)
     #endif
   }
-
   func play(song: Song, context: [Song] = []) {
     if isRadioMode {
       RadioController.shared.stop()
@@ -275,7 +269,6 @@ class AudioPlayerManager: ObservableObject {
     updateNowPlayingInfo(reloadArtwork: true)
     scheduleAutoMixIfNeeded()
   }
-
   private func cancelAutoMix() {
     crossfadeTimer?.invalidate()
     crossfadeTimer = nil
@@ -530,7 +523,6 @@ class AudioPlayerManager: ObservableObject {
       }
     }
   #endif
-
   func togglePlayPause() {
     if isPlaying {
       player?.pause()
@@ -580,7 +572,6 @@ class AudioPlayerManager: ObservableObject {
     }
     return song.imageURL
   }
-
   func playNextOrRandom() {
     if isRadioMode { return }
     if repeatMode == .one, let current = currentSong {
@@ -630,7 +621,6 @@ class AudioPlayerManager: ObservableObject {
   func toggleAutoplay() {
     autoplayEnabled.toggle()
   }
-
   func moveInUpNext(from source: IndexSet, to destination: Int) {
     guard let current = currentSong,
       let baseIdx = queue.firstIndex(of: current)
@@ -651,7 +641,6 @@ class AudioPlayerManager: ObservableObject {
     upNext.remove(atOffsets: offsets)
     queue = Array(queue[..<upNextStart]) + upNext
   }
-
   func seek(to fraction: Double) {
     guard fraction.isFinite, (0.0...1.0).contains(fraction) else { return }
     guard let duration = player?.currentItem?.duration.seconds,
@@ -680,7 +669,6 @@ class AudioPlayerManager: ObservableObject {
     }
     timeObserver = (player, token)
   }
-
   private func configureAudioSessionCategory() {
     do {
       if #available(iOS 13.0, *) {
@@ -731,7 +719,6 @@ class AudioPlayerManager: ObservableObject {
       updateNowPlayingInfo(reloadArtwork: false)
     }
   }
-
   func updateRouteIcon() {
     let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
     guard let primary = outputs.first else {
@@ -774,7 +761,6 @@ class AudioPlayerManager: ObservableObject {
       routeIcon = "airplayaudio"
     }
   }
-
   private func setupRemoteCommands() {
     let cc = MPRemoteCommandCenter.shared()
     cc.playCommand.addTarget { [weak self] _ in
@@ -809,7 +795,6 @@ class AudioPlayerManager: ObservableObject {
       return .success
     }
   }
-
   private func updateNowPlayingInfo(reloadArtwork: Bool) {
     guard let song = currentSong else {
       MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -866,7 +851,6 @@ class AudioPlayerManager: ObservableObject {
       #endif
     }.resume()
   }
-
   private func fetchRandomTrending() {
     guard let url = URL(string: "https://api.neurokaraoke.com/api/explore/trendings?days=7&take=50")
     else { return }
@@ -881,7 +865,6 @@ class AudioPlayerManager: ObservableObject {
     }.resume()
   }
 }
-
 #if canImport(UIKit)
 
   extension UIImage {

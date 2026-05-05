@@ -34,6 +34,7 @@ struct RadioView: View {
     let np = radio.nowPlaying
     let song = np?.nowPlaying?.song
     let isLivePlaying = audioManager.isRadioMode && audioManager.isPlaying
+    let isOnLiveStation = audioManager.isRadioMode && audioManager.currentSong != nil
     VStack(spacing: 14) {
       ZStack(alignment: .topLeading) {
         Group {
@@ -54,7 +55,7 @@ struct RadioView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Capsule().fill(.red))
+        .background(Capsule().fill(Color.appAccent))
         .padding(10)
       }
       .frame(maxWidth: 280, maxHeight: 280)
@@ -81,7 +82,7 @@ struct RadioView: View {
       }
       .padding(.horizontal, 24)
       Button {
-        if isLivePlaying {
+        if isOnLiveStation {
           audioManager.togglePlayPause()
         } else {
           radio.playLiveStream()
@@ -229,7 +230,7 @@ private struct RadioStationTileView: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(Capsule().fill(.red))
+        .background(Capsule().fill(Color.appAccent))
         .padding(8)
       }
       .frame(width: 200, height: 200)

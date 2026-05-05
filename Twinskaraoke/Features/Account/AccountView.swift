@@ -104,7 +104,7 @@ struct AccountView: View {
         HStack {
           Spacer()
           Text("Sign Out")
-            .foregroundStyle(.red)
+            .foregroundStyle(Color.appAccent)
           Spacer()
         }
       }
@@ -163,6 +163,7 @@ private struct ProfileHeaderRow: View {
 }
 
 private struct LoginSheet: View {
+
   @ObservedObject var auth: AuthManager
   @Environment(\.dismiss) private var dismiss
   @State private var username = ""
@@ -299,10 +300,10 @@ private struct LoginSheet: View {
   private func errorBanner(_ message: String) -> some View {
     HStack(spacing: 10) {
       Image(systemName: "exclamationmark.circle.fill")
-        .foregroundStyle(.red)
+        .foregroundStyle(Color.appAccent)
       Text(message)
         .font(.footnote)
-        .foregroundStyle(.red)
+        .foregroundStyle(Color.appAccent)
         .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: 0)
     }
@@ -310,7 +311,7 @@ private struct LoginSheet: View {
     .padding(.vertical, 10)
     .background(
       RoundedRectangle(cornerRadius: 12, style: .continuous)
-        .fill(Color.red.opacity(0.10))
+        .fill(Color.appAccent.opacity(0.10))
     )
   }
   private var signInButton: some View {

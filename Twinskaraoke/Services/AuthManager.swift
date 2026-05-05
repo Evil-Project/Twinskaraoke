@@ -5,7 +5,6 @@ import Foundation
 import Security
 
 @MainActor
-
 final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding
 {
   @Published private(set) var isLoggedIn = false
@@ -16,12 +15,14 @@ final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresenta
   @Published private(set) var errorMessage: String?
   private(set) var authToken: String?
   private let defaults = UserDefaults.standard
+
   private enum K {
     static let token = "nk.token"
     static let userId = "nk.userId"
     static let username = "nk.username"
     static let avatar = "nk.avatar"
   }
+
   private enum Endpoint {
     static let login = "https://api.neurokaraoke.com/api/auth/login"
     static let discordAuth = "https://discord.com/oauth2/authorize"

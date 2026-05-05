@@ -2,7 +2,6 @@ import Foundation
 import Testing
 
 @testable import Twinskaraoke
-
 struct SongModelTests {
   @Test func songImageURL_withCloudflareId() {
     let song = Song(
@@ -122,8 +121,8 @@ struct GuestIdentityTests {
 private func makePlaylist(id: String, name: String = "P", count: Int = 1) -> Playlist {
   Playlist(id: id, name: name, songCount: count, mosaicMedia: nil, songListDTOs: nil)
 }
-@MainActor
 
+@MainActor
 struct RecentlyPlayedStoreTests {
   @Test func recordAddsToFront() async {
     let key = "nk.recentlyPlayed.playlists.v1"
@@ -232,8 +231,8 @@ struct RadioNowPlayingDecodingTests {
     #expect(song.title == "Fallback text")
   }
 }
-@MainActor
 
+@MainActor
 struct FavoritesManagerTests {
   @Test func isFavoriteReflectsState() {
     let mgr = FavoritesManager.shared

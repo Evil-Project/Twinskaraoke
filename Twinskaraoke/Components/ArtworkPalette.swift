@@ -1,5 +1,4 @@
 import SwiftUI
-
 #if canImport(UIKit)
   import UIKit
 #endif
@@ -7,7 +6,6 @@ import SwiftUI
 /// Extracts dominant colors from an image so the player background can tint
 /// itself from the artwork. We sample the four corners + center for a quick,
 /// dependency-free palette that's good enough for ambient backgrounds.
-
 struct ArtworkPalette: Equatable {
   var primary: Color
   var secondary: Color
@@ -100,7 +98,6 @@ struct ArtworkPalette: Equatable {
     }
   #endif
 }
-
 #if canImport(UIKit)
 
   extension UIColor {

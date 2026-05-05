@@ -16,7 +16,6 @@ struct Artist: Codable, Identifiable, Equatable {
   }
   static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.id == rhs.id }
 }
-
 @MainActor
 final class ArtistsViewModel: ObservableObject {
   @Published var artists: [Artist] = []
@@ -62,7 +61,6 @@ final class ArtistsViewModel: ObservableObject {
     }.resume()
   }
 }
-
 @MainActor
 final class ArtistDetailViewModel: ObservableObject {
   @Published var artist: Artist?

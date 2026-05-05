@@ -173,30 +173,28 @@ private struct BrowseCategoriesView: View {
       [Color(red: 0.45, green: 0.45, blue: 0.55), Color(red: 0.15, green: 0.15, blue: 0.25)]
     ),
   ]
-  let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+  let columns = [GridItem(.flexible(), spacing: AM.Spacing.m), GridItem(.flexible(), spacing: AM.Spacing.m)]
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 24) {
+      VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
         section(title: "Browse Categories", items: topPicks)
         section(title: "Activities & Moods", items: activitiesAndMoods)
         section(title: "Decades", items: decades)
         section(title: "Genres", items: genres)
       }
-      .padding(.top, 8)
-      .padding(.bottom, 16)
+      .padding(.top, AM.Spacing.s)
+      .padding(.bottom, AM.Spacing.l)
     }
   }
   private func section(title: String, items: [(String, [Color])]) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text(title)
-        .font(.system(size: 22, weight: .bold))
-        .padding(.horizontal, 16)
-      LazyVGrid(columns: columns, spacing: 12) {
+    VStack(alignment: .leading, spacing: AM.Spacing.m) {
+      AMSectionHeader(title)
+      LazyVGrid(columns: columns, spacing: AM.Spacing.m) {
         ForEach(items, id: \.0) { item in
           CategoryTile(title: item.0, gradient: item.1)
         }
       }
-      .padding(.horizontal, 16)
+      .padding(.horizontal, AM.Spacing.screenMargin)
     }
   }
 }
@@ -207,13 +205,18 @@ private struct CategoryTile: View {
   var body: some View {
     ZStack(alignment: .topLeading) {
       LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+      LinearGradient(
+        colors: [Color.white.opacity(0.18), Color.white.opacity(0.0)],
+        startPoint: .topLeading,
+        endPoint: .center
+      )
       Text(title)
         .font(.system(size: 17, weight: .bold))
         .foregroundColor(.white)
-        .padding(12)
+        .padding(AM.Spacing.m)
     }
     .frame(height: 96)
-    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
   }
 }
 

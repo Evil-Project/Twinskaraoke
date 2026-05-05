@@ -43,8 +43,8 @@ struct LoadingImage: View {
     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
   }
 }
-/// Animated loading indicator using `Loading.webp`. Use anywhere a spinner would normally appear.
 
+/// Animated loading indicator using `Loading.webp`. Use anywhere a spinner would normally appear.
 struct LoadingIndicator: View {
   var size: CGFloat = 48
   var body: some View {

@@ -5,7 +5,6 @@
   /// Hidden `MPVolumeView` we drive programmatically to forward our slider's
   /// value through to the system volume. Holds zero visual weight (`alpha`
   /// near zero, no AirPlay button) — its only job is to relay scrubbing.
-
   struct SystemVolumeBridge: UIViewRepresentable {
     @Binding var volume: Double
     @Binding var isUserScrubbing: Bool
