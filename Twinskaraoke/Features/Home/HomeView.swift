@@ -206,7 +206,6 @@ struct HomePlaceholderTile: Identifiable {
 }
 
 struct HomePlaceholderSection: View {
-
   enum Style { case card, station }
   let title: String
   let tiles: [HomePlaceholderTile]

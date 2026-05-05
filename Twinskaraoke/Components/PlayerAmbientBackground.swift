@@ -8,9 +8,12 @@ import SwiftUI
 /// gradient when the artwork cannot be sampled.
 struct PlayerAmbientBackground: View {
   let artworkURL: URL?
+  var isPlaying: Bool = true
   @State private var palette: ArtworkPalette = .placeholder
+  @State private var isVisible: Bool = false
   var body: some View {
-    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
+    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !(isVisible && isPlaying))) {
+      context in
       let t = context.date.timeIntervalSinceReferenceDate
       ZStack {
         Color(.systemBackground)
@@ -23,7 +26,11 @@ struct PlayerAmbientBackground: View {
       .ignoresSafeArea()
       .animation(.easeInOut(duration: 1.2), value: palette)
     }
-    .onAppear { loadPalette() }
+    .onAppear {
+      isVisible = true
+      loadPalette()
+    }
+    .onDisappear { isVisible = false }
     .onChange(of: artworkURL) { _ in loadPalette() }
   }
   private func meshLayer(time: TimeInterval) -> some View {

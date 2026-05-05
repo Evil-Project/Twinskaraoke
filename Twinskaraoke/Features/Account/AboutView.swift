@@ -627,7 +627,6 @@ private struct ArtistCreditRow: View {
 }
 
 private struct AcknowledgementsView: View {
-
   private struct Credit: Identifiable {
     let id = UUID()
     let name: String

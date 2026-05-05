@@ -509,8 +509,11 @@ struct FullScreenPlayerView: View {
     radioFavoriteID != nil
   }
   private func backgroundView(song: Song) -> some View {
-    PlayerAmbientBackground(artworkURL: audioManager.displayImageURL(for: song))
-      .id(song.id)
+    PlayerAmbientBackground(
+      artworkURL: audioManager.displayImageURL(for: song),
+      isPlaying: audioManager.isPlaying
+    )
+    .id(song.id)
   }
   private func formattedTime(_ seconds: Double) -> String {
     let s = Int(seconds)

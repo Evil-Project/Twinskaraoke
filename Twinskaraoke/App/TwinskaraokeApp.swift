@@ -6,6 +6,7 @@ import SwiftUI
 @main
 struct TwinskaraokeApp: App {
   init() {
+    ImageCacheConfig.applyLimits()
     #if canImport(UIKit)
       let accent = UIColor(red: 0.99, green: 0.19, blue: 0.35, alpha: 1)
       UIView.appearance().tintColor = accent

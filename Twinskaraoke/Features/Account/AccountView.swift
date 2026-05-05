@@ -164,7 +164,6 @@ private struct ProfileHeaderRow: View {
 }
 
 private struct LoginSheet: View {
-
   @ObservedObject var auth: AuthManager
   @Environment(\.dismiss) private var dismiss
   @State private var username = ""
