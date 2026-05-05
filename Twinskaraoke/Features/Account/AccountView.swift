@@ -1,3 +1,4 @@
+import SDWebImageSwiftUI
 import SwiftUI
 
 private struct ProfileResponse: Decodable {
@@ -227,8 +228,8 @@ private struct LoginSheet: View {
   }
   @ViewBuilder
   private var appLogo: some View {
-    if let uiImage = UIImage(named: "LaunchScreen") {
-      Image(uiImage: uiImage)
+    if let data = NSDataAsset(name: "AppLogo")?.data {
+      AnimatedImage(data: data)
         .resizable()
         .aspectRatio(contentMode: .fill)
     } else {

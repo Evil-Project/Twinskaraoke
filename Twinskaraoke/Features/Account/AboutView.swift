@@ -1,3 +1,4 @@
+import SDWebImageSwiftUI
 import SwiftUI
 
 struct AboutView: View {
@@ -124,7 +125,7 @@ struct AboutView: View {
   }
   @ViewBuilder
   private var appIconView: some View {
-    Image("LaunchScreen")
+    AnimatedImage(data: NSDataAsset(name: "AppLogo")?.data ?? Data())
       .resizable()
       .scaledToFill()
       .frame(width: 96, height: 96)

@@ -44,11 +44,11 @@ struct LoadingImage: View {
   }
 }
 
-/// Animated loading indicator using `Loading.webp`. Use anywhere a spinner would normally appear.
+/// Animated loading indicator backed by the `LoadingImage` data asset.
 struct LoadingIndicator: View {
   var size: CGFloat = 48
   var body: some View {
-    AnimatedImage(name: "Loading.webp")
+    AnimatedImage(data: NSDataAsset(name: "LoadingImage")?.data ?? Data())
       .resizable()
       .scaledToFit()
       .frame(width: size, height: size)
