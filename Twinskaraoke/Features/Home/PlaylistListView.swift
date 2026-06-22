@@ -89,7 +89,7 @@ struct PlaylistListView: View {
             }
             prefetchArtwork()
         }
-        .onChange(of: displayedPlaylists.map(\.id)) { _, _ in
+        .onChange(of: Array(displayedPlaylists.prefix(12)).map(\.id)) { _, _ in
             prefetchArtwork()
         }
     }

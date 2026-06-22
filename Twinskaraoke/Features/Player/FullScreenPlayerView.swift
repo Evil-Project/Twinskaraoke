@@ -496,7 +496,7 @@ struct FullScreenPlayerView: View {
     private var dismissBar: some View {
         Button {
             AppHaptic.light.play()
-            popupPresentation.isExpanded = false
+            popupPresentation.collapse()
         } label: {
             Capsule()
                 .fill(Color.primary.opacity(0.35))

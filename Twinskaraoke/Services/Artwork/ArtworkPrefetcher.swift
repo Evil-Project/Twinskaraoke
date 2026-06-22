@@ -60,6 +60,7 @@ final class ArtworkPrefetcher {
     }
 
     private func freshUniqueURLs(from urls: [URL], limit: Int) -> [URL] {
+        guard limit > 0 else { return [] }
         let now = Date()
         recentlyRequested = recentlyRequested.filter { now.timeIntervalSince($0.value) < reuseWindow }
 

@@ -129,9 +129,17 @@ final class PopupPresentationState: ObservableObject {
     // frequent song, artwork, clock, and buffering updates; tying LNPopupUI's
     // expanded binding to that object makes unrelated playback/UI refreshes more
     // likely to be interpreted as presentation changes.
-    @Published var isExpanded = false
+    @Published private(set) var isExpanded = false
 
     private init() {}
+
+    func setExpanded(_ isExpanded: Bool) {
+        self.isExpanded = isExpanded
+    }
+
+    func collapse() {
+        setExpanded(false)
+    }
 }
 
 #if canImport(UIKit)
@@ -630,12 +638,12 @@ private struct PopupModifier: ViewModifier {
                                 let isIntentionalOpen =
                                     presentationState.isExpanded || PopupOpenIntentGate.shared.consumeIntent()
                                 guard isIntentionalOpen else {
-                                    presentationState.isExpanded = false
+                                    presentationState.collapse()
                                     return
                                 }
                             #endif
                         }
-                        presentationState.isExpanded = isOpen
+                        presentationState.setExpanded(isOpen)
                     }
                 )
             ) {

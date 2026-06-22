@@ -694,7 +694,7 @@ struct LibrarySongsView: View {
         .task {
             viewModel.loadIfNeeded()
         }
-        .onChange(of: songs.map(\.id)) { _, _ in
+        .onChange(of: Array(songs.prefix(18)).map(\.id)) { _, _ in
             ArtworkPrefetcher.shared.prefetchSongs(
                 Array(songs.prefix(18)),
                 limit: 18,

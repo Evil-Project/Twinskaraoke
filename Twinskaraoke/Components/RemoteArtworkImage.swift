@@ -129,7 +129,7 @@ struct RemoteArtworkImage: View {
                     markFinishedAfterFailure(for: url)
                 }
                 .onSuccess { _, _, cacheType in
-                    ArtworkLoadMetrics.shared.record(url: url, cacheType: cacheType)
+                    ArtworkLoadMetrics.shared.record(cacheType: cacheType)
                     markRendered(url)
                 }
                 .transition(.opacity.animation(AppMotion.spring(response: 0.15, dampingFraction: 0.9)))
@@ -194,7 +194,7 @@ private final class ArtworkLoadMetrics {
     private var networkLoads = 0
     private var lastReport = Date.distantPast
 
-    func record(url _: URL, cacheType: SDImageCacheType) {
+    func record(cacheType: SDImageCacheType) {
         totalLoads += 1
         switch cacheType {
         case .memory:
@@ -210,8 +210,16 @@ private final class ArtworkLoadMetrics {
         let now = Date()
         guard totalLoads >= 20, now.timeIntervalSince(lastReport) > 20 else { return }
         lastReport = now
+        let reportedTotal = totalLoads
+        let reportedMemory = memoryHits
+        let reportedDisk = diskHits
+        let reportedNetwork = networkLoads
+        totalLoads = 0
+        memoryHits = 0
+        diskHits = 0
+        networkLoads = 0
         DebugLogger.log(
-            "Artwork loads: total=\(totalLoads), memory=\(memoryHits), disk=\(diskHits), network=\(networkLoads)",
+            "Artwork loads: total=\(reportedTotal), memory=\(reportedMemory), disk=\(reportedDisk), network=\(reportedNetwork)",
             category: .cache
         )
     }

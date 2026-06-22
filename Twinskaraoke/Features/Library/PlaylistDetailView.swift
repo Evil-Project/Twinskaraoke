@@ -78,7 +78,7 @@ struct PlaylistDetailView: View {
             RecentlyPlayedStore.shared.record(playlist)
             prefetchArtwork(songs: songs)
         }
-        .onChange(of: songs.map(\.id)) { _, _ in
+        .onChange(of: Array(songs.prefix(18)).map(\.id)) { _, _ in
             prefetchArtwork(songs: songs)
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in

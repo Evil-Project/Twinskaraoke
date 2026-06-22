@@ -118,7 +118,7 @@ struct SearchView: View {
                 guard currentSongID == pendingSongID else { return }
                 pendingSongID = nil
             }
-            .onChange(of: viewModel.results.map(\.id)) { _, _ in
+            .onChange(of: Array(viewModel.results.prefix(18)).map(\.id)) { _, _ in
                 ArtworkPrefetcher.shared.prefetchSongs(
                     Array(viewModel.results.prefix(18)),
                     limit: 18,
