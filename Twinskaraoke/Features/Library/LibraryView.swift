@@ -584,6 +584,11 @@ final class LibrarySongsViewModel: ObservableObject {
         if !pageSongs.isEmpty || replace {
             self.page = page
         }
+        ArtworkPrefetcher.shared.prefetchSongs(
+            Array(pageSongs.prefix(18)),
+            limit: 18,
+            reason: replace ? "library songs initial" : "library songs page"
+        )
     }
 
     private static func decodeSongs(from data: Data?) -> [Song] {
@@ -688,6 +693,13 @@ struct LibrarySongsView: View {
         }
         .task {
             viewModel.loadIfNeeded()
+        }
+        .onChange(of: songs.map(\.id)) { _, _ in
+            ArtworkPrefetcher.shared.prefetchSongs(
+                Array(songs.prefix(18)),
+                limit: 18,
+                reason: "library visible songs"
+            )
         }
         .animation(listAnimation, value: songs.map(\.id))
         .animation(listAnimation, value: viewModel.sort)

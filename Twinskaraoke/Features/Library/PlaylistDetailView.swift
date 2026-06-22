@@ -76,11 +76,24 @@ struct PlaylistDetailView: View {
         .onAppear {
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             RecentlyPlayedStore.shared.record(playlist)
+            prefetchArtwork(songs: songs)
+        }
+        .onChange(of: songs.map(\.id)) { _, _ in
+            prefetchArtwork(songs: songs)
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in
             guard playlist.isFavorites else { return }
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
         }
+    }
+
+    private func prefetchArtwork(songs: [Song]) {
+        ArtworkPrefetcher.shared.prefetchPlaylists([playlist], limit: 6, reason: "playlist cover")
+        ArtworkPrefetcher.shared.prefetchSongs(
+            Array(songs.prefix(18)),
+            limit: 18,
+            reason: "playlist songs"
+        )
     }
 
     @ViewBuilder

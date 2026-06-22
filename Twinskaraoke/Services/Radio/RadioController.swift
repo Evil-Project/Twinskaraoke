@@ -97,6 +97,7 @@ final class RadioController: ObservableObject {
                 let (data, _) = try await URLSession.shared.data(from: Self.metadataURL)
                 let np = try JSONDecoder().decode(RadioNowPlaying.self, from: data)
                 nowPlaying = np
+                prefetchArtwork(from: np)
                 refreshErrorMessage = nil
                 lastUpdated = Date()
                 if AudioPlayerManager.shared.isRadioMode, let info = np.nowPlaying?.song {
@@ -131,6 +132,18 @@ final class RadioController: ObservableObject {
             info.artist ?? "",
             info.art ?? "",
         ].joined(separator: "|")
+    }
+
+    private func prefetchArtwork(from metadata: RadioNowPlaying) {
+        let urls =
+            [
+                metadata.nowPlaying?.song.art,
+                metadata.playingNext?.song.art,
+            ].compactMap { $0.flatMap(URL.init(string:)) }
+            + (metadata.songHistory ?? [])
+                .prefix(8)
+                .compactMap { $0.song.art.flatMap(URL.init(string:)) }
+        ArtworkPrefetcher.shared.prefetch(urls: urls, limit: 10, reason: "radio metadata")
     }
 
     private func applyUITestFixture() {

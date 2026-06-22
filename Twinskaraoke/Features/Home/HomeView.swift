@@ -47,6 +47,13 @@ struct HomeView: View {
                 }
             }
             .refreshable { viewModel.fetchHomeData(force: true) }
+            .onChange(of: viewModel.isLoading) { _, isLoading in
+                guard !isLoading else { return }
+                prefetchVisibleArtwork()
+            }
+            .onAppear {
+                prefetchVisibleArtwork()
+            }
         }
     }
 
@@ -152,6 +159,20 @@ struct HomeView: View {
         if !viewModel.suggestions.isEmpty { return viewModel.suggestions }
         if !viewModel.newReleases.isEmpty { return viewModel.newReleases }
         return viewModel.trending
+    }
+
+    private func prefetchVisibleArtwork() {
+        let songs =
+            [homeHeroSong, homeSecondarySong].compactMap { $0 }
+            + Array(viewModel.suggestions.prefix(8))
+            + Array(viewModel.newReleases.prefix(8))
+            + Array(viewModel.trending.prefix(8))
+        ArtworkPrefetcher.shared.prefetchSongs(songs, limit: 18, reason: "home songs")
+        ArtworkPrefetcher.shared.prefetchPlaylists(
+            Array((recentlyPlayed.playlists + viewModel.recentPlaylists).prefix(8)),
+            limit: 12,
+            reason: "home playlists"
+        )
     }
 
     @ViewBuilder

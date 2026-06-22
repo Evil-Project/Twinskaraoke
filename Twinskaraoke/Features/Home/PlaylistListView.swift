@@ -87,7 +87,19 @@ struct PlaylistListView: View {
             if let apiURL {
                 loader.bootstrap(initial: playlists, urlBuilder: apiURL)
             }
+            prefetchArtwork()
         }
+        .onChange(of: displayedPlaylists.map(\.id)) { _, _ in
+            prefetchArtwork()
+        }
+    }
+
+    private func prefetchArtwork() {
+        ArtworkPrefetcher.shared.prefetchPlaylists(
+            Array(displayedPlaylists.prefix(12)),
+            limit: 12,
+            reason: "playlist list"
+        )
     }
 }
 
@@ -133,6 +145,11 @@ final class PlaylistListLoader: ObservableObject {
                 if !items.isEmpty {
                     let existing = Set(self.playlists.map(\.id))
                     self.playlists += items.filter { !existing.contains($0.id) }
+                    ArtworkPrefetcher.shared.prefetchPlaylists(
+                        Array(items.prefix(12)),
+                        limit: 12,
+                        reason: "playlist list page"
+                    )
                     self.canLoadMore = items.count >= self.pageSize
                 } else {
                     self.canLoadMore = false

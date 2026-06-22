@@ -335,7 +335,6 @@ class AudioPlayerManager: ObservableObject {
     }
 
     @Published var queue: [Song] = []
-    @Published var showFullScreen = false
     @Published var isEditingProgress = false
     @Published var volume: Double = 1.0
     @Published var isUserScrubbingVolume: Bool = false

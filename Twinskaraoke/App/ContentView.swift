@@ -121,6 +121,19 @@ private struct PopupPlaybackSnapshot {
     }
 }
 
+@MainActor
+final class PopupPresentationState: ObservableObject {
+    static let shared = PopupPresentationState()
+
+    // Keep popup expansion isolated from playback churn. AudioPlayerManager emits
+    // frequent song, artwork, clock, and buffering updates; tying LNPopupUI's
+    // expanded binding to that object makes unrelated playback/UI refreshes more
+    // likely to be interpreted as presentation changes.
+    @Published var isExpanded = false
+
+    private init() {}
+}
+
 #if canImport(UIKit)
     @MainActor
     final class PopupOpenIntentGate: NSObject, UIGestureRecognizerDelegate {
@@ -603,25 +616,26 @@ private extension RootSection {
 
 private struct PopupModifier: ViewModifier {
     @ObservedObject private var popupState = PopupPlaybackState.shared
+    @ObservedObject private var presentationState = PopupPresentationState.shared
 
     func body(content: Content) -> some View {
         content
             .popup(
                 isBarPresented: .constant(popupState.hasCurrentSong),
                 isPopupOpen: Binding(
-                    get: { AudioPlayerManager.shared.showFullScreen },
+                    get: { presentationState.isExpanded },
                     set: { isOpen in
                         if isOpen {
                             #if canImport(UIKit)
                                 let isIntentionalOpen =
-                                    AudioPlayerManager.shared.showFullScreen || PopupOpenIntentGate.shared.consumeIntent()
+                                    presentationState.isExpanded || PopupOpenIntentGate.shared.consumeIntent()
                                 guard isIntentionalOpen else {
-                                    AudioPlayerManager.shared.showFullScreen = false
+                                    presentationState.isExpanded = false
                                     return
                                 }
                             #endif
                         }
-                        AudioPlayerManager.shared.showFullScreen = isOpen
+                        presentationState.isExpanded = isOpen
                     }
                 )
             ) {

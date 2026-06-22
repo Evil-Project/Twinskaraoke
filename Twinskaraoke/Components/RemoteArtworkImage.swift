@@ -7,8 +7,8 @@ enum ImageCacheConfig {
         guard !didApply else { return }
         didApply = true
         let cfg = SDImageCache.shared.config
-        cfg.maxMemoryCost = 32 * 1024 * 1024
-        cfg.maxMemoryCount = 48
+        cfg.maxMemoryCost = 64 * 1024 * 1024
+        cfg.maxMemoryCount = 96
         cfg.maxDiskSize = 256 * 1024 * 1024
         cfg.shouldCacheImagesInMemory = true
         cfg.shouldUseWeakMemoryCache = true
@@ -128,7 +128,8 @@ struct RemoteArtworkImage: View {
                 .onFailure { _ in
                     markFinishedAfterFailure(for: url)
                 }
-                .onSuccess { _, _, _ in
+                .onSuccess { _, _, cacheType in
+                    ArtworkLoadMetrics.shared.record(url: url, cacheType: cacheType)
                     markRendered(url)
                 }
                 .transition(.opacity.animation(AppMotion.spring(response: 0.15, dampingFraction: 0.9)))
@@ -181,6 +182,38 @@ struct RemoteArtworkImage: View {
         let h = max(displaySize.height, 1) * scale
         let cap = ImageCacheConfig.thumbnailPixelSize
         return CGSize(width: min(w, cap.width), height: min(h, cap.height))
+    }
+}
+
+@MainActor
+private final class ArtworkLoadMetrics {
+    static let shared = ArtworkLoadMetrics()
+    private var totalLoads = 0
+    private var memoryHits = 0
+    private var diskHits = 0
+    private var networkLoads = 0
+    private var lastReport = Date.distantPast
+
+    func record(url _: URL, cacheType: SDImageCacheType) {
+        totalLoads += 1
+        switch cacheType {
+        case .memory:
+            memoryHits += 1
+        case .disk:
+            diskHits += 1
+        case .none:
+            networkLoads += 1
+        default:
+            break
+        }
+
+        let now = Date()
+        guard totalLoads >= 20, now.timeIntervalSince(lastReport) > 20 else { return }
+        lastReport = now
+        DebugLogger.log(
+            "Artwork loads: total=\(totalLoads), memory=\(memoryHits), disk=\(diskHits), network=\(networkLoads)",
+            category: .cache
+        )
     }
 }
 

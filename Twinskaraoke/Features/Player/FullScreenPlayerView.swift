@@ -137,6 +137,7 @@ private struct PlayerLayoutMetrics {
 
 struct FullScreenPlayerView: View {
     @EnvironmentObject var audioManager: AudioPlayerManager
+    @ObservedObject private var popupPresentation = PopupPresentationState.shared
     @ObservedObject private var favorites = FavoritesManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -263,7 +264,7 @@ struct FullScreenPlayerView: View {
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
             if isRadio { showLyrics = false }
         }
-        .onChange(of: audioManager.showFullScreen) { _, isShown in
+        .onChange(of: popupPresentation.isExpanded) { _, isShown in
             if !isShown { dismiss() }
         }
         .onChange(of: audioManager.aiEnabled) { _, enabled in
@@ -495,7 +496,7 @@ struct FullScreenPlayerView: View {
     private var dismissBar: some View {
         Button {
             AppHaptic.light.play()
-            audioManager.showFullScreen = false
+            popupPresentation.isExpanded = false
         } label: {
             Capsule()
                 .fill(Color.primary.opacity(0.35))

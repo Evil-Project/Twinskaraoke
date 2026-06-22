@@ -198,6 +198,11 @@ struct DownloadedSongsView: View {
     private func refresh() {
         let cached = recentlyPlayed.playlists.flatMap { $0.songListDTOs ?? [] }
         let songs = downloads.downloadedSongs(knownSongs: cached)
+        ArtworkPrefetcher.shared.prefetchSongs(
+            Array(songs.prefix(18)),
+            limit: 18,
+            reason: "downloaded songs"
+        )
         if reduceMotion {
             localSongs = songs
         } else {
