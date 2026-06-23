@@ -153,16 +153,23 @@ final class PopupPresentationState: ObservableObject {
         private static let tapMovementTolerance: CGFloat = 12
         private static let visibleBarHitHeight: CGFloat = 116
         private static let openIntentWindow: TimeInterval = 0.45
+        private static let openDragReleaseWindow: TimeInterval = 1.2
         private var touchStartLocation: CGPoint?
+        private var isOpenDragActive = false
         private var openIntentExpiresAt = Date.distantPast
         private var suppressOpenExpiresAt = Date.distantPast
 
         func consumeIntent() -> Bool {
             guard Date() > suppressOpenExpiresAt else {
+                isOpenDragActive = false
                 openIntentExpiresAt = .distantPast
                 return false
             }
             suppressOpenExpiresAt = .distantPast
+            if isOpenDragActive {
+                openIntentExpiresAt = Date().addingTimeInterval(Self.openIntentWindow)
+                return true
+            }
             guard Date() <= openIntentExpiresAt else {
                 openIntentExpiresAt = .distantPast
                 return false
@@ -172,6 +179,7 @@ final class PopupPresentationState: ObservableObject {
         }
 
         func suppressNextOpen() {
+            isOpenDragActive = false
             openIntentExpiresAt = .distantPast
             suppressOpenExpiresAt = Date().addingTimeInterval(Self.openIntentWindow)
         }
@@ -198,6 +206,7 @@ final class PopupPresentationState: ObservableObject {
 
             switch recognizer.state {
             case .began:
+                isOpenDragActive = false
                 guard Date() > suppressOpenExpiresAt,
                       isVisibleMiniPlayerTouch(location, in: popupBar),
                       !isTrailingControlTouch(location, in: popupBar)
@@ -218,14 +227,23 @@ final class PopupPresentationState: ObservableObject {
                 // Keep the intent alive while LNPopupUI's own drag recognizer moves
                 // the popup; otherwise the binding rejects the open and collapses it.
                 if isIntentionalOpenDrag(from: touchStartLocation, to: location) {
+                    isOpenDragActive = true
                     openIntentExpiresAt = Date().addingTimeInterval(Self.openIntentWindow)
                 } else if distance(from: touchStartLocation, to: location) > Self.tapMovementTolerance {
+                    isOpenDragActive = false
                     openIntentExpiresAt = .distantPast
                 }
             case .ended:
                 touchStartLocation = nil
+                if isOpenDragActive {
+                    // Slow drags can hover at the top before LNPopupUI commits the
+                    // final open state. Keep a short release grace for that handoff.
+                    isOpenDragActive = false
+                    openIntentExpiresAt = Date().addingTimeInterval(Self.openDragReleaseWindow)
+                }
             case .cancelled, .failed:
                 touchStartLocation = nil
+                isOpenDragActive = false
                 openIntentExpiresAt = .distantPast
             default:
                 break
