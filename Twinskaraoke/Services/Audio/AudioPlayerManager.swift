@@ -634,6 +634,7 @@ class AudioPlayerManager: ObservableObject {
     private var activeCrossfadePlan: TransitionCoordinator.TransitionPlan?
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
+    private var handlingAudioSessionInterruption = false
 
     #if canImport(UIKit)
         private var bgTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -688,12 +689,20 @@ class AudioPlayerManager: ObservableObject {
     private func setPlaybackState(
         playing: Bool,
         buffering: Bool,
-        reloadArtwork: Bool = false
+        reloadArtwork: Bool = false,
+        forceNowPlayingUpdate: Bool = false,
+        reason: String = #function
     ) {
         let changed = isPlaying != playing || isBuffering != buffering || reloadArtwork
         isPlaying = playing
         isBuffering = buffering
         if changed {
+            DebugLogger.log(
+                "Playback state changed: playing=\(playing), buffering=\(buffering), reason=\(reason)",
+                category: .playback
+            )
+        }
+        if changed || forceNowPlayingUpdate {
             updateNowPlayingInfo(reloadArtwork: reloadArtwork)
         }
     }
@@ -703,9 +712,6 @@ class AudioPlayerManager: ObservableObject {
         activateAudioSession()
         AudioPlayerManager.cleanupOrphanPartialCacheFiles()
         DebugLogger.log("AudioPlayerManager initializing", category: .playback)
-        #if os(iOS)
-            UIApplication.shared.beginReceivingRemoteControlEvents()
-        #endif
         setupRemoteCommands()
 
         avEngine.onPlaybackEnded = { [weak self] in
@@ -781,9 +787,11 @@ class AudioPlayerManager: ObservableObject {
                 play(song: song)
                 return
             }
-            isPlaying = false
-            isBuffering = false
-            updateNowPlayingInfo(reloadArtwork: false)
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                reason: "avEngine.onPlaybackEnded"
+            )
         }
         avEngine.onEngineConfigurationChange = { [weak self] in
             self?.recoverFromEngineConfigChange()
@@ -957,6 +965,9 @@ class AudioPlayerManager: ObservableObject {
     }
 
     private func activePlaybackTime(for song: Song? = nil) -> TimeInterval {
+        if !isPlaying, !isBuffering, lastKnownPlaybackTime.isFinite, lastKnownPlaybackTime >= 0 {
+            return lastKnownPlaybackTime
+        }
         if isStreamMode {
             let fallbackDuration = Double(song?.duration ?? currentSong?.duration ?? 0)
             if let preferredResume = preferredStreamResumeTime(for: song) {
@@ -1099,7 +1110,11 @@ class AudioPlayerManager: ObservableObject {
                 autoplay: isPlaybackRequested
             )
         } else {
-            setPlaybackState(playing: false, buffering: false)
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                reason: "prematureEnd.noRemoteFallback"
+            )
         }
         return true
     }
@@ -1220,9 +1235,11 @@ class AudioPlayerManager: ObservableObject {
                 onReady: readyBlock
             )
         }
-        isPlaying = shouldResume
-        isBuffering = false
-        updateNowPlayingInfo(reloadArtwork: false)
+        setPlaybackState(
+            playing: shouldResume,
+            buffering: false,
+            reason: "switchToPreparedStems"
+        )
     }
 
     private func cancelQuickCutTimer(resetVolume: Bool = true) {
@@ -1480,9 +1497,12 @@ class AudioPlayerManager: ObservableObject {
                     #endif
                 }
             )
-            isPlaying = true
-            isBuffering = false
-            updateNowPlayingInfo(reloadArtwork: true)
+            setPlaybackState(
+                playing: true,
+                buffering: false,
+                reloadArtwork: true,
+                reason: "play.cachedStems"
+            )
             return
         }
         if let fileURL {
@@ -1599,9 +1619,12 @@ class AudioPlayerManager: ObservableObject {
                 self?.endTrackTransitionBackgroundTask()
             #endif
         }
-        isPlaying = true
-        isBuffering = false
-        updateNowPlayingInfo(reloadArtwork: true)
+        setPlaybackState(
+            playing: true,
+            buffering: false,
+            reloadArtwork: true,
+            reason: "startPlayingFile"
+        )
         DebugLogger.log("Playing file: \(url.lastPathComponent)", category: .playback)
         CacheManager.shared.recordAccess(for: url)
         if let song = currentSong, aiEnabled, aiAutoAnalyze, !anyAIEffectActive {
@@ -1628,59 +1651,117 @@ class AudioPlayerManager: ObservableObject {
             return
         }
         guard let remoteURL = song.audioURL else {
-            isPlaying = false
-            isBuffering = false
-            updateNowPlayingInfo(reloadArtwork: false)
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                reason: "fallBackToMainPlayback.noRemoteURL"
+            )
             return
         }
         startStreamPlayback(url: remoteURL, songID: song.id, startAt: resumeAt)
     }
 
+    /// Returns true when a pause request matched an active or resumable playback path.
     @discardableResult
-    private func pauseCurrentPlayback() -> Bool {
+    private func pauseCurrentPlayback(source: String = #function) -> Bool {
+        if !handlingAudioSessionInterruption {
+            wasPlayingBeforeInterruption = false
+        }
         if isRadioMode {
+            let wasActive = radioPlaybackRequested || isPlaying || isBuffering
             guard let player = radioPlayer else {
                 radioPlaybackRequested = false
-                setPlaybackState(playing: false, buffering: false)
-                return false
+                setPlaybackState(
+                    playing: false,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "pause.radio.noPlayer.\(source)"
+                )
+                return wasActive
+            }
+            guard wasActive else {
+                setPlaybackState(
+                    playing: false,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "pause.radio.alreadyPaused.\(source)"
+                )
+                return true
             }
             radioPlaybackRequested = false
+            lastKnownPlaybackTime = activePlaybackTime()
             player.pause()
-            setPlaybackState(playing: false, buffering: false)
+            setPlaybackState(playing: false, buffering: false, reason: "pause.radio.\(source)")
             return true
         }
         if isStreamMode {
+            let wasActive = streamPlaybackRequested || isPlaying || isBuffering
             guard let player = streamPlayer else {
                 streamPlaybackRequested = false
-                setPlaybackState(playing: false, buffering: false)
-                return false
+                setPlaybackState(
+                    playing: false,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "pause.stream.noPlayer.\(source)"
+                )
+                return wasActive
+            }
+            guard wasActive else {
+                setPlaybackState(
+                    playing: false,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "pause.stream.alreadyPaused.\(source)"
+                )
+                return true
             }
             cancelPendingTransitionWork()
             streamPlaybackRequested = false
+            lastKnownPlaybackTime = activePlaybackTime()
             player.pause()
-            setPlaybackState(playing: false, buffering: false)
+            setPlaybackState(playing: false, buffering: false, reason: "pause.stream.\(source)")
             return true
         }
-        guard isPlaying else { return false }
+        guard isPlaying else {
+            guard currentSong != nil else { return false }
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                forceNowPlayingUpdate: true,
+                reason: "pause.file.alreadyPaused.\(source)"
+            )
+            return true
+        }
         cancelPendingTransitionWork()
+        lastKnownPlaybackTime = activePlaybackTime()
         avEngine.pause()
-        setPlaybackState(playing: false, buffering: false)
+        setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")
         return true
     }
 
+    /// Returns true when a resume request could be applied to the current playback path.
     @discardableResult
-    private func resumeCurrentPlayback() -> Bool {
+    private func resumeCurrentPlayback(source: String = #function) -> Bool {
         if isRadioMode {
             guard let player = radioPlayer else {
                 radioPlaybackRequested = false
-                setPlaybackState(playing: false, buffering: false)
+                setPlaybackState(playing: false, buffering: false, reason: "resume.radio.noPlayer.\(source)")
                 return false
+            }
+            guard !radioPlaybackRequested || !isPlaying || isBuffering else {
+                setPlaybackState(
+                    playing: true,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "resume.radio.alreadyPlaying.\(source)"
+                )
+                return true
             }
             configureAudioSessionCategory()
             activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             radioPlaybackRequested = true
-            setPlaybackState(playing: false, buffering: true)
+            setPlaybackState(playing: false, buffering: true, reason: "resume.radio.buffering.\(source)")
             player.play()
             refreshManagedPlayerState(player, kind: .radio)
             return true
@@ -1688,36 +1769,54 @@ class AudioPlayerManager: ObservableObject {
         if isStreamMode {
             guard let player = streamPlayer else {
                 streamPlaybackRequested = false
-                setPlaybackState(playing: false, buffering: false)
+                setPlaybackState(playing: false, buffering: false, reason: "resume.stream.noPlayer.\(source)")
                 return false
+            }
+            guard !streamPlaybackRequested || !isPlaying || isBuffering else {
+                setPlaybackState(
+                    playing: true,
+                    buffering: false,
+                    forceNowPlayingUpdate: true,
+                    reason: "resume.stream.alreadyPlaying.\(source)"
+                )
+                return true
             }
             configureAudioSessionCategory()
             activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             streamPlaybackRequested = true
-            setPlaybackState(playing: false, buffering: true)
+            setPlaybackState(playing: false, buffering: true, reason: "resume.stream.buffering.\(source)")
             player.play()
             refreshManagedPlayerState(player, kind: .stream)
             return true
         }
         guard currentSong != nil else { return false }
+        guard !isPlaying else {
+            setPlaybackState(
+                playing: true,
+                buffering: false,
+                forceNowPlayingUpdate: true,
+                reason: "resume.file.alreadyPlaying.\(source)"
+            )
+            return true
+        }
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         avEngine.resume()
-        setPlaybackState(playing: true, buffering: false)
+        setPlaybackState(playing: true, buffering: false, reason: "resume.file.\(source)")
         return true
     }
 
     @discardableResult
-    func togglePlayPause() -> Bool {
+    func togglePlayPause(source: String = #function) -> Bool {
         if isPlaybackRequested {
-            return pauseCurrentPlayback()
+            return pauseCurrentPlayback(source: "toggle.\(source)")
         }
-        return resumeCurrentPlayback()
+        return resumeCurrentPlayback(source: "toggle.\(source)")
     }
 
     func pauseIfPlaying() {
         guard isPlaybackRequested else { return }
-        pauseCurrentPlayback()
+        pauseCurrentPlayback(source: "pauseIfPlaying")
     }
 
     func seek(to fraction: Double) {
@@ -1792,9 +1891,12 @@ class AudioPlayerManager: ObservableObject {
         } else if autoplayEnabled {
             fetchRandomTrending()
         } else {
-            isPlaying = false
             avEngine.pause()
-            updateNowPlayingInfo(reloadArtwork: false)
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                reason: "playNextOrRandom.endOfQueue"
+            )
             #if canImport(UIKit)
                 endTrackTransitionBackgroundTask()
             #endif
@@ -1947,7 +2049,7 @@ class AudioPlayerManager: ObservableObject {
     private func refreshManagedPlayerState(_ player: AVPlayer, kind: ManagedAVPlayerKind) {
         guard isCurrentManagedPlayer(player, kind: kind) else { return }
         guard let item = player.currentItem else {
-            setPlaybackState(playing: false, buffering: false)
+            setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).noItem")
             return
         }
         if item.status == .failed {
@@ -1956,13 +2058,13 @@ class AudioPlayerManager: ObservableObject {
         }
         let playbackRequested = playbackRequested(for: kind)
         guard playbackRequested else {
-            setPlaybackState(playing: false, buffering: false)
+            setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).notRequested")
             return
         }
         if player.timeControlStatus == .playing {
-            setPlaybackState(playing: true, buffering: false)
+            setPlaybackState(playing: true, buffering: false, reason: "managed.\(kind).playing")
         } else {
-            setPlaybackState(playing: false, buffering: true)
+            setPlaybackState(playing: false, buffering: true, reason: "managed.\(kind).buffering")
         }
     }
 
@@ -1983,7 +2085,7 @@ class AudioPlayerManager: ObservableObject {
             DebugLogger.log("Stream AVPlayer failed: \(message)", category: .playback)
             streamPlaybackRequested = false
         }
-        setPlaybackState(playing: false, buffering: false)
+        setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).failure")
     }
 
     private func isCurrentManagedPlayer(_ player: AVPlayer, kind: ManagedAVPlayerKind) -> Bool {
@@ -2047,7 +2149,7 @@ class AudioPlayerManager: ObservableObject {
         player.volume = 1.0
         radioPlayer = player
         radioPlaybackRequested = true
-        setPlaybackState(playing: false, buffering: true)
+        setPlaybackState(playing: false, buffering: true, reason: "startRadio")
         observeManagedPlayer(player, item: item, kind: .radio)
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         player.play()
@@ -2092,7 +2194,7 @@ class AudioPlayerManager: ObservableObject {
         streamPlayer = player
         streamStartedAt = Date()
         streamPlaybackRequested = autoplay
-        setPlaybackState(playing: false, buffering: autoplay)
+        setPlaybackState(playing: false, buffering: autoplay, reason: "startStreamPlayback")
         observeManagedPlayer(player, item: item, kind: .stream)
         if startAt > 0 {
             setPreferredStreamResumeTime(startAt, for: songID)
@@ -2458,17 +2560,31 @@ class AudioPlayerManager: ObservableObject {
         switch type {
         case .began:
             wasPlayingBeforeInterruption = isPlaybackRequested
+            DebugLogger.log(
+                "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
+                category: .playback
+            )
             if wasPlayingBeforeInterruption {
-                pauseCurrentPlayback()
+                handlingAudioSessionInterruption = true
+                pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
+                handlingAudioSessionInterruption = false
             }
         case .ended:
-            guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
+            guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else {
+                wasPlayingBeforeInterruption = false
+                return
+            }
             let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
+            DebugLogger.log(
+                "Audio session interruption ended; system wants resume=\(opts.contains(.shouldResume)), app wants resume=\(wasPlayingBeforeInterruption)",
+                category: .playback
+            )
             if opts.contains(.shouldResume), wasPlayingBeforeInterruption {
-                resumeCurrentPlayback()
+                resumeCurrentPlayback(source: "audioSessionInterruptionEnded")
             }
             wasPlayingBeforeInterruption = false
-        @unknown default: break
+        @unknown default:
+            wasPlayingBeforeInterruption = false
         }
     }
 
@@ -2479,7 +2595,7 @@ class AudioPlayerManager: ObservableObject {
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
         else { return }
         if reason == .oldDeviceUnavailable, isPlaybackRequested {
-            pauseCurrentPlayback()
+            pauseCurrentPlayback(source: "routeChange.oldDeviceUnavailable")
         }
     }
 
@@ -2528,35 +2644,98 @@ class AudioPlayerManager: ObservableObject {
 
     private func setupRemoteCommands() {
         let cc = MPRemoteCommandCenter.shared()
+        func performOnMain(
+            _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus
+        ) -> MPRemoteCommandHandlerStatus {
+            if Thread.isMainThread {
+                return MainActor.assumeIsolated { action() }
+            }
+            DispatchQueue.main.async {
+                _ = MainActor.assumeIsolated { action() }
+            }
+            return .success
+        }
+
+        cc.playCommand.removeTarget(nil)
+        cc.pauseCommand.removeTarget(nil)
+        cc.togglePlayPauseCommand.removeTarget(nil)
+        cc.nextTrackCommand.removeTarget(nil)
+        cc.previousTrackCommand.removeTarget(nil)
+        cc.changePlaybackPositionCommand.removeTarget(nil)
+
         cc.playCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            return resumeCurrentPlayback() ? .success : .commandFailed
+            return performOnMain {
+                DebugLogger.log("Remote play command received", category: .playback)
+                if self.isPlaybackRequested {
+                    self.updateNowPlayingInfo(reloadArtwork: false)
+                    return .success
+                }
+                return self.resumeCurrentPlayback(source: "remote.play") ? .success : .commandFailed
+            }
         }
         cc.pauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            return pauseCurrentPlayback() ? .success : .commandFailed
+            return performOnMain {
+                DebugLogger.log("Remote pause command received", category: .playback)
+                return self.pauseCurrentPlayback(source: "remote.pause") ? .success : .commandFailed
+            }
         }
         cc.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            return togglePlayPause() ? .success : .commandFailed
+            return performOnMain {
+                DebugLogger.log("Remote toggle command received", category: .playback)
+                return self.togglePlayPause(source: "remote.toggle") ? .success : .commandFailed
+            }
         }
         cc.nextTrackCommand.addTarget { [weak self] _ in
-            self?.playNextOrRandom()
-            return .success
+            guard let self else { return .commandFailed }
+            return performOnMain {
+                DebugLogger.log("Remote next command received", category: .playback)
+                self.playNextOrRandom()
+                return .success
+            }
         }
         cc.previousTrackCommand.addTarget { [weak self] _ in
-            self?.playPrevious()
-            return .success
+            guard let self else { return .commandFailed }
+            return performOnMain {
+                DebugLogger.log("Remote previous command received", category: .playback)
+                self.playPrevious()
+                return .success
+            }
         }
         cc.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let self,
-                  let positionEvent = event as? MPChangePlaybackPositionCommandEvent
+                  let positionEvent = event as? MPChangePlaybackPositionCommandEvent,
+                  positionEvent.positionTime.isFinite
             else { return .commandFailed }
-            let dur = playbackDuration
-            guard dur.isFinite, dur > 0 else { return .commandFailed }
-            seek(to: positionEvent.positionTime / dur)
-            return .success
+            return performOnMain {
+                let dur = self.playbackDuration
+                guard dur.isFinite, dur > 0 else { return .commandFailed }
+                DebugLogger.log(
+                    "Remote seek command received: \(positionEvent.positionTime)",
+                    category: .playback
+                )
+                self.seek(to: positionEvent.positionTime / dur)
+                return .success
+            }
         }
+        updateRemoteCommandAvailability()
+    }
+
+    private func updateRemoteCommandAvailability() {
+        let cc = MPRemoteCommandCenter.shared()
+        let hasCurrentItem = currentSong != nil
+        cc.playCommand.isEnabled = hasCurrentItem
+        cc.pauseCommand.isEnabled = hasCurrentItem
+        cc.togglePlayPauseCommand.isEnabled = hasCurrentItem
+        cc.nextTrackCommand.isEnabled = hasCurrentItem && !isRadioMode
+        cc.previousTrackCommand.isEnabled = hasCurrentItem && !isRadioMode
+        cc.changePlaybackPositionCommand.isEnabled = hasCurrentItem && !isRadioMode
+        DebugLogger.log(
+            "Remote commands availability: item=\(hasCurrentItem), play=\(cc.playCommand.isEnabled), pause=\(cc.pauseCommand.isEnabled), toggle=\(cc.togglePlayPauseCommand.isEnabled), requested=\(isPlaybackRequested)",
+            category: .playback
+        )
     }
 
     private func updateNowPlayingInfo(reloadArtwork: Bool) {
@@ -2564,11 +2743,13 @@ class AudioPlayerManager: ObservableObject {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             lastNowPlayingElapsedSecond = nil
             lastNowPlayingPlaybackRate = nil
+            updateRemoteCommandAvailability()
             return
         }
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPMediaItemPropertyTitle] = song.title
         info[MPMediaItemPropertyArtist] = song.originalArtists?.joined(separator: ", ") ?? ""
+        info[MPMediaItemPropertyMediaType] = MPMediaType.music.rawValue
         if isRadioMode {
             info[MPNowPlayingInfoPropertyIsLiveStream] = true
             info[MPMediaItemPropertyPlaybackDuration] = nil
@@ -2579,6 +2760,7 @@ class AudioPlayerManager: ObservableObject {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = playbackTime
         }
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
         let targetArt = isRadioMode ? radioArtworkURL : song.imageURL
         if reloadArtwork || artworkURL != targetArt {
             info[MPMediaItemPropertyArtwork] = nil
@@ -2590,12 +2772,21 @@ class AudioPlayerManager: ObservableObject {
                 loadArtworkAsync(from: targetArt)
             }
         }
+        updateRemoteCommandAvailability()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        DebugLogger.log(
+            "Now Playing updated: rate=\(isPlaying ? 1.0 : 0.0), playing=\(isPlaying), buffering=\(isBuffering)",
+            category: .playback
+        )
         lastNowPlayingElapsedSecond = isRadioMode ? nil : Int(playbackTime.rounded(.down))
         lastNowPlayingPlaybackRate = isPlaying ? 1.0 : 0.0
     }
 
     private func updateNowPlayingElapsed(_ elapsed: Double) {
+        guard isPlaying else {
+            updateNowPlayingInfo(reloadArtwork: false)
+            return
+        }
         let roundedSecond = Int(elapsed.rounded(.down))
         let playbackRate = isPlaying ? 1.0 : 0.0
         guard roundedSecond != lastNowPlayingElapsedSecond
@@ -2603,7 +2794,12 @@ class AudioPlayerManager: ObservableObject {
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackRate
+        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        DebugLogger.log(
+            "Now Playing elapsed update: elapsed=\(elapsed), rate=\(playbackRate)",
+            category: .playback
+        )
         lastNowPlayingElapsedSecond = roundedSecond
         lastNowPlayingPlaybackRate = playbackRate
     }
@@ -2902,8 +3098,11 @@ class AudioPlayerManager: ObservableObject {
             }
         }
         upcomingSong = nil
-        isPlaying = true
-        isBuffering = false
+        setPlaybackState(
+            playing: true,
+            buffering: false,
+            reason: "transitionCoordinatorDidFinish"
+        )
         DebugLogger.log(
             "Transition complete next=\(song.id), audioURL=\(avEngine.currentURL?.lastPathComponent ?? "nil"), time=\(avEngine.currentTime), duration=\(avEngine.duration), playing=\(avEngine.isPlaying)",
             category: .playback
