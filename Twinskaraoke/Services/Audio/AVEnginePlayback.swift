@@ -26,6 +26,7 @@ final class SimpleAudioPlayer {
     private var loadedFile: AVAudioFile?
     private var loadedBuffer: AVAudioPCMBuffer?
     private var seekOffset: TimeInterval = 0
+    private var pausedPosition: TimeInterval?
     private var _isPaused = false
 
     var volume: Float {
@@ -54,7 +55,7 @@ final class SimpleAudioPlayer {
               let nodeTime = playerNode.lastRenderTime,
               nodeTime.isSampleTimeValid,
               let playerTime = playerNode.playerTime(forNodeTime: nodeTime)
-        else { return seekOffset }
+        else { return pausedPosition ?? seekOffset }
         return seekOffset + max(0, Double(playerTime.sampleTime) / playerTime.sampleRate)
     }
 
@@ -63,6 +64,7 @@ final class SimpleAudioPlayer {
         loadedFile = file
         loadedBuffer = nil
         seekOffset = 0
+        pausedPosition = nil
         _isPaused = false
     }
 
@@ -71,12 +73,14 @@ final class SimpleAudioPlayer {
         loadedFile = nil
         loadedBuffer = buffer
         seekOffset = 0
+        pausedPosition = nil
         _isPaused = false
     }
 
     func play() {
         if _isPaused {
             _isPaused = false
+            pausedPosition = nil
             playerNode.play()
             return
         }
@@ -87,6 +91,7 @@ final class SimpleAudioPlayer {
         _isPaused = false
         playerNode.stop()
         seekOffset = max(0, seconds)
+        pausedPosition = nil
 
         if let file = loadedFile {
             scheduleFileSegment(file, at: time)
@@ -102,17 +107,16 @@ final class SimpleAudioPlayer {
     }
 
     func pause() {
-        if playerNode.isPlaying {
-            seekOffset = currentTime
-        }
-        _isPaused = true
+        pausedPosition = currentTime
         playerNode.pause()
+        _isPaused = true
     }
 
     func stop() {
         playerNode.stop()
         _isPaused = false
         seekOffset = 0
+        pausedPosition = nil
     }
 
     private func scheduleFileSegment(_ file: AVAudioFile, at time: AVAudioTime?) {
