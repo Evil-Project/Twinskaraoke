@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import Network
 import SwiftUI
 
 @MainActor
@@ -17,16 +18,26 @@ final class DownloadManager: ObservableObject {
     @Published private(set) var progress: [String: Double] = [:]
     private let cacheDir: URL
     private var tasks: [String: URLSessionDownloadTask] = [:]
+    private var pendingWiFiRepairs: [String: Song] = [:]
+    private var isWiFiAvailable = false
+    private let networkMonitor = NWPathMonitor()
+    private let networkMonitorQueue = DispatchQueue(label: "DownloadManager.NetworkMonitor")
+
     private init() {
         cacheDir = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Downloads")
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         refreshExistingDownloads()
+        startNetworkMonitoring()
         DebugLogger.log(
             "DownloadManager init — \(downloadedIDs.count) existing downloads",
             category: .network
         )
+    }
+
+    deinit {
+        networkMonitor.cancel()
     }
 
     private func files(for songID: String) -> SongFiles {
@@ -54,18 +65,31 @@ final class DownloadManager: ObservableObject {
         files(for: songID).source
     }
 
+    nonisolated static func durationAppearsComplete(
+        actualDuration: TimeInterval,
+        expectedDuration: TimeInterval?
+    ) -> Bool {
+        guard actualDuration.isFinite, actualDuration > 1.0 else { return false }
+        guard let expectedDuration, expectedDuration.isFinite, expectedDuration > 1.0 else {
+            return true
+        }
+
+        // Catalog durations are rounded and can differ slightly from decoded media duration.
+        // A longer file is complete; only a materially shorter file indicates truncation.
+        let tolerance = max(5.0, min(15.0, expectedDuration * 0.03))
+        return actualDuration + tolerance >= expectedDuration
+    }
+
     private nonisolated static func isValidDownloadedAudio(
         at url: URL,
         expectedDuration: TimeInterval? = nil
     ) -> Bool {
         guard AudioCacheStore.isPlayableAudioFile(at: url) else { return false }
-        guard let expectedDuration, expectedDuration.isFinite, expectedDuration > 1.0 else {
-            return true
-        }
         let actualDuration = AudioCacheStore.audioDuration(at: url)
-        guard actualDuration.isFinite, actualDuration > 1.0 else { return false }
-        let tolerance: TimeInterval = 2.0
-        return abs(actualDuration - expectedDuration) <= tolerance
+        return durationAppearsComplete(
+            actualDuration: actualDuration,
+            expectedDuration: expectedDuration
+        )
     }
 
     private nonisolated static func downloadedByteCount(at url: URL) -> Int {
@@ -84,6 +108,7 @@ final class DownloadManager: ObservableObject {
         guard let remote = song.audioURL else { return }
         if isDownloaded(song.id), playableURL(for: song) != nil { return }
         guard !isDownloading(song.id) else { return }
+        pendingWiFiRepairs.removeValue(forKey: song.id)
         DebugLogger.log("Starting download: \(song.id)", category: .network)
         inProgress.insert(song.id)
         progress[song.id] = 0
@@ -157,6 +182,7 @@ final class DownloadManager: ObservableObject {
 
     func remove(songID: String) {
         cancel(songID: songID)
+        pendingWiFiRepairs.removeValue(forKey: songID)
         let songFiles = files(for: songID)
         try? FileManager.default.removeItem(at: songFiles.directory)
         try? FileManager.default.removeItem(at: cacheDir.appendingPathComponent("\(songID).mp3"))
@@ -173,6 +199,7 @@ final class DownloadManager: ObservableObject {
         tasks.removeAll()
         inProgress.removeAll()
         progress.removeAll()
+        pendingWiFiRepairs.removeAll()
 
         let fm = FileManager.default
         if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
@@ -204,7 +231,13 @@ final class DownloadManager: ObservableObject {
             if hasValidDownload(for: songID) {
                 ids.insert(songID)
             } else {
-                try? fm.removeItem(at: entry)
+                let repairSong = readMetadata(for: songID)
+                if let repairSong, repairSong.audioURL != nil {
+                    removeBrokenAudioFiles(for: repairSong)
+                    pendingWiFiRepairs[songID] = repairSong
+                } else {
+                    try? fm.removeItem(at: entry)
+                }
             }
         }
         downloadedIDs = ids
@@ -220,16 +253,20 @@ final class DownloadManager: ObservableObject {
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         guard Self.isValidDownloadedAudio(at: songFiles.audio, expectedDuration: expectedDuration) else {
             DebugLogger.log("Discarding invalid downloaded audio for \(song.id)", category: .cache)
-            remove(songID: song.id)
+            discardBrokenDownloadAndScheduleRepair(for: song, reason: "file validation failed")
             return nil
         }
         guard let cached = readSourceURL(for: song.id) else {
-            DebugLogger.log(
-                "Discarding downloaded audio without source metadata for \(song.id)",
-                category: .cache
-            )
-            remove(songID: song.id)
-            return nil
+            if let expected = song.audioURL {
+                writeSourceURL(expected, for: song.id)
+                writeMetadata(for: song)
+                downloadedIDs.insert(song.id)
+                DebugLogger.log(
+                    "Repaired missing download source metadata for \(song.id)",
+                    category: .cache
+                )
+            }
+            return songFiles.audio
         }
         guard let expected = song.audioURL?.absoluteString else {
             return songFiles.audio
@@ -239,10 +276,31 @@ final class DownloadManager: ObservableObject {
                 "Discarding downloaded audio for \(song.id) due to source mismatch",
                 category: .cache
             )
-            remove(songID: song.id)
+            discardBrokenDownloadAndScheduleRepair(for: song, reason: "source URL changed")
             return nil
         }
         return songFiles.audio
+    }
+
+    /// Returns true only when the on-disk download is conclusively invalid and was removed.
+    /// Playback callbacks alone are not evidence that a download is corrupt.
+    @discardableResult
+    func repairIfDownloadedFileIsBroken(for song: Song) -> Bool {
+        guard isDownloaded(song.id) else { return false }
+        let songFiles = files(for: song.id)
+        guard FileManager.default.fileExists(atPath: songFiles.audio.path) else {
+            discardBrokenDownloadAndScheduleRepair(for: song, reason: "audio file is missing")
+            return true
+        }
+        let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+        guard !Self.isValidDownloadedAudio(
+            at: songFiles.audio,
+            expectedDuration: expectedDuration
+        ) else {
+            return false
+        }
+        discardBrokenDownloadAndScheduleRepair(for: song, reason: "file validation failed")
+        return true
     }
 
     func downloadedSongs(knownSongs: [Song] = []) -> [Song] {
@@ -270,10 +328,24 @@ final class DownloadManager: ObservableObject {
     private func hasValidDownload(for songID: String) -> Bool {
         let songFiles = files(for: songID)
         guard FileManager.default.fileExists(atPath: songFiles.audio.path) else { return false }
-        let metadataDuration = readMetadata(for: songID)?.duration ?? 0
+        let metadata = readMetadata(for: songID)
+        let metadataDuration = metadata?.duration ?? 0
         let expectedDuration = metadataDuration > 0 ? TimeInterval(metadataDuration) : nil
-        return readSourceURL(for: songID) != nil
-            && Self.isValidDownloadedAudio(at: songFiles.audio, expectedDuration: expectedDuration)
+        guard Self.isValidDownloadedAudio(
+            at: songFiles.audio,
+            expectedDuration: expectedDuration
+        ) else {
+            return false
+        }
+
+        guard let cachedSource = readSourceURL(for: songID) else {
+            if let remoteURL = metadata?.audioURL {
+                writeSourceURL(remoteURL, for: songID)
+            }
+            return true
+        }
+        guard let expectedSource = metadata?.audioURL?.absoluteString else { return true }
+        return cachedSource == expectedSource
     }
 
     private func readSourceURL(for songID: String) -> String? {
@@ -284,6 +356,72 @@ final class DownloadManager: ObservableObject {
         }
         let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private func writeSourceURL(_ remoteURL: URL, for songID: String) {
+        let source = sourceURL(for: songID)
+        ensureSongDirectory(for: songID)
+        try? FileManager.default.removeItem(at: source)
+        FileManager.default.createFile(
+            atPath: source.path,
+            contents: remoteURL.absoluteString.data(using: .utf8)
+        )
+    }
+
+    private func discardBrokenDownloadAndScheduleRepair(for song: Song, reason: String) {
+        let repairSong: Song? = if song.audioURL != nil {
+            song
+        } else if let persistedSong = readMetadata(for: song.id), persistedSong.audioURL != nil {
+            persistedSong
+        } else {
+            nil
+        }
+        DebugLogger.log(
+            "Removing confirmed broken download for \(song.id): \(reason)",
+            category: .cache
+        )
+        removeBrokenAudioFiles(for: song)
+        guard let repairSong else { return }
+        pendingWiFiRepairs[song.id] = repairSong
+        startPendingWiFiRepairsIfPossible()
+    }
+
+    private func removeBrokenAudioFiles(for song: Song) {
+        cancel(songID: song.id)
+        let songFiles = files(for: song.id)
+        try? FileManager.default.removeItem(at: songFiles.audio)
+        try? FileManager.default.removeItem(at: songFiles.source)
+        try? FileManager.default.removeItem(at: cacheDir.appendingPathComponent("\(song.id).mp3"))
+        try? FileManager.default.removeItem(at: cacheDir.appendingPathComponent("\(song.id).source"))
+        downloadedIDs.remove(song.id)
+        if song.audioURL != nil {
+            writeMetadata(for: song)
+        }
+    }
+
+    private func startNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            let hasWiFi = path.status == .satisfied && path.usesInterfaceType(.wifi)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                isWiFiAvailable = hasWiFi
+                startPendingWiFiRepairsIfPossible()
+            }
+        }
+        networkMonitor.start(queue: networkMonitorQueue)
+    }
+
+    private func startPendingWiFiRepairsIfPossible() {
+        guard isWiFiAvailable, !pendingWiFiRepairs.isEmpty else { return }
+        let repairs = Array(pendingWiFiRepairs.values)
+        pendingWiFiRepairs.removeAll()
+        DebugLogger.log(
+            "Wi-Fi available — repairing \(repairs.count) broken download(s)",
+            category: .network
+        )
+        for song in repairs {
+            download(song: song)
+        }
     }
 
     private func writeMetadata(for song: Song) {

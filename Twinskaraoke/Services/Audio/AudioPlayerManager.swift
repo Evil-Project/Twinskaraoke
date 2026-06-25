@@ -1093,12 +1093,15 @@ class AudioPlayerManager: ObservableObject {
                   playbackURL.isFileURL,
                   DownloadManager.shared.isDownloaded(song.id)
         {
-            DebugLogger.log(
-                "Removing suspect downloaded audio after premature end for \(song.id)",
-                category: .cache
-            )
-            DownloadManager.shared.remove(songID: song.id)
-            currentPlaybackURL = nil
+            if DownloadManager.shared.repairIfDownloadedFileIsBroken(for: song) {
+                currentPlaybackURL = nil
+            } else {
+                DebugLogger.log(
+                    "Ignoring stale premature-end callback for valid download \(song.id)",
+                    category: .playback
+                )
+                return true
+            }
         }
 
         if let remoteURL = song.audioURL {
