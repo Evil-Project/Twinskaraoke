@@ -259,7 +259,7 @@ final class TransitionCoordinator {
     }
 
     private func nextSongInQueue(current: Song, queue: [Song], repeatMode: RepeatMode) -> Song? {
-        guard !queue.isEmpty, let idx = queue.firstIndex(of: current) else { return nil }
+        guard !queue.isEmpty, let idx = queue.firstIndex(where: { $0.id == current.id }) else { return nil }
         if idx + 1 < queue.count { return queue[idx + 1] }
         if repeatMode == .all { return queue.first }
         return nil

@@ -1,12 +1,5 @@
 import SwiftUI
 
-struct LevelUpAnnouncement: Identifiable {
-    let id = UUID()
-    let previousLevel: Int
-    let currentLevel: Int
-    let levelTitle: String?
-}
-
 struct LevelUpSheet: View {
     let announcement: LevelUpAnnouncement
     @Environment(\.dismiss) private var dismiss

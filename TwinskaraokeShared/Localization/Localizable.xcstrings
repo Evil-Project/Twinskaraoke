@@ -2975,6 +2975,64 @@
         }
       }
     },
+<<<<<<< HEAD
+=======
+    "Audio Effects" : {
+
+    },
+    "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio effects use on-device AI to separate vocals and instrumentals in real time. For best results, use headphones or external speakers."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频效果利用端侧 AI 实时分离人声与伴奏。为了获得最佳效果，请使用耳机或外接扬声器"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音訊效果利用裝置端 AI 即時分離人聲與伴奏。為達最佳效果，請使用耳機或外接揚聲器"
+          }
+        }
+      }
+    },
+>>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
     "Audio Quality" : {
       "localizations" : {
         "de" : {
@@ -3702,6 +3760,9 @@
           }
         }
       }
+    },
+    "Camera Unavailable" : {
+
     },
     "Cancel" : {
       "localizations" : {
@@ -4645,6 +4706,20 @@
         }
       }
     },
+<<<<<<< HEAD
+=======
+    "Couldn't save" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save"
+          }
+        }
+      }
+    },
+>>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
     "Coverage" : {
 
     },
@@ -4956,6 +5031,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "交叉淡化時間"
+          }
+        }
+      }
+    },
+    "Current song" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current song"
+          }
+        }
+      }
+    },
+    "Current user" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current user"
           }
         }
       }
@@ -9129,6 +9226,17 @@
         }
       }
     },
+    "Live Radio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Radio"
+          }
+        }
+      }
+    },
     "LIVE RADIO" : {
       "localizations" : {
         "de" : {
@@ -9337,6 +9445,17 @@
         }
       }
     },
+    "Loading art gallery" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading art gallery"
+          }
+        }
+      }
+    },
     "Loading artist songs" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9443,6 +9562,28 @@
         }
       }
     },
+    "Loading categories" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading categories"
+          }
+        }
+      }
+    },
+    "Loading Home" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading Home"
+          }
+        }
+      }
+    },
     "Loading lyrics" : {
       "localizations" : {
         "de" : {
@@ -9491,6 +9632,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌詞載入中"
+          }
+        }
+      }
+    },
+    "Loading New" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading New"
           }
         }
       }
@@ -9649,6 +9801,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在載入歌單"
+          }
+        }
+      }
+    },
+    "Loading Radio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading Radio"
           }
         }
       }
@@ -14503,6 +14666,17 @@
         }
       }
     },
+    "Radio metadata is temporarily unavailable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radio metadata is temporarily unavailable."
+          }
+        }
+      }
+    },
     "Radio track" : {
       "localizations" : {
         "de" : {
@@ -14714,7 +14888,22 @@
         }
       }
     },
+<<<<<<< HEAD
     "Real-time mode: audio is processed on-the-fly when you activate a karaoke feature. Only the unplayed portion is processed for faster results." : {
+=======
+    "Ready to Play" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to Play"
+          }
+        }
+      }
+    },
+    "Real-time mode: audio is processed on-the-fly when you activate an audio effect. Only the unplayed portion is processed for faster results." : {
+>>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20395,6 +20584,17 @@
         }
       }
     },
+    "Tune playback for Twinskaraoke" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tune playback for Twinskaraoke"
+          }
+        }
+      }
+    },
     "Turn Off Vocal Removal" : {
       "localizations" : {
         "de" : {
@@ -20807,6 +21007,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Twinskaraoke iOS"
+          }
+        }
+      }
+    },
+    "Twinskaraoke Radio" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twinskaraoke Radio"
           }
         }
       }
@@ -21483,6 +21694,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Version %@"
+          }
+        }
+      }
+    },
+    "Video" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
           }
         }
       }

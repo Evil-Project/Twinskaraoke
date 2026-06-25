@@ -16,7 +16,12 @@ struct QRApproveView: View {
         case failure(String)
     }
 
-    enum CameraPermission { case unknown, granted, denied }
+    enum CameraPermission {
+        case unknown
+        case granted
+        case denied
+        case unavailable(String)
+    }
 
     var body: some View {
         NavigationStack {
@@ -96,9 +101,18 @@ struct QRApproveView: View {
                     UIApplication.shared.open(url)
                 }
             }
+        case let .unavailable(message):
+            QRCameraUnavailableView(
+                message: message,
+                retry: retryCameraCheck,
+                dismiss: {
+                    AppHaptic.light.play()
+                    dismiss()
+                }
+            )
         case .granted:
             ZStack {
-                QRCameraView(onScan: handleScan)
+                QRCameraView(onScan: handleScan, onFailure: handleCameraFailure)
                     .ignoresSafeArea()
                 QRScannerChrome()
                     .ignoresSafeArea()
@@ -135,6 +149,7 @@ struct QRApproveView: View {
         case .unknown: "unknown"
         case .granted: "granted"
         case .denied: "denied"
+        case .unavailable: "unavailable"
         }
     }
 
@@ -266,6 +281,14 @@ struct QRApproveView: View {
         }
     }
 
+    private func handleCameraFailure(_ message: String) {
+        guard case .scanning = phase else { return }
+        AppHaptic.error.play()
+        withOptionalAnimation(permissionAnimation) {
+            permission = .unavailable(message)
+        }
+    }
+
     private func parseSessionId(from raw: String) -> String? {
         if let url = URL(string: raw),
            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -311,19 +334,43 @@ struct QRApproveView: View {
         }
     }
 
+    private func retryCameraCheck() {
+        AppHaptic.selection.play()
+        withOptionalAnimation(permissionAnimation) {
+            permission = .unknown
+        }
+        Task { await checkPermission() }
+    }
+
+    @MainActor
     private func checkPermission() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            permission = .granted
+            permission = Self.hasVideoCaptureDevice ? .granted : .unavailable(Self.cameraUnavailableMessage)
         case .notDetermined:
+            guard Self.hasVideoCaptureDevice else {
+                permission = .unavailable(Self.cameraUnavailableMessage)
+                return
+            }
             let granted = await AVCaptureDevice.requestAccess(for: .video)
-            permission = granted ? .granted : .denied
+            permission = granted
+                ? (Self.hasVideoCaptureDevice ? .granted : .unavailable(Self.cameraUnavailableMessage))
+                : .denied
         case .denied, .restricted:
             permission = .denied
         @unknown default:
             permission = .denied
         }
     }
+
+    private static var hasVideoCaptureDevice: Bool {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil ||
+            AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) != nil ||
+            AVCaptureDevice.default(for: .video) != nil
+    }
+
+    private static let cameraUnavailableMessage =
+        "This device can't open the camera right now. Check that the camera is working, then try again."
 
     private var contentTransition: AnyTransition {
         reduceMotion
@@ -402,6 +449,48 @@ private struct QRPermissionDeniedView: View {
                 QRActionLabel(title: "Open Settings", systemImage: "gearshape.fill", isPrimary: true)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
+        }
+        .padding(24)
+        .frame(maxWidth: 380)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(Color.appDivider, lineWidth: 1)
+        )
+        .shadow(color: Color.appShadow, radius: 22, y: 10)
+        .padding(.horizontal, 24)
+    }
+}
+
+private struct QRCameraUnavailableView: View {
+    let message: String
+    let retry: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            QRHeroGlyph(systemImage: "camera.badge.ellipsis", tint: Color.secondary)
+            VStack(spacing: 8) {
+                Text("Camera Unavailable")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: 10) {
+                Button(action: retry) {
+                    QRActionLabel(title: "Try Again", systemImage: "arrow.clockwise", isPrimary: true)
+                }
+                .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
+
+                Button(action: dismiss) {
+                    QRActionLabel(title: "Done", systemImage: "checkmark", isPrimary: false)
+                }
+                .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
+            }
         }
         .padding(24)
         .frame(maxWidth: 380)
@@ -634,8 +723,10 @@ private struct QRActionLabel: View {
 
 private struct QRCameraView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
+    let onFailure: (String) -> Void
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(onScan: onScan)
+        Coordinator(onScan: onScan, onFailure: onFailure)
     }
 
     func makeUIViewController(context: Context) -> QRCameraController {
@@ -648,38 +739,47 @@ private struct QRCameraView: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, QRCameraControllerDelegate {
         let onScan: (String) -> Void
-        init(onScan: @escaping (String) -> Void) {
+        let onFailure: (String) -> Void
+        init(onScan: @escaping (String) -> Void, onFailure: @escaping (String) -> Void) {
             self.onScan = onScan
+            self.onFailure = onFailure
         }
 
         func qrCameraController(_: QRCameraController, didScan value: String) {
             onScan(value)
+        }
+
+        func qrCameraController(_: QRCameraController, didFail message: String) {
+            onFailure(message)
         }
     }
 }
 
 private protocol QRCameraControllerDelegate: AnyObject {
     func qrCameraController(_ controller: QRCameraController, didScan value: String)
+    func qrCameraController(_ controller: QRCameraController, didFail message: String)
 }
 
 private final class QRCameraController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     weak var delegate: QRCameraControllerDelegate?
     private let session = AVCaptureSession()
+    private let sessionQueue = DispatchQueue(label: "org.evilneuro.Twinskaraoke.qr-camera-session", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var runtimeErrorObserver: NSObjectProtocol?
     private var hasReported = false
+    private var isSessionConfigured = false
+    private var hasReportedFailure = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
+        observeRuntimeErrors()
         configureSession()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        if !session.isRunning {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.session.startRunning()
-            }
-        }
+        startSession()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -688,13 +788,16 @@ private final class QRCameraController: UIViewController, AVCaptureMetadataOutpu
     }
 
     deinit {
+        if let runtimeErrorObserver {
+            NotificationCenter.default.removeObserver(runtimeErrorObserver)
+        }
         stopSession()
     }
 
     private func stopSession() {
         let capturedSession = session
-        guard capturedSession.isRunning else { return }
-        DispatchQueue.global(qos: .userInitiated).async {
+        sessionQueue.async {
+            guard capturedSession.isRunning else { return }
             capturedSession.stopRunning()
         }
     }
@@ -705,21 +808,83 @@ private final class QRCameraController: UIViewController, AVCaptureMetadataOutpu
     }
 
     private func configureSession() {
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input)
-        else { return }
+        guard let device = Self.preferredVideoDevice else {
+            reportFailure("This device doesn't have an available camera for scanning QR codes.")
+            return
+        }
+
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: device)
+        } catch {
+            reportFailure("The camera couldn't be opened. Check that it isn't blocked by another app, then try again.")
+            return
+        }
+
+        session.beginConfiguration()
+        defer { session.commitConfiguration() }
+
+        guard session.canAddInput(input) else {
+            reportFailure("The camera couldn't be prepared for scanning.")
+            return
+        }
         session.addInput(input)
+
         let output = AVCaptureMetadataOutput()
-        guard session.canAddOutput(output) else { return }
+        guard session.canAddOutput(output) else {
+            reportFailure("The QR scanner couldn't start on this device.")
+            return
+        }
         session.addOutput(output)
+
+        guard output.availableMetadataObjectTypes.contains(.qr) else {
+            reportFailure("This camera doesn't support QR code scanning.")
+            return
+        }
+
         output.setMetadataObjectsDelegate(self, queue: .main)
         output.metadataObjectTypes = [.qr]
+
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
         preview.frame = view.layer.bounds
         view.layer.addSublayer(preview)
         previewLayer = preview
+        isSessionConfigured = true
+    }
+
+    private func startSession() {
+        guard isSessionConfigured else { return }
+        let capturedSession = session
+        sessionQueue.async {
+            guard !capturedSession.isRunning else { return }
+            capturedSession.startRunning()
+        }
+    }
+
+    private func observeRuntimeErrors() {
+        runtimeErrorObserver = NotificationCenter.default.addObserver(
+            forName: .AVCaptureSessionRuntimeError,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reportFailure("The camera stopped unexpectedly. Check that it is working, then try again.")
+        }
+    }
+
+    private func reportFailure(_ message: String) {
+        guard !hasReportedFailure else { return }
+        hasReportedFailure = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            delegate?.qrCameraController(self, didFail: message)
+        }
+    }
+
+    private static var preferredVideoDevice: AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) ??
+            AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) ??
+            AVCaptureDevice.default(for: .video)
     }
 
     func metadataOutput(

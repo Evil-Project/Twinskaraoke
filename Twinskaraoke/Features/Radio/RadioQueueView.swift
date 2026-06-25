@@ -106,19 +106,10 @@ struct RadioQueueView: View {
                 }
             }
             Spacer()
-            Button {
+            GlassXButton(action: {
                 AppHaptic.light.play()
                 dismiss()
-            } label: {
-                Label("Close", systemImage: "xmark")
-                    .labelStyle(.iconOnly)
-                    .font(.headline)
-                    .foregroundStyle(Color.appGlassForeground)
-                    .frame(width: 44, height: 44)
-            }
-            .modifier(GlassCircle())
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel("Close")
+            })
             .accessibilityHint("Dismisses the radio queue.")
         }
         .padding(.horizontal, 20)

@@ -69,7 +69,7 @@ struct LyricsView: View {
                                 showTranslation: showTranslations,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
-                                    scrollTo(line.id, proxy: proxy)
+                                    scrollTo(line.id, proxy: proxy, animated: false)
                                     onSeek(time)
                                 }
                             )
@@ -99,12 +99,12 @@ struct LyricsView: View {
         }
     }
 
-    private func scrollTo(_ id: some Hashable, proxy: ScrollViewProxy) {
-        if let scrollAnimation {
-            withAnimation(scrollAnimation) {
-                proxy.scrollTo(id, anchor: .center)
-            }
-        } else {
+    private func scrollTo(_ id: some Hashable, proxy: ScrollViewProxy, animated: Bool = true) {
+        guard animated, let scrollAnimation else {
+            proxy.scrollTo(id, anchor: .center)
+            return
+        }
+        withAnimation(scrollAnimation) {
             proxy.scrollTo(id, anchor: .center)
         }
     }

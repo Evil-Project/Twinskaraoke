@@ -193,18 +193,10 @@ struct QueueView: View {
                 .accessibilityHint("Removes all songs from Playing Next.")
                 .transition(clearButtonTransition)
             }
-            Button {
+            GlassXButton(action: {
                 AppHaptic.light.play()
                 dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.appGlassForeground)
-                    .frame(width: 44, height: 44)
-            }
-            .modifier(GlassCircle())
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel("Close")
+            })
             .accessibilityHint("Dismisses Playing Next.")
         }
         .padding(.horizontal, 20)

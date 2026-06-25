@@ -231,8 +231,8 @@ struct LibraryView: View {
                 title: "Downloaded",
                 destination: DownloadedSongsView()
             )
-            libraryLink(icon: "play.rectangle", title: "Video Gallery", destination: VideoGalleryView())
             libraryLink(icon: "paintpalette", title: "Art Gallery", destination: ArtGalleryView())
+            libraryLink(icon: "play.rectangle", title: "Video Gallery", destination: VideoGalleryView())
             libraryLink(
                 icon: "shuffle",
                 title: "Random Songs",

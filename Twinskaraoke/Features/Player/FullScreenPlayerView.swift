@@ -74,6 +74,16 @@ private struct PlayerLayoutMetrics {
         isCompactHeight ? 18 : 28
     }
 
+    var lyricsTopSpacer: CGFloat {
+        if usesTwoColumnPlayer { return artworkTopSpacer }
+        return isCompactHeight ? 8 : 8
+    }
+
+    var lyricsBottomSpacer: CGFloat {
+        if usesTwoColumnPlayer { return artworkBottomSpacer }
+        return isCompactHeight ? 12 : 10
+    }
+
     var progressTopPadding: CGFloat {
         isCompactHeight ? 10 : 16
     }
@@ -299,6 +309,7 @@ struct FullScreenPlayerView: View {
             ZStack {
                 if showLyrics {
                     VStack(spacing: 0) {
+                        Spacer(minLength: metrics.lyricsTopSpacer)
                         lyricsHeader(song: song, metrics: metrics)
                         TimedLyricsView(
                             lyrics: lyricsViewModel.lyrics,
@@ -313,6 +324,7 @@ struct FullScreenPlayerView: View {
                             },
                             onRetry: { lyricsViewModel.retry() }
                         )
+                        Spacer(minLength: metrics.lyricsBottomSpacer)
                     }
                     .overlay(alignment: .bottomLeading) {
                         lyricsTranslationButton
