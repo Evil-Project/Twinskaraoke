@@ -4,36 +4,36 @@ struct StorageSection: View {
     let limits: UploadLimits
     private static let byteFormatter: ByteCountFormatter = {
         let f = ByteCountFormatter()
-        f.allowedUnits = [.useMB, .useGB]
+        f.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
         f.countStyle = .binary
         return f
     }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Library")
+            Text("Storage & Limits")
                 .font(.headline)
             VStack(spacing: 14) {
                 StorageMeterRow(
+                    icon: "music.note",
+                    label: "Songs Uploaded",
+                    valueText: "\(limits.currentSongCount)/\(limits.maxSongs)",
+                    ratio: ratio(limits.currentSongCount, limits.maxSongs),
+                    barHeight: 4
+                )
+                Divider()
+                StorageMeterRow(
                     icon: "internaldrive",
-                    label: "Storage",
+                    label: "Storage Used",
                     valueText: storageValueText,
                     ratio: storageRatio,
                     barHeight: 6
                 )
                 Divider()
                 StorageMeterRow(
-                    icon: "music.note",
-                    label: "Songs",
-                    valueText: "\(limits.currentSongCount) / \(limits.maxSongs)",
-                    ratio: ratio(limits.currentSongCount, limits.maxSongs),
-                    barHeight: 4
-                )
-                Divider()
-                StorageMeterRow(
                     icon: "music.note.list",
                     label: "Playlists",
-                    valueText: "\(limits.currentPlaylistCount) / \(limits.playlistLimit)",
+                    valueText: "\(limits.currentPlaylistCount)/\(limits.playlistLimit)",
                     ratio: ratio(limits.currentPlaylistCount, limits.playlistLimit),
                     barHeight: 4
                 )
@@ -54,7 +54,9 @@ struct StorageSection: View {
     }
 
     private var storageValueText: String {
-        let used = Self.byteFormatter.string(fromByteCount: limits.usedStorageBytes)
+        let used = limits.usedStorageBytes == 0
+            ? "0 B"
+            : Self.byteFormatter.string(fromByteCount: limits.usedStorageBytes)
         let max = Self.byteFormatter.string(fromByteCount: limits.maxStorageBytes)
         return "\(used) / \(max)"
     }
@@ -98,10 +100,10 @@ private struct SongsPerPlaylistRow: View {
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
                 .frame(width: 24, height: 28)
-            Text("Songs per playlist")
+            Text("Songs per Playlist")
                 .font(.subheadline)
             Spacer()
-            Text("up to \(limit)")
+            Text("\(limit)")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
         }
