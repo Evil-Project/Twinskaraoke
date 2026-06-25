@@ -2975,8 +2975,6 @@
         }
       }
     },
-<<<<<<< HEAD
-=======
     "Audio Effects" : {
 
     },
@@ -3032,7 +3030,6 @@
         }
       }
     },
->>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
     "Audio Quality" : {
       "localizations" : {
         "de" : {
@@ -4706,8 +4703,6 @@
         }
       }
     },
-<<<<<<< HEAD
-=======
     "Couldn't save" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4719,7 +4714,6 @@
         }
       }
     },
->>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
     "Coverage" : {
 
     },
@@ -14888,9 +14882,6 @@
         }
       }
     },
-<<<<<<< HEAD
-    "Real-time mode: audio is processed on-the-fly when you activate a karaoke feature. Only the unplayed portion is processed for faster results." : {
-=======
     "Ready to Play" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14903,7 +14894,6 @@
       }
     },
     "Real-time mode: audio is processed on-the-fly when you activate an audio effect. Only the unplayed portion is processed for faster results." : {
->>>>>>> 9caef89935ec9dd69b42fd21e829255c0f704d45
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16039,13 +16029,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat"
+            "value" : "循环播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat"
+            "value" : "重複播放"
           }
         }
       }
@@ -16091,13 +16081,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat All"
+            "value" : "列表循环"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat All"
+            "value" : "歌單重複"
           }
         }
       }
@@ -16143,13 +16133,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat One"
+            "value" : "单曲循环"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat One"
+            "value" : "單曲重複"
           }
         }
       }
@@ -16195,13 +16185,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset Equalizer"
+            "value" : "重置均衡器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset Equalizer"
+            "value" : "重設等化器"
           }
         }
       }
@@ -16247,13 +16237,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resources"
+            "value" : "资源"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Resources"
+            "value" : "資源"
           }
         }
       }
@@ -16299,13 +16289,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Respect Reduce Motion"
+            "value" : "减弱动态效果"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Respect Reduce Motion"
+            "value" : "減弱動態效果"
           }
         }
       }
@@ -16351,13 +16341,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Results for \"%@\""
+            "value" : "与 \"%@\" 相关的结果"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Results for \"%@\""
+            "value" : "與 \"%@\" 相關的結果"
           }
         }
       }
@@ -16403,13 +16393,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Results for %@"
+            "value" : "与 %@ 相关的结果"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Results for %@"
+            "value" : "與 %@ 相關的結果"
           }
         }
       }
@@ -16455,13 +16445,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retry"
+            "value" : "重试"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Retry"
+            "value" : "重試"
           }
         }
       }
@@ -16507,13 +16497,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Return to Player"
+            "value" : "返回至播放器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Return to Player"
+            "value" : "返回播放器"
           }
         }
       }
@@ -16559,13 +16549,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Returns to the player controls."
+            "value" : "返回到播放器控制栏"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Returns to the player controls."
+            "value" : "返回至播放器控制項"
           }
         }
       }
@@ -16611,13 +16601,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reveals the full guest ID."
+            "value" : "显示完整的访客ID"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reveals the full guest ID."
+            "value" : "顯示完整的訪客ID"
           }
         }
       }
@@ -16663,13 +16653,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Runs the last search again"
+            "value" : "重新执行最近一次搜索"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Runs the last search again"
+            "value" : "重新執行最近一次搜尋"
           }
         }
       }
@@ -16715,13 +16705,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save"
+            "value" : "保存"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save"
+            "value" : "儲存"
           }
         }
       }
@@ -16767,13 +16757,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save Artwork"
+            "value" : "保存图片"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save Artwork"
+            "value" : "儲存圖片"
           }
         }
       }
@@ -16819,13 +16809,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save karaoke tracks from any song menu and they will appear here for offline playback."
+            "value" : "从任意歌曲菜单中保存卡拉 OK 曲目后便会出现在此处以供离线播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save karaoke tracks from any song menu and they will appear here for offline playback."
+            "value" : "從任意歌曲選單中儲存卡拉 OK 曲目後便會出現在此處以供離線播放"
           }
         }
       }
@@ -16871,13 +16861,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saved"
+            "value" : "已保存"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saved"
+            "value" : "已儲存"
           }
         }
       }
@@ -16923,13 +16913,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saving"
+            "value" : "正在保存"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saving"
+            "value" : "正在儲存"
           }
         }
       }
@@ -16975,13 +16965,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scan Web Sign-In Code"
+            "value" : "扫描网页端登录二维码"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scan Web Sign-In Code"
+            "value" : "掃描網頁端登入行動條碼"
           }
         }
       }
@@ -17027,13 +17017,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search"
+            "value" : "搜索"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search"
+            "value" : "搜尋"
           }
         }
       }
@@ -17085,7 +17075,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "搜尋演出者"
+            "value" : "搜尋藝人"
           }
         }
       }
@@ -17131,13 +17121,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search Playlists"
+            "value" : "搜索歌单"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search Playlists"
+            "value" : "搜尋歌單"
           }
         }
       }
@@ -17183,13 +17173,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search Songs"
+            "value" : "搜索歌曲"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search Songs"
+            "value" : "搜尋歌曲"
           }
         }
       }
@@ -17235,13 +17225,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search unavailable"
+            "value" : "搜索暂不可用"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Search unavailable"
+            "value" : "搜尋暫不可用"
           }
         }
       }
@@ -17288,13 +17278,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Searching songs"
+            "value" : "正在搜索歌曲"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Searching songs"
+            "value" : "正在搜尋歌曲"
           }
         }
       }
@@ -17343,13 +17333,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Session"
+            "value" : "会话"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Session"
+            "value" : "工作階段"
           }
         }
       }
@@ -17395,13 +17385,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Settings"
+            "value" : "设置"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Settings"
+            "value" : "設定"
           }
         }
       }
@@ -17447,13 +17437,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share artwork"
+            "value" : "分享图片"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share artwork"
+            "value" : "分享圖片"
           }
         }
       }
@@ -17499,13 +17489,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share Artwork"
+            "value" : "分享图片"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share Artwork"
+            "value" : "分享圖片"
           }
         }
       }
@@ -17551,13 +17541,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share video"
+            "value" : "分享视频"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share video"
+            "value" : "分享影片"
           }
         }
       }
@@ -17603,13 +17593,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share Video"
+            "value" : "分享视频"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share Video"
+            "value" : "分享影片"
           }
         }
       }
@@ -17655,13 +17645,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Live Schedule"
+            "value" : "查看直播日程"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Live Schedule"
+            "value" : "查看直播日程"
           }
         }
       }
@@ -17707,13 +17697,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Lyrics"
+            "value" : "显示歌词"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Lyrics"
+            "value" : "顯示歌詞"
           }
         }
       }
