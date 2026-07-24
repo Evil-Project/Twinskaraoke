@@ -15,10 +15,10 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 
 ::: info  UPDATE
-**Moving towards an App Store and TestFlight launch very soon! Stay tuned!**
+**We Are On TestFlight!**
 :::
 ::: warning NOTE
-Until the official launch, the current installation method means you must sideload the app every 7 days.
+TestFlight Apps expire after 90 days, in the event we do not upload a new build before then you will lose access to the app untill we update again, in case thats a long time the sideloading instructions will remain here just in case.
 :::
 
 ## Features
@@ -85,6 +85,27 @@ Until the official launch, the current installation method means you must sidelo
 </p>
 
 </details>
+
+# Twinskaraoke - iOS Installation Guide
+
+Currently, Twinskaraoke is not yet available on the App Store.
+
+To install the app on your iPhone or iPad today, you must use testflight or build from source.
+
+## Install on TestFlight
+
+1. Download the TestFlight app: https://apps.apple.com/us/app/testflight/id899247664
+2. Login to TestFlight in the app with your Apple account.
+3. Click on this link on your iPhone: https://testflight.apple.com/join/PrNm97Vr
+4. Click install.
+
+### If you have testflight already, scan below
+<p align="center">
+  <img src="readmeimages/qr.svg" title="QR">
+  <br>
+  <em>Twinskaraoke on TestFlight</em>
+</p>
+
 
 ## Install via Sideloading
 
