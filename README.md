@@ -88,7 +88,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 
 Currently, Twinskaraoke is not yet available on the App Store.
 
-To install the app on your iPhone or iPad today, you must use testflight or build from source.
+To install the app on your iPhone or iPad today, you must use TestFlight or build from source.
 
 ## Install
 
