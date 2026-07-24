@@ -335,7 +335,9 @@ class AudioPlayerManager: ObservableObject {
         return defaultValue
     }
 
-    private let avEngine = AVEnginePlayback()
+    // Construct the graph only after init has configured/activated the audio
+    // session, so its fixed effects bus adopts the active hardware sample rate.
+    private lazy var avEngine = AVEnginePlayback()
     private let transitionCoordinator = TransitionCoordinator()
     private var radioPlayer: AVPlayer?
     private var streamPlayer: AVPlayer?
@@ -370,9 +372,13 @@ class AudioPlayerManager: ObservableObject {
     private var quickCutGeneration: UInt64 = 0
     private var separationGeneration: UInt64 = 0
     private var transitionTimeoutGeneration: UInt64 = 0
+    private var transitionStartGeneration: UInt64 = 0
+    private var transitionStartTask: Task<Void, Never>?
     private var activeCrossfadePlan: TransitionCoordinator.TransitionPlan?
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
+    private var audioSessionCategoryConfigured = false
+    private var audioSessionIsActive = false
     private var handlingAudioSessionInterruption = false
 
     private let easterEggSongID = "73376790-47d2-4c17-a7fc-88d11dccd2f0"
@@ -581,6 +587,9 @@ class AudioPlayerManager: ObservableObject {
         transitionCoordinator.onBeginTransition = { [weak self] plan in
             self?.handleTransitionBegin(plan: plan)
         }
+        transitionCoordinator.onTransitionPrepared = { [weak self] plan in
+            self?.schedulePreparedTransition(plan)
+        }
         transitionCoordinator.onUpcomingSongDetermined = { [weak self] song in
             self?.upcomingSong = song
         }
@@ -626,6 +635,7 @@ class AudioPlayerManager: ObservableObject {
             pollTimer?.invalidate()
             quickCutTimer?.invalidate()
             streamFadeTimer?.invalidate()
+            transitionStartTask?.cancel()
             instrumentalTask?.cancel()
             backgroundAnalysisRetryTask?.cancel()
             remotePlaybackCacheTask?.cancel()
@@ -859,12 +869,24 @@ class AudioPlayerManager: ObservableObject {
         if let playbackURL = currentPlaybackURL,
            playbackURL.path.hasPrefix(AudioPlayerManager.audioCacheDir.path)
         {
-            DebugLogger.log(
-                "Removing suspect cached audio after premature end for \(song.id)",
-                category: .cache
-            )
-            AudioCacheStore.removeSongCache(for: song.id)
-            currentPlaybackURL = nil
+            let cachedDuration = AudioCacheStore.audioDuration(at: playbackURL)
+            if AudioCacheStore.durationAppearsComplete(
+                actualDuration: cachedDuration,
+                expectedDuration: expectedDuration
+            ) {
+                DebugLogger.log(
+                    "Keeping duration-validated cache after stale premature-end callback for \(song.id): cached=\(cachedDuration), expected=\(expectedDuration)",
+                    category: .cache
+                )
+                return true
+            } else {
+                DebugLogger.log(
+                    "Removing corroborated incomplete cache after premature end for \(song.id): cached=\(cachedDuration), expected=\(expectedDuration)",
+                    category: .cache
+                )
+                AudioCacheStore.removeSongCache(for: song.id)
+                currentPlaybackURL = nil
+            }
         } else if let playbackURL = currentPlaybackURL,
                   playbackURL.isFileURL,
                   DownloadManager.shared.isDownloaded(song.id)
@@ -1036,6 +1058,9 @@ class AudioPlayerManager: ObservableObject {
 
     private func cancelPendingTransitionWork(resetVolume: Bool = true) {
         transitionTimeoutGeneration &+= 1
+        transitionStartGeneration &+= 1
+        transitionStartTask?.cancel()
+        transitionStartTask = nil
         activeCrossfadePlan = nil
         cancelQuickCutTimer(resetVolume: resetVolume)
         avEngine.cancelCrossfade()
@@ -1048,6 +1073,37 @@ class AudioPlayerManager: ObservableObject {
         #if canImport(UIKit)
             endTrackTransitionBackgroundTask()
         #endif
+    }
+
+    private func schedulePreparedTransition(_ plan: TransitionCoordinator.TransitionPlan) {
+        transitionStartGeneration &+= 1
+        let generation = transitionStartGeneration
+        transitionStartTask?.cancel()
+
+        let remaining = max(0, playbackDuration - activePlaybackTime(for: currentSong))
+        let delay = max(0, remaining - plan.fadeDuration)
+        DebugLogger.log(
+            "Scheduling transition deadline next=\(plan.nextSong.id), in=\(String(format: "%.3f", delay))s",
+            category: .playback
+        )
+
+        transitionStartTask = Task { [weak self] in
+            guard delay.isFinite else { return }
+            if delay > 0 {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return
+                }
+            }
+            guard let self,
+                  transitionStartGeneration == generation,
+                  isPlaying,
+                  currentSong?.id != plan.nextSong.id
+            else { return }
+            transitionStartTask = nil
+            transitionCoordinator.beginPreparedTransition(plan)
+        }
     }
 
     private func handleMemoryWarning() {
@@ -2511,6 +2567,7 @@ class AudioPlayerManager: ObservableObject {
     }
 
     private func configureAudioSessionCategory() {
+        guard !audioSessionCategoryConfigured else { return }
         do {
             if #available(iOS 13.0, *) {
                 try AVAudioSession.sharedInstance().setCategory(
@@ -2519,11 +2576,20 @@ class AudioPlayerManager: ObservableObject {
             } else {
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             }
-        } catch {}
+            audioSessionCategoryConfigured = true
+        } catch {
+            DebugLogger.log("Audio session category configuration failed: \(error)", category: .playback)
+        }
     }
 
     private func activateAudioSession() {
-        try? AVAudioSession.sharedInstance().setActive(true, options: [.notifyOthersOnDeactivation])
+        guard !audioSessionIsActive else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            audioSessionIsActive = true
+        } catch {
+            DebugLogger.log("Audio session activation failed: \(error)", category: .playback)
+        }
     }
 
     private func syncSystemVolume(
@@ -2554,6 +2620,8 @@ class AudioPlayerManager: ObservableObject {
 
     private func handleMediaServicesReset() {
         DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
+        audioSessionCategoryConfigured = false
+        audioSessionIsActive = false
         configureAudioSessionCategory()
         activateAudioSession()
         if isPlaying, !isRadioMode, !isStreamMode {
@@ -2570,6 +2638,7 @@ class AudioPlayerManager: ObservableObject {
         else { return }
         switch type {
         case .began:
+            audioSessionIsActive = false
             wasPlayingBeforeInterruption = isPlaybackRequested
             DebugLogger.log(
                 "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
@@ -3175,8 +3244,6 @@ class AudioPlayerManager: ObservableObject {
             beginTrackTransitionBackgroundTask()
         #endif
         activeCrossfadePlan = plan
-        configureAudioSessionCategory()
-        activateAudioSession()
         DebugLogger.log(
             "Transition begin next=\(plan.nextSong.id), file=\(plan.nextFileURL.lastPathComponent), fade=\(plan.fadeDuration), ramp=\(plan.rampStyle), streamMode=\(isStreamMode), aiEffectActive=\(anyAIEffectActive)",
             category: .playback

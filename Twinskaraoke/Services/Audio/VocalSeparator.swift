@@ -270,6 +270,7 @@ final class VocalSeparator: ObservableObject {
         activeTask = task
         do {
             _ = try await task.value
+            try Task.checkCancellation()
         } catch {
             Self.cleanupTmpFiles([vocalsURL, instrumentsURL])
             throw error
@@ -281,6 +282,7 @@ final class VocalSeparator: ObservableObject {
             Self.cleanupTmpFiles([vocalsURL, instrumentsURL])
             throw VocalSeparatorError.unavailable
         }
+        try Task.checkCancellation()
 
         DebugLogger.log(
             "Real-time separation complete for \(songID), offset=\(normalizedStart)",
@@ -485,11 +487,26 @@ final class VocalSeparator: ObservableObject {
             cleanupTmpFiles([tmpVocals, tmpInstruments])
             throw error
         }
+        // Some inference backends finish their AsyncSequence normally after
+        // cancellation. Never publish those partial outputs as completed stems.
+        do {
+            try Task.checkCancellation()
+        } catch {
+            cleanupTmpFiles([tmpVocals, tmpInstruments])
+            throw VocalSeparatorError.cancelled
+        }
         let moves: [(URL, URL)] = [
             (tmpVocals, vocalsOutputURL),
             (tmpInstruments, instrumentsOutputURL),
         ]
         for (src, dst) in moves {
+            do {
+                try Task.checkCancellation()
+            } catch {
+                cleanupTmpFiles([tmpVocals, tmpInstruments])
+                cleanupTmpFiles(moves.map(\.1))
+                throw VocalSeparatorError.cancelled
+            }
             try? FileManager.default.removeItem(at: dst)
             do {
                 try FileManager.default.moveItem(at: src, to: dst)
