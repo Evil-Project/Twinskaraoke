@@ -241,6 +241,32 @@ struct DownloadManagerTests {
         )
     }
 
+    @Test("Collection download status separates pending and in-flight songs")
+    func collectionDownloadStatusClassifiesSongs() {
+        let songs = ["downloaded", "downloading", "pending", "overlap"].map { id in
+            Song(
+                id: id,
+                title: id,
+                duration: 180,
+                absolutePath: "/audio/\(id).mp3",
+                cloudflareID: nil,
+                coverArt: nil,
+                originalArtists: nil,
+                coverArtists: nil,
+                userUploaded: false
+            )
+        }
+
+        let status = SongCollectionDownloadStatus.make(
+            downloadedIDs: ["downloaded", "overlap"],
+            inProgress: ["downloading", "overlap"],
+            songs: songs
+        )
+
+        #expect(status.pendingSongs.map(\.id) == ["pending"])
+        #expect(status.inFlightCount == 2)
+    }
+
     @Test("Audio cache access does not mutate persistent download files")
     func cacheTouchLeavesExternalFilesUnchanged() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
