@@ -60,6 +60,33 @@ struct SongDownloadStatus: Equatable, Sendable {
     }
 }
 
+struct SongCollectionDownloadStatus: Equatable, Sendable {
+    let pendingSongs: [Song]
+    let inFlightCount: Int
+
+    static func make(
+        downloadedIDs: Set<String>,
+        inProgress: Set<String>,
+        songs: [Song]
+    ) -> SongCollectionDownloadStatus {
+        var pendingSongs: [Song] = []
+        var inFlightCount = 0
+
+        for song in songs {
+            if inProgress.contains(song.id) {
+                inFlightCount += 1
+            } else if !downloadedIDs.contains(song.id) {
+                pendingSongs.append(song)
+            }
+        }
+
+        return SongCollectionDownloadStatus(
+            pendingSongs: pendingSongs,
+            inFlightCount: inFlightCount
+        )
+    }
+}
+
 @MainActor
 final class DownloadManager: ObservableObject {
     private struct PublishedState: Equatable {
@@ -304,6 +331,14 @@ final class DownloadManager: ObservableObject {
             downloadedIDs: downloadedIDs,
             inProgress: inProgress,
             songID: songID
+        )
+    }
+
+    func status(for songs: [Song]) -> SongCollectionDownloadStatus {
+        SongCollectionDownloadStatus.make(
+            downloadedIDs: downloadedIDs,
+            inProgress: inProgress,
+            songs: songs
         )
     }
 

@@ -17,13 +17,7 @@ struct PlaylistActionsMenuItems: View {
     }
 
     var body: some View {
-        let state = songs.reduce(into: (pendingSongs: [Song](), inFlightCount: 0)) { state, song in
-            if downloads.isDownloading(song.id) {
-                state.inFlightCount += 1
-            } else if !downloads.isDownloaded(song.id) {
-                state.pendingSongs.append(song)
-            }
-        }
+        let state = downloads.status(for: songs)
         let pendingSongs = state.pendingSongs
         let inFlightCount = state.inFlightCount
         let pendingCount = pendingSongs.count
