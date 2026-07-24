@@ -57,6 +57,9 @@ struct PlaylistDetailView: View {
                 if wasActivelyPulling, !isActivelyPulling, isArtworkPullOverridden {
                     withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.24)) {
                         artworkPullOverride = 0
+                    } completion: {
+                        guard artworkPullOverride == 0 else { return }
+                        isArtworkPullOverridden = false
                     }
                 }
             }
@@ -102,7 +105,12 @@ struct PlaylistDetailView: View {
             RecentlyPlayedStore.shared.record(playlist)
             prefetchArtwork(songs: displayedSongs)
         }
-        .onChange(of: Array(displayedSongs.prefix(18)).map(\.id)) { _, _ in
+        .task(id: Array(displayedSongs.prefix(18)).map(\.id)) {
+            do {
+                try await Task.sleep(for: .milliseconds(180))
+            } catch {
+                return
+            }
             prefetchArtwork(songs: displayedSongs)
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in
@@ -218,6 +226,7 @@ struct PlaylistDetailView: View {
                 isSearchVisible = true
             }
             Task { @MainActor in
+                guard isSearchVisible, !isSearchModeActive else { return }
                 isSearchFocused = true
             }
         }
@@ -458,8 +467,8 @@ struct PlaylistDetailView: View {
                 .transition(.opacity)
         } else if isSearching, !songs.isEmpty {
             MusicEmptyState(
-                title: "No Results",
-                message: "Try another song title or artist."
+                title: String(localized: "No Results"),
+                message: String(localized: "Try another song title or artist.")
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 48)
