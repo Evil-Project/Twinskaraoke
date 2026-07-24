@@ -630,6 +630,200 @@ struct SongModelTests {
         #expect(playlist.songListDTOs.map(\.id) == ["youtube-1"])
     }
 
+    @Test("Playlist search matches song titles and artists")
+    func playlistSearchMatchesTitlesAndArtists() {
+        let titleMatch = Song(
+            id: "title-match",
+            title: "Dancing Queen",
+            duration: 210,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: ["ABBA"],
+            coverArtists: nil,
+            userUploaded: false
+        )
+        let artistMatch = Song(
+            id: "artist-match",
+            title: "As It Was",
+            duration: 167,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: ["Harry Styles"],
+            coverArtists: ["Twinskaraoke"],
+            userUploaded: false
+        )
+
+        #expect(
+            PlaylistSongSearch.filter([titleMatch, artistMatch], matching: "dancing")
+                .map(\.id) == ["title-match"]
+        )
+        #expect(
+            PlaylistSongSearch.filter([titleMatch, artistMatch], matching: "harry")
+                .map(\.id) == ["artist-match"]
+        )
+        #expect(
+            PlaylistSongSearch.filter([titleMatch, artistMatch], matching: "twins")
+                .map(\.id) == ["artist-match"]
+        )
+    }
+
+    @Test("Playlist search trims its query and preserves order")
+    func playlistSearchTrimsQueryAndPreservesOrder() {
+        let first = Song(
+            id: "first",
+            title: "First Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: ["Shared Artist"],
+            coverArtists: nil,
+            userUploaded: false
+        )
+        let second = Song(
+            id: "second",
+            title: "Second Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: ["Shared Artist"],
+            coverArtists: nil,
+            userUploaded: false
+        )
+
+        #expect(
+            PlaylistSongSearch.filter([first, second], matching: "  SHARED  ")
+                .map(\.id) == ["first", "second"]
+        )
+        #expect(
+            PlaylistSongSearch.filter([first, second], matching: "   ")
+                .map(\.id) == ["first", "second"]
+        )
+    }
+
+    @Test("Playlist search reveal requires a deliberate pull")
+    func playlistSearchRevealRequiresThreshold() {
+        var state = PlaylistSearchRevealState()
+
+        let belowThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold - 1,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let atThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let repeatedAboveThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 20,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+
+        #expect(!belowThreshold)
+        #expect(atThreshold)
+        #expect(!repeatedAboveThreshold)
+    }
+
+    @Test("Playlist search reveal rearms after returning to rest")
+    func playlistSearchRevealRearmsAfterRelease() {
+        var state = PlaylistSearchRevealState()
+
+        let initialReveal = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let release = state.update(
+            pullDistance: PlaylistSearchRevealState.resetThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: false
+        )
+        let secondReveal = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+
+        #expect(initialReveal)
+        #expect(!release)
+        #expect(secondReveal)
+    }
+
+    @Test("Playlist search reveal stays inactive while search is visible")
+    func playlistSearchRevealStaysInactiveWhileVisible() {
+        var state = PlaylistSearchRevealState()
+
+        let revealWhileVisible = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 40,
+            isSearchVisible: true,
+            isActivelyPulling: true
+        )
+
+        #expect(!revealWhileVisible)
+    }
+
+    @Test("Playlist search reveal cannot arm during ordinary scrolling")
+    func playlistSearchRevealRequiresActivePulling() {
+        var state = PlaylistSearchRevealState()
+
+        let armedWhileSettling = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 20,
+            isSearchVisible: false,
+            isActivelyPulling: false
+        )
+
+        #expect(!armedWhileSettling)
+    }
+
+    @Test("Playlist search pill hides during an intentional downward scroll")
+    func playlistSearchPillAutoHideRules() {
+        #expect(
+            PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold - 1,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: false,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: true,
+                isActivelyScrolling: false,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: true
+            )
+        )
+    }
+
     @Test("Display artist combines original and cover artists")
     func displayArtistUsesOriginalAndCoverMetadata() {
         let song = Song(
