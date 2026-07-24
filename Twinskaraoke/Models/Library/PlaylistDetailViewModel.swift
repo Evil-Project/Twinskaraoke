@@ -1,6 +1,19 @@
 import Combine
 import Foundation
 
+nonisolated enum PlaylistSongSearch {
+    static func filter(_ songs: [Song], matching searchText: String) -> [Song] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return songs }
+
+        return songs.filter { song in
+            song.title.localizedCaseInsensitiveContains(query)
+                || song.displayArtist.localizedCaseInsensitiveContains(query)
+                || song.displayTitle.localizedCaseInsensitiveContains(query)
+        }
+    }
+}
+
 @MainActor
 class PlaylistDetailViewModel: ObservableObject {
     @Published var songs: [Song]?
@@ -12,7 +25,7 @@ class PlaylistDetailViewModel: ObservableObject {
         if loadFailed {
             return "The playlist couldn't be loaded. Check your connection and try again."
         }
-        return "Pull down or tap refresh to check for new songs."
+        return "Tap refresh to check for new songs."
     }
 
     func reload(playlistID: String, fallback: [Song]? = nil) {
