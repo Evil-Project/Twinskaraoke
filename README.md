@@ -101,7 +101,7 @@ To install the app on your iPhone or iPad today, you must use testflight or buil
 ---
 ### If you have testflight already, scan below
 <p align="center">
-  <img src="readmeimages/QR.svg" title="QR">
+  <img src="readmeimages/qr.svg" title="QR">
   <br>
   <em>Twinskaraoke on TestFlight</em>
 </p>
