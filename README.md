@@ -95,6 +95,17 @@ All credits go to the website creator "Soul". This is a companion app for the we
 3. Click on this link on your iPhone: [https://testflight.apple.com/join/PrNm97Vr](https://testflight.apple.com/join/PrNm97Vr)
 4. Click install.
 
+> [!WARNING]
+> **TestFlight builds expire after 90 days.** Each build we upload is only valid for 90 days, after which it stops working and you will need to update to a newer build from TestFlight. If we ever fail to upload a new build in time, testers will lose access to the app until a fresh build is published.
+
+### Or scan the QR code to join the TestFlight beta if you have the TestFlight app:
+
+<p align="center">
+  <img src="readmeimages/qr.svg" width="40%" title="Scan to join the Twinskaraoke TestFlight beta">
+  <br>
+  <em>Scan with your camera to open the TestFlight invite</em>
+</p>
+
 ---
 
 #### You may also, optionally, Sideload or build from source. You can find the info below:

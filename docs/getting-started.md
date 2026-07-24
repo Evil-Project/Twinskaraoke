@@ -14,11 +14,11 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@ytsodacan](https://github.com/ytsodacan) (SillyProotSoda) 
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 
-::: info  UPDATE
-**Moving towards an App Store and TestFlight launch very soon! Stay tuned!**
+::: info UPDATE
+**We are officially live on TestFlight. See the installation info below! Stay tuned for the App Store!**
 :::
 ::: warning NOTE
-Until the official launch, the current installation method means you must sideload the app every 7 days.
+Sideloading is still available as an optional install method, but with a free Apple ID you must re-sign the app every 7 days. TestFlight is the recommended way to install.
 :::
 
 ## Features
@@ -85,6 +85,25 @@ Until the official launch, the current installation method means you must sidelo
 </p>
 
 </details>
+
+## Install via TestFlight
+
+1. Download the TestFlight app: [https://apps.apple.com/us/app/testflight/id899247664](https://apps.apple.com/us/app/testflight/id899247664)
+2. Log in to TestFlight in the app with your Apple account.
+3. Click on this link on your iPhone: [https://testflight.apple.com/join/PrNm97Vr](https://testflight.apple.com/join/PrNm97Vr)
+4. Click install.
+
+::: warning TESTFLIGHT BUILDS EXPIRE AFTER 90 DAYS
+Each build we upload to TestFlight is only valid for **90 days**, after which it stops working and you will need to update to a newer build. If we ever fail to upload a new build in time, testers will lose access to the app until a fresh build is published.
+:::
+
+### Or scan the QR code to join the TestFlight beta:
+
+<p align="center">
+  <img src="../readmeimages/qr.svg" width="40%" title="Scan to join the Twinskaraoke TestFlight beta">
+  <br>
+  <em>Scan with your iPhone camera to open the TestFlight invite</em>
+</p>
 
 ## Install via Sideloading
 

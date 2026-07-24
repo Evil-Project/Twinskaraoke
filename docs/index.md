@@ -18,8 +18,8 @@ hero:
       link: //github.com/Evil-Project/Twinskaraoke
 
 features:
-  - title:  Coming Soon to App Store !
-    details: We are officially moving towards an App Store and TestFlight launch very soon! Stay tuned!
+  - title:  Now on TestFlight
+    details: We are now on TestFlight!
   - title: Advanced Audio & Offline Play
     details: Download songs to listen anywhere. Fine-tune your audio with a built-in 10-band EQ and real-time vocal/instrumental separation.
   - title: Native Background Playback
