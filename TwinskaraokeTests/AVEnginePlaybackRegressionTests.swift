@@ -38,6 +38,23 @@ struct AVEnginePlaybackRegressionTests {
         #expect(abs(player.duration - 2) < 0.01)
     }
 
+    @Test("Starting at end of file reports completion without phantom playback")
+    func endOfFileStartCompletes() async throws {
+        let sourceURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let player = SimpleAudioPlayer()
+        try player.load(file: AVAudioFile(forReading: sourceURL))
+
+        var completionCount = 0
+        player.completionHandler = { completionCount += 1 }
+        player.play(from: player.duration)
+        await Task.yield()
+
+        #expect(!player.isPlaying)
+        #expect(completionCount == 1)
+    }
+
     private func makeSilentWaveFile(duration: TimeInterval, sampleRate: Double) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("playback-regression-\(UUID().uuidString).wav")

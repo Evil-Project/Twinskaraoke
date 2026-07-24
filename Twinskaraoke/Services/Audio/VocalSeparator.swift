@@ -40,6 +40,31 @@ nonisolated struct CachedStems {
     }
 }
 
+struct SeparationJobOwnership {
+    private(set) var activeID: UUID?
+
+    @discardableResult
+    mutating func begin(id: UUID = UUID()) -> UUID {
+        activeID = id
+        return id
+    }
+
+    mutating func cancelCurrent() {
+        activeID = nil
+    }
+
+    func owns(_ id: UUID) -> Bool {
+        activeID == id
+    }
+
+    @discardableResult
+    mutating func finish(_ id: UUID) -> Bool {
+        guard activeID == id else { return false }
+        activeID = nil
+        return true
+    }
+}
+
 @MainActor
 final class VocalSeparator: ObservableObject {
     static let shared = VocalSeparator()
@@ -59,12 +84,24 @@ final class VocalSeparator: ObservableObject {
     private var activeTaskKind: SeparationTaskKind?
     private var backgroundAnalysisTask: Task<Void, Never>?
     private var realtimeCleanupTask: Task<Void, Never>?
+    private var jobOwnership = SeparationJobOwnership()
 
     private nonisolated static var realtimeTempDir: URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("RealtimeStems", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    nonisolated static func separationOutputURLs(
+        in directory: URL, songID: String, jobID: UUID
+    ) -> (vocals: URL, instruments: URL) {
+        let storageKey = SongStorageKey.component(for: songID)
+        let prefix = "\(storageKey).\(jobID.uuidString)"
+        return (
+            directory.appendingPathComponent("\(prefix).vocals.wav"),
+            directory.appendingPathComponent("\(prefix).instruments.wav")
+        )
     }
 
     private init() {
@@ -157,39 +194,48 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            jobOwnership.cancelCurrent()
         }
         try Task.checkCancellation()
         guard #available(iOS 18.0, *) else { throw VocalSeparatorError.unavailable }
         DebugLogger.log("Starting full separation for \(songID)", category: .separation)
         processingSongID = songID
         activeTaskKind = initiatedByBackground ? .background : .foreground
+        let jobID = jobOwnership.begin()
         _ = AudioCacheStore.ensureSongDirectory(for: songID)
         let songFiles = AudioCacheStore.files(for: songID)
         let vocalsURL = songFiles.vocals
         let instrumentsURL = songFiles.instruments
+        let staging = Self.separationOutputURLs(
+            in: vocalsURL.deletingLastPathComponent(),
+            songID: songID,
+            jobID: jobID
+        )
         let modelRef = modelURL
         let task = Task<URL, Error>.detached(priority: .utility) {
             do {
                 try await Self.runSeparation2(
                     modelURL: modelRef,
-                    songID: songID,
+                    jobID: jobID,
                     sourceURL: sourceURL,
-                    vocalsOutputURL: vocalsURL,
-                    instrumentsOutputURL: instrumentsURL
+                    vocalsOutputURL: staging.vocals,
+                    instrumentsOutputURL: staging.instruments
                 ) { fraction in
-                    await VocalSeparator.shared.updateProgress(songID: songID, fraction: fraction)
-                }
-                AudioCacheStore.clearMainOffset(for: songID)
-                await VocalSeparator.shared.finishJob(songID: songID)
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .vocalSeparatorDidCacheStems,
-                        object: songID
+                    await VocalSeparator.shared.updateProgress(
+                        jobID: jobID, songID: songID, fraction: fraction
                     )
                 }
+                try Task.checkCancellation()
+                try await VocalSeparator.shared.publishCompletedFullJob(
+                    jobID: jobID,
+                    songID: songID,
+                    staging: staging,
+                    destinations: (vocalsURL, instrumentsURL)
+                )
                 return vocalsURL
             } catch {
-                await VocalSeparator.shared.finishJob(songID: songID)
+                Self.cleanupTmpFiles([staging.vocals, staging.instruments])
+                await VocalSeparator.shared.finishJob(jobID: jobID)
                 throw error
             }
         }
@@ -214,6 +260,7 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            jobOwnership.cancelCurrent()
         }
 
         try Task.checkCancellation()
@@ -227,74 +274,78 @@ final class VocalSeparator: ObservableObject {
 
         processingSongID = songID
         activeTaskKind = .foreground
-        let storageKey = SongStorageKey.component(for: songID)
-        let vocalsURL = Self.realtimeTempDir.appendingPathComponent("\(storageKey).vocals.wav")
-        let instrumentsURL = Self.realtimeTempDir.appendingPathComponent("\(storageKey).instruments.wav")
+        let jobID = jobOwnership.begin()
+        let outputs = Self.separationOutputURLs(
+            in: Self.realtimeTempDir,
+            songID: songID,
+            jobID: jobID
+        )
+        let vocalsURL = outputs.vocals
+        let instrumentsURL = outputs.instruments
         let modelRef = modelURL
 
         let task = Task<URL, Error>.detached(priority: .utility) {
-            do {
-                let trimmedSource: URL
-                let trimmedTemp: URL?
-                if normalizedStart > 1.0 {
-                    let tmp = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("\(storageKey).rt.trim.m4a")
-                    try await Self.trim(source: sourceURL, from: normalizedStart, to: tmp)
-                    trimmedSource = tmp
-                    trimmedTemp = tmp
-                } else {
-                    trimmedSource = sourceURL
-                    trimmedTemp = nil
-                }
-                defer {
-                    if let trimmedTemp {
-                        try? FileManager.default.removeItem(at: trimmedTemp)
-                    }
-                }
-                try await Self.runSeparation2(
-                    modelURL: modelRef,
-                    songID: songID,
-                    sourceURL: trimmedSource,
-                    vocalsOutputURL: vocalsURL,
-                    instrumentsOutputURL: instrumentsURL
-                ) { fraction in
-                    await VocalSeparator.shared.updateProgress(songID: songID, fraction: fraction)
-                }
-                await VocalSeparator.shared.finishJob(songID: songID)
-                return vocalsURL
-            } catch {
-                await VocalSeparator.shared.finishJob(songID: songID)
-                throw error
+            let trimmedSource: URL
+            let trimmedTemp: URL?
+            if normalizedStart > 1.0 {
+                let tmp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("\(jobID.uuidString).rt.trim.m4a")
+                try await Self.trim(source: sourceURL, from: normalizedStart, to: tmp)
+                trimmedSource = tmp
+                trimmedTemp = tmp
+            } else {
+                trimmedSource = sourceURL
+                trimmedTemp = nil
             }
+            defer {
+                if let trimmedTemp {
+                    try? FileManager.default.removeItem(at: trimmedTemp)
+                }
+            }
+            try await Self.runSeparation2(
+                modelURL: modelRef,
+                jobID: jobID,
+                sourceURL: trimmedSource,
+                vocalsOutputURL: vocalsURL,
+                instrumentsOutputURL: instrumentsURL
+            ) { fraction in
+                await VocalSeparator.shared.updateProgress(
+                    jobID: jobID, songID: songID, fraction: fraction
+                )
+            }
+            return vocalsURL
         }
         activeTask = task
         do {
             _ = try await task.value
             try Task.checkCancellation()
+            guard jobOwnership.owns(jobID) else {
+                throw VocalSeparatorError.cancelled
+            }
+            guard FileManager.default.fileExists(atPath: vocalsURL.path),
+                  FileManager.default.fileExists(atPath: instrumentsURL.path)
+            else {
+                throw VocalSeparatorError.unavailable
+            }
+            try Task.checkCancellation()
+            finishJob(jobID: jobID)
+
+            DebugLogger.log(
+                "Real-time separation complete for \(songID), offset=\(normalizedStart)",
+                category: .separation
+            )
+            let offset = normalizedStart > 1.0 ? normalizedStart : 0
+            return CachedStems(
+                vocals: vocalsURL,
+                instruments: instrumentsURL,
+                startOffset: offset,
+                isTemporary: true
+            )
         } catch {
             Self.cleanupTmpFiles([vocalsURL, instrumentsURL])
+            finishJob(jobID: jobID)
             throw error
         }
-
-        guard FileManager.default.fileExists(atPath: vocalsURL.path),
-              FileManager.default.fileExists(atPath: instrumentsURL.path)
-        else {
-            Self.cleanupTmpFiles([vocalsURL, instrumentsURL])
-            throw VocalSeparatorError.unavailable
-        }
-        try Task.checkCancellation()
-
-        DebugLogger.log(
-            "Real-time separation complete for \(songID), offset=\(normalizedStart)",
-            category: .separation
-        )
-        let offset = normalizedStart > 1.0 ? normalizedStart : 0
-        return CachedStems(
-            vocals: vocalsURL,
-            instruments: instrumentsURL,
-            startOffset: offset,
-            isTemporary: true
-        )
     }
 
     func analyzeInBackground(songID: String, sourceURL: URL) {
@@ -343,6 +394,7 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            jobOwnership.cancelCurrent()
             old?.cancel()
         }
         isBackgroundAnalyzing = false
@@ -358,6 +410,7 @@ final class VocalSeparator: ObservableObject {
         activeTaskKind = nil
         processingSongID = nil
         progressFraction = 0
+        jobOwnership.cancelCurrent()
         old?.cancel()
         if hadWork {
             DebugLogger.log("Separation cancelled", category: .separation)
@@ -420,17 +473,41 @@ final class VocalSeparator: ObservableObject {
         return duration
     }
 
-    private func updateProgress(songID: String, fraction: Float) {
-        if processingSongID == songID { progressFraction = fraction }
+    private func updateProgress(jobID: UUID, songID: String, fraction: Float) {
+        if jobOwnership.owns(jobID), processingSongID == songID {
+            progressFraction = fraction
+        }
     }
 
-    fileprivate func finishJob(songID: String) {
-        if processingSongID == songID {
-            processingSongID = nil
-            progressFraction = 0
-            activeTask = nil
-            activeTaskKind = nil
+    private func finishJob(jobID: UUID) {
+        guard jobOwnership.finish(jobID) else { return }
+        processingSongID = nil
+        progressFraction = 0
+        activeTask = nil
+        activeTaskKind = nil
+    }
+
+    private func publishCompletedFullJob(
+        jobID: UUID,
+        songID: String,
+        staging: (vocals: URL, instruments: URL),
+        destinations: (vocals: URL, instruments: URL)
+    ) throws {
+        guard jobOwnership.owns(jobID) else {
+            throw VocalSeparatorError.cancelled
         }
+        try Self.publishStemFiles(
+            vocalsSource: staging.vocals,
+            instrumentsSource: staging.instruments,
+            vocalsDestination: destinations.vocals,
+            instrumentsDestination: destinations.instruments
+        )
+        AudioCacheStore.clearMainOffset(for: songID)
+        finishJob(jobID: jobID)
+        NotificationCenter.default.post(
+            name: .vocalSeparatorDidCacheStems,
+            object: songID
+        )
     }
 
     private static func trim(source: URL, from startSeconds: TimeInterval, to output: URL)
@@ -461,7 +538,7 @@ final class VocalSeparator: ObservableObject {
     @available(iOS 18.0, *)
     private static func runSeparation2(
         modelURL: URL,
-        songID: String,
+        jobID: UUID,
         sourceURL: URL,
         vocalsOutputURL: URL,
         instrumentsOutputURL: URL,
@@ -469,11 +546,12 @@ final class VocalSeparator: ObservableObject {
     ) async throws {
         let separator = try AudioSeparator2(modelURL: modelURL)
         let tmpDir = FileManager.default.temporaryDirectory
-        let storageKey = SongStorageKey.component(for: songID)
-        let tmpVocals = tmpDir.appendingPathComponent("\(storageKey).vocals.wav")
-        let tmpInstruments = tmpDir.appendingPathComponent("\(storageKey).instruments.wav")
-        try? FileManager.default.removeItem(at: tmpVocals)
-        try? FileManager.default.removeItem(at: tmpInstruments)
+            .appendingPathComponent("SeparationJobs", isDirectory: true)
+            .appendingPathComponent(jobID.uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let tmpVocals = tmpDir.appendingPathComponent("vocals.wav")
+        let tmpInstruments = tmpDir.appendingPathComponent("instruments.wav")
         let stems = Stems2(vocals: tmpVocals, accompaniment: tmpInstruments)
         do {
             for try await prog in separator.separate(from: sourceURL, to: stems) {
@@ -519,7 +597,74 @@ final class VocalSeparator: ObservableObject {
         }
     }
 
-    private static func cleanupTmpFiles(_ urls: [URL]) {
+    private nonisolated static func publishStemFiles(
+        vocalsSource: URL,
+        instrumentsSource: URL,
+        vocalsDestination: URL,
+        instrumentsDestination: URL
+    ) throws {
+        let fileManager = FileManager.default
+        let moves = [
+            (vocalsSource, vocalsDestination),
+            (instrumentsSource, instrumentsDestination),
+        ]
+        let transactionID = UUID().uuidString
+        var backups: [(destination: URL, backup: URL)] = []
+        var publishedDestinations: [URL] = []
+
+        do {
+            // Move any existing pair aside first. Both replacements are then
+            // published as one transaction and the old pair can be restored if
+            // either move fails.
+            for (_, destination) in moves
+            where fileManager.fileExists(atPath: destination.path) {
+                let backup = destination.deletingLastPathComponent()
+                    .appendingPathComponent(
+                        ".\(destination.lastPathComponent).\(transactionID).backup"
+                    )
+                try fileManager.moveItem(at: destination, to: backup)
+                backups.append((destination, backup))
+            }
+
+            for (source, destination) in moves {
+                try fileManager.moveItem(at: source, to: destination)
+                publishedDestinations.append(destination)
+            }
+
+            for (_, backup) in backups {
+                try? fileManager.removeItem(at: backup)
+            }
+        } catch {
+            for destination in publishedDestinations.reversed() {
+                try? fileManager.removeItem(at: destination)
+            }
+            for (destination, backup) in backups.reversed()
+            where fileManager.fileExists(atPath: backup.path) {
+                try? fileManager.removeItem(at: destination)
+                try? fileManager.moveItem(at: backup, to: destination)
+            }
+            cleanupTmpFiles(moves.map(\.0))
+            throw error
+        }
+    }
+
+    #if DEBUG
+        nonisolated static func publishStemFilesForTesting(
+            vocalsSource: URL,
+            instrumentsSource: URL,
+            vocalsDestination: URL,
+            instrumentsDestination: URL
+        ) throws {
+            try publishStemFiles(
+                vocalsSource: vocalsSource,
+                instrumentsSource: instrumentsSource,
+                vocalsDestination: vocalsDestination,
+                instrumentsDestination: instrumentsDestination
+            )
+        }
+    #endif
+
+    private nonisolated static func cleanupTmpFiles(_ urls: [URL]) {
         for url in urls {
             try? FileManager.default.removeItem(at: url)
         }

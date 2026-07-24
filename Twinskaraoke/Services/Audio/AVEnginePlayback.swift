@@ -28,9 +28,7 @@ extension AVAudioTime {
 
 @MainActor
 final class SimpleAudioPlayer {
-    // AVAudioPlayerNode.stop() is thread-safe and is also used during
-    // nonisolated owner teardown.
-    nonisolated(unsafe) let playerNode = AVAudioPlayerNode()
+    let playerNode = AVAudioPlayerNode()
     let sourceMixer = AVAudioMixerNode()
     var completionHandler: (() -> Void)?
 
@@ -98,8 +96,14 @@ final class SimpleAudioPlayer {
         seekOffset = max(0, seconds)
         pausedPosition = nil
 
-        if let file = loadedFile {
-            scheduleFileSegment(file, at: time)
+        let generation = scheduleGeneration
+        guard let file = loadedFile, scheduleFileSegment(file, at: time) else {
+            // Preserve the asynchronous shape of a natural node completion.
+            // A later stop/load invalidates this generation before delivery.
+            Task { @MainActor [weak self] in
+                self?.deliverCompletion(for: generation)
+            }
+            return
         }
 
         if let time {
@@ -129,11 +133,12 @@ final class SimpleAudioPlayer {
         playerNode.stop()
     }
 
-    private func scheduleFileSegment(_ file: AVAudioFile, at time: AVAudioTime?) {
+    @discardableResult
+    private func scheduleFileSegment(_ file: AVAudioFile, at time: AVAudioTime?) -> Bool {
         let sampleRate = file.fileFormat.sampleRate
         let startFrame = AVAudioFramePosition(seekOffset * sampleRate)
         let remaining = AVAudioFrameCount(max(0, file.length - startFrame))
-        guard remaining > 0 else { return }
+        guard remaining > 0 else { return false }
         let generation = scheduleGeneration
         playerNode.scheduleSegment(
             file, startingFrame: startFrame, frameCount: remaining, at: time,
@@ -143,6 +148,7 @@ final class SimpleAudioPlayer {
                 self?.deliverCompletion(for: generation)
             }
         }
+        return true
     }
 
     private func deliverCompletion(for generation: UInt64) {
@@ -324,7 +330,7 @@ final class AVEnginePlayback {
         }
     }
 
-    deinit {
+    isolated deinit {
         if let engineConfigObserver {
             NotificationCenter.default.removeObserver(engineConfigObserver)
         }
