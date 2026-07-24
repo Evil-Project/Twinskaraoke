@@ -603,21 +603,66 @@ final class VocalSeparator: ObservableObject {
         vocalsDestination: URL,
         instrumentsDestination: URL
     ) throws {
+        let fileManager = FileManager.default
         let moves = [
             (vocalsSource, vocalsDestination),
             (instrumentsSource, instrumentsDestination),
         ]
+        let transactionID = UUID().uuidString
+        var backups: [(destination: URL, backup: URL)] = []
+        var publishedDestinations: [URL] = []
+
         do {
+            // Move any existing pair aside first. Both replacements are then
+            // published as one transaction and the old pair can be restored if
+            // either move fails.
+            for (_, destination) in moves
+            where fileManager.fileExists(atPath: destination.path) {
+                let backup = destination.deletingLastPathComponent()
+                    .appendingPathComponent(
+                        ".\(destination.lastPathComponent).\(transactionID).backup"
+                    )
+                try fileManager.moveItem(at: destination, to: backup)
+                backups.append((destination, backup))
+            }
+
             for (source, destination) in moves {
-                try? FileManager.default.removeItem(at: destination)
-                try FileManager.default.moveItem(at: source, to: destination)
+                try fileManager.moveItem(at: source, to: destination)
+                publishedDestinations.append(destination)
+            }
+
+            for (_, backup) in backups {
+                try? fileManager.removeItem(at: backup)
             }
         } catch {
+            for destination in publishedDestinations.reversed() {
+                try? fileManager.removeItem(at: destination)
+            }
+            for (destination, backup) in backups.reversed()
+            where fileManager.fileExists(atPath: backup.path) {
+                try? fileManager.removeItem(at: destination)
+                try? fileManager.moveItem(at: backup, to: destination)
+            }
             cleanupTmpFiles(moves.map(\.0))
-            cleanupTmpFiles(moves.map(\.1))
             throw error
         }
     }
+
+    #if DEBUG
+        nonisolated static func publishStemFilesForTesting(
+            vocalsSource: URL,
+            instrumentsSource: URL,
+            vocalsDestination: URL,
+            instrumentsDestination: URL
+        ) throws {
+            try publishStemFiles(
+                vocalsSource: vocalsSource,
+                instrumentsSource: instrumentsSource,
+                vocalsDestination: vocalsDestination,
+                instrumentsDestination: instrumentsDestination
+            )
+        }
+    #endif
 
     private nonisolated static func cleanupTmpFiles(_ urls: [URL]) {
         for url in urls {
