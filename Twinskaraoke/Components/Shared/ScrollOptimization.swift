@@ -22,11 +22,12 @@ extension View {
         baseSize: CGFloat,
         restingOffset: CGFloat = 0,
         fadesWhenCollapsed: Bool = false,
-        reduceMotion: Bool
+        reduceMotion: Bool,
+        pullDownOverride: CGFloat? = nil
     ) -> some View {
         visualEffect { content, proxy in
             let rawOffset = proxy.frame(in: .scrollView(axis: .vertical)).minY - restingOffset
-            let pullDown = reduceMotion ? 0 : max(0, rawOffset)
+            let pullDown = reduceMotion ? 0 : (pullDownOverride ?? max(0, rawOffset))
             let collapse = reduceMotion ? 0 : max(0, -rawOffset)
             let scale = max(
                 140 / max(baseSize, 1),

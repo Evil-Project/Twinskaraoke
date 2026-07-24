@@ -2,6 +2,8 @@ import Combine
 import SwiftUI
 
 struct PlaylistDetailView: View {
+    private static let searchFieldHeight: CGFloat = 40
+
     let playlist: Playlist
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -10,6 +12,14 @@ struct PlaylistDetailView: View {
     @ObservedObject private var fallbackArt = FallbackArtProvider.shared
     @State private var showsCollapsedTitle = false
     @State private var searchText = ""
+    @State private var isSearchVisible = false
+    @State private var isSearchModeActive = false
+    @State private var artworkPullOverride: CGFloat = 0
+    @State private var isArtworkPullOverridden = false
+    @State private var canAutoHideSearch = false
+    @State private var isActivelyPulling = false
+    @State private var searchRevealState = PlaylistSearchRevealState()
+    @FocusState private var isSearchFocused: Bool
     private func usesWideOverview(availableWidth: CGFloat) -> Bool {
         AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
@@ -24,7 +34,7 @@ struct PlaylistDetailView: View {
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         GeometryReader { geo in
             ScrollView {
-                playlistOverview(
+                playlistScrollContent(
                     songs: songs,
                     displayedSongs: displayedSongs,
                     isSearching: isSearching,
@@ -33,10 +43,25 @@ struct PlaylistDetailView: View {
                     .padding(.bottom, 16)
             }
             .smoothScrolling()
+            .scrollDismissesKeyboard(.interactively)
             .bottomChromeScrollTracking()
             .collapsedNavigationTitle($showsCollapsedTitle)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, scrollOffset in
+                updateSearchInteraction(scrollOffset: scrollOffset)
+            }
+            .onScrollPhaseChange { _, phase in
+                let wasActivelyPulling = isActivelyPulling
+                isActivelyPulling = phase == .tracking || phase == .interacting
+                if wasActivelyPulling, !isActivelyPulling, isArtworkPullOverridden {
+                    withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.24)) {
+                        artworkPullOverride = 0
+                    }
+                }
+            }
         }
-        .navigationTitle(showsCollapsedTitle ? playlist.name : "")
+        .navigationTitle(showsCollapsedTitle && !isSearchModeActive ? playlist.name : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
@@ -48,11 +73,16 @@ struct PlaylistDetailView: View {
                 )
             }
         }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Find in Playlist"
-        )
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if isSearchVisible {
+                playlistSearchField
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .move(edge: .top).combined(with: .opacity)
+                    )
+            }
+        }
         .animation(
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle
@@ -60,6 +90,10 @@ struct PlaylistDetailView: View {
         .animation(
             reduceMotion ? nil : AppMotion.quick,
             value: loader.isLoading
+        )
+        .animation(
+            reduceMotion ? nil : AppMotion.quick,
+            value: isSearchModeActive
         )
         .scrollIndicators(.hidden)
         .musicScreenBackground()
@@ -75,9 +109,152 @@ struct PlaylistDetailView: View {
             guard playlist.isFavorites else { return }
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
         }
+        .onChange(of: isSearchFocused) { _, isFocused in
+            guard isFocused, !isSearchModeActive else { return }
+            isArtworkPullOverridden = false
+            withAnimation(reduceMotion ? nil : AppMotion.quick) {
+                isSearchModeActive = true
+            }
+        }
         .onDisappear {
             ArtworkPrefetcher.shared.cancel(reason: "playlist cover \(playlist.id)")
             ArtworkPrefetcher.shared.cancel(reason: "playlist songs \(playlist.id)")
+        }
+    }
+
+    @ViewBuilder
+    private func playlistScrollContent(
+        songs: [Song],
+        displayedSongs: [Song],
+        isSearching: Bool,
+        width: CGFloat
+    ) -> some View {
+        if isSearchModeActive {
+            playlistSongsContent(
+                songs: songs,
+                displayedSongs: displayedSongs,
+                isSearching: isSearching,
+                showsActionButtons: false
+            )
+            .padding(.top, AM.Spacing.xs)
+            .transition(
+                reduceMotion
+                    ? .opacity
+                    : .opacity.combined(with: .move(edge: .bottom))
+            )
+            .accessibilityIdentifier("PlaylistDetail.SearchResults")
+        } else {
+            playlistOverview(
+                songs: songs,
+                displayedSongs: displayedSongs,
+                isSearching: isSearching,
+                width: width
+            )
+            .transition(
+                reduceMotion
+                    ? .opacity
+                    : .opacity.combined(with: .scale(scale: 0.98))
+            )
+        }
+    }
+
+    private var playlistSearchField: some View {
+        HStack(spacing: AM.Spacing.s) {
+            HStack(spacing: AM.Spacing.s) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Find in Playlist", text: $searchText)
+                    .focused($isSearchFocused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .accessibilityIdentifier("PlaylistDetail.searchField")
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear Search")
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: Self.searchFieldHeight)
+            .background(.thinMaterial, in: Capsule())
+
+            if isSearchModeActive {
+                Button("Cancel") {
+                    dismissSearch()
+                }
+                .foregroundStyle(Color.appAccent)
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
+            }
+        }
+        .padding(.horizontal, AM.Spacing.screenMargin)
+        .padding(.top, AM.Spacing.s)
+        .padding(.bottom, AM.Spacing.m)
+        .animation(reduceMotion ? nil : AppMotion.quick, value: isSearchModeActive)
+        .accessibilityIdentifier("PlaylistDetail.search")
+    }
+
+    private func updateSearchInteraction(scrollOffset: CGFloat) {
+        let pullDistance = max(0, -scrollOffset)
+
+        if searchRevealState.update(
+            pullDistance: pullDistance,
+            isSearchVisible: isSearchVisible,
+            isActivelyPulling: isActivelyPulling
+        ) {
+            AppHaptic.medium.play()
+            canAutoHideSearch = false
+            artworkPullOverride = reduceMotion
+                ? 0
+                : min(pullDistance, PlaylistSearchRevealState.revealThreshold)
+            isArtworkPullOverridden = !reduceMotion
+            withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.2)) {
+                isSearchVisible = true
+            }
+            Task { @MainActor in
+                isSearchFocused = true
+            }
+        }
+
+        guard isSearchVisible else { return }
+
+        if abs(scrollOffset) <= PlaylistSearchRevealState.resetThreshold {
+            canAutoHideSearch = true
+            return
+        }
+
+        guard PlaylistSearchRevealState.shouldAutoHide(
+            scrollOffset: scrollOffset,
+            isReady: canAutoHideSearch,
+            isActivelyScrolling: isActivelyPulling,
+            isSearchModeActive: isSearchModeActive
+        ) else { return }
+
+        isSearchFocused = false
+        searchText = ""
+        canAutoHideSearch = false
+        withAnimation(reduceMotion ? nil : AppMotion.quick) {
+            isSearchVisible = false
+            isSearchModeActive = false
+            isArtworkPullOverridden = false
+        }
+    }
+
+    private func dismissSearch() {
+        isSearchFocused = false
+        searchText = ""
+        canAutoHideSearch = false
+        searchRevealState.reset()
+        withAnimation(reduceMotion ? nil : AppMotion.quick) {
+            isSearchVisible = false
+            isSearchModeActive = false
+            isArtworkPullOverridden = false
         }
     }
 
@@ -212,7 +389,8 @@ struct PlaylistDetailView: View {
                 baseSize: baseSize,
                 restingOffset: 12,
                 fadesWhenCollapsed: true,
-                reduceMotion: reduceMotion
+                reduceMotion: reduceMotion,
+                pullDownOverride: isArtworkPullOverridden ? artworkPullOverride : nil
             )
             .padding(.top, 12)
     }
@@ -247,11 +425,12 @@ struct PlaylistDetailView: View {
         displayedSongs: [Song],
         isSearching: Bool,
         isWideOverview: Bool = false,
+        showsActionButtons: Bool = true,
         rowHorizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) -> some View {
         if !displayedSongs.isEmpty {
             VStack(spacing: 0) {
-                if !isWideOverview {
+                if showsActionButtons, !isWideOverview {
                     actionButtons(songs: displayedSongs)
                 }
                 LazyVStack(spacing: 0) {

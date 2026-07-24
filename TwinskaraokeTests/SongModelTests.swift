@@ -704,6 +704,126 @@ struct SongModelTests {
         )
     }
 
+    @Test("Playlist search reveal requires a deliberate pull")
+    func playlistSearchRevealRequiresThreshold() {
+        var state = PlaylistSearchRevealState()
+
+        let belowThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold - 1,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let atThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let repeatedAboveThreshold = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 20,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+
+        #expect(!belowThreshold)
+        #expect(atThreshold)
+        #expect(!repeatedAboveThreshold)
+    }
+
+    @Test("Playlist search reveal rearms after returning to rest")
+    func playlistSearchRevealRearmsAfterRelease() {
+        var state = PlaylistSearchRevealState()
+
+        let initialReveal = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+        let release = state.update(
+            pullDistance: PlaylistSearchRevealState.resetThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: false
+        )
+        let secondReveal = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold,
+            isSearchVisible: false,
+            isActivelyPulling: true
+        )
+
+        #expect(initialReveal)
+        #expect(!release)
+        #expect(secondReveal)
+    }
+
+    @Test("Playlist search reveal stays inactive while search is visible")
+    func playlistSearchRevealStaysInactiveWhileVisible() {
+        var state = PlaylistSearchRevealState()
+
+        let revealWhileVisible = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 40,
+            isSearchVisible: true,
+            isActivelyPulling: true
+        )
+
+        #expect(!revealWhileVisible)
+    }
+
+    @Test("Playlist search reveal cannot arm during ordinary scrolling")
+    func playlistSearchRevealRequiresActivePulling() {
+        var state = PlaylistSearchRevealState()
+
+        let armedWhileSettling = state.update(
+            pullDistance: PlaylistSearchRevealState.revealThreshold + 20,
+            isSearchVisible: false,
+            isActivelyPulling: false
+        )
+
+        #expect(!armedWhileSettling)
+    }
+
+    @Test("Playlist search pill hides during an intentional downward scroll")
+    func playlistSearchPillAutoHideRules() {
+        #expect(
+            PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold - 1,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: false,
+                isActivelyScrolling: true,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: true,
+                isActivelyScrolling: false,
+                isSearchModeActive: false
+            )
+        )
+        #expect(
+            !PlaylistSearchRevealState.shouldAutoHide(
+                scrollOffset: PlaylistSearchRevealState.hideThreshold + 20,
+                isReady: true,
+                isActivelyScrolling: true,
+                isSearchModeActive: true
+            )
+        )
+    }
+
     @Test("Display artist combines original and cover artists")
     func displayArtistUsesOriginalAndCoverMetadata() {
         let song = Song(

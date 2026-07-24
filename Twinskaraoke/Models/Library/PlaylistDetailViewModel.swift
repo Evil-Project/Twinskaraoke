@@ -14,6 +14,51 @@ nonisolated enum PlaylistSongSearch {
     }
 }
 
+nonisolated struct PlaylistSearchRevealState: Equatable {
+    static let revealThreshold: CGFloat = 88
+    static let resetThreshold: CGFloat = 6
+    static let hideThreshold: CGFloat = 18
+
+    private(set) var isArmed = false
+
+    mutating func update(
+        pullDistance: CGFloat,
+        isSearchVisible: Bool,
+        isActivelyPulling: Bool
+    ) -> Bool {
+        if pullDistance <= Self.resetThreshold {
+            isArmed = false
+        }
+
+        guard !isSearchVisible,
+              isActivelyPulling,
+              !isArmed,
+              pullDistance >= Self.revealThreshold
+        else {
+            return false
+        }
+
+        isArmed = true
+        return true
+    }
+
+    mutating func reset() {
+        isArmed = false
+    }
+
+    static func shouldAutoHide(
+        scrollOffset: CGFloat,
+        isReady: Bool,
+        isActivelyScrolling: Bool,
+        isSearchModeActive: Bool
+    ) -> Bool {
+        isReady
+            && isActivelyScrolling
+            && !isSearchModeActive
+            && scrollOffset >= hideThreshold
+    }
+}
+
 @MainActor
 class PlaylistDetailViewModel: ObservableObject {
     @Published var songs: [Song]?

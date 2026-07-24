@@ -7138,6 +7138,9 @@
     "Features & Content" : {
 
     },
+    "Find in Playlist" : {
+
+    },
     "Follow the artist gallery for new covers as they arrive." : {
       "localizations" : {
         "de" : {
@@ -15234,6 +15237,9 @@
           }
         }
       }
+    },
+    "Refresh Playlist" : {
+
     },
     "Refresh radio metadata" : {
       "localizations" : {
