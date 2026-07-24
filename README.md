@@ -12,9 +12,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 
 
-> **Update : We are officially moving towards an App Store and TestFlight launch very soon! Stay tuned!**
->
-> Note: Until the official launch, the current installation method means you must sideload the app every 7 days.
+> **Update :We are on TestFlight!**
 
 
 ## Features
@@ -98,6 +96,8 @@ To install the app on your iPhone or iPad today, you must use testflight or buil
 2. Login to TestFlight in the app with your Apple account.
 3. Click on this link on your iPhone: https://testflight.apple.com/join/PrNm97Vr
 4. Click install.
+
+> Note: Testflight Apps Expire After 90 Days, in the event we do not upload a new build before then you may lose app access, but it is unlikely to happen. 
 ---
 ### If you have testflight already, scan below
 <p align="center">
