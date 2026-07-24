@@ -40,6 +40,7 @@ final class TransitionCoordinator {
     weak var avEngine: AVEnginePlayback?
 
     var onBeginTransition: ((TransitionPlan) -> Void)?
+    var onTransitionPrepared: ((TransitionPlan) -> Void)?
 
     var onUpcomingSongDetermined: ((Song?) -> Void)?
 
@@ -109,15 +110,11 @@ final class TransitionCoordinator {
         case .preparing:
             break
 
-        case let .ready(plan):
-            if remaining <= plan.fadeDuration + 0.1 {
-                DebugLogger.log(
-                    "Transition ready -> crossfading for next=\(plan.nextSong.id), remaining=\(remaining), fade=\(plan.fadeDuration), ramp=\(plan.rampStyle)",
-                    category: .playback
-                )
-                state = .crossfading(plan: plan)
-                onBeginTransition?(plan)
-            }
+        case .ready:
+            // The manager schedules the exact transition deadline as soon as
+            // preparation completes. Polling remains for progress/preparation,
+            // but no longer quantizes crossfade start to a 250 ms tick.
+            break
 
         case .crossfading:
             break
@@ -214,8 +211,21 @@ final class TransitionCoordinator {
                 if !aiEffectActive {
                     avEngine?.preloadCrossfade(url: fileURL)
                 }
+                onTransitionPrepared?(plan)
             }
         }
+    }
+
+    func beginPreparedTransition(_ plan: TransitionPlan) {
+        guard case let .ready(currentPlan) = state,
+              currentPlan.nextSong.id == plan.nextSong.id
+        else { return }
+        DebugLogger.log(
+            "Transition deadline reached -> crossfading next=\(plan.nextSong.id), fade=\(plan.fadeDuration), ramp=\(plan.rampStyle)",
+            category: .playback
+        )
+        state = .crossfading(plan: plan)
+        onBeginTransition?(plan)
     }
 
     private func detectBPM(for song: Song, fileURL: URL?) async -> Double? {
