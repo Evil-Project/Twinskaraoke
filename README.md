@@ -88,34 +88,23 @@ All credits go to the website creator "Soul". This is a companion app for the we
 
 # Twinskaraoke - iOS Installation Guide
 
-Currently, Twinskaraoke is not yet available on the App Store or via TestFlight. 
+Currently, Twinskaraoke is not yet available on the App Store.
 
-To install the app on your iPhone or iPad today, you must use a sideloader or build from source.
+To install the app on your iPhone or iPad today, you must use testflight or build from source.
 
 ## Install
 
-install using sideloading tools like [Sideloadly](https://sideloadly.io/) or [AltStore](https://altstore.io/).
-you will need a free Apple ID.
-
-### Step 1: Download the App (Nightly Builds)
-As we prepare for our App Store launch, we highly recommend using our Nightly Builds to get the latest features, bug fixes, and improvements!
-
-Go to the **[Nightly Releases](https://github.com/Evil-Project/Twinskaraoke/releases)** page on this repository and download the latest nightly `.ipa` file:
-* **`Twinskaraoke-iPhone-Sideload.ipa`** (Recommended for iPhone & iPad)
-
-### Step 2: Sideload
-1. Open your favorite sideloading tool on your PC/Mac.
-2. Drag and drop the downloaded `.ipa` into the tool.
-3. Enter your standard Apple ID when prompted to sign the app.
-4. Hit install! 
-
-*Sideloadly Users: Our IPA is pre-optimized for you. You do **NOT** need to click "Remove Plug-ins" in Advanced Options!*
-
-## Apple Watch
-If you wish to use the Apple Watch companion app, download the **`Twinskaraoke-Watch.ipa`** as well.
-
-Free Apple accounts are limited to creating **10 App IDs every 7 days**. Because Watch apps use multiple App IDs at once, sideloading the Watch version may fail if you have hit Apple's server limit. If this happens, please stick to the iPhone-only IPA.
-
+1. Download the TestFlight app: https://apps.apple.com/us/app/testflight/id899247664
+2. Login to TestFlight in the app with your Apple account.
+3. Click on this link on your iPhone: https://testflight.apple.com/join/PrNm97Vr
+4. Click install.
+---
+### If you have testflight already, scan below
+<p align="center">
+  <img src="readmeimages/QR.svg" title="QR">
+  <br>
+  <em>Twinskaraoke on TestFlight</em>
+</p>
 ---
 
 <details>
