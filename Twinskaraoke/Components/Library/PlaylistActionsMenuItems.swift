@@ -4,24 +4,12 @@ struct PlaylistActionsMenuItems: View {
     let playlist: Playlist
     let songs: [Song]
     private let isSaved: Bool
-    private let pendingSongs: [Song]
-    private let inFlightCount: Int
+    @ObservedObject private var downloads = DownloadManager.shared
 
     init(playlist: Playlist, songs: [Song]) {
         self.playlist = playlist
         self.songs = songs
         isSaved = SavedPlaylistsStore.shared.isSaved(playlist)
-
-        let downloads = DownloadManager.shared
-        let state = songs.reduce(into: (pendingSongs: [Song](), inFlightCount: 0)) { state, song in
-            if downloads.isDownloading(song.id) {
-                state.inFlightCount += 1
-            } else if !downloads.isDownloaded(song.id) {
-                state.pendingSongs.append(song)
-            }
-        }
-        pendingSongs = state.pendingSongs
-        inFlightCount = state.inFlightCount
     }
 
     private var canSaveToLibrary: Bool {
@@ -29,6 +17,15 @@ struct PlaylistActionsMenuItems: View {
     }
 
     var body: some View {
+        let state = songs.reduce(into: (pendingSongs: [Song](), inFlightCount: 0)) { state, song in
+            if downloads.isDownloading(song.id) {
+                state.inFlightCount += 1
+            } else if !downloads.isDownloaded(song.id) {
+                state.pendingSongs.append(song)
+            }
+        }
+        let pendingSongs = state.pendingSongs
+        let inFlightCount = state.inFlightCount
         let pendingCount = pendingSongs.count
         let allDownloaded = !songs.isEmpty
             && pendingCount == 0
@@ -73,14 +70,14 @@ struct PlaylistActionsMenuItems: View {
             } else if allDownloaded {
                 Button(role: .destructive) {
                     AppHaptic.warning.play()
-                    DownloadManager.shared.remove(songIDs: songs.map(\.id))
+                    downloads.remove(songIDs: songs.map(\.id))
                 } label: {
                     Label("Remove Downloads", systemImage: "trash")
                 }
             } else {
                 Button {
                     AppHaptic.success.play()
-                    DownloadManager.shared.download(songs: pendingSongs)
+                    downloads.download(songs: pendingSongs)
                 } label: {
                     let label = pendingCount < songs.count ? "Download Remaining" : "Download"
                     Label(label, systemImage: "arrow.down.circle")
