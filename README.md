@@ -12,7 +12,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 
 
-> **Update :We are on TestFlight!**
+> **Update: We are on TestFlight!**
 
 
 ## Features
