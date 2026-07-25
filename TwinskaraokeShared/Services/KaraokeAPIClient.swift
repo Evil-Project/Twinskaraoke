@@ -169,7 +169,7 @@ nonisolated enum KaraokeAPIClient {
   static func playlistSongCount(id: String) async throws -> Int? {
     let data = try await playlistDetailData(id: id)
     if let playlist = try? decode(Playlist.self, from: data) {
-      return max(playlist.songCount, playlist.songListDTOs?.count ?? 0)
+      return playlist.songListDTOs?.count ?? (playlist.songCount > 0 ? playlist.songCount : nil)
     }
     return SongPayloadDecoder.decodeSongs(from: data)?.count
   }

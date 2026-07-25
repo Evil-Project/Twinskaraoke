@@ -630,6 +630,93 @@ struct SongModelTests {
         #expect(playlist.songListDTOs.map(\.id) == ["youtube-1"])
     }
 
+    @Test("Playlist summaries prefer the declared song count")
+    func playlistSummaryPrefersDeclaredSongCount() throws {
+        let json = """
+        {
+          "id": "playlist-count",
+          "name": "Bangers",
+          "songCount": 2,
+          "songListDTOs": [
+            {"id": "song-1", "title": "One"},
+            {"id": "song-2", "title": "Two"},
+            {"id": "song-3", "title": "Three"}
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let item = try JSONDecoder().decode(PlaylistListItem.self, from: json)
+
+        #expect(item.asPlaylist().songCount == 2)
+    }
+
+    @Test("Playlist summaries fall back to the embedded song count")
+    func playlistSummaryFallsBackToEmbeddedSongCount() throws {
+        let json = """
+        {
+          "id": "playlist-fallback-count",
+          "name": "Bangers",
+          "songCount": 0,
+          "songListDTOs": [
+            {"id": "song-1", "title": "One"},
+            {"id": "song-2", "title": "Two"}
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let item = try JSONDecoder().decode(PlaylistListItem.self, from: json)
+
+        #expect(item.asPlaylist().songCount == 2)
+    }
+
+    @Test("Favourite Songs exposes a zero count")
+    @MainActor
+    func favoritesPlaylistExposesZeroCount() {
+        let playlist = Playlist(
+            id: Playlist.favoritesID,
+            name: "Favourite Songs",
+            songCount: 0,
+            mosaicMedia: nil,
+            songListDTOs: []
+        )
+
+        #expect(PlaylistSongCountStore.shared.displayedCount(for: playlist) == 0)
+    }
+
+    @Test("Personal playlist counts are resolved from playlist detail")
+    @MainActor
+    func personalPlaylistCountUsesDetail() {
+        var playlist = Playlist(
+            id: "personal-bangers",
+            name: "Bangers",
+            songCount: 498,
+            mosaicMedia: nil,
+            songListDTOs: nil
+        )
+        playlist.isPersonal = true
+
+        #expect(PlaylistSongCountStore.needsDetailCount(for: playlist, isSaved: false))
+    }
+
+    @Test("Playlist grid hides an unverified summary count")
+    @MainActor
+    func playlistGridWaitsForDetailCount() {
+        let playlist = Playlist(
+            id: "summary-bangers",
+            name: "Bangers",
+            songCount: 498,
+            mosaicMedia: nil,
+            songListDTOs: nil
+        )
+
+        #expect(
+            PlaylistSongCountStore.shared.displayedCount(
+                for: playlist,
+                prefersDetailCount: true
+            ) == nil
+        )
+    }
+
     @Test("Playlist search matches song titles and artists")
     func playlistSearchMatchesTitlesAndArtists() {
         let titleMatch = Song(

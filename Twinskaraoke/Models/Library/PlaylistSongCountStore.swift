@@ -8,20 +8,29 @@ final class PlaylistSongCountStore: ObservableObject {
     @Published private var resolvedCounts: [String: Int] = [:]
     private var loadingIDs: Set<String> = []
 
-    func displayedCount(for playlist: Playlist) -> Int? {
-        if let resolved = resolvedCounts[playlist.id], resolved > 0 {
+    func displayedCount(for playlist: Playlist, prefersDetailCount: Bool = false) -> Int? {
+        if playlist.isFavorites {
+            return playlist.songCount
+        }
+        if let resolved = resolvedCounts[playlist.id] {
             return resolved
         }
-        let embeddedCount = playlist.songListDTOs?.count ?? 0
-        if embeddedCount > 0 {
-            return max(playlist.songCount, embeddedCount)
+        if prefersDetailCount {
+            return nil
         }
-        return playlist.songCount > 0 ? playlist.songCount : nil
+        if playlist.songCount > 0 {
+            return playlist.songCount
+        }
+        let embeddedCount = playlist.songListDTOs?.count ?? 0
+        return embeddedCount > 0 ? embeddedCount : nil
     }
 
-    func loadIfNeeded(for playlist: Playlist) {
-        guard !playlist.isFavorites, !playlist.isPersonal else { return }
-        guard playlist.songCount == 0 else { return }
+    func loadIfNeeded(for playlist: Playlist, forceDetailCount: Bool = false) {
+        guard !playlist.isFavorites else { return }
+        let isSavedPlaylist = SavedPlaylistsStore.shared.isSaved(playlist)
+        guard forceDetailCount
+            || Self.needsDetailCount(for: playlist, isSaved: isSavedPlaylist)
+        else { return }
         guard resolvedCounts[playlist.id] == nil else { return }
         guard !loadingIDs.contains(playlist.id) else { return }
 
@@ -35,9 +44,18 @@ final class PlaylistSongCountStore: ObservableObject {
             }
 
             loadingIDs.remove(playlist.id)
-            if let count, count > 0 {
+            if let count {
                 resolvedCounts[playlist.id] = count
             }
         }
+    }
+
+    func recordResolvedCount(_ count: Int, for playlistID: String) {
+        resolvedCounts[playlistID] = max(0, count)
+    }
+
+    static func needsDetailCount(for playlist: Playlist, isSaved: Bool) -> Bool {
+        guard !playlist.isFavorites else { return false }
+        return playlist.isPersonal || isSaved || playlist.songCount == 0
     }
 }

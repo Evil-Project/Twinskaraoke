@@ -619,7 +619,7 @@ nonisolated struct PlaylistListItem: Decodable, Identifiable, Sendable {
   }
 
   func asPlaylist() -> Playlist {
-    let effectiveCount = max(songCount, songListDTOs?.count ?? 0)
+    let effectiveCount = songCount > 0 ? songCount : songListDTOs?.count ?? 0
     return Playlist(
       id: id,
       name: name,
