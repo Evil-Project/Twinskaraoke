@@ -415,17 +415,20 @@ struct PlaylistDetailView: View {
             Text(playlist.name)
                 .font(.title2.bold())
                 .multilineTextAlignment(alignment)
-            Text(songCountText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            if let songCountText {
+                Text(songCountText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
         .padding(.horizontal, alignment == .leading ? 0 : AM.Spacing.screenMargin)
     }
 
-    private var songCountText: String {
+    private var songCountText: String? {
+        guard loader.hasAuthoritativeSongs else { return nil }
         let songs = loader.songs ?? playlist.songListDTOs ?? []
-        return SongCountText.songs(songs.isEmpty ? playlist.songCount : songs.count)
+        return SongCountText.songs(songs.count)
     }
 
     @ViewBuilder

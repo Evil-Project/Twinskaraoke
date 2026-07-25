@@ -63,6 +63,7 @@ nonisolated struct PlaylistSearchRevealState: Equatable {
 class PlaylistDetailViewModel: ObservableObject {
     @Published var songs: [Song]?
     @Published var isLoading = false
+    @Published private(set) var hasAuthoritativeSongs = false
     @Published private var loadFailed = false
     private var loadedID: String?
     private var loadTask: Task<Void, Never>?
@@ -76,12 +77,16 @@ class PlaylistDetailViewModel: ObservableObject {
     func reload(playlistID: String, fallback: [Song]? = nil) {
         loadedID = nil
         loadFailed = false
+        hasAuthoritativeSongs = false
         load(playlistID: playlistID, fallback: fallback)
     }
 
     func load(playlistID: String, fallback: [Song]?) {
         let alreadyLoaded = (loadedID == playlistID) && songs != nil && !isLoading
         if alreadyLoaded { return }
+        if loadedID != playlistID {
+            hasAuthoritativeSongs = false
+        }
         loadedID = playlistID
         loadTask?.cancel()
         if songs?.isEmpty ?? true, let fallback, !fallback.isEmpty {
@@ -94,6 +99,7 @@ class PlaylistDetailViewModel: ObservableObject {
             songs = fallback
             isLoading = false
             loadFailed = false
+            hasAuthoritativeSongs = true
             return
         }
         isLoading = true
@@ -108,7 +114,8 @@ class PlaylistDetailViewModel: ObservableObject {
                     self?.applyLoadedSongs(
                         fallbackWithDurations,
                         playlistID: playlistID,
-                        requestFailed: false
+                        requestFailed: false,
+                        isAuthoritative: false
                     )
                 }
 
@@ -117,7 +124,8 @@ class PlaylistDetailViewModel: ObservableObject {
                 self?.applyLoadedSongs(
                     loadedSongs,
                     playlistID: playlistID,
-                    requestFailed: false
+                    requestFailed: false,
+                    isAuthoritative: true
                 )
 
                 let songsWithDurations = await UploadedSongDurationResolver.shared
@@ -132,7 +140,8 @@ class PlaylistDetailViewModel: ObservableObject {
                 self?.applyLoadedSongs(
                     songsWithDurations,
                     playlistID: playlistID,
-                    requestFailed: false
+                    requestFailed: false,
+                    isAuthoritative: true
                 )
             } catch {
                 guard !Task.isCancelled else { return }
@@ -140,7 +149,12 @@ class PlaylistDetailViewModel: ObservableObject {
                     "Playlist \(playlistID) load failed: \(String(describing: error))",
                     category: .network
                 )
-                self?.applyLoadedSongs(nil, playlistID: playlistID, requestFailed: true)
+                self?.applyLoadedSongs(
+                    nil,
+                    playlistID: playlistID,
+                    requestFailed: true,
+                    isAuthoritative: false
+                )
             }
         }
     }
@@ -149,10 +163,19 @@ class PlaylistDetailViewModel: ObservableObject {
         loadTask?.cancel()
     }
 
-    private func applyLoadedSongs(_ list: [Song]?, playlistID: String, requestFailed: Bool) {
+    private func applyLoadedSongs(
+        _ list: [Song]?,
+        playlistID: String,
+        requestFailed: Bool,
+        isAuthoritative: Bool
+    ) {
         guard loadedID == playlistID else { return }
         if let list {
             songs = list
+            if isAuthoritative {
+                hasAuthoritativeSongs = true
+                PlaylistSongCountStore.shared.recordResolvedCount(list.count, for: playlistID)
+            }
         }
         loadFailed = requestFailed && (songs?.isEmpty ?? true)
         isLoading = false

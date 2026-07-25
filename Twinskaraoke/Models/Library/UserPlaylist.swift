@@ -38,7 +38,7 @@ struct UserPlaylist: Codable, Identifiable, Hashable {
                 mediaArray = [Media(absolutePath: path)]
             }
         }
-        let effectiveCount = max(songCount, songListDTOs?.count ?? 0)
+        let effectiveCount = songCount > 0 ? songCount : songListDTOs?.count ?? 0
         var p = Playlist(
             id: id,
             name: name,

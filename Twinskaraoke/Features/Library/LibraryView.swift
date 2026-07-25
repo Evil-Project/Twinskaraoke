@@ -5,24 +5,34 @@ import SwiftUI
 struct PlaylistSongCountLabel: View {
     let playlist: Playlist
     var fallbackText: String?
+    var prefersDetailCount = true
 
     @ObservedObject private var countStore = PlaylistSongCountStore.shared
 
     private var labelText: String? {
-        if let count = countStore.displayedCount(for: playlist) {
+        if let count = countStore.displayedCount(
+            for: playlist,
+            prefersDetailCount: prefersDetailCount
+        ) {
             return SongCountText.songs(count)
         }
         return fallbackText
     }
 
     var body: some View {
-        Group {
+        ZStack(alignment: .leading) {
+            Color.clear
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
             if let labelText {
                 Text(labelText)
             }
         }
         .task(id: playlist.id) {
-            countStore.loadIfNeeded(for: playlist)
+            countStore.loadIfNeeded(
+                for: playlist,
+                forceDetailCount: prefersDetailCount
+            )
         }
     }
 }
@@ -633,7 +643,10 @@ struct PlaylistsGridScreen: View {
                     LazyVGrid(columns: cols, spacing: AM.Spacing.l) {
                         ForEach(displayed) { playlist in
                             NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-                                PlaylistGridCell(playlist: playlist)
+                                PlaylistGridCell(
+                                    playlist: playlist,
+                                    prefersDetailCount: true
+                                )
                             }
                             .buttonStyle(PressableButtonStyle())
                             .contextMenu {
@@ -681,6 +694,7 @@ struct PlaylistsGridScreen: View {
 struct PlaylistGridCell: View {
     let playlist: Playlist
     var width: CGFloat?
+    var prefersDetailCount = true
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.s) {
             artwork
@@ -690,12 +704,14 @@ struct PlaylistGridCell: View {
                 .font(AM.Font.tileTitle)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            if !playlist.isFavorites {
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: "Playlist")
-                    .font(AM.Font.tileCaption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            PlaylistSongCountLabel(
+                playlist: playlist,
+                fallbackText: prefersDetailCount ? nil : "Playlist",
+                prefersDetailCount: prefersDetailCount
+            )
+                .font(AM.Font.tileCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
