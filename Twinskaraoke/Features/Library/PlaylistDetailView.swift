@@ -426,7 +426,7 @@ struct PlaylistDetailView: View {
     }
 
     private var songCountText: String? {
-        guard loader.hasLoadedRemoteSongs else { return nil }
+        guard loader.hasAuthoritativeSongs else { return nil }
         let songs = loader.songs ?? playlist.songListDTOs ?? []
         return SongCountText.songs(songs.count)
     }

@@ -672,6 +672,7 @@ struct SongModelTests {
     @Test("Favourite Songs exposes a zero count")
     @MainActor
     func favoritesPlaylistExposesZeroCount() {
+        let store = PlaylistSongCountStore()
         let playlist = Playlist(
             id: Playlist.favoritesID,
             name: "Favourite Songs",
@@ -680,7 +681,24 @@ struct SongModelTests {
             songListDTOs: []
         )
 
-        #expect(PlaylistSongCountStore.shared.displayedCount(for: playlist) == 0)
+        #expect(store.displayedCount(for: playlist) == 0)
+    }
+
+    @Test("Favourite Songs prefers an authoritative cached count")
+    @MainActor
+    func favoritesPlaylistPrefersAuthoritativeCount() {
+        let store = PlaylistSongCountStore()
+        let playlist = Playlist(
+            id: Playlist.favoritesID,
+            name: "Favourite Songs",
+            songCount: 73,
+            mosaicMedia: nil,
+            songListDTOs: nil
+        )
+
+        store.recordResolvedCount(74, for: playlist.id)
+
+        #expect(store.displayedCount(for: playlist) == 74)
     }
 
     @Test("Personal playlist counts are resolved from playlist detail")
@@ -701,6 +719,7 @@ struct SongModelTests {
     @Test("Playlist grid hides an unverified summary count")
     @MainActor
     func playlistGridWaitsForDetailCount() {
+        let store = PlaylistSongCountStore()
         let playlist = Playlist(
             id: "summary-bangers",
             name: "Bangers",
@@ -710,7 +729,7 @@ struct SongModelTests {
         )
 
         #expect(
-            PlaylistSongCountStore.shared.displayedCount(
+            store.displayedCount(
                 for: playlist,
                 prefersDetailCount: true
             ) == nil

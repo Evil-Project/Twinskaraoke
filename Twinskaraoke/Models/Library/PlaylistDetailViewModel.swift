@@ -63,7 +63,7 @@ nonisolated struct PlaylistSearchRevealState: Equatable {
 class PlaylistDetailViewModel: ObservableObject {
     @Published var songs: [Song]?
     @Published var isLoading = false
-    @Published private(set) var hasLoadedRemoteSongs = false
+    @Published private(set) var hasAuthoritativeSongs = false
     @Published private var loadFailed = false
     private var loadedID: String?
     private var loadTask: Task<Void, Never>?
@@ -77,7 +77,7 @@ class PlaylistDetailViewModel: ObservableObject {
     func reload(playlistID: String, fallback: [Song]? = nil) {
         loadedID = nil
         loadFailed = false
-        hasLoadedRemoteSongs = false
+        hasAuthoritativeSongs = false
         load(playlistID: playlistID, fallback: fallback)
     }
 
@@ -85,7 +85,7 @@ class PlaylistDetailViewModel: ObservableObject {
         let alreadyLoaded = (loadedID == playlistID) && songs != nil && !isLoading
         if alreadyLoaded { return }
         if loadedID != playlistID {
-            hasLoadedRemoteSongs = false
+            hasAuthoritativeSongs = false
         }
         loadedID = playlistID
         loadTask?.cancel()
@@ -99,7 +99,7 @@ class PlaylistDetailViewModel: ObservableObject {
             songs = fallback
             isLoading = false
             loadFailed = false
-            hasLoadedRemoteSongs = true
+            hasAuthoritativeSongs = true
             return
         }
         isLoading = true
@@ -173,7 +173,7 @@ class PlaylistDetailViewModel: ObservableObject {
         if let list {
             songs = list
             if isAuthoritative {
-                hasLoadedRemoteSongs = true
+                hasAuthoritativeSongs = true
                 PlaylistSongCountStore.shared.recordResolvedCount(list.count, for: playlistID)
             }
         }

@@ -9,11 +9,11 @@ final class PlaylistSongCountStore: ObservableObject {
     private var loadingIDs: Set<String> = []
 
     func displayedCount(for playlist: Playlist, prefersDetailCount: Bool = false) -> Int? {
-        if playlist.isFavorites {
-            return playlist.songCount
-        }
         if let resolved = resolvedCounts[playlist.id] {
             return resolved
+        }
+        if playlist.isFavorites {
+            return playlist.songCount
         }
         if prefersDetailCount {
             return nil
