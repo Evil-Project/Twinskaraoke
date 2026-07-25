@@ -102,6 +102,14 @@ struct RadioView: View {
                 await retryRadioRefresh()
             }
             .onAppear { radio.start() }
+            .onDisappear {
+                // Polling must keep running while the stream is playing so
+                // now-playing metadata stays fresh; stop() only invalidates
+                // the metadata poll timer and never touches playback.
+                if !playback.isRadioMode {
+                    radio.stop()
+                }
+            }
             .sheet(isPresented: $showingRadioSchedule) {
                 RadioQueueView()
                     .presentationDetents([.medium, .large])

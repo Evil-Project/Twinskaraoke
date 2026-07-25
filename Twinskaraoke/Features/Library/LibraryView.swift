@@ -32,6 +32,10 @@ struct PlaylistSongCountLabel: View {
             countStore.loadIfNeeded(
                 for: playlist,
                 forceDetailCount: prefersDetailCount
+                    && PlaylistSongCountStore.needsDetailCount(
+                        for: playlist,
+                        isSaved: SavedPlaylistsStore.shared.isSaved(playlist)
+                    )
             )
         }
     }
@@ -46,7 +50,7 @@ struct LibraryView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
-    let cols = AM.Layout.playlistGridColumns
+    @State private var favoritesRefreshTask: Task<Void, Never>?
 
     private var usesCompactToolbar: Bool {
         horizontalSizeClass == .compact
@@ -102,7 +106,15 @@ struct LibraryView: View {
                 recentSongsViewModel.loadIfNeeded()
             }
             .onChange(of: favorites.favoriteIDs) { _, _ in
-                viewModel.fetchFavoriteSongs(force: true)
+                // Every star tap anywhere in the app fires this; LibraryView is a
+                // tab root that is always alive, so coalesce rapid toggles into a
+                // single refetch instead of fetching the whole list per tap.
+                favoritesRefreshTask?.cancel()
+                favoritesRefreshTask = Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    guard !Task.isCancelled else { return }
+                    viewModel.fetchFavoriteSongs(force: true)
+                }
             }
             .sheet(isPresented: $showCreateSheet) {
                 CreatePlaylistSheet()
@@ -209,14 +221,6 @@ struct LibraryView: View {
                 showsDivider: false
             )
         }
-    }
-
-    private var librarySecondaryLinks: some View {
-        EmptyView()
-    }
-
-    private var librarySecondaryLinksContent: some View {
-        EmptyView()
     }
 
     @ViewBuilder
@@ -511,13 +515,29 @@ struct LibrarySongsView: View {
     }
 
     private func emptyState(isSearching: Bool) -> some View {
-        MusicEmptyState(
-            title: isSearching ? "No Results" : "No Songs",
-            message: isSearching
-                ? "Try another song or artist."
-                : "Songs you load from Twins Karaoke will appear here."
-        )
+        VStack(spacing: AM.Spacing.l) {
+            MusicEmptyState(title: emptyTitle(isSearching: isSearching), message: emptyMessage(isSearching: isSearching))
+
+            if viewModel.loadFailed, !isSearching {
+                MusicEmptyActionButton(title: "Try Again") {
+                    AppHaptic.selection.play()
+                    viewModel.refresh()
+                }
+            }
+        }
         .frame(maxWidth: .infinity, minHeight: 360)
+    }
+
+    private func emptyTitle(isSearching: Bool) -> String {
+        if isSearching { return "No Results" }
+        if viewModel.loadFailed { return "Couldn't Load Songs" }
+        return "No Songs"
+    }
+
+    private func emptyMessage(isSearching: Bool) -> String {
+        if isSearching { return "Try another song or artist." }
+        if viewModel.loadFailed { return "Check your connection and try again." }
+        return "Songs you load from Twins Karaoke will appear here."
     }
 
     private var skeletonRows: some View {
@@ -600,6 +620,7 @@ struct PlaylistsGridScreen: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""
+    @State private var favoritesRefreshTask: Task<Void, Never>?
     let cols = AM.Layout.playlistGridColumns
 
 
@@ -683,7 +704,12 @@ struct PlaylistsGridScreen: View {
         }
         .task { userManager.loadIfNeeded() }
         .onChange(of: favorites.favoriteIDs) { _, _ in
-            viewModel.fetchFavoriteSongs(force: true)
+            favoritesRefreshTask?.cancel()
+            favoritesRefreshTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                viewModel.fetchFavoriteSongs(force: true)
+            }
         }
         .sheet(isPresented: $showCreateSheet) {
             CreatePlaylistSheet()
@@ -699,7 +725,6 @@ struct PlaylistGridCell: View {
         VStack(alignment: .leading, spacing: AM.Spacing.s) {
             artwork
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-                .amShadow(AM.Shadow.card)
             Text(playlist.name)
                 .font(AM.Font.tileTitle)
                 .foregroundStyle(.primary)

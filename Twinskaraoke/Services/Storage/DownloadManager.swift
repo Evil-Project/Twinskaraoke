@@ -372,6 +372,90 @@ final class DownloadManager: ObservableObject {
     }
 
     func download(songs: [Song]) {
+        // Already-downloaded songs are revalidated through playableURL, which
+        // on a validation-cache miss opens the file with AVAudioFile. Validate
+        // those off the main actor first so 'download all' on a large playlist
+        // never decodes audio on the main thread; the warmed cache then makes
+        // the enqueue pass skip them for the price of a dictionary lookup.
+        let needsValidation = songs.filter {
+            $0.audioURL != nil
+                && downloadedIDs.contains($0.id)
+                && !hasCachedPlayableValidation(for: $0)
+        }
+        guard needsValidation.isEmpty else {
+            let deferredIDs = Set(needsValidation.map(\.id))
+            enqueueDownloads(songs.filter { !deferredIDs.contains($0.id) })
+            prewarmValidationCache(for: needsValidation)
+            return
+        }
+        enqueueDownloads(songs)
+    }
+
+    private func hasCachedPlayableValidation(for song: Song) -> Bool {
+        let cachedSource = readSourceURL(for: song.id)
+        let storedSourceURL = cachedSource.flatMap(URL.init(string:))
+        let songFiles = files(for: song.id, sourceURL: storedSourceURL ?? song.audioURL)
+        let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+        return hasCachedValidation(
+            for: song.id,
+            audioURL: songFiles.audio,
+            source: cachedSource ?? song.audioURL?.absoluteString,
+            expectedDuration: expectedDuration
+        )
+    }
+
+    private func prewarmValidationCache(for songs: [Song]) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let entries = self.validateDownloadsForCachePrewarm(songs)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for (songID, entry) in entries where self.validDownloadCache[songID] == nil {
+                    self.validDownloadCache[songID] = entry
+                }
+                self.enqueueDownloads(songs)
+            }
+        }
+    }
+
+    /// Mirrors the early-exit checks in playableURL so warmed cache entries
+    /// make it return the audio file without AVAudioFile on the main actor.
+    /// Missing, stale, or invalid downloads get no entry and fall back to the
+    /// on-main validation and repair path.
+    private nonisolated func validateDownloadsForCachePrewarm(
+        _ songs: [Song]
+    ) -> [String: ValidDownloadCacheEntry] {
+        var entries: [String: ValidDownloadCacheEntry] = [:]
+        for song in songs {
+            migrateLegacyDownloadIfNeeded(for: song.id)
+            migrateMislabeledDownloadedAudioIfNeeded(
+                for: song.id,
+                expectedSourceURL: song.audioURL
+            )
+            let cachedSource = readSourceURL(for: song.id)
+            let storedSourceURL = cachedSource.flatMap(URL.init(string:))
+            let songFiles = files(
+                for: song.id,
+                sourceURL: storedSourceURL ?? song.audioURL
+            )
+            guard FileManager.default.fileExists(atPath: songFiles.audio.path) else { continue }
+            let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+            let expectedSource = song.audioURL?.absoluteString
+            if let cachedSource, let expectedSource, cachedSource != expectedSource { continue }
+            guard Self.isValidDownloadedAudio(
+                at: songFiles.audio,
+                expectedDuration: expectedDuration
+            ) else { continue }
+            entries[song.id] = ValidDownloadCacheEntry(
+                source: cachedSource ?? expectedSource,
+                expectedDuration: expectedDuration,
+                modifiedAt: Self.modificationDate(at: songFiles.audio)
+            )
+        }
+        return entries
+    }
+
+    private func enqueueDownloads(_ songs: [Song]) {
         var nextInProgress = inProgress
         var acceptedAny = false
 
@@ -399,8 +483,14 @@ final class DownloadManager: ObservableObject {
     }
 
     private func startQueuedDownloadsIfPossible() {
-        while activeDownloadWorkCount < Self.maxConcurrentDownloads, !queuedDownloadOrder.isEmpty {
-            let songID = queuedDownloadOrder.removeFirst()
+        // Iterate by index and remove the drained prefix in one batch instead
+        // of removeFirst() per element, which shifts the whole array each time.
+        var drainedCount = 0
+        while activeDownloadWorkCount < Self.maxConcurrentDownloads,
+              drainedCount < queuedDownloadOrder.count
+        {
+            let songID = queuedDownloadOrder[drainedCount]
+            drainedCount += 1
             guard let song = queuedDownloads.removeValue(forKey: songID) else { continue }
             guard inProgress.contains(songID), !downloadedIDs.contains(songID) else {
                 updatePublishedState { $0.inProgress.remove(songID) }
@@ -408,6 +498,7 @@ final class DownloadManager: ObservableObject {
             }
             startDownloadTask(song: song)
         }
+        queuedDownloadOrder.removeFirst(drainedCount)
     }
 
     private func startDownloadTask(song: Song) {
@@ -1006,9 +1097,7 @@ final class DownloadManager: ObservableObject {
             sourceURL: storedSourceURL ?? song.audioURL
         )
         guard FileManager.default.fileExists(atPath: songFiles.audio.path) else {
-            updatePublishedState { $0.downloadedIDs.remove(song.id) }
-            validDownloadCache.removeValue(forKey: song.id)
-            downloadedMetadata.removeValue(forKey: song.id)
+            discardBrokenDownloadAndScheduleRepair(for: song, reason: "audio file is missing")
             return nil
         }
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil

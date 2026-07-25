@@ -109,8 +109,40 @@ final class UserPlaylistsManager: ObservableObject {
             }
             req.httpMethod = "PUT"
             let ok = (try? await KaraokeAPIClient.data(for: req)) != nil
+            if ok {
+                bumpSongCount(forPlaylist: playlistID)
+                PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
+            }
             completion?(ok)
         }
+    }
+
+    private func bumpSongCount(forPlaylist playlistID: String) {
+        guard let index = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        let playlist = playlists[index]
+        playlists[index] = UserPlaylist(
+            id: playlist.id,
+            name: playlist.name,
+            description: playlist.description,
+            createdBy: playlist.createdBy,
+            updatedBy: playlist.updatedBy,
+            media: playlist.media,
+            createdAt: playlist.createdAt,
+            updatedAt: playlist.updatedAt,
+            totalDuration: playlist.totalDuration,
+            songCount: playlist.songCount + 1,
+            playCount: playlist.playCount,
+            favoriteCount: playlist.favoriteCount,
+            playlistType: playlist.playlistType,
+            songListDTOs: playlist.songListDTOs,
+            mosaicMedia: playlist.mosaicMedia,
+            genres: playlist.genres,
+            editable: playlist.editable,
+            deletable: playlist.deletable,
+            isPublic: playlist.isPublic,
+            isSetList: playlist.isSetList,
+            setListDate: playlist.setListDate
+        )
     }
 
     func clear() {

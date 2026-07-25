@@ -140,10 +140,7 @@ final class VocalSeparator: ObservableObject {
         AudioCacheStore.removeStemCache(for: songID)
     }
 
-    func cachedStems(
-        forSongID songID: String,
-        expectedDuration: TimeInterval? = nil
-    ) -> CachedStems? {
+    private func validatedStemStartOffset(forSongID songID: String) -> TimeInterval? {
         let offset = AudioCacheStore.readStartOffset(for: songID)
         guard offset <= 1.0 else {
             DebugLogger.log(
@@ -153,8 +150,42 @@ final class VocalSeparator: ObservableObject {
             removeCachedStems(forSongID: songID)
             return nil
         }
+        return offset
+    }
+
+    func cachedStems(
+        forSongID songID: String,
+        expectedDuration: TimeInterval? = nil
+    ) async -> CachedStems? {
+        guard let offset = validatedStemStartOffset(forSongID: songID) else { return nil }
+        // Decompression of compressed cache entries is blocking file I/O, so
+        // the lookup runs off the main actor.
+        let stems = await Task.detached(priority: .userInitiated) {
+            AudioCacheStore.playableStems(
+                for: songID,
+                startOffset: offset,
+                expectedDuration: expectedDuration
+            )
+        }.value
+        guard let stems else {
+            return nil
+        }
+        DebugLogger.log("Cache hit for stems: \(songID)", category: .separation)
+        CacheManager.shared.recordAccess(for: stems.vocals)
+        CacheManager.shared.recordAccess(for: stems.instruments)
+        return stems
+    }
+
+    /// Non-decompressing variant of `cachedStems` for main-thread fast paths:
+    /// returns nil when only the compressed cache exists so callers can defer
+    /// the decompression to the async path instead of blocking the main thread.
+    func immediatelyAvailableStems(
+        forSongID songID: String,
+        expectedDuration: TimeInterval? = nil
+    ) -> CachedStems? {
+        guard let offset = validatedStemStartOffset(forSongID: songID) else { return nil }
         guard
-            let stems = AudioCacheStore.playableStems(
+            let stems = AudioCacheStore.immediatelyPlayableStems(
                 for: songID,
                 startOffset: offset,
                 expectedDuration: expectedDuration
@@ -168,6 +199,11 @@ final class VocalSeparator: ObservableObject {
         return stems
     }
 
+    /// Existence-only stem check (plain or compressed) that never decompresses.
+    func hasCachedStems(forSongID songID: String) -> Bool {
+        cachedVocalsURL(forSongID: songID) != nil && cachedInstrumentsURL(forSongID: songID) != nil
+    }
+
     func cachedStartOffset(forSongID songID: String) -> TimeInterval {
         AudioCacheStore.readStartOffset(for: songID)
     }
@@ -176,14 +212,14 @@ final class VocalSeparator: ObservableObject {
         forSongID songID: String, sourceURL: URL, initiatedByBackground: Bool = false
     ) async throws -> CachedStems {
         let expectedDuration = Self.expectedDuration(for: sourceURL)
-        if let cached = cachedStems(forSongID: songID, expectedDuration: expectedDuration) {
+        if let cached = await cachedStems(forSongID: songID, expectedDuration: expectedDuration) {
             return cached
         }
         guard isAvailable, let modelURL else { throw VocalSeparatorError.unavailable }
         if processingSongID == songID, let active = activeTask {
             DebugLogger.log("Waiting for in-progress separation: \(songID)", category: .separation)
             _ = try await active.value
-            if let cached = cachedStems(forSongID: songID, expectedDuration: expectedDuration) {
+            if let cached = await cachedStems(forSongID: songID, expectedDuration: expectedDuration) {
                 return cached
             }
             throw VocalSeparatorError.unavailable
@@ -242,7 +278,7 @@ final class VocalSeparator: ObservableObject {
         activeTask = task
         _ = try await task.value
         CacheManager.shared.enforceMusicCacheLimits()
-        guard let stems = cachedStems(forSongID: songID, expectedDuration: expectedDuration) else {
+        guard let stems = await cachedStems(forSongID: songID, expectedDuration: expectedDuration) else {
             throw VocalSeparatorError.unavailable
         }
         DebugLogger.log("Full separation complete for \(songID)", category: .separation)
@@ -350,7 +386,7 @@ final class VocalSeparator: ObservableObject {
 
     func analyzeInBackground(songID: String, sourceURL: URL) {
         guard isAvailable else { return }
-        guard cachedStems(forSongID: songID) == nil else {
+        guard !hasCachedStems(forSongID: songID) else {
             DebugLogger.log(
                 "Background analysis skipped — stems already cached for \(songID)",
                 category: .ai

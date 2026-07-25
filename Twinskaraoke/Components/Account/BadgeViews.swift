@@ -48,7 +48,7 @@ struct BadgeGridCell: View {
                 if !badge.unlocked {
                     Image(systemName: "lock.fill")
                         .font(.caption.bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.appBackground)
                         .frame(width: 19, height: 19)
                         .background(Color.primary.opacity(0.72), in: Circle())
                         .overlay(Circle().strokeBorder(Color.appBackground, lineWidth: 2))
@@ -145,7 +145,7 @@ private struct BadgeDetailIcon: View {
             if !badge.unlocked {
                 Image(systemName: "lock.fill")
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appBackground)
                     .frame(width: 44, height: 44)
                     .background(Color.primary.opacity(0.76), in: Circle())
                     .overlay(Circle().strokeBorder(Color.appBackground, lineWidth: 3))

@@ -163,7 +163,7 @@ private struct WideSongHeroCard: View {
                 RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous)
                     .strokeBorder(Color.appDivider, lineWidth: 0.8)
             }
-            .amShadow(AM.Shadow.heroPlaying)
+            .amShadow(AM.Shadow.heroIdle)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.88, haptic: .selection))
         .accessibilityElement(children: .combine)

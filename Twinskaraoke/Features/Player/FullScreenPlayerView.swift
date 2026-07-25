@@ -76,12 +76,12 @@ private struct PlayerLayoutMetrics {
 
     var lyricsTopSpacer: CGFloat {
         if usesTwoColumnPlayer { return artworkTopSpacer }
-        return isCompactHeight ? 8 : 8
+        return isCompactHeight ? 8 : 12
     }
 
     var lyricsBottomSpacer: CGFloat {
         if usesTwoColumnPlayer { return artworkBottomSpacer }
-        return isCompactHeight ? 12 : 10
+        return isCompactHeight ? 10 : 12
     }
 
     var progressTopPadding: CGFloat {
@@ -668,11 +668,14 @@ struct FullScreenPlayerView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentTransition(.opacity)
                 Text(song.displayArtist)
                     .font(metrics.artistSize <= 15 ? .subheadline : AM.Font.nowPlayingArtist)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .contentTransition(.opacity)
             }
+            .animation(reduceMotion ? nil : AppMotion.quick, value: song.id)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Now playing")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
@@ -879,7 +882,6 @@ struct FullScreenPlayerView: View {
             artworkURL: audioManager.displayImageURL(for: song, variant: .blur),
             isPlaying: audioManager.isPlaying && popupPresentation.isExpanded
         )
-        .id(song.id)
     }
 
     private func formattedTime(_ seconds: Double) -> String {

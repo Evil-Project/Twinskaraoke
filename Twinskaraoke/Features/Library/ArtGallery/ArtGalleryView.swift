@@ -100,12 +100,11 @@ struct ArtGalleryView: View {
     }
 
     private var featuredArt: (art: GalleryArt, artist: GalleryArtist)? {
-        for artist in viewModel.artists {
-            if let art = artist.arts?.max(by: { ($0.upvotes ?? 0) < ($1.upvotes ?? 0) }) {
-                return (art, artist)
+        viewModel.artists
+            .flatMap { artist in
+                (artist.arts ?? []).map { (art: $0, artist: artist) }
             }
-        }
-        return nil
+            .max { ($0.art.upvotes ?? 0) < ($1.art.upvotes ?? 0) }
     }
 
     private var topArtists: [GalleryArtist] {

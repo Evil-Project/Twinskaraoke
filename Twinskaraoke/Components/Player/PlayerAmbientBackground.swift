@@ -10,6 +10,7 @@ struct PlayerAmbientBackground: View {
     var isPlaying: Bool = true
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var palette: ArtworkPalette = .placeholder
+    @State private var paletteSourceURL: URL?
     @State private var animationPhase: Bool = false
 
     private var shouldAnimateAmbient: Bool {
@@ -85,13 +86,13 @@ struct PlayerAmbientBackground: View {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .blur(radius: runtimeBlurRadius)
                         .saturation(1.05)
+                        .drawingGroup()
                         .scaleEffect(shouldAnimateAmbient ? 1.28 : 1.22)
                         .offset(
                             x: shouldAnimateAmbient ? 8 : -8,
                             y: shouldAnimateAmbient ? -6 : 6
                         )
                         .clipped()
-                        .drawingGroup()
                         .transition(.opacity)
                 } placeholder: {
                     fallbackGradient
@@ -189,9 +190,13 @@ struct PlayerAmbientBackground: View {
 
     private func loadPalette() {
         guard let url = artworkURL else {
+            paletteSourceURL = nil
             palette = .placeholder
             return
         }
+        // Tag the request with its URL so a slow extraction for an older
+        // artwork can't overwrite a newer palette after quick song skips.
+        paletteSourceURL = url
         #if canImport(UIKit)
             SDWebImageManager.shared.loadImage(
                 with: url,
@@ -204,6 +209,7 @@ struct PlayerAmbientBackground: View {
                 Task.detached(priority: .utility) {
                     let extracted = ArtworkPalette(image: image)
                     await MainActor.run {
+                        guard paletteSourceURL == url else { return }
                         palette = extracted
                     }
                 }

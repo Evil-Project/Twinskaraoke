@@ -44,7 +44,7 @@ struct KaraokeRightDock: View {
             return "On, removal level \(vocalRemovalPercent)%"
         }
         if shouldShowProcessingIndicator {
-            return "Preparing, \(processingPercentText)"
+            return isProcessing ? "Preparing, \(processingPercentText)" : "Preparing"
         }
         return "Off"
     }
@@ -99,7 +99,7 @@ struct KaraokeRightDock: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.7))
         .disabled(!canActivateKaraoke)
-        .animation(dockAnimation, value: processingFraction)
+        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: processingFraction)
         .accessibilityLabel(audioManager.karaokeMode ? "Turn Off Vocal Removal" : "Vocal Removal")
         .accessibilityValue(karaokeButtonAccessibilityValue)
         .accessibilityHint(karaokeButtonAccessibilityHint)
@@ -138,16 +138,27 @@ struct KaraokeRightDock: View {
 
     private var processingIndicator: some View {
         VStack(spacing: 4) {
-            Text(processingPercentText)
-                .font(.caption.monospacedDigit())
-                .bold()
-                .foregroundStyle(isProcessing ? Color.appAccent : .secondary)
-                .monospacedDigit()
+            // progressFraction is only non-zero while VocalSeparator is actively
+            // processing this song, so only show a percentage then; while merely
+            // queued/locked show an indeterminate label instead of "0%".
+            if isProcessing {
+                Text(processingPercentText)
+                    .font(.caption.monospacedDigit())
+                    .bold()
+                    .foregroundStyle(Color.appAccent)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            } else {
+                Text("Preparing")
+                    .font(.caption)
+                    .bold()
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.top, -2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Preparing vocal removal")
-        .accessibilityValue(processingPercentText)
+        .accessibilityValue(isProcessing ? processingPercentText : "Preparing")
     }
 
     private var dockAnimation: Animation? {
@@ -160,7 +171,9 @@ struct KaraokeRightDock: View {
 
     private var karaokeButtonAccessibilityValue: String {
         if audioManager.karaokeMode { return "On" }
-        if shouldShowProcessingIndicator { return "Preparing, \(processingPercentText)" }
+        if shouldShowProcessingIndicator {
+            return isProcessing ? "Preparing, \(processingPercentText)" : "Preparing"
+        }
         return "Off"
     }
 

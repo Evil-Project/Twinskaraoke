@@ -365,6 +365,7 @@ class AudioPlayerManager: ObservableObject {
     private var warmedPlayerArtworkAt: [String: Date] = [:]
     private var currentPlaybackURL: URL?
     private var instrumentalTask: Task<Void, Never>?
+    private var preparedStemTask: Task<Void, Never>?
     private var backgroundAnalysisRetryTask: Task<Void, Never>?
     private var cacheCompressionTask: Task<Void, Never>?
     private var aiStemSwitchInFlightSongID: String?
@@ -637,6 +638,7 @@ class AudioPlayerManager: ObservableObject {
             streamFadeTimer?.invalidate()
             transitionStartTask?.cancel()
             instrumentalTask?.cancel()
+            preparedStemTask?.cancel()
             backgroundAnalysisRetryTask?.cancel()
             remotePlaybackCacheTask?.cancel()
             easterEggLyricsTask?.cancel()
@@ -687,20 +689,32 @@ class AudioPlayerManager: ObservableObject {
         localPlaybackFileURL(for: song)
     }
 
-    private func cachedStems(for song: Song, sourceURL: URL? = nil) -> CachedStems? {
-        let expectedDuration: TimeInterval?
-        if song.duration > 0 {
-            expectedDuration = TimeInterval(song.duration)
-        } else if let sourceURL {
-            let duration = AudioCacheStore.audioDuration(at: sourceURL)
-            expectedDuration = duration.isFinite && duration > 1.0 ? duration : nil
-        } else {
-            expectedDuration = nil
-        }
-        return VocalSeparator.shared.cachedStems(
+    private func cachedStems(for song: Song, sourceURL: URL? = nil) async -> CachedStems? {
+        await VocalSeparator.shared.cachedStems(
             forSongID: song.id,
-            expectedDuration: expectedDuration
+            expectedDuration: expectedStemDuration(for: song, sourceURL: sourceURL)
         )
+    }
+
+    /// Non-decompressing stem lookup for main-thread fast paths: returns nil
+    /// when only the compressed cache exists so callers can defer the
+    /// decompression to the async `cachedStems` path instead.
+    private func immediatelyCachedStems(for song: Song, sourceURL: URL? = nil) -> CachedStems? {
+        VocalSeparator.shared.immediatelyAvailableStems(
+            forSongID: song.id,
+            expectedDuration: expectedStemDuration(for: song, sourceURL: sourceURL)
+        )
+    }
+
+    private func expectedStemDuration(for song: Song, sourceURL: URL?) -> TimeInterval? {
+        if song.duration > 0 {
+            return TimeInterval(song.duration)
+        }
+        if let sourceURL {
+            let duration = AudioCacheStore.audioDuration(at: sourceURL)
+            return duration.isFinite && duration > 1.0 ? duration : nil
+        }
+        return nil
     }
 
     private func activeSongIDs() -> Set<String> {
@@ -976,14 +990,23 @@ class AudioPlayerManager: ObservableObject {
     private func prepareBackgroundStemPlaybackIfPossible(for song: Song) {
         guard aiEnabled, aiAutoAnalyze, !isRadioMode else { return }
         guard let sourceURL = localPlaybackFileURL(for: song) else { return }
-        guard let stems = cachedStems(for: song, sourceURL: sourceURL) else { return }
+        preparedStemTask?.cancel()
+        let gen = separationGeneration
+        // Decompresses compressed stem caches off the main thread.
+        preparedStemTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let stems = await cachedStems(for: song, sourceURL: sourceURL) else { return }
+            guard separationGeneration == gen,
+                  currentSong?.id == song.id, !isRadioMode
+            else { return }
 
-        preparedStemSongID = song.id
-        guard anyAIEffectActive else { return }
-        switchActivePlaybackToStems(
-            for: song, stems: stems, sourceURL: sourceURL,
-            onReady: { [weak self] in self?.applyAIMixVolumes() }
-        )
+            preparedStemSongID = song.id
+            guard anyAIEffectActive else { return }
+            switchActivePlaybackToStems(
+                for: song, stems: stems, sourceURL: sourceURL,
+                onReady: { [weak self] in self?.applyAIMixVolumes() }
+            )
+        }
     }
 
     private func scheduleIdleCacheCompression(excluding songIDs: Set<String>) {
@@ -1115,6 +1138,8 @@ class AudioPlayerManager: ObservableObject {
         cancelPlayerArtworkWarmups()
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         resetEasterEggWork()
         cancelBackgroundAnalysisRetry()
         VocalSeparator.shared.cancel()
@@ -1286,6 +1311,8 @@ class AudioPlayerManager: ObservableObject {
         avEngine.stop()
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         separationGeneration &+= 1
         VocalSeparator.shared.cancel()
         VocalSeparator.shared.cancelBackgroundAnalysis()
@@ -1306,9 +1333,7 @@ class AudioPlayerManager: ObservableObject {
         }
         progress = 0
         if currentSong?.id != song.id {
-            withAnimation(.easeInOut(duration: 0.32)) {
-                currentSong = song
-            }
+            currentSong = song
         } else {
             currentSong = song
         }
@@ -1334,6 +1359,8 @@ class AudioPlayerManager: ObservableObject {
         if let fileURL, let stems = stemsForCachedAIMode(song: song) {
             instrumentalTask?.cancel()
             instrumentalTask = nil
+            preparedStemTask?.cancel()
+            preparedStemTask = nil
             separationGeneration &+= 1
             VocalSeparator.shared.cancel()
             preparedStemSongID = song.id
@@ -1429,6 +1456,8 @@ class AudioPlayerManager: ObservableObject {
         stopStreamPlayer()
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         if resetSeparation {
             separationGeneration &+= 1
             VocalSeparator.shared.cancel()
@@ -1726,6 +1755,8 @@ class AudioPlayerManager: ObservableObject {
             )
             return true
         }
+        configureAudioSessionCategory()
+        activateAudioSession()
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         avEngine.resume()
         setPlaybackState(playing: true, buffering: false, reason: "resume.file.\(source)")
@@ -1753,6 +1784,7 @@ class AudioPlayerManager: ObservableObject {
         progress = fraction
         if isStreamMode {
             guard let player = streamPlayer else { return }
+            cancelPendingTransitionWork()
             let totalDur = playbackDuration
             guard totalDur.isFinite, totalDur > 0 else { return }
             let targetSeconds = min(totalDur * fraction, totalDur - 1.5)
@@ -1767,6 +1799,7 @@ class AudioPlayerManager: ObservableObject {
             return
         }
         if isRemotePlaybackCaching, let song = currentSong, song.duration > 0 {
+            cancelPendingTransitionWork()
             let totalDur = Double(song.duration)
             let targetSeconds = min(totalDur * fraction, totalDur - 1.5)
             guard targetSeconds >= 0 else { return }
@@ -2054,6 +2087,8 @@ class AudioPlayerManager: ObservableObject {
         stopStreamPlayer()
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         preparedStemSongID = nil
         deferredAIEffect = nil
         VocalSeparator.shared.cancel()
@@ -2064,7 +2099,7 @@ class AudioPlayerManager: ObservableObject {
         progress = 0
         queue = []
         originalQueue = []
-        withAnimation(.easeInOut(duration: 0.32)) { currentSong = song }
+        currentSong = song
         startRadio(url: streamURL)
     }
 
@@ -2371,6 +2406,8 @@ class AudioPlayerManager: ObservableObject {
         remotePlaybackCacheTask?.cancel()
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         resetEasterEggWork()
         preparedStemSongID = nil
         deferredAIEffect = nil
@@ -2396,14 +2433,14 @@ class AudioPlayerManager: ObservableObject {
         guard aiEnabled, anyAIEffectActive, !isRadioMode, VocalSeparator.shared.isAvailable else {
             return nil
         }
-        return cachedStems(for: song, sourceURL: localPlaybackFileURL(for: song))
+        return immediatelyCachedStems(for: song, sourceURL: localPlaybackFileURL(for: song))
     }
 
     private func triggerBackgroundAnalysis(for song: Song) {
         guard aiEnabled, aiAutoAnalyze, !isRadioMode, !anyAIEffectActive else { return }
         guard VocalSeparator.shared.isAvailable else { return }
 
-        if cachedStems(for: song, sourceURL: localPlaybackFileURL(for: song)) != nil {
+        if VocalSeparator.shared.hasCachedStems(forSongID: song.id) {
             prepareBackgroundStemPlaybackIfPossible(for: song)
             return
         }
@@ -2440,6 +2477,8 @@ class AudioPlayerManager: ObservableObject {
     private func applyMLSeparationIfNeeded() {
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         separationGeneration &+= 1
         let gen = separationGeneration
         guard aiEnabled, !isRadioMode, let song = currentSong else {
@@ -2480,17 +2519,48 @@ class AudioPlayerManager: ObservableObject {
             applyAIMixVolumes()
             return
         }
-        if let sourceURL = localPlaybackFileURL(for: song),
-           let stems = cachedStems(for: song, sourceURL: sourceURL)
-        {
-            DebugLogger.log("Using cached stems for \(song.id)", category: .ai)
-            preparedStemSongID = song.id
-            switchActivePlaybackToStems(
-                for: song, stems: stems, sourceURL: sourceURL,
-                onReady: { [weak self] in self?.applyAIMixVolumes() }
-            )
+        if let sourceURL = localPlaybackFileURL(for: song) {
+            if let stems = immediatelyCachedStems(for: song, sourceURL: sourceURL) {
+                DebugLogger.log("Using cached stems for \(song.id)", category: .ai)
+                preparedStemSongID = song.id
+                switchActivePlaybackToStems(
+                    for: song, stems: stems, sourceURL: sourceURL,
+                    onReady: { [weak self] in self?.applyAIMixVolumes() }
+                )
+                return
+            }
+            // Compressed-only stem caches are decompressed off the main thread
+            // before falling back to real-time separation.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let stems = await cachedStems(for: song, sourceURL: sourceURL) else {
+                    guard separationGeneration == gen,
+                          currentSong?.id == song.id
+                    else { return }
+                    startRealTimeSeparation(for: song, generation: gen)
+                    return
+                }
+                guard separationGeneration == gen,
+                      currentSong?.id == song.id
+                else { return }
+                guard avEngine.mode != .aiStems else {
+                    applyAIMixVolumes()
+                    return
+                }
+                guard anyAIEffectActive else { return }
+                DebugLogger.log("Using cached stems for \(song.id)", category: .ai)
+                preparedStemSongID = song.id
+                switchActivePlaybackToStems(
+                    for: song, stems: stems, sourceURL: sourceURL,
+                    onReady: { [weak self] in self?.applyAIMixVolumes() }
+                )
+            }
             return
         }
+        startRealTimeSeparation(for: song, generation: gen)
+    }
+
+    private func startRealTimeSeparation(for song: Song, generation gen: UInt64) {
         guard anyAIEffectActive else {
             triggerBackgroundAnalysis(for: song)
             return
@@ -3291,6 +3361,8 @@ class AudioPlayerManager: ObservableObject {
         cancelQuickCutTimer(resetVolume: false)
         instrumentalTask?.cancel()
         instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
         VocalSeparator.shared.cancel()
         VocalSeparator.shared.cancelBackgroundAnalysis()
         quickCutGeneration &+= 1
@@ -3373,9 +3445,7 @@ class AudioPlayerManager: ObservableObject {
             var excludeIDs = activeSongIDs()
             excludeIDs.insert(song.id)
             scheduleIdleCacheCompression(excluding: excludeIDs)
-            withAnimation(.easeInOut(duration: 0.32)) {
-                currentSong = song
-            }
+            currentSong = song
         }
         upcomingSong = nil
         checkEasterEgg(for: song)

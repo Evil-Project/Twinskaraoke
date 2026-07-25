@@ -196,7 +196,6 @@ private struct CreatePlaylistTextField: View {
             TextField(prompt, text: $text, axis: axis)
                 .scaledSystemFont(size: 17)
                 .textInputAutocapitalization(.words)
-                .disableAutocorrection(false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

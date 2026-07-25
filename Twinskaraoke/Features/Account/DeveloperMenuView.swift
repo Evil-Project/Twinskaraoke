@@ -51,7 +51,23 @@ struct DeveloperMenuView: View {
                 .first(where: { $0.activationState == .foregroundActive }),
                 let root = windowScene.keyWindow?.rootViewController
             {
-                root.present(av, animated: true)
+                var presenter = root
+                while let presented = presenter.presentedViewController {
+                    presenter = presented
+                }
+                // UIActivityViewController is a popover on iPad and crashes
+                // without a source view/rect.
+                if let popover = av.popoverPresentationController {
+                    popover.sourceView = presenter.view
+                    popover.sourceRect = CGRect(
+                        x: presenter.view.bounds.midX,
+                        y: presenter.view.bounds.midY,
+                        width: 0,
+                        height: 0
+                    )
+                    popover.permittedArrowDirections = []
+                }
+                presenter.present(av, animated: true)
             }
         #endif
     }

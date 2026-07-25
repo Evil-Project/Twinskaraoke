@@ -147,7 +147,7 @@ private struct WatchPlaylistCard: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(.secondary.opacity(0.65))
                     }
-                AsyncImage(url: playlist.thumbnailURL ?? playlist.imageURL) { image in
+                WatchCachedImage(url: playlist.thumbnailURL ?? playlist.imageURL) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Color.clear

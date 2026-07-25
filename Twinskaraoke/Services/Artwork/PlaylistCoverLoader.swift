@@ -24,10 +24,18 @@ final class PlaylistCoverLoader: ObservableObject {
 
         guard let request = try? KaraokeAPIClient.request(
             pathSegments: ["api", "playlist", playlistID]
-        ) else { return }
+        ) else {
+            loadedID = nil
+            return
+        }
 
         loadTask = Task { [weak self, request] in
-            guard let data = try? await URLSession.shared.data(for: request).0 else { return }
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                self?.handleLoadFailure(playlistID: playlistID)
+                return
+            }
             guard !Task.isCancelled else { return }
             self?.applyLoadedPlaylistData(data, playlistID: playlistID)
         }
@@ -35,6 +43,11 @@ final class PlaylistCoverLoader: ObservableObject {
 
     deinit {
         loadTask?.cancel()
+    }
+
+    private func handleLoadFailure(playlistID: String) {
+        guard loadedID == playlistID else { return }
+        loadedID = nil
     }
 
     private func applyLoadedPlaylistData(_ data: Data, playlistID: String) {

@@ -41,6 +41,7 @@ final class PublicPlaylistsViewModel: ObservableObject {
     @Published var isLoadingMore = false
     private var canLoadMore = true
     private var hasLoaded = false
+    private var requestToken = 0
     private let pageSize = 25
 
     func loadIfNeeded() {
@@ -52,6 +53,12 @@ final class PublicPlaylistsViewModel: ObservableObject {
         }
         hasLoaded = true
         fetchPage(startIndex: 0, replace: true)
+    }
+
+    func refresh() {
+        hasLoaded = false
+        canLoadMore = true
+        loadIfNeeded()
     }
 
     func loadMoreIfNeeded(current: Playlist) {
@@ -66,7 +73,12 @@ final class PublicPlaylistsViewModel: ObservableObject {
     }
 
     private func fetchPage(startIndex: Int, replace: Bool) {
-        if !replace { isLoadingMore = true }
+        if replace {
+            requestToken += 1
+        } else {
+            isLoadingMore = true
+        }
+        let token = requestToken
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -74,6 +86,7 @@ final class PublicPlaylistsViewModel: ObservableObject {
                     startIndex: startIndex,
                     pageSize: pageSize
                 )
+                guard token == requestToken else { return }
                 if replace {
                     playlists = items
                 } else {
@@ -82,6 +95,7 @@ final class PublicPlaylistsViewModel: ObservableObject {
                 }
                 canLoadMore = items.count >= pageSize
             } catch {
+                guard token == requestToken else { return }
                 if replace { playlists = [] }
                 canLoadMore = false
             }
@@ -135,6 +149,7 @@ final class TopChartViewModel: ObservableObject {
     @Published var songs: [Song] = []
     @Published var weeklyTrending: [Song] = []
     private var hasLoaded = false
+    private var requestToken = 0
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -144,13 +159,23 @@ final class TopChartViewModel: ObservableObject {
             return
         }
         hasLoaded = true
+        requestToken += 1
+        let token = requestToken
         Task { [weak self] in
             guard let self else { return }
             async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
             async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
-            songs = await allTime ?? []
-            weeklyTrending = await weekly ?? []
+            let allTimeSongs = await allTime ?? []
+            let weeklySongs = await weekly ?? []
+            guard token == requestToken else { return }
+            songs = allTimeSongs
+            weeklyTrending = weeklySongs
         }
+    }
+
+    func refresh() {
+        hasLoaded = false
+        loadIfNeeded()
     }
 
     private func applyUITestFixture() {
@@ -191,6 +216,7 @@ final class GenresViewModel: ObservableObject {
     private var pendingDetails: [String: GenreSummary] = [:]
     private var detailTasks: [String: URLSessionDataTask] = [:]
     private var detailGeneration: UInt64 = 0
+    private var pageGeneration: UInt64 = 0
     private var detailFailureDates: [String: Date] = [:]
     private let maxConcurrentDetailRequests = 4
     private var genresNeedingFallback = Set<String>()
@@ -227,6 +253,11 @@ final class GenresViewModel: ObservableObject {
             return
         }
         fetchPage(0, replace: true)
+    }
+
+    func refresh() {
+        hasLoaded = false
+        loadIfNeeded()
     }
 
     func loadMoreIfNeeded(current: GenreSummary) {
@@ -279,22 +310,25 @@ final class GenresViewModel: ObservableObject {
             )
         else { return }
         if replace {
+            pageGeneration &+= 1
             isLoading = true
             pendingDetailOrder.removeAll()
             pendingDetails.removeAll()
         } else {
             isLoadingMore = true
         }
+        let generation = pageGeneration
         var request = URLRequest(url: url)
         GuestIdentity.applyIfNeeded(to: &request)
         URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, page, replace] in
-                self?.applyGenrePageResponse(data, page: page, replace: replace)
+            Task { @MainActor [weak self, data, page, replace, generation] in
+                self?.applyGenrePageResponse(data, page: page, replace: replace, generation: generation)
             }
         }.resume()
     }
 
-    private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool) {
+    private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool, generation: UInt64) {
+        guard generation == pageGeneration else { return }
         defer {
             isLoading = false
             isLoadingMore = false

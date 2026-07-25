@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct BrowseSongCollectionView: View {
     let title: String
@@ -6,6 +7,7 @@ struct BrowseSongCollectionView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showsCollapsedTitle = false
+    @State private var fallbackHeroURL: URL?
 
     private func usesWideOverview(availableWidth: CGFloat) -> Bool {
         AM.Layout.usesWideCanvas(
@@ -122,8 +124,22 @@ struct BrowseSongCollectionView: View {
     @ViewBuilder
     private var heroArtwork: some View {
         let heroSong = songs.first(where: { $0.hasOwnArtwork })
-        let artURL = heroSong?.imageURL ?? FallbackArtProvider.shared.randomURL
+        // The random fallback is picked once per collection; drawing it in
+        // `body` directly would swap the hero image on every re-render.
+        let artURL = heroSong?.imageURL ?? fallbackHeroURL
         RemoteArtworkImage(url: artURL, cornerRadius: 0, contentMode: .fill, lowResURL: heroSong?.thumbnailURL)
+            .onAppear {
+                pickFallbackHeroURLIfNeeded()
+            }
+            .onReceive(FallbackArtProvider.shared.objectWillChange) { _ in
+                fallbackHeroURL = nil
+                pickFallbackHeroURLIfNeeded()
+            }
+    }
+
+    private func pickFallbackHeroURLIfNeeded() {
+        guard fallbackHeroURL == nil else { return }
+        fallbackHeroURL = FallbackArtProvider.shared.randomURL
     }
 
     @ViewBuilder

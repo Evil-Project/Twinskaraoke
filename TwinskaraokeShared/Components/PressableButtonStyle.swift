@@ -120,7 +120,7 @@ private struct PressableButtonBody: View {
   }
 
   private var animation: Animation {
-    pressAnimation ?? AppMotion.playful
+    pressAnimation ?? AppMotion.snap
   }
 
   private func updatePressState(_ isPressed: Bool) {

@@ -27,6 +27,5 @@ struct ArtThumbnail: View {
                     .padding(7)
             }
         }
-        .shadow(color: Color.appShadow.opacity(0.7), radius: 8, y: 4)
     }
 }

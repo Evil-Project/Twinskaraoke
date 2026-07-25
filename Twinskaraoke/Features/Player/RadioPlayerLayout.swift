@@ -3,6 +3,7 @@ import SwiftUI
 struct RadioPlayerLayout: View {
     @EnvironmentObject var audioManager: AudioPlayerManager
     @ObservedObject var favorites: FavoritesManager
+    @ObservedObject private var radio = RadioController.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showingQueue: Bool
     let song: Song
@@ -51,7 +52,7 @@ struct RadioPlayerLayout: View {
                         .font(.caption.bold())
                         .foregroundStyle(Color.appAccent)
                         .tracking(1.2)
-                    if let listeners = RadioController.shared.nowPlaying?.listeners {
+                    if let listeners = radio.nowPlaying?.listeners {
                         Text("·")
                             .font(.caption.bold())
                             .foregroundStyle(.tertiary)
@@ -177,7 +178,7 @@ struct RadioPlayerLayout: View {
     }
 
     private var radioFavoriteID: String? {
-        RadioController.shared.nowPlaying?.nowPlaying?.song.resolvedSongID
+        radio.nowPlaying?.nowPlaying?.song.resolvedSongID
     }
 
     private var canFavoriteRadioSong: Bool {

@@ -11,6 +11,7 @@ struct RemoteArtworkImage: View {
     var fullResolution: Bool = false
 
     var fixedDisplaySize: CGSize?
+    @ObservedObject private var scrollState = ScrollPerformanceState.shared
     @State private var fullLoaded: Bool = false
     @State private var loadFailed: Bool = false
     @State private var renderedFullURL: URL?
@@ -53,7 +54,7 @@ struct RemoteArtworkImage: View {
                         .aspectRatio(contentMode: contentMode)
                         .frame(width: displaySize.width, height: displaySize.height)
                         .clipped()
-                        .blur(radius: 2)
+                        .blur(radius: scrollState.isScrolling ? 0 : 2)
                 } placeholder: {
                     Color.clear
                 }
@@ -137,7 +138,7 @@ struct RemoteArtworkImage: View {
     }
 
     private var shouldAnimateLoad: Bool {
-        !ScrollPerformanceState.shared.isScrolling && shouldPreferProgressiveArtwork
+        !scrollState.isScrolling && shouldPreferProgressiveArtwork
     }
 
     private var shouldPreferProgressiveArtwork: Bool {
@@ -158,8 +159,9 @@ struct RemoteArtworkImage: View {
 
     private func evictFailedImageCache(for failedURL: URL) {
         let cacheKey = failedURL.absoluteString
-        SDImageCache.shared.removeImageFromMemory(forKey: cacheKey)
-        SDImageCache.shared.removeImageFromDisk(forKey: cacheKey)
+        // Async variant: removes from memory immediately and evicts the disk
+        // entry off the calling (main) queue.
+        SDImageCache.shared.removeImage(forKey: cacheKey, fromDisk: true, withCompletion: nil)
     }
 
     private func sanitizedDisplaySize(_ size: CGSize) -> CGSize {
