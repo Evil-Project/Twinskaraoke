@@ -182,6 +182,38 @@ nonisolated enum AudioCacheStore {
         return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
     }
 
+    /// Like `playableStems`, but never decompresses: returns nil when only the
+    /// compressed cache exists, so callers on the main thread can defer that
+    /// work to a background path instead.
+    static func immediatelyPlayableStems(
+        for songID: String,
+        startOffset: TimeInterval,
+        expectedDuration: TimeInterval? = nil
+    ) -> CachedStems? {
+        let songFiles = files(for: songID)
+        let vocals = songFiles.vocals
+        let instruments = songFiles.instruments
+        guard fm.fileExists(atPath: vocals.path), isValidAudioFile(at: vocals),
+              fm.fileExists(atPath: instruments.path), isValidAudioFile(at: instruments)
+        else {
+            return nil
+        }
+        guard validateStemPair(
+            vocals: vocals,
+            instruments: instruments,
+            startOffset: startOffset,
+            expectedDuration: expectedDuration
+        )
+        else {
+            DebugLogger.log("Removing invalid stem cache for \(songID)", category: .cache)
+            removeStemCache(for: songID)
+            return nil
+        }
+        touch(vocals)
+        touch(instruments)
+        return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
+    }
+
     static func hasCachedMainAudio(for songID: String, expectedRemoteURL: URL? = nil, expectedDuration: TimeInterval? = nil) -> Bool {
         playableMainURL(
             for: songID,

@@ -70,7 +70,7 @@ struct AboutIconBadge: View {
         Image(systemName: systemImage)
             .font(.system(size: size * 0.63, weight: .semibold))
             .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(Color.appAccent)
+            .foregroundStyle(color)
             .frame(width: size + 6, height: size)
     }
 }

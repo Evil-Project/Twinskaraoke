@@ -28,7 +28,6 @@ struct ArtistCircleCard: View {
             }
             .frame(width: 96, height: 96)
             .clipShape(Circle())
-            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
             Text(artist.name)
                 .scaledSystemFont(size: 13, weight: .medium)
                 .foregroundColor(.primary)

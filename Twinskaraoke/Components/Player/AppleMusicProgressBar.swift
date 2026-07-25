@@ -101,6 +101,7 @@ struct AppleMusicProgressBar: View {
                     }
             )
             .animation(scrubAnimation, value: isScrubbing)
+            .animation(isScrubbing || reduceMotion ? nil : .linear(duration: 0.25), value: clampedProgress)
         }
         .frame(height: controlHeight)
         .accessibilityElement(children: .ignore)

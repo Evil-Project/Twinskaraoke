@@ -178,6 +178,10 @@ class PlaylistDetailViewModel: ObservableObject {
             }
         }
         loadFailed = requestFailed && (songs?.isEmpty ?? true)
-        isLoading = false
+        // A non-authoritative fallback apply means the remote fetch is still in
+        // flight; keep isLoading true until the authoritative or failure apply.
+        if isAuthoritative || requestFailed {
+            isLoading = false
+        }
     }
 }

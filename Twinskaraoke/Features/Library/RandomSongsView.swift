@@ -164,7 +164,7 @@ struct RandomSongsView: View {
                 }
 
                 LazyVStack(spacing: 0) {
-                    ForEach(songs) { song in
+                    ForEach(Array(songs.enumerated()), id: \.offset) { idx, song in
                         Button {
                             play(song, context: songs)
                         } label: {
@@ -181,7 +181,9 @@ struct RandomSongsView: View {
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
                         .accessibilityIdentifier("RandomSongs.song.\(song.id)")
-                        Divider().padding(.leading, rowHorizontalPadding + 60)
+                        if idx < songs.count - 1 {
+                            Divider().padding(.leading, rowHorizontalPadding + 60)
+                        }
                     }
                 }
             }

@@ -710,7 +710,7 @@ private struct EqualizerBands: View {
         HStack(alignment: .bottom, spacing: 6) {
             ForEach(0 ..< AVEnginePlayback.eqBandCount, id: \.self) { i in
                 VStack(spacing: 6) {
-                    Text(gainLabel(gainsDB[i]))
+                    Text(gainLabel(gainsDB.indices.contains(i) ? gainsDB[i] : 0))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .frame(height: 12)

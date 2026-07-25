@@ -90,7 +90,7 @@ struct PlayerView: View {
                 ScrollView {
                     VStack(spacing: metrics.contentSpacing) {
                         ZStack {
-                            AsyncImage(url: song.thumbnailURL) { image in
+                            WatchCachedImage(url: song.thumbnailURL) { image in
                                 image.resizable().scaledToFit()
                             } placeholder: {
                                 RoundedRectangle(cornerRadius: 10)
@@ -286,7 +286,7 @@ struct PlayerView: View {
             .background(
                 Group {
                     if let url = audioManager.currentSong?.thumbnailURL {
-                        AsyncImage(url: url) { image in
+                        WatchCachedImage(url: url) { image in
                             image.resizable().scaledToFill()
                         } placeholder: {
                             backgroundBase

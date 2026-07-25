@@ -13955,6 +13955,9 @@
         }
       }
     },
+    "Preparing" : {
+
+    },
     "Preparing karaoke" : {
       "extractionState" : "stale",
       "localizations" : {

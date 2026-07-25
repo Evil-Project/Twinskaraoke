@@ -92,7 +92,7 @@ struct QueueView: View {
                     .transition(emptyQueueTransition)
                 } else {
                     List {
-                        ForEach(Array(upNext.enumerated()), id: \.element.id) { index, song in
+                        ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
                             QueueRow(
                                 song: song,
                                 position: index + 1,
@@ -158,6 +158,7 @@ struct QueueView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    .contentTransition(.numericText())
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Playing Next")
@@ -224,7 +225,7 @@ struct QueueView: View {
                 }
                 Spacer()
 
-                EqualizerBars(isAnimating: false)
+                EqualizerBars(isAnimating: audioManager.isPlaying)
                     .frame(width: 16, height: 16)
                     .foregroundStyle(Color.appAccent)
             }
@@ -280,8 +281,10 @@ struct QueueView: View {
     }
 
     private var upNextSongs: [Song] {
+        // Match by id: applyEnrichedMetadata replaces currentSong with a fresh
+        // instance that no longer == the queue copy.
         guard let current = audioManager.currentSong,
-              let idx = audioManager.queue.firstIndex(of: current),
+              let idx = audioManager.queue.firstIndex(where: { $0.id == current.id }),
               idx + 1 < audioManager.queue.count
         else { return [] }
         return Array(audioManager.queue[(idx + 1)...])

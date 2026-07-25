@@ -1,6 +1,10 @@
 import Foundation
 import os
 
+extension Notification.Name {
+  nonisolated static let karaokeSessionExpired = Notification.Name("KaraokeSessionExpired")
+}
+
 actor UploadedSongMetadataCache {
   private struct Entry: Sendable {
     let songs: [Song]
@@ -41,7 +45,9 @@ actor UploadedSongMetadataCache {
 
     do {
       let songs = try await request.task.value
-      let coveredIDs = (cachedValue?.coveredIDs ?? []).union(requestedIDs)
+      let coveredIDs = (cachedValue?.coveredIDs ?? [])
+        .union(requestedIDs)
+        .union(songs.map(\.id))
       cachedValue = Entry(
         songs: songs,
         coveredIDs: coveredIDs,
@@ -305,7 +311,7 @@ nonisolated enum KaraokeAPIClient {
     }
     guard !uniqueIDs.isEmpty else { return [] }
     let request = try songsByIDsRequest(uniqueIDs)
-    let data = try await data(for: request)
+    let data = try await data(for: request, retriesNonIdempotentRequest: true)
     guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
       throw APIError.decodeFailed
     }
@@ -416,7 +422,7 @@ nonisolated enum KaraokeAPIClient {
       path: "/api/songs",
       body: body
     )
-    return try await data(for: request)
+    return try await data(for: request, retriesNonIdempotentRequest: true)
   }
 
   private static func playlistDetailData(id: String) async throws -> Data {
@@ -516,9 +522,13 @@ nonisolated enum KaraokeAPIClient {
     return allowed
   }()
 
-  static func data(for request: URLRequest) async throws -> Data {
+  static func data(
+    for request: URLRequest,
+    retriesNonIdempotentRequest: Bool = false
+  ) async throws -> Data {
     let maxRetries = 3
     let baseDelay: UInt64 = 500_000_000
+    let canRetry = retriesNonIdempotentRequest || isIdempotent(request)
 
     for attempt in 0..<maxRetries {
       do {
@@ -527,8 +537,13 @@ nonisolated enum KaraokeAPIClient {
           throw APIError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
+          if httpResponse.statusCode == 401,
+            request.value(forHTTPHeaderField: "Authorization") != nil
+          {
+            NotificationCenter.default.post(name: .karaokeSessionExpired, object: nil)
+          }
 
-          if shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
+          if canRetry && shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
             let delay = baseDelay * UInt64(1 << attempt)
             try await Task.sleep(nanoseconds: delay)
             continue
@@ -538,7 +553,7 @@ nonisolated enum KaraokeAPIClient {
         return data
       } catch let error as URLError {
 
-        if shouldRetry(urlError: error) && attempt < maxRetries - 1 {
+        if canRetry && shouldRetry(urlError: error) && attempt < maxRetries - 1 {
           let delay = baseDelay * UInt64(1 << attempt)
           try await Task.sleep(nanoseconds: delay)
           continue
@@ -551,6 +566,11 @@ nonisolated enum KaraokeAPIClient {
     }
 
     throw APIError.invalidResponse
+  }
+
+  private static func isIdempotent(_ request: URLRequest) -> Bool {
+    guard let method = request.httpMethod?.uppercased() else { return true }
+    return method == "GET" || method == "HEAD" || method == "PUT" || method == "DELETE"
   }
 
   private static func shouldRetry(statusCode: Int) -> Bool {

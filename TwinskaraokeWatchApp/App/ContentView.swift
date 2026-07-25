@@ -54,7 +54,7 @@ struct WatchSongArtwork: View {
 
     var body: some View {
         ZStack {
-            AsyncImage(url: url) { image in
+            WatchCachedImage(url: url) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 RoundedRectangle(cornerRadius: cornerRadius)

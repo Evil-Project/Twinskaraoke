@@ -13,6 +13,7 @@ final class LibrarySongsViewModel: ObservableObject {
         didSet { rebuildDisplayedSongs() }
     }
     @Published private(set) var displayedSongs: [Song] = []
+    @Published private(set) var loadFailed = false
     private var hasLoaded = false
     private var canLoadMore = true
     private var page = 1
@@ -85,6 +86,7 @@ final class LibrarySongsViewModel: ObservableObject {
         requestToken += 1
         let token = requestToken
         if replace {
+            loadFailed = false
             isLoading = songs.isEmpty
         } else {
             isLoadingMore = true
@@ -139,10 +141,18 @@ final class LibrarySongsViewModel: ObservableObject {
 
         if let error {
             DebugLogger.log("Library songs fetch failed: \(error.localizedDescription)", category: .network)
+            if replace, songs.isEmpty {
+                hasLoaded = true
+                loadFailed = true
+            }
             return
         }
         if let http = response as? HTTPURLResponse, !(200 ... 299).contains(http.statusCode) {
             DebugLogger.log("Library songs HTTP \(http.statusCode)", category: .network)
+            if replace, songs.isEmpty {
+                hasLoaded = true
+                loadFailed = true
+            }
             return
         }
 

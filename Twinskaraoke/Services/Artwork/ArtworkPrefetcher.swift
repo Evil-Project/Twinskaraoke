@@ -213,7 +213,7 @@ final class ArtworkPrefetcher {
             return min(limit, reason == "radio metadata" ? 3 : 2)
         }
         if AudioPlayerManager.shared.isPlaying {
-            return min(limit, reason == "radio metadata" ? 4 : 4)
+            return min(limit, 4)
         }
         return min(limit, reason == "radio metadata" ? 6 : 8)
     }

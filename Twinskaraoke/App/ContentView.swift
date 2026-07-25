@@ -131,6 +131,7 @@ struct ContentView: View {
 private struct PopupHostView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
+    @StateObject private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
 
@@ -140,6 +141,7 @@ private struct PopupHostView: View {
 
     var body: some View {
         rootShell
+            .environmentObject(homeViewModel)
             .modifier(PopupModifier())
             .onAppear {
                 configureTabBarAppearance()
@@ -260,7 +262,7 @@ private struct PopupHostView: View {
     }
 
     private var shellTransition: AnyTransition {
-        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .trailing))
+        reduceMotion ? .opacity : .opacity
     }
 
     private func configureTabBarAppearance() {
@@ -435,8 +437,10 @@ private struct SidebarNowPlayingHint: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Now Playing")
                 .accessibilityValue(popupState.subtitle.isEmpty ? popupState.title : "\(popupState.title), \(popupState.subtitle)")
+                .transition(.opacity)
             }
         }
+        .animation(AppMotion.quick, value: popupState.hasCurrentSong)
     }
 
     @ViewBuilder

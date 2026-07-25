@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 
+@MainActor
 final class HomeViewModel: ObservableObject {
     private enum TopPicksSource {
         case publicPlaylists
@@ -38,7 +39,11 @@ final class HomeViewModel: ObservableObject {
         dataGeneration += 1
         let generation = dataGeneration
         hasLoaded = true
-        isLoading = true
+        // Only swap to the skeleton on the first load; a pull-to-refresh with
+        // existing content keeps it on screen until the new data arrives.
+        if trending.isEmpty, suggestions.isEmpty, recentPlaylists.isEmpty, newReleases.isEmpty {
+            isLoading = true
+        }
         isLoadingMoreTopPicks = false
         topPicksPage = 0
         canLoadMoreTopPicks = true
@@ -72,6 +77,13 @@ final class HomeViewModel: ObservableObject {
             isLoading = false
             homeLoadTask = nil
         }
+    }
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the home data has actually finished loading.
+    func refreshHomeData() async {
+        fetchHomeData(force: true)
+        await homeLoadTask?.value
     }
 
     func loadMoreTopPicksIfNeeded(current: Playlist) {

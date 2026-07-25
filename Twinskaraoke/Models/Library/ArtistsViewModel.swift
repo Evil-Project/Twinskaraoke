@@ -6,6 +6,7 @@ final class ArtistsViewModel: ObservableObject {
     @Published var artists: [Artist] = []
     @Published var isLoading = false
     @Published var canLoadMore = true
+    @Published private(set) var loadFailed = false
     private var page = 0
     private let pageSize = 25
     private var loadGeneration = 0
@@ -41,6 +42,9 @@ final class ArtistsViewModel: ObservableObject {
             "\(StorageHost.api)/api/artists?startIndex=\(startIndex)&pageSize=\(pageSize)&search=&sortBy=Name&sortDescending=False"
         guard let url = URL(string: urlString) else { return }
         isLoading = true
+        if reset {
+            loadFailed = false
+        }
         loadGeneration += 1
         let generation = loadGeneration
         var request = URLRequest(url: url)
@@ -78,6 +82,9 @@ final class ArtistsViewModel: ObservableObject {
               let data,
               let decoded = try? JSONDecoder().decode([Artist].self, from: data)
         else {
+            if reset, artists.isEmpty {
+                loadFailed = true
+            }
             return
         }
 

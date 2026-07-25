@@ -50,7 +50,9 @@ final class TransitionCoordinator {
 
     private static let bpmCacheKey = "nk.bpmCache.v2"
     private static let legacyBPMCacheKey = "nk.bpmCache"
-    private static let bpmCacheTTL: TimeInterval = 3600
+    // BPM of a static audio file never changes, so entries only expire after
+    // a week (and stay bounded by the LRU limit) to avoid re-analyzing audio.
+    private static let bpmCacheTTL: TimeInterval = 60 * 60 * 24 * 7
     private static let bpmCacheLimit = 500
 
     private var bpmCache: [String: BPMCacheEntry] = TransitionCoordinator.loadBPMCache()

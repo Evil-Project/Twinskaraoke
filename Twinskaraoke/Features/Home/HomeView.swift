@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject var viewModel = HomeViewModel()
+    @EnvironmentObject var viewModel: HomeViewModel
     @StateObject private var recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
@@ -40,7 +40,7 @@ struct HomeView: View {
                     AccountToolbarButton()
                 }
             }
-            .refreshable { viewModel.fetchHomeData(force: true) }
+            .refreshable { await viewModel.refreshHomeData() }
             .onChange(of: artworkPrefetchSignature) { _, _ in
                 prefetchVisibleArtworkIfNeeded()
             }

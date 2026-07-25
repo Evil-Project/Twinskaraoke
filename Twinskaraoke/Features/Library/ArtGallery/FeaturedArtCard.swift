@@ -20,7 +20,6 @@ struct FeaturedArtCard: View {
             .aspectRatio(4 / 5, contentMode: .fill)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.2), radius: 14, y: 6)
             LinearGradient(
                 colors: [.clear, .black.opacity(0.7)],
                 startPoint: .center, endPoint: .bottom

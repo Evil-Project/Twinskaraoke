@@ -58,6 +58,21 @@ final class AuthManager: NSObject, ObservableObject {
     override init() {
         super.init()
         loadPersisted()
+        NotificationCenter.default.addObserver(
+            forName: .karaokeSessionExpired,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleExpiredSession()
+            }
+        }
+    }
+
+    private func handleExpiredSession() {
+        guard isLoggedIn else { return }
+        logout()
+        errorMessage = "Your session expired — please sign in again"
     }
 
     private func loadPersisted() {

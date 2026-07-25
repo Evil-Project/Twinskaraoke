@@ -1,6 +1,7 @@
 import SwiftUI
 
 #if canImport(UIKit)
+    import SDWebImage
     import UIKit
 #endif
 
@@ -10,6 +11,7 @@ struct ArtDetailView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showFullScreen = false
     @State private var saveStatus: ArtworkSaveStatus = .idle
+    @State private var saveGeneration = 0
     @State private var appeared = false
     private var fullResURL: URL? {
         art.fullHDImageURL ?? art.imageURL
@@ -100,29 +102,52 @@ struct ArtDetailView: View {
         guard let url = fullResURL else { return }
         AppHaptic.selection.play()
         saveStatus = .saving
+        saveGeneration &+= 1
+        let generation = saveGeneration
+        #if canImport(UIKit)
+            // RemoteArtworkImage already downloaded this exact URL into the
+            // shared SDWebImage memory cache; reuse it instead of re-downloading.
+            if let cached = SDImageCache.shared.imageFromMemoryCache(forKey: url.absoluteString) {
+                saveLoadedImage(cached, generation: generation)
+                return
+            }
+        #endif
         URLSession.shared.dataTask(with: url) { data, _, error in
             DispatchQueue.main.async {
                 #if canImport(UIKit)
                     if let data, let image = UIImage(data: data) {
-                        ImageSaver.shared.save(image: image) { result in
-                            DispatchQueue.main.async {
-                                switch result {
-                                case .success:
-                                    saveStatus = .success
-                                case let .failure(err):
-                                    saveStatus = .failed(err.localizedDescription)
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    saveStatus = .idle
-                                }
-                            }
-                        }
+                        saveLoadedImage(image, generation: generation)
                         return
                     }
                 #endif
                 saveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveStatus = .idle }
+                resetSaveStatusLater(generation: generation)
             }
         }.resume()
+    }
+
+    #if canImport(UIKit)
+        private func saveLoadedImage(_ image: UIImage, generation: Int) {
+            ImageSaver.shared.save(image: image) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        saveStatus = .success
+                    case let .failure(err):
+                        saveStatus = .failed(err.localizedDescription)
+                    }
+                    resetSaveStatusLater(generation: generation)
+                }
+            }
+        }
+    #endif
+
+    private func resetSaveStatusLater(generation: Int) {
+        // A second save may start before this timer fires; only reset the
+        // status that belongs to this save cycle.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            guard saveGeneration == generation else { return }
+            saveStatus = .idle
+        }
     }
 }

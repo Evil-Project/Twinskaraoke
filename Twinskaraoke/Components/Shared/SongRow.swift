@@ -213,13 +213,6 @@ enum MusicGridCardSize: Equatable {
         case .compact: 6
         }
     }
-
-    var usesShadow: Bool {
-        switch self {
-        case .regular: true
-        case .compact: false
-        }
-    }
 }
 
 struct MusicGridCard: View {
@@ -292,13 +285,11 @@ struct MusicGridCard: View {
             artworkContent
                 .frame(width: width, height: width)
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-                .modifier(MusicGridCardShadow(enabled: size.usesShadow))
         } else {
             artworkContent
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-                .modifier(MusicGridCardShadow(enabled: size.usesShadow))
         }
     }
 
@@ -314,18 +305,6 @@ struct MusicGridCard: View {
         } else {
             MusicArtworkPlaceholder(cornerRadius: AM.Radius.card)
         }
-    }
-}
-
-private struct MusicGridCardShadow: ViewModifier {
-    let enabled: Bool
-
-    func body(content: Content) -> some View {
-        content.shadow(
-            color: enabled ? AM.Shadow.card.color : .clear,
-            radius: enabled ? AM.Shadow.card.radius : 0,
-            y: enabled ? AM.Shadow.card.y : 0
-        )
     }
 }
 

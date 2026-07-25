@@ -12,14 +12,23 @@ struct PlaylistDetailView: View {
     @ObservedObject private var fallbackArt = FallbackArtProvider.shared
     @State private var showsCollapsedTitle = false
     @State private var searchText = ""
+    @State private var filteredSongs: [Song]
     @State private var isSearchVisible = false
     @State private var isSearchModeActive = false
     @State private var artworkPullOverride: CGFloat = 0
     @State private var isArtworkPullOverridden = false
     @State private var canAutoHideSearch = false
     @State private var isActivelyPulling = false
+    @State private var shouldActivateSearchAfterPull = false
     @State private var searchRevealState = PlaylistSearchRevealState()
     @FocusState private var isSearchFocused: Bool
+
+    init(playlist: Playlist) {
+        self.playlist = playlist
+        // searchText starts empty, so the initial filtered list is the fallback.
+        _filteredSongs = State(initialValue: playlist.songListDTOs ?? [])
+    }
+
     private func usesWideOverview(availableWidth: CGFloat) -> Bool {
         AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
@@ -30,7 +39,7 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
-        let displayedSongs = PlaylistSongSearch.filter(songs, matching: searchText)
+        let displayedSongs = filteredSongs
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         GeometryReader { geo in
             ScrollView {
@@ -54,13 +63,16 @@ struct PlaylistDetailView: View {
             .onScrollPhaseChange { _, phase in
                 let wasActivelyPulling = isActivelyPulling
                 isActivelyPulling = phase == .tracking || phase == .interacting
-                if wasActivelyPulling, !isActivelyPulling, isArtworkPullOverridden {
-                    withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.24)) {
-                        artworkPullOverride = 0
-                    } completion: {
-                        guard artworkPullOverride == 0 else { return }
-                        isArtworkPullOverridden = false
+                if wasActivelyPulling, !isActivelyPulling {
+                    if isArtworkPullOverridden {
+                        withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.24)) {
+                            artworkPullOverride = 0
+                        } completion: {
+                            guard artworkPullOverride == 0 else { return }
+                            isArtworkPullOverridden = false
+                        }
                     }
+                    activateSearchAfterPull()
                 }
             }
         }
@@ -113,12 +125,28 @@ struct PlaylistDetailView: View {
             }
             prefetchArtwork(songs: displayedSongs)
         }
+        .onChange(of: searchText) { _, _ in
+            filteredSongs = PlaylistSongSearch.filter(songs, matching: searchText)
+        }
+        .onReceive(loader.$songs) { newSongs in
+            let next = PlaylistSongSearch.filter(
+                newSongs ?? playlist.songListDTOs ?? [],
+                matching: searchText
+            )
+            // Animating a huge structural swap can stall the main thread;
+            // only animate small list changes (e.g. unfavoriting a row).
+            let canAnimate = filteredSongs.count < 300 && next.count < 300
+            withOptionalAnimation(reduceMotion || !canAnimate ? nil : AppMotion.quick) {
+                filteredSongs = next
+            }
+        }
         .onChange(of: favorites.favoriteIDs) { _, _ in
             guard playlist.isFavorites else { return }
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
         }
         .onChange(of: isSearchFocused) { _, isFocused in
             guard isFocused, !isSearchModeActive else { return }
+            shouldActivateSearchAfterPull = false
             isArtworkPullOverridden = false
             withAnimation(reduceMotion ? nil : AppMotion.quick) {
                 isSearchModeActive = true
@@ -148,7 +176,7 @@ struct PlaylistDetailView: View {
             .transition(
                 reduceMotion
                     ? .opacity
-                    : .opacity.combined(with: .move(edge: .bottom))
+                    : .opacity.combined(with: .scale(scale: 0.98))
             )
             .accessibilityIdentifier("PlaylistDetail.SearchResults")
         } else {
@@ -222,12 +250,9 @@ struct PlaylistDetailView: View {
                 ? 0
                 : min(pullDistance, PlaylistSearchRevealState.revealThreshold)
             isArtworkPullOverridden = !reduceMotion
-            withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.2)) {
+            shouldActivateSearchAfterPull = true
+            withAnimation(reduceMotion ? nil : AppMotion.snap) {
                 isSearchVisible = true
-            }
-            Task { @MainActor in
-                guard isSearchVisible, !isSearchModeActive else { return }
-                isSearchFocused = true
             }
         }
 
@@ -248,6 +273,7 @@ struct PlaylistDetailView: View {
         isSearchFocused = false
         searchText = ""
         canAutoHideSearch = false
+        shouldActivateSearchAfterPull = false
         withAnimation(reduceMotion ? nil : AppMotion.quick) {
             isSearchVisible = false
             isSearchModeActive = false
@@ -259,11 +285,27 @@ struct PlaylistDetailView: View {
         isSearchFocused = false
         searchText = ""
         canAutoHideSearch = false
+        shouldActivateSearchAfterPull = false
         searchRevealState.reset()
         withAnimation(reduceMotion ? nil : AppMotion.quick) {
             isSearchVisible = false
             isSearchModeActive = false
             isArtworkPullOverridden = false
+        }
+    }
+
+    private func activateSearchAfterPull() {
+        guard shouldActivateSearchAfterPull, isSearchVisible else { return }
+        shouldActivateSearchAfterPull = false
+
+        withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.18)) {
+            isSearchModeActive = true
+        } completion: {
+            Task { @MainActor in
+                await Task.yield()
+                guard isSearchVisible, isSearchModeActive else { return }
+                isSearchFocused = true
+            }
         }
     }
 
@@ -446,7 +488,9 @@ struct PlaylistDetailView: View {
                     actionButtons(songs: displayedSongs)
                 }
                 LazyVStack(spacing: 0) {
-                    ForEach(displayedSongs) { song in
+                    // Positional identity: playlists can contain the same song
+                    // twice, and duplicate ForEach IDs can hang AttributeGraph.
+                    ForEach(Array(displayedSongs.enumerated()), id: \.offset) { idx, song in
                         Button {
                             play(song, context: displayedSongs)
                         } label: {
@@ -457,14 +501,15 @@ struct PlaylistDetailView: View {
                                 }
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
-                        .id("\(song.id):\(song.duration)")
                         .accessibilityHint("Starts playback.")
                         .accessibilityIdentifier("PlaylistDetail.song.\(song.id)")
-                        Divider().padding(.leading, rowHorizontalPadding + 60)
+                        if idx < displayedSongs.count - 1 {
+                            Divider().padding(.leading, rowHorizontalPadding + 60)
+                        }
                     }
                 }
             }
-            .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
+            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         } else if loader.isLoading, songs.isEmpty {
             PlaylistLoadingRows(horizontalPadding: rowHorizontalPadding)
                 .transition(.opacity)

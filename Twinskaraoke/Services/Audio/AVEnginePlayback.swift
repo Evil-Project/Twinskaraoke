@@ -956,6 +956,16 @@ final class AVEnginePlayback {
                     for: url, token: token, loadGeneration: loadGeneration
                 )
                 guard self.suppressionToken == token, self.crossfadeLoadGeneration == loadGeneration else {
+                    // Superseded before the crossfade could start. Clear the
+                    // pending marker only if it is still ours — a newer
+                    // beginCrossfade owns the marker when it differs.
+                    if self.pendingCrossfadeURL == url {
+                        self.pendingCrossfadeURL = nil
+                        DebugLogger.log(
+                            "Crossfade begin superseded for \(url.lastPathComponent)",
+                            category: .playback
+                        )
+                    }
                     return
                 }
                 let fadeDuration = max(0.5, duration)

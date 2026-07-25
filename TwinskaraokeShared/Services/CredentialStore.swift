@@ -15,10 +15,29 @@ nonisolated enum CredentialStore {
   private static let legacyTokenKey = "nk.token"
   private static let sessionCommittedKey = "nk.sessionCommitted"
 
+  private static let tokenCacheLock = NSLock()
+  private nonisolated(unsafe) static var cachedToken: String?
+
   static var token: String? {
     if UserDefaults.standard.object(forKey: sessionCommittedKey) as? Bool == false {
       return nil
     }
+    tokenCacheLock.lock()
+    let cached = cachedToken
+    tokenCacheLock.unlock()
+    if let cached {
+      return cached
+    }
+    guard let resolved = resolveToken() else {
+      return nil
+    }
+    tokenCacheLock.lock()
+    cachedToken = resolved
+    tokenCacheLock.unlock()
+    return resolved
+  }
+
+  private static func resolveToken() -> String? {
     if let stored = readTokenFromKeychain() {
       return stored
     }
@@ -54,6 +73,7 @@ nonisolated enum CredentialStore {
     let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
     if updateStatus == errSecSuccess {
       UserDefaults.standard.removeObject(forKey: legacyTokenKey)
+      setCachedToken(token)
       return
     }
     guard updateStatus == errSecItemNotFound else {
@@ -67,11 +87,19 @@ nonisolated enum CredentialStore {
       throw StoreError.keychain(insertStatus)
     }
     UserDefaults.standard.removeObject(forKey: legacyTokenKey)
+    setCachedToken(token)
   }
 
   static func deleteToken() {
     SecItemDelete(baseQuery as CFDictionary)
     UserDefaults.standard.removeObject(forKey: legacyTokenKey)
+    setCachedToken(nil)
+  }
+
+  private static func setCachedToken(_ token: String?) {
+    tokenCacheLock.lock()
+    cachedToken = token
+    tokenCacheLock.unlock()
   }
 
   private static var baseQuery: [String: Any] {

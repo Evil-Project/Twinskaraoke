@@ -40,7 +40,7 @@ struct UploadedSongsView: View {
                                     play(song, context: songs)
                                 }
                         }
-                        .id("\(song.id):\(song.duration)")
+                        .id(song.id)
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))

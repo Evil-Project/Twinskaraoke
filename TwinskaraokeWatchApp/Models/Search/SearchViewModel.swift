@@ -32,7 +32,11 @@ final class SearchViewModel: ObservableObject {
         isLoading = true
         Task { [weak self] in
             guard let self else { return }
-            defer { isLoading = false }
+            defer {
+                // Only the latest query clears the spinner; a stale completion
+                // must not hide the loader while a newer search is in flight.
+                if queryToken == token { isLoading = false }
+            }
             do {
                 let items = try await KaraokeAPIClient.searchSongItems(query: query, pageSize: 20)
                 guard queryToken == token else { return }

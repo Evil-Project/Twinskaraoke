@@ -22,13 +22,27 @@ struct ArtistsView: View {
                 ArtistsSkeletonView()
                     .transition(.opacity)
             } else if displayedArtists.isEmpty {
-                MusicEmptyState(
-                    title: searchText.isEmpty ? "No Artists" : "No Results",
-                    message: searchText.isEmpty
-                        ? "Artists you load from Twinskaraoke will appear here."
-                        : "Try another artist."
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if viewModel.loadFailed, searchText.isEmpty {
+                    VStack(spacing: AM.Spacing.l) {
+                        MusicEmptyState(
+                            title: "Couldn't Load Artists",
+                            message: "Check your connection and try again."
+                        )
+                        MusicEmptyActionButton(title: "Try Again") {
+                            AppHaptic.selection.play()
+                            viewModel.refresh()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    MusicEmptyState(
+                        title: searchText.isEmpty ? "No Artists" : "No Results",
+                        message: searchText.isEmpty
+                            ? "Artists you load from Twinskaraoke will appear here."
+                            : "Try another artist."
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 List {
                     ForEach(displayedArtists) { artist in

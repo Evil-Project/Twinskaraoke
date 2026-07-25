@@ -291,9 +291,9 @@ private struct BrowseCategoriesView: View {
         .tabBarScrollInset()
         .refreshable {
             AppHaptic.selection.play()
-            genresVM.loadIfNeeded()
-            topChartVM.loadIfNeeded()
-            publicPlaylistsVM.loadIfNeeded()
+            genresVM.refresh()
+            topChartVM.refresh()
+            publicPlaylistsVM.refresh()
         }
         .onAppear {
             genresVM.loadIfNeeded()
@@ -451,8 +451,17 @@ private struct BrowseCategoriesView: View {
         }) {
             return match.1
         }
-        let stable = genres[abs(name.hashValue) % genres.count]
-        return stable.1
+        return genres[Self.stablePaletteIndex(for: name, count: genres.count)].1
+    }
+
+    /// FNV-1a over unicode scalars: stable across launches, unlike `hashValue`.
+    private static func stablePaletteIndex(for name: String, count: Int) -> Int {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        for scalar in name.unicodeScalars {
+            hash ^= UInt64(scalar.value)
+            hash &*= 1_099_511_628_211
+        }
+        return Int(hash % UInt64(count))
     }
 }
 
@@ -880,7 +889,6 @@ private struct SearchFeaturedShortcutTile: View {
         }
         .frame(height: isCompactWidth ? 124 : 144)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
-        .amShadow(AM.Shadow.card)
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
     }
 
@@ -948,7 +956,6 @@ private struct CategoryTile: View {
         }
         .frame(height: isCompactWidth ? 92 : 102)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
-        .amShadow(AM.Shadow.card)
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
     }
 }

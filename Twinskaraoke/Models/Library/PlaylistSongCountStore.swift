@@ -15,7 +15,15 @@ final class PlaylistSongCountStore: ObservableObject {
         if playlist.isFavorites {
             return playlist.songCount
         }
-        if prefersDetailCount {
+        // Only withhold the summary count for playlists whose summary is known
+        // to be unreliable; those fetch a detail count via loadIfNeeded.
+        // Public playlists already carry an accurate server-side count — show
+        // it immediately instead of staying blank until a detail fetch or visit.
+        let needsDetail = Self.needsDetailCount(
+            for: playlist,
+            isSaved: SavedPlaylistsStore.shared.isSaved(playlist)
+        )
+        if prefersDetailCount && needsDetail {
             return nil
         }
         if playlist.songCount > 0 {
@@ -34,8 +42,11 @@ final class PlaylistSongCountStore: ObservableObject {
         guard resolvedCounts[playlist.id] == nil else { return }
         guard !loadingIDs.contains(playlist.id) else { return }
 
+        // Mark in-flight synchronously: an unstructured Task does not run its
+        // body until later, so inserting inside it would let same-runloop
+        // callers pass the guard twice and fire duplicate requests.
+        loadingIDs.insert(playlist.id)
         Task {
-            loadingIDs.insert(playlist.id)
             let count: Int?
             do {
                 count = try await KaraokeAPIClient.playlistSongCount(id: playlist.id)
@@ -52,6 +63,10 @@ final class PlaylistSongCountStore: ObservableObject {
 
     func recordResolvedCount(_ count: Int, for playlistID: String) {
         resolvedCounts[playlistID] = max(0, count)
+    }
+
+    func invalidate(playlistID: String) {
+        resolvedCounts.removeValue(forKey: playlistID)
     }
 
     static func needsDetailCount(for playlist: Playlist, isSaved: Bool) -> Bool {

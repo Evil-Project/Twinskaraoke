@@ -54,6 +54,12 @@ final class PublicPlaylistsViewModel: ObservableObject {
         fetchPage(startIndex: 0, replace: true)
     }
 
+    func refresh() {
+        hasLoaded = false
+        canLoadMore = true
+        loadIfNeeded()
+    }
+
     func loadMoreIfNeeded(current: Playlist) {
         guard let idx = playlists.firstIndex(where: { $0.id == current.id }) else { return }
         if idx >= playlists.count - 4, !isLoadingMore, canLoadMore {
@@ -153,6 +159,11 @@ final class TopChartViewModel: ObservableObject {
         }
     }
 
+    func refresh() {
+        hasLoaded = false
+        loadIfNeeded()
+    }
+
     private func applyUITestFixture() {
         songs = Self.uiTestFixtureSongs
         weeklyTrending = Array(Self.uiTestFixtureSongs.prefix(2))
@@ -227,6 +238,11 @@ final class GenresViewModel: ObservableObject {
             return
         }
         fetchPage(0, replace: true)
+    }
+
+    func refresh() {
+        hasLoaded = false
+        loadIfNeeded()
     }
 
     func loadMoreIfNeeded(current: GenreSummary) {

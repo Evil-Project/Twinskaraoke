@@ -3,13 +3,11 @@ import SwiftUI
 struct PlaylistActionsMenuItems: View {
     let playlist: Playlist
     let songs: [Song]
-    private let isSaved: Bool
+    @ObservedObject private var savedStore = SavedPlaylistsStore.shared
     @ObservedObject private var downloads = DownloadManager.shared
 
-    init(playlist: Playlist, songs: [Song]) {
-        self.playlist = playlist
-        self.songs = songs
-        isSaved = SavedPlaylistsStore.shared.isSaved(playlist)
+    private var isSaved: Bool {
+        savedStore.isSaved(playlist)
     }
 
     private var canSaveToLibrary: Bool {

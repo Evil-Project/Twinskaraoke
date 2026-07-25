@@ -678,6 +678,7 @@ class AudioManager: ObservableObject {
 
     private func setupInterruptionHandler() {
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleInterruption(note) }
             .store(in: &cancellables)
     }
