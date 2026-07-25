@@ -7,6 +7,10 @@ struct ArtistsView: View {
     @State private var searchText = ""
 
 
+    private var isQueryEmpty: Bool {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var displayedArtists: [Artist] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return viewModel.artists }
@@ -22,7 +26,7 @@ struct ArtistsView: View {
                 ArtistsSkeletonView()
                     .transition(.opacity)
             } else if displayedArtists.isEmpty {
-                if viewModel.loadFailed, searchText.isEmpty {
+                if viewModel.loadFailed, isQueryEmpty {
                     VStack(spacing: AM.Spacing.l) {
                         MusicEmptyState(
                             title: "Couldn't Load Artists",
@@ -36,8 +40,8 @@ struct ArtistsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     MusicEmptyState(
-                        title: searchText.isEmpty ? "No Artists" : "No Results",
-                        message: searchText.isEmpty
+                        title: isQueryEmpty ? "No Artists" : "No Results",
+                        message: isQueryEmpty
                             ? "Artists you load from Twinskaraoke will appear here."
                             : "Try another artist."
                     )

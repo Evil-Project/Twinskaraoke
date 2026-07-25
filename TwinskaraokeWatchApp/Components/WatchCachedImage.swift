@@ -68,6 +68,9 @@ struct WatchCachedImage<Content: View, Placeholder: View>: View {
                 image = nil
                 return
             }
+            // URL changed: drop the previous artwork, re-seeding from the
+            // memory cache exactly like the initial State value in init.
+            image = WatchImageCache.shared.cachedImage(for: url)
             let loaded = await WatchImageCache.shared.image(for: url)
             guard !Task.isCancelled else { return }
             image = loaded

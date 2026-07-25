@@ -720,9 +720,27 @@ struct SongModelTests {
     @MainActor
     func playlistGridWaitsForDetailCount() {
         let store = PlaylistSongCountStore()
-        let playlist = Playlist(
+        var personalPlaylist = Playlist(
             id: "summary-bangers",
             name: "Bangers",
+            songCount: 498,
+            mosaicMedia: nil,
+            songListDTOs: nil
+        )
+        personalPlaylist.isPersonal = true
+
+        #expect(
+            store.displayedCount(
+                for: personalPlaylist,
+                prefersDetailCount: true
+            ) == nil
+        )
+
+        // Public playlists carry an accurate server-side count: show it
+        // immediately instead of staying blank until a detail fetch.
+        let publicPlaylist = Playlist(
+            id: "summary-public",
+            name: "Public Bangers",
             songCount: 498,
             mosaicMedia: nil,
             songListDTOs: nil
@@ -730,9 +748,9 @@ struct SongModelTests {
 
         #expect(
             store.displayedCount(
-                for: playlist,
+                for: publicPlaylist,
                 prefersDetailCount: true
-            ) == nil
+            ) == 498
         )
     }
 

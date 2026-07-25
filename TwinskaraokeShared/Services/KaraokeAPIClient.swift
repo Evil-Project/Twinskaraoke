@@ -538,7 +538,9 @@ nonisolated enum KaraokeAPIClient {
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
           if httpResponse.statusCode == 401,
-            request.value(forHTTPHeaderField: "Authorization") != nil
+            let authorization = request.value(forHTTPHeaderField: "Authorization"),
+            let currentToken = CredentialStore.token,
+            authorization == "Bearer \(currentToken)"
           {
             NotificationCenter.default.post(name: .karaokeSessionExpired, object: nil)
           }

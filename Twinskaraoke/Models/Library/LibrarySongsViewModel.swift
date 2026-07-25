@@ -18,6 +18,7 @@ final class LibrarySongsViewModel: ObservableObject {
     private var canLoadMore = true
     private var page = 1
     private var requestToken = 0
+    private var isReplacing = false
     private var activeTask: URLSessionDataTask?
     private let pageSize = 40
 
@@ -64,7 +65,7 @@ final class LibrarySongsViewModel: ObservableObject {
     }
 
     func loadMoreIfNeeded(current: Song) {
-        guard canLoadMore, !isLoading, !isLoadingMore else { return }
+        guard canLoadMore, !isLoading, !isLoadingMore, !isReplacing else { return }
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let visible = displayedSongs
         guard let index = visible.firstIndex(where: { $0.id == current.id }) else { return }
@@ -73,7 +74,7 @@ final class LibrarySongsViewModel: ObservableObject {
     }
 
     func loadMore() {
-        guard canLoadMore, !isLoading, !isLoadingMore else { return }
+        guard canLoadMore, !isLoading, !isLoadingMore, !isReplacing else { return }
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         fetch(page: page + 1, replace: false)
     }
@@ -87,6 +88,7 @@ final class LibrarySongsViewModel: ObservableObject {
         let token = requestToken
         if replace {
             loadFailed = false
+            isReplacing = true
             isLoading = songs.isEmpty
         } else {
             isLoadingMore = true
@@ -137,6 +139,7 @@ final class LibrarySongsViewModel: ObservableObject {
             activeTask = nil
             isLoading = false
             isLoadingMore = false
+            if replace { isReplacing = false }
         }
 
         if let error {
@@ -156,7 +159,14 @@ final class LibrarySongsViewModel: ObservableObject {
             return
         }
 
-        let decoded = Self.decodeSongs(from: data)
+        guard let decoded = Self.decodeSongs(from: data) else {
+            DebugLogger.log("Library songs decode failed", category: .network)
+            if replace, songs.isEmpty {
+                hasLoaded = true
+                loadFailed = true
+            }
+            return
+        }
         let filtered = decoded.filter {
             !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
         }
@@ -183,12 +193,12 @@ final class LibrarySongsViewModel: ObservableObject {
         )
     }
 
-    private static func decodeSongs(from data: Data?) -> [Song] {
-        guard let data else { return [] }
+    private static func decodeSongs(from data: Data?) -> [Song]? {
+        guard let data else { return nil }
         if let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data) {
             return decoded.items
         }
-        return SongPayloadDecoder.decodeSongs(from: data) ?? []
+        return SongPayloadDecoder.decodeSongs(from: data)
     }
 
     deinit {

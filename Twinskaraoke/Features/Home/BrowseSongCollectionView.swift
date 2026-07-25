@@ -132,6 +132,7 @@ struct BrowseSongCollectionView: View {
                 pickFallbackHeroURLIfNeeded()
             }
             .onReceive(FallbackArtProvider.shared.objectWillChange) { _ in
+                fallbackHeroURL = nil
                 pickFallbackHeroURLIfNeeded()
             }
     }

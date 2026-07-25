@@ -7,6 +7,7 @@ final class PlaylistSongCountStore: ObservableObject {
 
     @Published private var resolvedCounts: [String: Int] = [:]
     private var loadingIDs: Set<String> = []
+    private var generations: [String: UInt64] = [:]
 
     func displayedCount(for playlist: Playlist, prefersDetailCount: Bool = false) -> Int? {
         if let resolved = resolvedCounts[playlist.id] {
@@ -46,6 +47,7 @@ final class PlaylistSongCountStore: ObservableObject {
         // body until later, so inserting inside it would let same-runloop
         // callers pass the guard twice and fire duplicate requests.
         loadingIDs.insert(playlist.id)
+        let generation = generations[playlist.id, default: 0]
         Task {
             let count: Int?
             do {
@@ -55,7 +57,7 @@ final class PlaylistSongCountStore: ObservableObject {
             }
 
             loadingIDs.remove(playlist.id)
-            if let count {
+            if let count, generations[playlist.id, default: 0] == generation {
                 resolvedCounts[playlist.id] = count
             }
         }
@@ -66,6 +68,9 @@ final class PlaylistSongCountStore: ObservableObject {
     }
 
     func invalidate(playlistID: String) {
+        // Bump the generation so any older in-flight count request for this
+        // playlist is fenced off and cannot overwrite fresher local state.
+        generations[playlistID, default: 0] &+= 1
         resolvedCounts.removeValue(forKey: playlistID)
     }
 

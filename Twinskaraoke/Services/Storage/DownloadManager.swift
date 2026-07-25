@@ -392,9 +392,16 @@ final class DownloadManager: ObservableObject {
     }
 
     private func hasCachedPlayableValidation(for song: Song) -> Bool {
-        guard let cached = validDownloadCache[song.id] else { return false }
+        let cachedSource = readSourceURL(for: song.id)
+        let storedSourceURL = cachedSource.flatMap(URL.init(string:))
+        let songFiles = files(for: song.id, sourceURL: storedSourceURL ?? song.audioURL)
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
-        return cached.expectedDuration == expectedDuration
+        return hasCachedValidation(
+            for: song.id,
+            audioURL: songFiles.audio,
+            source: cachedSource ?? song.audioURL?.absoluteString,
+            expectedDuration: expectedDuration
+        )
     }
 
     private func prewarmValidationCache(for songs: [Song]) {

@@ -102,14 +102,11 @@ struct PlaylistDetailView: View {
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle
         )
-        .animation(
-            reduceMotion ? nil : AppMotion.quick,
-            value: loader.isLoading
-        )
-        .animation(
-            reduceMotion ? nil : AppMotion.quick,
-            value: isSearchModeActive
-        )
+        // No container .animation(value:) for isLoading / isSearchModeActive:
+        // an implicit animation on those flips animates the whole scroll
+        // content swap, which makes SwiftUI re-measure every row of a large
+        // playlist per frame and can hang the main thread. The section-level
+        // .transition(.opacity) modifiers still animate the swap cheaply.
         .scrollIndicators(.hidden)
         .musicScreenBackground()
         .onAppear {

@@ -218,9 +218,16 @@ struct DownloadedSongsView: View {
         durationTask = Task { @MainActor in
             // File-existence checks hit the disk once per song; keep them off
             // the main actor so refresh/onAppear stays responsive.
-            let localAudioURLs = await Task.detached(priority: .utility) {
-                localAudioCandidates.filter { FileManager.default.fileExists(atPath: $0.value.path) }
-            }.value
+            let scanTask = Task.detached(priority: .utility) {
+                localAudioCandidates.filter {
+                    !Task.isCancelled && FileManager.default.fileExists(atPath: $0.value.path)
+                }
+            }
+            let localAudioURLs = await withTaskCancellationHandler {
+                await scanTask.value
+            } onCancel: {
+                scanTask.cancel()
+            }
             guard !Task.isCancelled else { return }
 
             let songsWithDurations = await UploadedSongDurationResolver.shared
