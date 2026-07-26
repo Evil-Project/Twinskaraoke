@@ -838,19 +838,23 @@ nonisolated enum KaraokeAPIClient {
     baseDelay * UInt64(1 << attempt) + UInt64.random(in: 0 ... baseDelay / 2)
   }
 
-  // Retry-After may be delta-seconds or an HTTP-date.
+  // Retry-After may be delta-seconds or an HTTP-date. The parsed value is
+  // clamped so an absurd header can't overflow the nanosecond conversion
+  // (or park the retry for hours) at the call site.
+  private static let maxRetryAfterInterval: TimeInterval = 300
+
   private static func retryAfterInterval(from response: HTTPURLResponse) -> TimeInterval? {
     guard let value = response.value(forHTTPHeaderField: "Retry-After")?
       .trimmingCharacters(in: .whitespaces)
     else { return nil }
     if let seconds = TimeInterval(value), seconds >= 0 {
-      return seconds
+      return min(seconds, maxRetryAfterInterval)
     }
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
     guard let date = formatter.date(from: value) else { return nil }
-    return max(0, date.timeIntervalSinceNow)
+    return min(max(0, date.timeIntervalSinceNow), maxRetryAfterInterval)
   }
 
   private static func shouldRetry(statusCode: Int) -> Bool {

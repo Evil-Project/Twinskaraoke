@@ -506,6 +506,14 @@ nonisolated enum AudioCacheStore {
     private static let minimumPlayableFileSize = 4096
 
     private static func playableURL(for url: URL) -> URL? {
+        // Only wav stems ever get a compressed sibling; the compressor never
+        // touches other files, so they skip the lock dance entirely. Taking
+        // the try-lock for them would falsely report a cache miss whenever a
+        // long compressIdleAssets sweep holds the lock.
+        guard shouldCompressPlayableFile(at: url) else {
+            guard fm.fileExists(atPath: url.path) else { return nil }
+            return validateAndHandOut(url)
+        }
         // The compressor deletes wav files it has compressed; only hand out an
         // existing file while holding the same lock so it cannot be deleted
         // between the existence check and the return. When the lock is busy,
@@ -513,14 +521,7 @@ nonisolated enum AudioCacheStore {
         if compressionLock.try() {
             defer { compressionLock.unlock() }
             if fm.fileExists(atPath: url.path) {
-                if !isValidAudioFile(at: url) {
-                    DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
-                    try? fm.removeItem(at: url)
-                    try? fm.removeItem(at: compressedURL(for: url))
-                    return nil
-                }
-                touch(url)
-                return url
+                return validateAndHandOut(url)
             }
         }
         let compressed = compressedURL(for: url)
@@ -545,6 +546,19 @@ nonisolated enum AudioCacheStore {
             try? fm.removeItem(at: compressed)
             return nil
         }
+    }
+
+    /// Validate, touch, and hand out an existing playable file; removes it (and
+    /// any compressed sibling) when broken.
+    private static func validateAndHandOut(_ url: URL) -> URL? {
+        if !isValidAudioFile(at: url) {
+            DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
+            try? fm.removeItem(at: url)
+            try? fm.removeItem(at: compressedURL(for: url))
+            return nil
+        }
+        touch(url)
+        return url
     }
 
     private static func isValidAudioFile(at url: URL) -> Bool {

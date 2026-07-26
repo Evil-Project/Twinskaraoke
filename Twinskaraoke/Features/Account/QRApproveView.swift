@@ -283,7 +283,7 @@ struct QRApproveView: View {
         case .untrusted:
             AppHaptic.error.play()
             withOptionalAnimation(phaseAnimation) {
-                phase = .failure("This QR code doesn't come from the official Twinskaraoke website. Only scan codes shown on twinskaraoke.com.")
+                phase = .failure("This QR code doesn't come from an official Twinskaraoke website.")
             }
         case .notSignIn:
             break
