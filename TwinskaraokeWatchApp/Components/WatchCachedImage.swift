@@ -7,6 +7,15 @@ final class WatchImageCache {
     private let memory = NSCache<NSURL, UIImage>()
     // Dedicated, bounded disk cache instead of the default shared URLCache.
     private let disk = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 64 * 1024 * 1024)
+    /// Guards `inFlight` and `failures` (NSCache/URLCache are already thread-safe).
+    private let stateLock = NSLock()
+    /// Fetches currently in flight, so a prefetcher and a visible row asking
+    /// for the same URL share one request instead of racing two.
+    private var inFlight: [NSURL: Task<UIImage?, Never>] = [:]
+    /// Short-lived negative cache for failed URLs so scrolling does not
+    /// hammer a dead host on every row re-entry.
+    private var failures: [NSURL: Date] = [:]
+    private static let negativeTTL: TimeInterval = 30
 
     private init() {
         memory.countLimit = 200
@@ -29,13 +38,48 @@ final class WatchImageCache {
             return image
         }
 
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let image = UIImage(data: data)
-        else { return nil }
+        stateLock.lock()
+        if let failedAt = failures[key], Date().timeIntervalSince(failedAt) < Self.negativeTTL {
+            stateLock.unlock()
+            return nil
+        }
+        if let task = inFlight[key] {
+            stateLock.unlock()
+            // Coalesce with the caller already fetching this URL.
+            _ = await task.value
+            return memory.object(forKey: key)
+        }
+        let task = Task<UIImage?, Never> { [memory, disk] in
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let image = UIImage(data: data)
+            else { return nil }
+            memory.setObject(image, forKey: key, cost: data.count)
+            disk.storeCachedResponse(CachedURLResponse(response: response, data: data), for: request)
+            return image
+        }
+        inFlight[key] = task
+        stateLock.unlock()
 
-        memory.setObject(image, forKey: key, cost: data.count)
-        disk.storeCachedResponse(CachedURLResponse(response: response, data: data), for: request)
+        let image = await task.value
+        stateLock.lock()
+        inFlight[key] = nil
+        if image == nil {
+            if failures.count > 256 {
+                let now = Date()
+                failures = failures.filter { now.timeIntervalSince($0.value) < Self.negativeTTL }
+            }
+            failures[key] = Date()
+        }
+        stateLock.unlock()
         return image
+    }
+
+    /// Whether `url` is inside the negative-cache window (test hook).
+    func isKnownFailure(for url: URL) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard let failedAt = failures[url as NSURL] else { return false }
+        return Date().timeIntervalSince(failedAt) < Self.negativeTTL
     }
 }
 

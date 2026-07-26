@@ -30,11 +30,18 @@ struct SongsView: View {
                     ProgressView()
                     Spacer()
                 }
+            } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
+                WatchLoadErrorState(
+                    title: "Couldn't Load Songs",
+                    message: loadError,
+                    retryAction: { viewModel.fetchSongs() }
+                )
+                .listRowBackground(Color.clear)
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
                     title: "No Songs",
-                    message: "Songs from Twinskaraoke will appear here."
+                    message: "Trending songs will appear here."
                 )
                 .listRowBackground(Color.clear)
             } else {
@@ -69,7 +76,7 @@ struct SongsView: View {
                 }
             }
         }
-        .navigationTitle("Songs")
+        .navigationTitle("Trending")
         .animation(listAnimation, value: audioManager.currentSong?.id)
         .animation(playbackAnimation, value: audioManager.isPlaying)
         .animation(listAnimation, value: viewModel.songs.count)
@@ -149,7 +156,7 @@ private struct WatchSongsLibraryHeader: View {
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Songs")
+                    Text("Trending")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
@@ -196,7 +203,7 @@ private struct WatchSongsLibraryHeader: View {
                 .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Songs")
+        .accessibilityLabel("Trending")
         .accessibilityValue(summaryText)
     }
 

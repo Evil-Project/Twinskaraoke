@@ -249,3 +249,33 @@ struct WatchEmptyState: View {
         .accessibilityHint(message)
     }
 }
+
+/// Shown when an initial load fails, so a network error is not mistaken for
+/// an empty library. Mirrors WatchEmptyState with an added retry action.
+struct WatchLoadErrorState: View {
+    let title: String
+    let message: String
+    let retryAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(.secondary)
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .multilineTextAlignment(.center)
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Retry", action: retryAction)
+                .buttonStyle(.watchPressable)
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
+    }
+}

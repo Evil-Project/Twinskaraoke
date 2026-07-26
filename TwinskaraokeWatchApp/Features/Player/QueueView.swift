@@ -102,7 +102,7 @@ struct QueueView: View {
         .onAppear {
             prefetchArtwork()
         }
-        .onChange(of: audioManager.upNextSongs.map(\.id)) {
+        .compatibleOnChange(of: audioManager.upNextSongs.map(\.id)) { _ in
             prefetchArtwork()
         }
         .onDisappear {

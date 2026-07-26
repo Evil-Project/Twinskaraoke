@@ -35,6 +35,14 @@ struct PlaylistsGridView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 24)
+            } else if let loadError = viewModel.loadError, viewModel.playlists.isEmpty {
+                WatchLoadErrorState(
+                    title: "Couldn't Load Playlists",
+                    message: loadError,
+                    retryAction: { viewModel.fetchMusic() }
+                )
+                .padding(.horizontal, 10)
+                .padding(.top, 16)
             } else if viewModel.playlists.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
@@ -80,7 +88,7 @@ struct PlaylistsGridView: View {
             viewModel.fetchMusic()
             prefetchArtwork()
         }
-        .onChange(of: viewModel.playlists.map(\.id)) {
+        .compatibleOnChange(of: viewModel.playlists.map(\.id)) { _ in
             prefetchArtwork()
         }
         .onDisappear {

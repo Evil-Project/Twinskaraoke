@@ -21,6 +21,9 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var playableSongs: [Song] = []
     @Published var isLoading = false
     @Published var searchText = ""
+    /// Set when the latest query fails so the view can offer a retry instead
+    /// of showing a misleading "no results" state.
+    @Published var loadError: String?
     private var cancellables = Set<AnyCancellable>()
     private var queryToken = 0
 
@@ -36,6 +39,7 @@ final class SearchViewModel: ObservableObject {
                     self?.queryToken += 1
                     self?.results = []
                     self?.isLoading = false
+                    self?.loadError = nil
                 }
             }
             .store(in: &cancellables)
@@ -45,6 +49,7 @@ final class SearchViewModel: ObservableObject {
         queryToken += 1
         let token = queryToken
         isLoading = true
+        loadError = nil
         Task { [weak self] in
             guard let self else { return }
             defer {
@@ -59,6 +64,7 @@ final class SearchViewModel: ObservableObject {
             } catch {
                 guard queryToken == token else { return }
                 results = []
+                loadError = "Check your connection and try again."
             }
         }
     }

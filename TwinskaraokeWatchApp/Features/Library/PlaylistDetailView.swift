@@ -37,6 +37,13 @@ struct PlaylistDetailView: View {
                     Spacer()
                 }
                 .listRowBackground(Color.clear)
+            } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
+                WatchLoadErrorState(
+                    title: "Couldn't Load Playlist",
+                    message: loadError,
+                    retryAction: { viewModel.fetchSongs() }
+                )
+                .listRowBackground(Color.clear)
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
