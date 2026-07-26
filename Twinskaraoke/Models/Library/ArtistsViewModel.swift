@@ -10,7 +10,7 @@ final class ArtistsViewModel: ObservableObject {
     private var page = 0
     private let pageSize = 25
     private var loadGeneration = 0
-    private var activeTask: URLSessionDataTask?
+    private var activeTask: Task<Void, Never>?
     func fetchInitial() {
         guard artists.isEmpty, !isLoading else { return }
         page = 0
@@ -38,36 +38,32 @@ final class ArtistsViewModel: ObservableObject {
     private func load(reset: Bool) {
         guard !isLoading else { return }
         let startIndex = page * pageSize
-        let urlString =
-            "\(StorageHost.api)/api/artists?startIndex=\(startIndex)&pageSize=\(pageSize)&search=&sortBy=Name&sortDescending=False"
-        guard let url = URL(string: urlString) else { return }
+        guard let request = try? KaraokeAPIClient.request(
+            path: "/api/artists",
+            queryItems: [
+                URLQueryItem(name: "startIndex", value: String(startIndex)),
+                URLQueryItem(name: "pageSize", value: String(pageSize)),
+                URLQueryItem(name: "search", value: ""),
+                URLQueryItem(name: "sortBy", value: "Name"),
+                URLQueryItem(name: "sortDescending", value: "False"),
+            ]
+        ) else { return }
         isLoading = true
         if reset {
             loadFailed = false
         }
         loadGeneration += 1
         let generation = loadGeneration
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            Task { @MainActor [weak self, data, response, error, reset, generation] in
-                self?.applyArtistsResponse(
-                    data,
-                    response: response,
-                    error: error,
-                    reset: reset,
-                    generation: generation
-                )
-            }
+        activeTask = Task { [weak self] in
+            // KaraokeAPIClient.data throws on non-2xx and posts
+            // .karaokeSessionExpired on 401.
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyArtistsResponse(data, reset: reset, generation: generation)
         }
-        activeTask = task
-        task.resume()
     }
 
     private func applyArtistsResponse(
         _ data: Data?,
-        response: URLResponse?,
-        error: Error?,
         reset: Bool,
         generation: Int
     ) {
@@ -77,9 +73,7 @@ final class ArtistsViewModel: ObservableObject {
             isLoading = false
         }
 
-        guard error == nil,
-              (response as? HTTPURLResponse).map({ (200 ... 299).contains($0.statusCode) }) != false,
-              let data,
+        guard let data,
               let decoded = try? JSONDecoder().decode([Artist].self, from: data)
         else {
             if reset, artists.isEmpty {
@@ -111,7 +105,7 @@ final class ArtistDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
     private var loadedID: String?
     private var loadGeneration = 0
-    private var activeTask: URLSessionDataTask?
+    private var activeTask: Task<Void, Never>?
 
     func load(id: String, fallback: Artist?, force: Bool = false) {
         if !force, loadedID == id, hasLoadedDetail { return }
@@ -131,24 +125,21 @@ final class ArtistDetailViewModel: ObservableObject {
             return
         }
         isLoading = true
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            Task { @MainActor [weak self, data, response, error, id, generation] in
-                self?.applyArtistDetailResponse(
-                    data,
-                    response: response,
-                    error: error,
-                    id: id,
-                    generation: generation
-                )
+        activeTask = Task { [weak self] in
+            do {
+                let data = try await KaraokeAPIClient.data(for: request)
+                self?.applyArtistDetailResponse(data, error: nil, id: id, generation: generation)
+            } catch let error as URLError {
+                self?.applyArtistDetailResponse(nil, error: error, id: id, generation: generation)
+            } catch {
+                // Non-2xx and other API failures map to the generic load error.
+                self?.applyArtistDetailResponse(nil, error: nil, id: id, generation: generation)
             }
         }
-        activeTask = task
-        task.resume()
     }
 
     private func applyArtistDetailResponse(
         _ data: Data?,
-        response: URLResponse?,
         error: Error?,
         id: String,
         generation: Int
@@ -163,8 +154,7 @@ final class ArtistDetailViewModel: ObservableObject {
             errorMessage = "Check your connection and try again."
             return
         }
-        guard (response as? HTTPURLResponse).map({ (200 ... 299).contains($0.statusCode) }) != false,
-              let data
+        guard let data
         else {
             errorMessage = "The artist could not be loaded right now."
             return

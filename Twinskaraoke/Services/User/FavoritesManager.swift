@@ -62,7 +62,11 @@ final class FavoritesManager: ObservableObject {
             await MainActor.run {
                 guard stateGeneration == generation else { return }
                 inFlight.remove(songID)
-                if !ok {
+                if ok {
+                    // Drop the cached favorite-song list so the next read
+                    // reflects the toggle.
+                    Task { await KaraokeAPIClient.invalidateFavoriteSongs() }
+                } else {
                     if wasFavorite {
                         favoriteIDs.insert(songID)
                     } else {

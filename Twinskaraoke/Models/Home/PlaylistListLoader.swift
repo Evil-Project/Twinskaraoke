@@ -36,7 +36,10 @@ final class PlaylistListLoader: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+        // Routed through KaraokeAPIClient.data so 401s trigger the
+        // session-expired flow and transient failures get retried.
+        Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
             DispatchQueue.main.async {
                 guard let self else { return }
                 let items = Self.decode(data: data)
@@ -54,7 +57,7 @@ final class PlaylistListLoader: ObservableObject {
                 }
                 self.isLoadingMore = false
             }
-        }.resume()
+        }
     }
 
     private static func decode(data: Data?) -> [Playlist] {

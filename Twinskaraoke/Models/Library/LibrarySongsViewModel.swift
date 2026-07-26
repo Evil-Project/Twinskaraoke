@@ -19,7 +19,7 @@ final class LibrarySongsViewModel: ObservableObject {
     private var page = 1
     private var requestToken = 0
     private var isReplacing = false
-    private var activeTask: URLSessionDataTask?
+    private var activeTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private var songsGeneration: UInt64 = 0
     private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
@@ -135,25 +135,23 @@ final class LibrarySongsViewModel: ObservableObject {
             "sortDescending": true,
         ])
 
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            Task { @MainActor [weak self, data, response, error, page, replace, token] in
-                self?.applyResponse(
-                    data,
-                    response: response,
-                    error: error,
-                    page: page,
-                    replace: replace,
-                    token: token
+        // Routed through KaraokeAPIClient.data so 401s trigger the
+        // session-expired flow and transient failures get retried.
+        activeTask = Task { [weak self] in
+            do {
+                let data = try await KaraokeAPIClient.data(
+                    for: request,
+                    retriesNonIdempotentRequest: true
                 )
+                self?.applyResponse(data, error: nil, page: page, replace: replace, token: token)
+            } catch {
+                self?.applyResponse(nil, error: error, page: page, replace: replace, token: token)
             }
         }
-        activeTask = task
-        task.resume()
     }
 
     private func applyResponse(
         _ data: Data?,
-        response: URLResponse?,
         error: Error?,
         page: Int,
         replace: Bool,
@@ -168,15 +166,8 @@ final class LibrarySongsViewModel: ObservableObject {
         }
 
         if let error {
+            guard (error as? URLError)?.code != .cancelled, !(error is CancellationError) else { return }
             DebugLogger.log("Library songs fetch failed: \(error.localizedDescription)", category: .network)
-            if replace, songs.isEmpty {
-                hasLoaded = true
-                loadFailed = true
-            }
-            return
-        }
-        if let http = response as? HTTPURLResponse, !(200 ... 299).contains(http.statusCode) {
-            DebugLogger.log("Library songs HTTP \(http.statusCode)", category: .network)
             if replace, songs.isEmpty {
                 hasLoaded = true
                 loadFailed = true

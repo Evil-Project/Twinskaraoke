@@ -138,14 +138,13 @@ final class AuthManager: NSObject, ObservableObject {
         isLoading = true
         errorMessage = nil
         do {
-            var req = URLRequest(url: URL(string: Endpoint.login)!)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try JSONSerialization.data(withJSONObject: [
-                "username": username,
-                "password": password,
-            ])
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await postJSON(
+                url: Endpoint.login,
+                body: [
+                    "username": username,
+                    "password": password,
+                ]
+            )
             guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
                 let body = String(data: data, encoding: .utf8) ?? ""
                 throw AuthError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, body)
@@ -245,9 +244,30 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
+    private static let requestTimeout: TimeInterval = 15
+
+    /// Shared POST-with-JSON-body request: bounded timeout, JSON content
+    /// type, optional bearer token. Callers inspect the HTTP status.
+    private func postJSON(
+        url: String,
+        body: [String: Any],
+        bearerToken: String? = nil
+    ) async throws -> (Data, URLResponse) {
+        var req = URLRequest(url: URL(string: url)!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = Self.requestTimeout
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let bearerToken {
+            req.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await URLSession.shared.data(for: req)
+    }
+
     private func exchangeDiscordCode(_ code: String, verifier: String) async throws -> String {
         var req = URLRequest(url: URL(string: Endpoint.discordToken)!)
         req.httpMethod = "POST"
+        req.timeoutInterval = Self.requestTimeout
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         let encoded =
             Endpoint.redirectUri
@@ -270,11 +290,10 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func exchangeForNKToken(_ discordToken: String) async throws -> String {
-        var req = URLRequest(url: URL(string: Endpoint.nkTokenExchange)!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["accessToken": discordToken])
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await postJSON(
+            url: Endpoint.nkTokenExchange,
+            body: ["accessToken": discordToken]
+        )
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
             throw AuthError.http(
                 (resp as? HTTPURLResponse)?.statusCode ?? 0,
@@ -335,6 +354,7 @@ final class AuthManager: NSObject, ObservableObject {
 
     private func fetchDiscordProfile(_ token: String) async throws -> DiscordProfile {
         var req = URLRequest(url: URL(string: Endpoint.discordUser)!)
+        req.timeoutInterval = Self.requestTimeout
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
@@ -369,13 +389,14 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     func approveQRSession(sessionId: String) async throws {
-        guard let token = authToken, isLoggedIn else { throw AuthError.notSignedIn }
-        var req = URLRequest(url: URL(string: "\(StorageHost.api)/api/auth/approve-qr")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["sessionId": sessionId])
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        // Trust the Keychain token, not the in-memory flags, so a stale
+        // AuthManager state can't approve a session with the wrong identity.
+        guard let token = CredentialStore.token else { throw AuthError.notSignedIn }
+        let (data, resp) = try await postJSON(
+            url: "\(StorageHost.api)/api/auth/approve-qr",
+            body: ["sessionId": sessionId],
+            bearerToken: token
+        )
         guard let http = resp as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             throw AuthError.http(
                 (resp as? HTTPURLResponse)?.statusCode ?? 0,

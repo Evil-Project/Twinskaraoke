@@ -15,6 +15,9 @@ actor UploadedSongMetadataCache {
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
   private var inFlight: (id: UUID, task: Task<[Song], Error>)?
+  // Bumped on invalidate() so a fetch started before signout can't re-cache
+  // the previous user's uploads when it resolves.
+  private var epoch = 0
 
   init(lifetime: TimeInterval) {
     self.lifetime = lifetime
@@ -33,6 +36,7 @@ actor UploadedSongMetadataCache {
       return cachedValue.songs.filter { requestedIDs.contains($0.id) }
     }
 
+    let startEpoch = epoch
     let request: (id: UUID, task: Task<[Song], Error>)
     if let inFlight {
       request = inFlight
@@ -45,14 +49,16 @@ actor UploadedSongMetadataCache {
 
     do {
       let songs = try await request.task.value
-      let coveredIDs = (cachedValue?.coveredIDs ?? [])
-        .union(requestedIDs)
-        .union(songs.map(\.id))
-      cachedValue = Entry(
-        songs: songs,
-        coveredIDs: coveredIDs,
-        expiresAt: now.addingTimeInterval(lifetime)
-      )
+      if epoch == startEpoch {
+        let coveredIDs = (cachedValue?.coveredIDs ?? [])
+          .union(requestedIDs)
+          .union(songs.map(\.id))
+        cachedValue = Entry(
+          songs: songs,
+          coveredIDs: coveredIDs,
+          expiresAt: now.addingTimeInterval(lifetime)
+        )
+      }
       if inFlight?.id == request.id {
         inFlight = nil
       }
@@ -63,6 +69,12 @@ actor UploadedSongMetadataCache {
       }
       throw error
     }
+  }
+
+  func invalidate() {
+    cachedValue = nil
+    inFlight = nil
+    epoch &+= 1
   }
 }
 
@@ -208,6 +220,69 @@ actor FavoriteCatalogMetadataCache {
   }
 }
 
+/// Short-TTL cache for the full hydrated favorite-song list so reopening the
+/// Favorites playlist doesn't re-fetch and re-hydrate within the lifetime.
+/// Favorite toggles (FavoritesManager) and signout must invalidate it.
+actor FavoriteSongsCache {
+  private struct Entry: Sendable {
+    let songs: [Song]
+    let expiresAt: Date
+  }
+
+  private let lifetime: TimeInterval
+  private var cachedValue: Entry?
+  private var inFlight: (id: UUID, task: Task<[Song], Error>)?
+  // Bumped on invalidate() so a fetch started before a toggle or signout
+  // can't re-cache the stale list when it resolves.
+  private var epoch = 0
+
+  init(lifetime: TimeInterval) {
+    self.lifetime = lifetime
+  }
+
+  func value(
+    at now: Date = Date(),
+    loader: @escaping @Sendable () async throws -> [Song]
+  ) async throws -> [Song] {
+    if let cachedValue, cachedValue.expiresAt > now {
+      return cachedValue.songs
+    }
+
+    let startEpoch = epoch
+    let request: (id: UUID, task: Task<[Song], Error>)
+    if let inFlight {
+      request = inFlight
+    } else {
+      let id = UUID()
+      let task = Task { try await loader() }
+      request = (id, task)
+      inFlight = request
+    }
+
+    do {
+      let songs = try await request.task.value
+      if epoch == startEpoch {
+        cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
+      }
+      if inFlight?.id == request.id {
+        inFlight = nil
+      }
+      return songs
+    } catch {
+      if inFlight?.id == request.id {
+        inFlight = nil
+      }
+      throw error
+    }
+  }
+
+  func invalidate() {
+    cachedValue = nil
+    inFlight = nil
+    epoch &+= 1
+  }
+}
+
 nonisolated enum KaraokeAPIClient {
   enum APIError: Error {
     case invalidURL
@@ -224,6 +299,7 @@ nonisolated enum KaraokeAPIClient {
   private static let uploadedSongMetadataCache = UploadedSongMetadataCache(lifetime: 60)
   private static let playlistDetailCache = PlaylistDetailCache(lifetime: 60)
   private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
+  private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
   static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
     try await trendingSongs(days: String(days), take: take)
@@ -325,13 +401,15 @@ nonisolated enum KaraokeAPIClient {
   }
 
   static func favoriteSongs() async throws -> [Song] {
-    let request = try request(
-      path: "/api/favorites/type",
-      queryItems: [URLQueryItem(name: "type", value: "0")]
-    )
-    let data = try await data(for: request)
-    let songs = SongPayloadDecoder.decodeSongs(from: data) ?? []
-    return try await hydrateFavoriteSongs(songs)
+    try await favoriteSongsCache.value {
+      let request = try request(
+        path: "/api/favorites/type",
+        queryItems: [URLQueryItem(name: "type", value: "0")]
+      )
+      let data = try await data(for: request)
+      let songs = SongPayloadDecoder.decodeSongs(from: data) ?? []
+      return try await hydrateFavoriteSongs(songs)
+    }
   }
 
   private static func hydrateFavoriteSongs(_ songs: [Song]) async throws -> [Song] {
@@ -585,11 +663,20 @@ nonisolated enum KaraokeAPIClient {
     await playlistDetailCache.invalidate(playlistID: id)
   }
 
+  /// Drop the cached favorite-song list after a favorite toggle so the next
+  /// read reflects the change (the 60s TTL bounds staleness otherwise).
+  static func invalidateFavoriteSongs() async {
+    await favoriteSongsCache.invalidate()
+  }
+
   /// Drop all account-scoped cached payloads on signout so the previous
-  /// user's playlist details and favorites can't leak into the next session.
+  /// user's playlist details, favorites, and uploads can't leak into the
+  /// next session.
   static func invalidateAccountScopedCaches() async {
     await playlistDetailCache.invalidateAll()
     await favoriteCatalogMetadataCache.invalidate()
+    await favoriteSongsCache.invalidate()
+    await uploadedSongMetadataCache.invalidate()
   }
 
   private static func decodeSongSearchResults(from data: Data) throws -> [Song] {
@@ -710,7 +797,14 @@ nonisolated enum KaraokeAPIClient {
           }
 
           if canRetry && shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
-            let delay = baseDelay * UInt64(1 << attempt)
+            let delay: UInt64
+            if httpResponse.statusCode == 429,
+              let retryAfter = retryAfterInterval(from: httpResponse)
+            {
+              delay = UInt64(retryAfter * 1_000_000_000)
+            } else {
+              delay = backoffDelay(attempt: attempt, baseDelay: baseDelay)
+            }
             try await Task.sleep(nanoseconds: delay)
             continue
           }
@@ -720,8 +814,7 @@ nonisolated enum KaraokeAPIClient {
       } catch let error as URLError {
 
         if canRetry && shouldRetry(urlError: error) && attempt < maxRetries - 1 {
-          let delay = baseDelay * UInt64(1 << attempt)
-          try await Task.sleep(nanoseconds: delay)
+          try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt, baseDelay: baseDelay))
           continue
         }
         throw error
@@ -739,22 +832,40 @@ nonisolated enum KaraokeAPIClient {
     return method == "GET" || method == "HEAD" || method == "PUT" || method == "DELETE"
   }
 
+  // Exponential backoff with up to half a base delay of random jitter so
+  // concurrent retrying clients don't stay in lockstep.
+  private static func backoffDelay(attempt: Int, baseDelay: UInt64) -> UInt64 {
+    baseDelay * UInt64(1 << attempt) + UInt64.random(in: 0 ... baseDelay / 2)
+  }
+
+  // Retry-After may be delta-seconds or an HTTP-date.
+  private static func retryAfterInterval(from response: HTTPURLResponse) -> TimeInterval? {
+    guard let value = response.value(forHTTPHeaderField: "Retry-After")?
+      .trimmingCharacters(in: .whitespaces)
+    else { return nil }
+    if let seconds = TimeInterval(value), seconds >= 0 {
+      return seconds
+    }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+    guard let date = formatter.date(from: value) else { return nil }
+    return max(0, date.timeIntervalSinceNow)
+  }
+
   private static func shouldRetry(statusCode: Int) -> Bool {
 
     return statusCode == 408 ||
            statusCode == 429 ||
-           statusCode >= 500
+           ((500..<600).contains(statusCode) && statusCode != 501)
   }
 
   private static func shouldRetry(urlError: URLError) -> Bool {
 
     switch urlError.code {
     case .timedOut,
-         .cannotFindHost,
          .cannotConnectToHost,
          .networkConnectionLost,
-         .dnsLookupFailed,
-         .notConnectedToInternet,
          .resourceUnavailable,
          .badServerResponse:
       return true

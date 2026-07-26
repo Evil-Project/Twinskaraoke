@@ -52,13 +52,14 @@ final class ArtGalleryViewModel: ObservableObject {
     func fetch(force: Bool = false) {
         guard !isLoading else { return }
         guard force || !hasLoaded else { return }
-        guard let url = URL(string: "\(StorageHost.api)/api/media/artists?loadArts=true")
-        else { return }
+        guard let request = try? KaraokeAPIClient.request(
+            path: "/api/media/artists",
+            queryItems: [URLQueryItem(name: "loadArts", value: "true")]
+        ) else { return }
         loadFailed = false
         isLoading = true
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+        Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
             let filtered = data.flatMap { data -> [GalleryArtist]? in
                 guard let decoded = try? JSONDecoder().decode([GalleryArtist].self, from: data) else {
                     return nil
@@ -67,17 +68,15 @@ final class ArtGalleryViewModel: ObservableObject {
                     .filter { ($0.arts?.count ?? 0) > 0 }
                     .sorted { ($0.arts?.count ?? 0) > ($1.arts?.count ?? 0) }
             }
-            Task { @MainActor [weak self, filtered] in
-                guard let self else { return }
-                if let filtered {
-                    artists = filtered
-                    hasLoaded = true
-                    loadFailed = false
-                } else {
-                    loadFailed = artists.isEmpty
-                }
-                isLoading = false
+            guard let self else { return }
+            if let filtered {
+                artists = filtered
+                hasLoaded = true
+                loadFailed = false
+            } else {
+                loadFailed = artists.isEmpty
             }
-        }.resume()
+            isLoading = false
+        }
     }
 }
