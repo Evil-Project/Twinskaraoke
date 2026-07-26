@@ -99,6 +99,20 @@ struct QueueView: View {
         }
         .navigationTitle("Queue")
         .animation(queueAnimation, value: audioManager.currentSong?.id)
+        .onAppear {
+            prefetchArtwork()
+        }
+        .onChange(of: audioManager.upNextSongs.map(\.id)) {
+            prefetchArtwork()
+        }
+        .onDisappear {
+            WatchArtworkPrefetcher.shared.cancel(reason: "queue")
+        }
+    }
+
+    private func prefetchArtwork() {
+        let urls = audioManager.upNextSongs.compactMap(\.rowImageURL)
+        WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "queue")
     }
 
     private var upNextSongs: [Song] {

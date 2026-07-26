@@ -140,6 +140,20 @@ struct SearchView: View {
             PlayerView()
                 .environmentObject(audioManager)
         }
+        .onAppear {
+            prefetchArtwork()
+        }
+        .onChange(of: viewModel.resolvedResults.map(\.id)) {
+            prefetchArtwork()
+        }
+        .onDisappear {
+            WatchArtworkPrefetcher.shared.cancel(reason: "search")
+        }
+    }
+
+    private func prefetchArtwork() {
+        let urls = viewModel.resolvedResults.compactMap { $0.song?.rowImageURL ?? $0.item.rowImageURL }
+        WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "search")
     }
 
     private var trimmedSearchText: String {
