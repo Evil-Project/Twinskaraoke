@@ -122,6 +122,9 @@ final class DownloadManager: ObservableObject {
     private let cacheDir: URL
     private var tasks: [String: URLSessionDownloadTask] = [:]
     private var cachePromotionTasks: [String: Task<Void, Never>] = [:]
+    // Song IDs that already used their one resume-data retry for the current
+    // download attempt; a second interruption fails normally.
+    private var resumeRetriedSongIDs: Set<String> = []
     private var queuedDownloads: [String: Song] = [:]
     private var queuedDownloadOrder: [String] = []
     private var isLoggingDownloadQueue = false
@@ -624,7 +627,7 @@ final class DownloadManager: ObservableObject {
         startNetworkDownload(song: song, remoteURL: remoteURL, token: token)
     }
 
-    private func startNetworkDownload(song: Song, remoteURL: URL, token: UUID) {
+    private func startNetworkDownload(song: Song, remoteURL: URL, token: UUID, resumeData: Data? = nil) {
         let songID = song.id
         let songFiles = files(for: songID, sourceURL: remoteURL)
         let taskRegistry = taskRegistry
@@ -632,7 +635,7 @@ final class DownloadManager: ObservableObject {
             "Download started: \(songID) (active=\(tasks.count + 1), queued=\(queuedDownloadOrder.count))",
             category: .network
         )
-        let task = downloadSession.downloadTask(with: remoteURL) { [weak self] tempURL, response, error in
+        let completion: @Sendable (URL?, URLResponse?, Error?) -> Void = { [weak self] tempURL, response, error in
             var moved = false
             let expectedBytes = response?.expectedContentLength ?? NSURLSessionTransferSizeUnknown
             let downloadedBytes = tempURL.map { Self.downloadedByteCount(at: $0) } ?? 0
@@ -681,6 +684,19 @@ final class DownloadManager: ObservableObject {
                             "Download transport failed for \(songID): domain=\(nsError.domain), code=\(nsError.code)",
                             category: .network
                         )
+                        // An interrupted transfer carries resume data; continue
+                        // from the partial bytes instead of failing the download.
+                        if let resumeData = Self.resumeData(from: error) {
+                            Task { @MainActor [weak self, song, token] in
+                                self?.retryDownload(
+                                    resumeData: resumeData,
+                                    song: song,
+                                    remoteURL: remoteURL,
+                                    token: token
+                                )
+                            }
+                            return
+                        }
                     }
                 } else {
                     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -694,8 +710,33 @@ final class DownloadManager: ObservableObject {
                 self?.finishDownload(songID: songID, song: song, moved: moved, token: token)
             }
         }
+        let task = if let resumeData {
+            downloadSession.downloadTask(withResumeData: resumeData, completionHandler: completion)
+        } else {
+            downloadSession.downloadTask(with: remoteURL, completionHandler: completion)
+        }
         tasks[songID] = task
         task.resume()
+    }
+
+    /// Resume data URLSession attaches to an interrupted download's error; nil
+    /// for cancellations (user-initiated) and failures with no usable progress.
+    nonisolated static func resumeData(from error: Error) -> Data? {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain, nsError.code != NSURLErrorCancelled else {
+            return nil
+        }
+        return nsError.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+    }
+
+    private func retryDownload(resumeData: Data, song: Song, remoteURL: URL, token: UUID) {
+        guard tasks[song.id] != nil, !resumeRetriedSongIDs.contains(song.id) else {
+            finishDownload(songID: song.id, song: song, moved: false, token: token)
+            return
+        }
+        resumeRetriedSongIDs.insert(song.id)
+        DebugLogger.log("Resuming interrupted download: \(song.id)", category: .network)
+        startNetworkDownload(song: song, remoteURL: remoteURL, token: token, resumeData: resumeData)
     }
 
     private func finishDownload(songID: String, song: Song, moved: Bool, token: UUID? = nil) {
@@ -715,6 +756,7 @@ final class DownloadManager: ObservableObject {
         }
         tasks.removeValue(forKey: songID)
         cachePromotionTasks.removeValue(forKey: songID)
+        resumeRetriedSongIDs.remove(songID)
         let wasInProgress = inProgress.contains(songID)
         guard wasInProgress else {
             startQueuedDownloadsIfPossible()
@@ -759,6 +801,7 @@ final class DownloadManager: ObservableObject {
         cachePromotionTasks.removeValue(forKey: songID)
         tasks[songID]?.cancel()
         tasks.removeValue(forKey: songID)
+        resumeRetriedSongIDs.remove(songID)
         queuedDownloads.removeValue(forKey: songID)
         queuedDownloadOrder.removeAll { $0 == songID }
     }
@@ -885,6 +928,7 @@ final class DownloadManager: ObservableObject {
         }
         tasks.removeAll()
         cachePromotionTasks.removeAll()
+        resumeRetriedSongIDs.removeAll()
         queuedDownloads.removeAll()
         queuedDownloadOrder.removeAll()
         isLoggingDownloadQueue = false

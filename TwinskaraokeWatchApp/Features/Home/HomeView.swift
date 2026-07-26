@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject var audioManager = AudioManager.shared
+    @EnvironmentObject var audioManager: AudioManager
     @StateObject var homeViewModel = HomeViewModel()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
@@ -103,7 +103,7 @@ struct HomeView: View {
                     NavigationLink(destination: SongsView().environmentObject(audioManager)) {
                         WatchBrowseLinkRow(
                             title: "Songs",
-                            subtitle: "Browse the full catalog",
+                            subtitle: "Trending songs",
                             systemImage: "music.note",
                             tint: .purple
                         )
@@ -111,7 +111,7 @@ struct HomeView: View {
                     .accessibilityIdentifier("WatchHome.songs")
                     .buttonStyle(.watchPressable)
                     .accessibilityLabel("Songs")
-                    .accessibilityHint("Opens the full song catalog.")
+                    .accessibilityHint("Opens trending songs.")
                     .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                     NavigationLink(destination: SearchView().environmentObject(audioManager)) {
                         WatchBrowseLinkRow(
@@ -129,7 +129,7 @@ struct HomeView: View {
                     NavigationLink(destination: AccountView()) {
                         WatchBrowseLinkRow(
                             title: "Account",
-                            subtitle: "Guest session and sync",
+                            subtitle: "Guest session",
                             systemImage: "person.crop.circle",
                             tint: .green
                         )
@@ -137,7 +137,7 @@ struct HomeView: View {
                     .accessibilityIdentifier("WatchHome.account")
                     .buttonStyle(.watchPressable)
                     .accessibilityLabel("Account")
-                    .accessibilityHint("Opens account and sync status.")
+                    .accessibilityHint("Opens account and session status.")
                     .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                 }
             }
@@ -153,7 +153,6 @@ struct HomeView: View {
                 homeViewModel.fetchTrending()
             }
         }
-        .environmentObject(audioManager)
     }
 
     private func play(_ song: Song, context: [Song]) {

@@ -597,7 +597,8 @@ struct SongModelTests {
 
         let hydrated = favorite.fillingMissingMetadata(from: canonical)
 
-        #expect(hydrated == favorite)
+        // Song equality is identity-based (id only), so compare explicitly.
+        #expect(hydrated.id == favorite.id)
         #expect(hydrated.cloudflareID == "favorite-artwork-id")
         #expect(hydrated.coverArt?.absolutePath == "/favorites/cover.jpg")
         #expect(hydrated.originalArtists == ["Favorite Artist"])

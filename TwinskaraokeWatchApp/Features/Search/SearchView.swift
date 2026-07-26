@@ -69,6 +69,13 @@ struct SearchView: View {
                         Spacer()
                     }
                     .listRowBackground(Color.clear)
+                } else if let loadError = viewModel.loadError, viewModel.results.isEmpty {
+                    WatchLoadErrorState(
+                        title: "Search Failed",
+                        message: loadError,
+                        retryAction: { viewModel.performSearch(query: trimmedSearchText) }
+                    )
+                    .listRowBackground(Color.clear)
                 } else if viewModel.results.isEmpty {
                     WatchEmptyState(
                         systemImage: "music.mic",
@@ -143,7 +150,7 @@ struct SearchView: View {
         .onAppear {
             prefetchArtwork()
         }
-        .onChange(of: viewModel.resolvedResults.map(\.id)) {
+        .compatibleOnChange(of: viewModel.resolvedResults.map(\.id)) { _ in
             prefetchArtwork()
         }
         .onDisappear {

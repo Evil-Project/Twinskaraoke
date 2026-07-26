@@ -31,9 +31,10 @@ enum ImageCacheConfig {
         let cfg = SDImageCache.shared.config
         cfg.maxMemoryCost = 128 * 1024 * 1024
         cfg.maxMemoryCount = 240
-        // Keep in sync with CacheManager's 2 GB image limit (and the value the
-        // Settings UI advertises) so the bookkeeping matches what is actually kept.
-        cfg.maxDiskSize = 2 * 1024 * 1024 * 1024
+        // Single source of truth: CacheManager.imageCacheLimit, so SDWebImage's
+        // own pruning matches the limit CacheManager enforces (and the value
+        // the Settings UI advertises).
+        cfg.maxDiskSize = UInt(CacheManager.imageCacheLimit)
         cfg.shouldCacheImagesInMemory = true
         cfg.shouldUseWeakMemoryCache = true
         cfg.maxDiskAge = 90 * 24 * 60 * 60

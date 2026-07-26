@@ -49,14 +49,17 @@ class AudioManager: ObservableObject {
     private var volumePersistWorkItem: DispatchWorkItem?
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
-    private static let audioCacheDir: URL = {
+    private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
 
-    private static let maxCachedFiles = 10
+    private nonisolated static let maxCachedFiles = 10
+    /// Total on-disk budget for the audio cache: once past it, the oldest
+    /// files are evicted even when the count limit has not been reached.
+    private nonisolated static let maxCacheBytes = 128 * 1024 * 1024
     private static let volumeDefaultsKey = "nk.watchVolume"
     init() {
         setupRemoteCommands()
@@ -141,6 +144,13 @@ class AudioManager: ObservableObject {
             return
         }
         isLoading = true
+        startDownload(song: song, remoteURL: remoteURL, destinationURL: localURL)
+    }
+
+    /// Single download/validate/play pipeline: every path that fetches remote
+    /// audio (fresh play, cache re-download, broken-cache recovery) goes
+    /// through here so fixes apply in one place.
+    private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
         let token = UUID()
         downloadToken = token
         downloadTask = URLSession.shared.downloadTask(with: remoteURL) {
@@ -161,7 +171,7 @@ class AudioManager: ObservableObject {
                 self.finishDownloadedPlayback(
                     tempURL: tempURL,
                     responseAccepted: responseAccepted,
-                    destinationURL: localURL,
+                    destinationURL: destinationURL,
                     song: song
                 )
             }
@@ -285,8 +295,15 @@ class AudioManager: ObservableObject {
                 updateNowPlayingInfo()
                 return true
             }
+            // Pausing during the initial download cancelled it with nothing
+            // in flight; restart the prepare/download pipeline instead of
+            // dead-ending.
+            if currentSong != nil {
+                prepareAndPlay()
+                return true
+            }
             isPlaying = false
-            if !isLoading { playbackRequested = false }
+            playbackRequested = false
             updateNowPlayingInfo()
             return false
         }
@@ -347,9 +364,16 @@ class AudioManager: ObservableObject {
 
     func playEnded() {
         if playbackMode == .singleLoop {
-            player?.seek(to: .zero) { [weak self] _ in
+            // The seek completes asynchronously; only resume if this is still
+            // the active player and the user has not paused/skipped meanwhile.
+            let loopingPlayer = player
+            loopingPlayer?.seek(to: .zero) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.player?.play()
+                    guard let self,
+                          self.player === loopingPlayer,
+                          self.playbackRequested
+                    else { return }
+                    loopingPlayer?.play()
                 }
             }
         } else {
@@ -564,32 +588,7 @@ class AudioManager: ObservableObject {
                 playbackRequested = false
                 return
             }
-            let token = UUID()
-            downloadToken = token
-            downloadTask = URLSession.shared.downloadTask(with: remoteURL) {
-                [weak self] tempURL, response, error in
-                let responseAccepted = Self.acceptsAudioResponse(response)
-                DispatchQueue.main.async {
-                    guard let self,
-                          self.downloadToken == token,
-                          self.currentSong?.id == songID
-                    else { return }
-                    self.downloadToken = nil
-                    self.downloadTask = nil
-                    self.isLoading = false
-                    guard let tempURL, error == nil else {
-                        self.playbackRequested = false
-                        return
-                    }
-                    self.finishDownloadedPlayback(
-                        tempURL: tempURL,
-                        responseAccepted: responseAccepted,
-                        destinationURL: cacheURL,
-                        song: song
-                    )
-                }
-            }
-            downloadTask?.resume()
+            startDownload(song: song, remoteURL: remoteURL, destinationURL: cacheURL)
         }
     }
 
@@ -607,47 +606,29 @@ class AudioManager: ObservableObject {
         isLoading = true
         downloadTask?.cancel()
         downloadToken = nil
-        let token = UUID()
-        downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) {
-            [weak self] tempURL, response, error in
-            let responseAccepted = Self.acceptsAudioResponse(response)
-            DispatchQueue.main.async {
-                guard let self,
-                      self.downloadToken == token,
-                      self.currentSong?.id == songID
-                else { return }
-                self.downloadToken = nil
-                self.downloadTask = nil
-                self.isLoading = false
-                guard let tempURL, error == nil else {
-                    self.playbackRequested = false
-                    return
-                }
-                self.finishDownloadedPlayback(
-                    tempURL: tempURL,
-                    responseAccepted: responseAccepted,
-                    destinationURL: playbackURL,
-                    song: song
-                )
-            }
-        }
-        downloadTask?.resume()
+        startDownload(song: song, remoteURL: remoteURL, destinationURL: playbackURL)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.recoveringFromBrokenCache.remove(songID)
         }
         return true
     }
 
-    private func evictOldCacheFiles() {
+    /// Evicts least-recently-played cache files once either the file-count
+    /// limit or the total byte budget is exceeded. The newest file (usually
+    /// the one just downloaded) is always kept.
+    func evictOldCacheFiles(
+        in directory: URL = AudioManager.audioCacheDir,
+        maxCount: Int = AudioManager.maxCachedFiles,
+        maxBytes: Int = AudioManager.maxCacheBytes
+    ) {
         let fm = FileManager.default
-        let dir = AudioManager.audioCacheDir
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
         guard
             let files = try? fm.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+                at: directory, includingPropertiesForKeys: keys
             )
         else { return }
-        guard files.count > AudioManager.maxCachedFiles else { return }
+        // Oldest first; both budgets drop the least-recently-played files.
         let sorted = files.sorted {
             let d1 =
                 (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
@@ -657,9 +638,16 @@ class AudioManager: ObservableObject {
                     ?? .distantPast
             return d1 < d2
         }
-        let toRemove = sorted.prefix(files.count - AudioManager.maxCachedFiles)
-        for file in toRemove {
-            try? fm.removeItem(at: file)
+        var keptCount = 0
+        var keptBytes = 0
+        for (index, file) in sorted.reversed().enumerated() {
+            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            if index == 0 || (keptCount < maxCount && keptBytes + size <= maxBytes) {
+                keptCount += 1
+                keptBytes += size
+            } else {
+                try? fm.removeItem(at: file)
+            }
         }
     }
 
@@ -724,6 +712,10 @@ class AudioManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleInterruption(note) }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleRouteChange(note) }
+            .store(in: &cancellables)
     }
 
     private func handleInterruption(_ note: Notification) {
@@ -748,6 +740,19 @@ class AudioManager: ObservableObject {
         }
     }
 
+    /// Mirrors the iOS route-change handling: when the current output device
+    /// goes away (headphones disconnected), pause instead of continuing on
+    /// the watch speaker.
+    private func handleRouteChange(_ note: Notification) {
+        guard let info = note.userInfo,
+              let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
+              reason == .oldDeviceUnavailable,
+              playbackRequested
+        else { return }
+        pausePlayback(cancelDownload: false)
+    }
+
     private func updateNowPlayingInfo() {
         guard let song = currentSong else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -759,7 +764,29 @@ class AudioManager: ObservableObject {
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+        if let artwork = nowPlayingArtwork(for: song) {
+            info[MPMediaItemPropertyArtwork] = artwork
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Now Playing artwork served from the image cache the player view
+    /// already warms; falls back to no artwork until the thumbnail arrives.
+    private func nowPlayingArtwork(for song: Song) -> MPMediaItemArtwork? {
+        guard let url = song.thumbnailURL else { return nil }
+        if let image = WatchImageCache.shared.cachedImage(for: url) {
+            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        }
+        // Not cached yet: fetch, then re-apply so the artwork appears without
+        // waiting for the next playback event.
+        Task { [weak self] in
+            guard let self,
+                  await WatchImageCache.shared.image(for: url) != nil,
+                  self.currentSong?.id == song.id
+            else { return }
+            self.updateNowPlayingInfo()
+        }
+        return nil
     }
 
     deinit {

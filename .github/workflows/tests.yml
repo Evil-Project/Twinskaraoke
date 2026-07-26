@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ios-tests:
+    name: iOS Tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Force Latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
+
+      - name: Run iOS Tests
+        run: |
+          # Name-only destinations imply OS:latest; a device that only exists
+          # under an older runtime then fails to match. Resolve the UDID from
+          # the newest runtime that actually has an iPhone and target that.
+          udid=$(xcrun simctl list devices available -j | ruby -rjson -e '
+            devices = JSON.parse(STDIN.read)["devices"]
+            devices.keys.sort.reverse_each do |runtime|
+              match = devices[runtime].find { |d| d["isAvailable"] && d["name"].start_with?("iPhone") }
+              if match
+                puts match["udid"]
+                break
+              end
+            end
+          ')
+          echo "Using simulator UDID: $udid"
+          xcodebuild test \
+            -project Twinskaraoke.xcodeproj \
+            -scheme "Twinskaraoke" \
+            -destination "platform=iOS Simulator,id=$udid" \
+            -only-testing:TwinskaraokeTests \
+            CODE_SIGNING_ALLOWED=NO
+
+  watch-tests:
+    name: watchOS Tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Force Latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
+
+      - name: Run watchOS Tests
+        run: |
+          # Same UDID-based resolution as the iOS job (see above).
+          udid=$(xcrun simctl list devices available -j | ruby -rjson -e '
+            devices = JSON.parse(STDIN.read)["devices"]
+            devices.keys.sort.reverse_each do |runtime|
+              match = devices[runtime].find { |d| d["isAvailable"] && d["name"].start_with?("Apple Watch") }
+              if match
+                puts match["udid"]
+                break
+              end
+            end
+          ')
+          echo "Using simulator UDID: $udid"
+          xcodebuild test \
+            -project Twinskaraoke.xcodeproj \
+            -scheme "TwinskaraokeWatchApp" \
+            -destination "platform=watchOS Simulator,id=$udid" \
+            -only-testing:'Twinskaraoke Watch AppTests' \
+            CODE_SIGNING_ALLOWED=NO

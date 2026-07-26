@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var viewModel: HomeViewModel
-    @StateObject private var recentlyPlayed = RecentlyPlayedStore.shared
+    @ObservedObject private var recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var artworkPrefetchTracker = ArtworkPrefetchTracker()

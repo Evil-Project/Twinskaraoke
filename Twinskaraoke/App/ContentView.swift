@@ -231,7 +231,7 @@ private struct PopupHostView: View {
             currentSection.content
                 .id(currentSection)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(shellTransition)
+                .transition(.opacity)
         }
         .navigationSplitViewStyle(.balanced)
         .tint(.appAccent)
@@ -263,10 +263,6 @@ private struct PopupHostView: View {
 
     private var shellAnimation: Animation? {
         reduceMotion ? nil : AppMotion.snap
-    }
-
-    private var shellTransition: AnyTransition {
-        reduceMotion ? .opacity : .opacity
     }
 
     private func configureTabBarAppearance() {

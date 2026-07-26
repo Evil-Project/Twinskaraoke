@@ -23,6 +23,7 @@ struct PlaylistDetailView: View {
     @State private var searchRevealState = PlaylistSearchRevealState()
     @State private var filterTask: Task<Void, Never>?
     @State private var favoritesRefreshTask: Task<Void, Never>?
+    @State private var prefetchedIDs: [String] = []
     @FocusState private var isSearchFocused: Bool
 
     init(playlist: Playlist) {
@@ -114,15 +115,16 @@ struct PlaylistDetailView: View {
         .onAppear {
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             RecentlyPlayedStore.shared.record(playlist)
+            prefetchedIDs = Array(displayedSongs.prefix(18)).map(\.id)
             prefetchArtwork(songs: displayedSongs)
         }
-        .task(id: Array(displayedSongs.prefix(18)).map(\.id)) {
-            do {
-                try await Task.sleep(for: .milliseconds(180))
-            } catch {
-                return
-            }
-            prefetchArtwork(songs: displayedSongs)
+        // Diffing on displayedSongs (Equatable) avoids allocating the prefix
+        // id array on every body eval; it only builds when the list changes.
+        .onChange(of: displayedSongs) { _, newSongs in
+            let ids = Array(newSongs.prefix(18)).map(\.id)
+            guard ids != prefetchedIDs else { return }
+            prefetchedIDs = ids
+            prefetchArtwork(songs: newSongs)
         }
         .onChange(of: searchText) { _, newValue in
             // Filtering a large playlist runs 3 localized comparisons per song;

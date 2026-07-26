@@ -44,18 +44,18 @@ struct AccountView: View {
                 )
             }
 
-            Section("Sync") {
+            Section("Playback") {
                 WatchAccountStatusRow(
-                    systemImage: "iphone",
+                    systemImage: "applewatch",
                     tint: .blue,
-                    title: "Sign in on iPhone",
-                    value: "Favorites and downloads sync from the main app"
+                    title: "On This Watch Only",
+                    value: "The watch app plays on its own; it does not sync with the iPhone app"
                 )
                 WatchAccountStatusRow(
                     systemImage: "checkmark.seal.fill",
                     tint: .green,
                     title: "Guest playback",
-                    value: "Ready for browsing, radio, and music"
+                    value: "Ready for browsing and music"
                 )
             }
 
@@ -110,7 +110,6 @@ private struct WatchAccountHeader: View {
 
             HStack(spacing: 6) {
                 WatchAccountPill(systemImage: "music.note", title: "Browse")
-                WatchAccountPill(systemImage: "dot.radiowaves.left.and.right", title: "Radio")
             }
         }
         .padding(10)

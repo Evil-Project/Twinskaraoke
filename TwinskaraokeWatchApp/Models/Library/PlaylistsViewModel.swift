@@ -5,10 +5,14 @@ import Foundation
 final class PlaylistsViewModel: ObservableObject {
     @Published var playlists: [Playlist] = []
     @Published var isLoading = false
+    /// Set when the initial load fails so the view can offer a retry instead
+    /// of showing a misleading empty state.
+    @Published var loadError: String?
 
     func fetchMusic() {
         guard !isLoading, playlists.isEmpty else { return }
         isLoading = true
+        loadError = nil
         Task { [weak self] in
             guard let self else { return }
             defer { isLoading = false }
@@ -20,7 +24,7 @@ final class PlaylistsViewModel: ObservableObject {
                     sortDescending: false
                 )
             } catch {
-                playlists = []
+                loadError = "Check your connection and try again."
             }
         }
     }

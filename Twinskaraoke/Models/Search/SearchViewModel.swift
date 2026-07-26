@@ -214,7 +214,7 @@ final class GenresViewModel: ObservableObject {
     private var detailRequestsInFlight = Set<String>()
     private var pendingDetailOrder: [String] = []
     private var pendingDetails: [String: GenreSummary] = [:]
-    private var detailTasks: [String: URLSessionDataTask] = [:]
+    private var detailTasks: [String: Task<Void, Never>] = [:]
     private var detailGeneration: UInt64 = 0
     private var pageGeneration: UInt64 = 0
     private var detailFailureDates: [String: Date] = [:]
@@ -304,9 +304,12 @@ final class GenresViewModel: ObservableObject {
         guard replace || (!isLoadingMore && canLoadMore) else { return }
         guard !isLoading else { return }
         guard
-            let url = URL(
-                string:
-                "\(StorageHost.api)/api/filters/genres?page=\(page)&pageSize=\(pageSize)"
+            let request = try? KaraokeAPIClient.request(
+                path: "/api/filters/genres",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "pageSize", value: String(pageSize)),
+                ]
             )
         else { return }
         if replace {
@@ -318,13 +321,10 @@ final class GenresViewModel: ObservableObject {
             isLoadingMore = true
         }
         let generation = pageGeneration
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, page, replace, generation] in
-                self?.applyGenrePageResponse(data, page: page, replace: replace, generation: generation)
-            }
-        }.resume()
+        Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyGenrePageResponse(data, page: page, replace: replace, generation: generation)
+        }
     }
 
     private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool, generation: UInt64) {
@@ -407,13 +407,11 @@ final class GenresViewModel: ObservableObject {
             startQueuedDetailRequests()
             return
         }
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, genre, generation] in
-                self?.applyGenreDetailResponse(data, for: genre, generation: generation)
-            }
+        let task = Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyGenreDetailResponse(data, for: genre, generation: generation)
         }
         detailTasks[genre.id] = task
-        task.resume()
     }
 
     private func applyGenreDetailResponse(

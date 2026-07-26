@@ -71,7 +71,7 @@ nonisolated private struct FlexibleArtistList: Decodable, Sendable {
 
 nonisolated enum SongCountText {
   static func songs(_ count: Int) -> String {
-    count == 1 ? "1 song" : "\(count) songs"
+    count == 1 ? String(localized: "1 song") : String(localized: "\(count) songs")
   }
 }
 
@@ -304,13 +304,14 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   var displayArtist: String {
     let original = originalArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
     let cover = coverArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
+    let coverBy = String(localized: "Cover by \(cover)")
     switch (original.isEmpty, cover.isEmpty) {
-    case (false, false): return "\(original) · Cover by \(cover)"
+    case (false, false): return "\(original) · \(coverBy)"
     case (false, true): return original
-    case (true, false): return "Cover by \(cover)"
+    case (true, false): return coverBy
     case (true, true):
       let apiProvidedArtists = originalArtists != nil || coverArtists != nil
-      return apiProvidedArtists ? "Unknown Artist" : ""
+      return apiProvidedArtists ? String(localized: "Unknown Artist") : ""
     }
   }
 
@@ -318,7 +319,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     if let originals = originalArtists, !originals.isEmpty {
       return originals.joined(separator: ", ")
     }
-    return coverArtists?.joined(separator: ", ") ?? "Unknown Artist"
+    return coverArtists?.joined(separator: ", ") ?? String(localized: "Unknown Artist")
   }
 
   var hasArtistMetadata: Bool {
@@ -334,6 +335,9 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     return String(format: "%d:%02d", m, s)
   }
 
+  /// Identity-based equality: two `Song` values are equal when they share an
+  /// `id`, even if their metadata (title, artists, artwork, …) differs. Do not
+  /// use `==` to detect metadata changes between two instances.
   static func == (lhs: Song, rhs: Song) -> Bool { lhs.id == rhs.id }
 
   private static func decodeString(
@@ -572,6 +576,9 @@ nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
     SongCountText.songs(songCount)
   }
 
+  /// Identity-based equality and hashing: two `Playlist` values are equal (and
+  /// hash the same) when they share an `id`, even if their metadata differs.
+  /// Do not use `==` to detect metadata changes between two instances.
   static func == (lhs: Playlist, rhs: Playlist) -> Bool { lhs.id == rhs.id }
 
   func hash(into hasher: inout Hasher) {
@@ -724,6 +731,7 @@ nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {
   let coverArtists: [String]?
   let coverArt: SearchMedia?
   let cloudflareId: String?
+  let oss: String?
 
   var imageURL: URL? {
     imageURL(variant: .card)
@@ -750,18 +758,21 @@ nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {
   }
 
   func toSong() -> Song? {
-    guard let absPath = absolutePath else { return nil }
-    return Song(
+    // Oss-only uploads have no absolutePath; mirror Song.audioURL's fallback
+    // chain and accept the item when either source yields a playable URL.
+    let song = Song(
       id: id,
       title: title,
       duration: duration,
-      absolutePath: absPath,
+      absolutePath: absolutePath,
+      cloudflareID: cloudflareId,
       coverArt: coverArt.map { SongMedia(absolutePath: $0.absolutePath) },
-      coverArtists: coverArtists,
       originalArtists: originalArtists,
-      cloudflareId: cloudflareId,
-      userUploaded: nil
+      coverArtists: coverArtists,
+      userUploaded: nil,
+      oss: oss
     )
+    return song.audioURL != nil ? song : nil
   }
 
 }
@@ -823,13 +834,14 @@ nonisolated enum SongPayloadDecoder {
     guard let data else { return nil }
     let decoder = JSONDecoder()
 
-    if let wrapped = try? decoder.decode(SongArrayContainer.self, from: data),
-      !wrapped.songs.isEmpty
-    {
+    // A payload matching a known shape but containing no songs is a valid
+    // empty list (e.g. an empty uploads library), not a decode failure;
+    // nil is reserved for payloads where no shape matched at all.
+    if let wrapped = try? decoder.decode(SongArrayContainer.self, from: data) {
       return wrapped.songs
     }
-    if let list = (try? decoder.decode(SongCollection.self, from: data))?.songs, !list.isEmpty {
-      return list
+    if let list = try? decoder.decode(SongCollection.self, from: data) {
+      return list.songs
     }
     return nil
   }

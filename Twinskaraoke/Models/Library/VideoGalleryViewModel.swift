@@ -10,7 +10,7 @@ final class VideoGalleryViewModel: ObservableObject {
     private var page = 1
     private let pageSize = 25
     private var loadGeneration = 0
-    private var activeTask: URLSessionDataTask?
+    private var activeTask: Task<Void, Never>?
 
     func fetchInitial() {
         guard videos.isEmpty, !isLoading else { return }
@@ -37,9 +37,15 @@ final class VideoGalleryViewModel: ObservableObject {
 
     private func load(reset: Bool) {
         guard !isLoading else { return }
-        let urlString =
-            "\(StorageHost.api)/api/videos?page=\(page)&pageSize=\(pageSize)&sortBy=UploadedAt&sortDescending=True"
-        guard let url = URL(string: urlString) else {
+        guard let request = try? KaraokeAPIClient.request(
+            path: "/api/videos",
+            queryItems: [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "pageSize", value: String(pageSize)),
+                URLQueryItem(name: "sortBy", value: "UploadedAt"),
+                URLQueryItem(name: "sortDescending", value: "True"),
+            ]
+        ) else {
             errorMessage = "The video gallery endpoint is unavailable."
             return
         }
@@ -47,27 +53,38 @@ final class VideoGalleryViewModel: ObservableObject {
         if reset { errorMessage = nil }
         loadGeneration += 1
         let generation = loadGeneration
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            Task { @MainActor [weak self, data, response, error, reset, generation] in
+        activeTask = Task { [weak self] in
+            do {
+                let data = try await KaraokeAPIClient.data(for: request)
+                self?.applyVideosResponse(data, failureMessage: nil, reset: reset, generation: generation)
+            } catch let error as URLError {
                 self?.applyVideosResponse(
-                    data,
-                    response: response,
-                    error: error,
+                    nil,
+                    failureMessage: error.localizedDescription,
+                    reset: reset,
+                    generation: generation
+                )
+            } catch KaraokeAPIClient.APIError.httpStatus(let statusCode) {
+                self?.applyVideosResponse(
+                    nil,
+                    failureMessage: "The server returned HTTP \(statusCode).",
+                    reset: reset,
+                    generation: generation
+                )
+            } catch {
+                self?.applyVideosResponse(
+                    nil,
+                    failureMessage: "The video response could not be read.",
                     reset: reset,
                     generation: generation
                 )
             }
         }
-        activeTask = task
-        task.resume()
     }
 
     private func applyVideosResponse(
         _ data: Data?,
-        response: URLResponse?,
-        error: Error?,
+        failureMessage: String?,
         reset: Bool,
         generation: Int
     ) {
@@ -77,12 +94,8 @@ final class VideoGalleryViewModel: ObservableObject {
             activeTask = nil
         }
 
-        if let error {
-            errorMessage = error.localizedDescription
-            return
-        }
-        if let http = response as? HTTPURLResponse, !(200 ... 299).contains(http.statusCode) {
-            errorMessage = "The server returned HTTP \(http.statusCode)."
+        if let failureMessage {
+            errorMessage = failureMessage
             return
         }
         guard let data, let decoded = try? JSONDecoder().decode(VideosResponse.self, from: data) else {
@@ -120,17 +133,20 @@ final class SimilarVideosViewModel: ObservableObject {
 
     func fetch(excluding currentID: String) {
         guard videos.isEmpty, !isLoading else { return }
-        let urlString =
-            "\(StorageHost.api)/api/videos?startIndex=0&pageSize=20&sortBy=CreatedAt&sortDescending=true"
-        guard let url = URL(string: urlString) else { return }
+        guard let request = try? KaraokeAPIClient.request(
+            path: "/api/videos",
+            queryItems: [
+                URLQueryItem(name: "startIndex", value: "0"),
+                URLQueryItem(name: "pageSize", value: "20"),
+                URLQueryItem(name: "sortBy", value: "CreatedAt"),
+                URLQueryItem(name: "sortDescending", value: "true"),
+            ]
+        ) else { return }
         isLoading = true
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, currentID] in
-                self?.applySimilarVideosResponse(data, excluding: currentID)
-            }
-        }.resume()
+        Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applySimilarVideosResponse(data, excluding: currentID)
+        }
     }
 
     private func applySimilarVideosResponse(_ data: Data?, excluding currentID: String) {

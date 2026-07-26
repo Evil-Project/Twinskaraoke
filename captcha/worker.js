@@ -1,5 +1,26 @@
 import html from "./index.html" with { type: "text" };
 
+// Origins allowed to call this worker cross-origin. The easter-egg page is
+// served from this same worker, so browser calls are same-origin anyway;
+// this list only covers the first-party app/web origins.
+const ALLOWED_ORIGINS = new Set([
+  "https://twinskaraoke.com",
+  "https://www.twinskaraoke.com",
+  "https://neurokaraoke.com",
+  "https://www.neurokaraoke.com",
+  "https://neurokaraoke.com.cn",
+  "https://www.neurokaraoke.com.cn",
+]);
+
+function corsHeaders(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    Vary: "Origin",
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -7,7 +28,7 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          ...corsHeaders(request),
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
@@ -23,6 +44,9 @@ export default {
       });
     }
 
+    // NOTE: /api/verify is intentional easter-egg theater — it randomly
+    // succeeds or fails and verifies nothing. Real authentication must
+    // never depend on this endpoint.
     if (url.pathname === "/api/verify" && request.method === "POST") {
       return handleVerify(request, env);
     }
@@ -75,7 +99,7 @@ async function handleVerify(request, env) {
 
   return Response.json(response, {
     headers: {
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(request),
       "Content-Type": "application/json",
     },
   });

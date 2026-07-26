@@ -1006,31 +1006,26 @@ struct FullScreenPlayerView: View {
         guard !coverArtSaveStatus.isSaving else { return }
         guard let url else { return }
         coverArtSaveStatus = .saving
-        URLSession.shared.dataTask(with: url) { data, _, error in
+        Task {
             #if canImport(UIKit)
-                // Decode off-main; a full-HD decode on the main queue can hitch the player UI.
-                if let data, let image = UIImage(data: data) {
-                    DispatchQueue.main.async {
-                        ImageSaver.shared.save(image: image) { result in
-                            DispatchQueue.main.async {
-                                switch result {
-                                case .success:
-                                    coverArtSaveStatus = .success
-                                case let .failure(err):
-                                    coverArtSaveStatus = .failed(err.localizedDescription)
-                                }
-                                resetCoverArtSaveStatusLater()
+                if let image = await CoverArtService.fetchImage(from: url) {
+                    ImageSaver.shared.save(image: image) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                coverArtSaveStatus = .success
+                            case let .failure(err):
+                                coverArtSaveStatus = .failed(err.localizedDescription)
                             }
+                            resetCoverArtSaveStatusLater()
                         }
                     }
                     return
                 }
             #endif
-            DispatchQueue.main.async {
-                coverArtSaveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
-                resetCoverArtSaveStatusLater()
-            }
-        }.resume()
+            coverArtSaveStatus = .failed("Couldn't save")
+            resetCoverArtSaveStatusLater()
+        }
     }
 
     private func resetCoverArtSaveStatusLater() {
@@ -1044,29 +1039,16 @@ struct FullScreenPlayerView: View {
             showCoverArt = true
             return
         }
-        let urlString = "\(StorageHost.api)/public/art/yuri/random"
-        guard let apiURL = URL(string: urlString) else {
-            showCoverArt = true
-            return
-        }
-        var request = URLRequest(url: apiURL)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            DispatchQueue.main.async {
-                guard let data,
-                      let item = try? JSONDecoder().decode(RandomYuriArtItem.self, from: data),
-                      let baseURL = URL(string: item.url)
-                else {
-                    showCoverArt = true
-                    return
-                }
-                let imageURL = ArtworkURLBuilder.variantURL(from: baseURL, variant: .hero) ?? baseURL
-                easterEggImageURL = imageURL
-                easterEggArtistName = item.artistCredit
-                easterEggArtistLink = nil
+        Task {
+            guard let art = await CoverArtService.fetchRandomYuriArt() else {
                 showCoverArt = true
+                return
             }
-        }.resume()
+            easterEggImageURL = art.imageURL
+            easterEggArtistName = art.artistCredit
+            easterEggArtistLink = nil
+            showCoverArt = true
+        }
     }
 
     private func fetchCoverArtArtist(songID: String) {
@@ -1076,26 +1058,12 @@ struct FullScreenPlayerView: View {
             coverArtArtistLink = fallback?.artistLink
             return
         }
-        guard let request = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "songs", songID]
-        ) else { return }
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            guard let data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let coverArt = json["coverArt"] as? [String: Any],
-                  let artist = coverArt["artist"] as? [String: Any]
-            else { return }
-            DispatchQueue.main.async {
-                // A slow response for a previous song must not label the current one.
-                guard audioManager.currentSong?.id == songID else { return }
-                coverArtArtistName = artist["name"] as? String
-                coverArtArtistLink = artist["socialLink"] as? String
-            }
-        }.resume()
+        Task {
+            guard let credit = await CoverArtService.fetchArtistCredit(songID: songID) else { return }
+            // A slow response for a previous song must not label the current one.
+            guard audioManager.currentSong?.id == songID else { return }
+            coverArtArtistName = credit.name
+            coverArtArtistLink = credit.link
+        }
     }
-}
-
-private struct RandomYuriArtItem: Decodable {
-    let url: String
-    let artistCredit: String?
 }

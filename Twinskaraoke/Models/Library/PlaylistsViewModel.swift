@@ -7,8 +7,29 @@ final class PlaylistsViewModel: ObservableObject {
     @Published var favoriteSongs: [Song] = []
     @Published var isLoading = false
     @Published var isLoadingFavorites = false
+    /// Server + saved + user playlists, merged and deduped once per source
+    /// change instead of on every view body evaluation.
+    @Published private(set) var combinedPlaylists: [Playlist] = []
     private var hasLoadedPlaylists = false
     private var hasLoadedFavoriteSongs = false
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        let sourceChanges = Publishers.Merge4(
+            $playlists.map { _ in },
+            $favoriteSongs.map { _ in },
+            SavedPlaylistsStore.shared.$playlists.map { _ in },
+            UserPlaylistsManager.shared.$playlists.map { _ in }
+        )
+        .merge(with: FavoritesManager.shared.$favoriteIDs.map { _ in })
+        // @Published fires from willSet; hop one main-queue pass so the
+        // recompute below reads the already-updated values.
+        .receive(on: DispatchQueue.main)
+        sourceChanges
+            .sink { [weak self] in self?.recomputeCombinedPlaylists() }
+            .store(in: &cancellables)
+        recomputeCombinedPlaylists()
+    }
 
     var favoritesPlaylist: Playlist {
         let favoriteCount = max(favoriteSongs.count, FavoritesManager.shared.favoriteIDs.count)
@@ -25,6 +46,15 @@ final class PlaylistsViewModel: ObservableObject {
         let serverIDs = Set(playlists.map(\.id))
         let localOnly = saved.filter { !serverIDs.contains($0.id) }
         return [favoritesPlaylist] + playlists + localOnly
+    }
+
+    private func recomputeCombinedPlaylists() {
+        let all = allPlaylists(saved: SavedPlaylistsStore.shared.playlists)
+        let existingIDs = Set(all.map(\.id))
+        let uniqueUser = UserPlaylistsManager.shared.playlists
+            .map { $0.asPlaylist() }
+            .filter { !existingIDs.contains($0.id) }
+        combinedPlaylists = uniqueUser + all
     }
 
     func recentlyAddedPlaylists(saved: [Playlist]) -> [Playlist] {

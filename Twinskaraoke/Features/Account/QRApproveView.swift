@@ -274,10 +274,19 @@ struct QRApproveView: View {
 
     private func handleScan(_ value: String) {
         guard case .scanning = phase else { return }
-        guard let sessionId = parseSessionId(from: value) else { return }
-        AppHaptic.success.play()
-        withOptionalAnimation(phaseAnimation) {
-            phase = .confirming(sessionId: sessionId)
+        switch parseSessionId(from: value) {
+        case let .valid(sessionId):
+            AppHaptic.success.play()
+            withOptionalAnimation(phaseAnimation) {
+                phase = .confirming(sessionId: sessionId)
+            }
+        case .untrusted:
+            AppHaptic.error.play()
+            withOptionalAnimation(phaseAnimation) {
+                phase = .failure("This QR code doesn't come from an official Twinskaraoke website.")
+            }
+        case .notSignIn:
+            break
         }
     }
 
@@ -289,21 +298,42 @@ struct QRApproveView: View {
         }
     }
 
-    private func parseSessionId(from raw: String) -> String? {
+    private enum ScannedCode {
+        case valid(sessionId: String)
+        case untrusted
+        case notSignIn
+    }
+
+    // Sign-in codes are only issued as HTTPS links on the first-party web
+    // hosts; a sessionId from anywhere else must never reach the confirming
+    // phase, where it would be approved blindly.
+    private static let trustedQRHosts = [
+        "twinskaraoke.com",
+        "neurokaraoke.com",
+        "neurokaraoke.com.cn",
+    ]
+
+    private func parseSessionId(from raw: String) -> ScannedCode {
         if let url = URL(string: raw),
            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
            let id = comps.queryItems?.first(where: { $0.name == "sessionId" })?.value,
            !id.isEmpty
         {
-            return id
+            guard url.scheme?.lowercased() == "https",
+                  let host = url.host?.lowercased(),
+                  Self.trustedQRHosts.contains(where: { host == $0 || host.hasSuffix(".\($0)") })
+            else {
+                return .untrusted
+            }
+            return .valid(sessionId: id)
         }
         if let comps = URLComponents(string: "?\(raw)"),
-           let id = comps.queryItems?.first(where: { $0.name == "sessionId" })?.value,
-           !id.isEmpty
+           comps.queryItems?.contains(where: { $0.name == "sessionId" }) == true
         {
-            return id
+            // A bare sessionId carries no first-party origin to verify.
+            return .untrusted
         }
-        return nil
+        return .notSignIn
     }
 
     private func approve(sessionId: String) async {

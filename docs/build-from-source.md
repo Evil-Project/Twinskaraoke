@@ -12,6 +12,10 @@ If you are familiar with Swift development you may skip ahead to [Step 6C](#part
 2. **An Apple ID** (A standard, free account works perfectly).
 3. **Your iPhone/iPad** and a USB cable to connect it to your Mac.
 
+::: warning Version Requirements
+The app targets **iOS 26 or later** (and **watchOS 10.6 or later** for the Apple Watch companion app), so you need a recent **Xcode 26** (or newer) to build it.
+:::
+
 ::: tip Getting Help
 If you need help during installation you can ask in the neurosama discord server (neurocord) in the *"Neuro & Evil Karaoke Web Player"* thread, but please look up the issue first.
 :::

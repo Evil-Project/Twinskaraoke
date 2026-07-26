@@ -42,9 +42,10 @@ struct VocalSeparatorRegressionTests {
         for url in [stale.vocals, stale.instruments, replacement.vocals, replacement.instruments] {
             try Data([0x52, 0x49, 0x46, 0x46]).write(to: url)
         }
-        for url in [stale.vocals, stale.instruments] {
-            try FileManager.default.removeItem(at: url)
-        }
+
+        // The production failure path cleans up only the failing job's own
+        // staging URLs, which are namespaced by that job's ID.
+        VocalSeparator.cleanupTmpFilesForTesting([stale.vocals, stale.instruments])
 
         #expect(!FileManager.default.fileExists(atPath: stale.vocals.path))
         #expect(!FileManager.default.fileExists(atPath: stale.instruments.path))

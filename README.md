@@ -153,6 +153,7 @@ If you are familiar with the "magic" that is swift dev you may skip to 6c
 1. **A Mac computer** (Xcode is only available on macOS, any mac will do).
 2. **An Apple ID** (A standard, free account works perfectly).
 3. **Your iPhone/iPad** and a USB cable to connect it to your Mac
+4. **A recent Xcode 26 (or newer)** — the app targets **iOS 26+** (and **watchOS 10.6+** for the Apple Watch companion app).
 
 ##### Getting Help
 * If you need help during installation you can ask in the neurosama discord server (neurocord) in the *"Neuro & Evil Karaoke Web Player"* Thread but please look up the issue first
@@ -213,8 +214,8 @@ Xcode needs your Apple ID to create a free temporary signing certificate so your
    ![xcode4](readmeimages/xcode4.png)
 5. In the **Team** dropdown menu, change it from the red "Unknown Name" to **Your Name (Personal Team)**.
 6. **Crucial Step:** You must change the **Bundle Identifier** to something globally unique.
-   * It currently says: `com.xiaoyuan151.Twinskaraoke`
-   * Change `xiaoyuan151` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
+   * It currently says: `org.evilneuro.Twinskaraoke`
+   * Change `evilneuro` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
    * *Press `Enter` on your keyboard after typing it.* Xcode should spin for a second and the red errors should disappear.
    ![xcodenamechange1](readmeimages/xcodenamechange.png)
 

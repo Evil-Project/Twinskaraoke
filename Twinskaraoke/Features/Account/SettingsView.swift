@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var audioManager = AudioPlayerManager.shared
-    @StateObject private var cacheManager = CacheManager.shared
+    @ObservedObject private var audioManager = AudioPlayerManager.shared
+    @ObservedObject private var cacheManager = CacheManager.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage("nk.addPlaylistSongsToLibrary") private var addPlaylistSongsToLibrary: Bool = false
     @AppStorage("nk.addFavoriteSongsToLibrary") private var addFavoriteSongsToLibrary: Bool = true

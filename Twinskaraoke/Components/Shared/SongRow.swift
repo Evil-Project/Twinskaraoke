@@ -240,7 +240,7 @@ struct MusicGridCard: View {
     }
 
     private var artistText: String {
-        song.displayArtist.isEmpty ? "Unknown Artist" : song.displayArtist
+        song.displayArtist.isEmpty ? String(localized: "Unknown Artist") : song.displayArtist
     }
 
     var body: some View {

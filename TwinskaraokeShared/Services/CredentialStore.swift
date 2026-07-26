@@ -13,17 +13,15 @@ nonisolated enum CredentialStore {
   private static let service = "org.evilneuro.Twinskaraoke.credentials"
   private static let tokenAccount = "nk.token"
   private static let legacyTokenKey = "nk.token"
-  private static let sessionCommittedKey = "nk.sessionCommitted"
 
   private static let tokenCacheLock = NSLock()
   private nonisolated(unsafe) static var cachedToken: String?
   private nonisolated(unsafe) static var tokenCacheValid = false
   private nonisolated(unsafe) static var cacheGeneration: UInt64 = 0
 
+  // Purely a Keychain wrapper: the half-committed-session marker
+  // (nk.sessionCommitted) is enforced by AuthManager.persistedSessionIsComplete.
   static var token: String? {
-    if UserDefaults.standard.object(forKey: sessionCommittedKey) as? Bool == false {
-      return nil
-    }
     tokenCacheLock.lock()
     if tokenCacheValid {
       let cached = cachedToken

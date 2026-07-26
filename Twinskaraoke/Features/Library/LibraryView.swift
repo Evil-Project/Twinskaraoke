@@ -620,7 +620,6 @@ struct PlaylistListRow: View {
 
 struct PlaylistsGridScreen: View {
     @ObservedObject var viewModel: PlaylistsViewModel
-    @ObservedObject var savedStore: SavedPlaylistsStore = .shared
     @ObservedObject private var userManager = UserPlaylistsManager.shared
     @ObservedObject private var favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
@@ -634,16 +633,8 @@ struct PlaylistsGridScreen: View {
         CredentialStore.isAuthenticated
     }
 
-    private var combinedPlaylists: [Playlist] {
-        let userConverted = userManager.playlists.map { $0.asPlaylist() }
-        let all = viewModel.allPlaylists(saved: savedStore.playlists)
-        let existingIDs = Set(all.map(\.id))
-        let uniqueUser = userConverted.filter { !existingIDs.contains($0.id) }
-        return uniqueUser + all
-    }
-
     var body: some View {
-        let all = combinedPlaylists
+        let all = viewModel.combinedPlaylists
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayed = query.isEmpty ? all : all.filter { playlist in
             playlist.name.localizedCaseInsensitiveContains(query)

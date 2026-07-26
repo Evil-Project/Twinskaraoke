@@ -71,6 +71,7 @@ private nonisolated final class TrimWriteContext: @unchecked Sendable {
 private nonisolated final class TrimCancellationState: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
+    private var didResume = false
 
     var isCancelled: Bool {
         lock.lock()
@@ -81,6 +82,35 @@ private nonisolated final class TrimCancellationState: @unchecked Sendable {
     func cancel() {
         lock.lock()
         cancelled = true
+        lock.unlock()
+    }
+
+    /// The continuation must be resumed exactly once, but the readiness
+    /// callback and the cancellation handler can race to finish it.
+    func claimContinuationResume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if didResume { return false }
+        didResume = true
+        return true
+    }
+}
+
+/// Hands the trim pipeline context from the continuation setup closure to the
+/// cancellation handler, which may run first on another thread.
+private nonisolated final class TrimWriteContextBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: TrimWriteContext?
+
+    var context: TrimWriteContext? {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+
+    func set(_ context: TrimWriteContext) {
+        lock.lock()
+        stored = context
         lock.unlock()
     }
 }
@@ -273,6 +303,10 @@ final class VocalSeparator: ObservableObject {
             }
             throw VocalSeparatorError.unavailable
         }
+        // Check before cancelling the in-progress job: a caller that is
+        // already cancelled (e.g. a superseded background analysis) must not
+        // tear down a newer foreground separation.
+        try Task.checkCancellation()
         if let old = activeTask {
             old.cancel()
             activeTask = nil
@@ -282,7 +316,6 @@ final class VocalSeparator: ObservableObject {
             lastPublishedProgressFraction = -1
             jobOwnership.cancelCurrent()
         }
-        try Task.checkCancellation()
         guard #available(iOS 18.0, *) else { throw VocalSeparatorError.unavailable }
         DebugLogger.log("Starting full separation for \(songID)", category: .separation)
         processingSongID = songID
@@ -662,6 +695,7 @@ final class VocalSeparator: ObservableObject {
         }
         writer.startSession(atSourceTime: safeStart)
         let cancellationState = TrimCancellationState()
+        let contextBox = TrimWriteContextBox()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Void, Error>) in
@@ -673,26 +707,34 @@ final class VocalSeparator: ObservableObject {
                     continuation: continuation,
                     cancellationState: cancellationState
                 )
+                contextBox.set(context)
                 context.writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
                     while context.writerInput.isReadyForMoreMediaData {
                         if context.cancellationState.isCancelled {
                             context.reader.cancelReading()
                             context.writerInput.markAsFinished()
                             context.writer.cancelWriting()
-                            context.continuation.resume(throwing: CancellationError())
+                            if context.cancellationState.claimContinuationResume() {
+                                context.continuation.resume(throwing: CancellationError())
+                            }
                             return
                         }
                         guard context.reader.status != .failed else {
                             context.writerInput.markAsFinished()
                             context.writer.cancelWriting()
-                            context.continuation.resume(
-                                throwing: context.reader.error ?? VocalSeparatorError.trimFailed
-                            )
+                            if context.cancellationState.claimContinuationResume() {
+                                context.continuation.resume(
+                                    throwing: context.reader.error ?? VocalSeparatorError.trimFailed
+                                )
+                            }
                             return
                         }
                         guard let buffer = context.readerOutput.copyNextSampleBuffer() else {
                             context.writerInput.markAsFinished()
                             context.writer.finishWriting {
+                                guard context.cancellationState.claimContinuationResume() else {
+                                    return
+                                }
                                 if context.cancellationState.isCancelled {
                                     context.continuation.resume(throwing: CancellationError())
                                 } else if context.writer.status == .completed {
@@ -709,9 +751,11 @@ final class VocalSeparator: ObservableObject {
                         if !context.writerInput.append(buffer) {
                             context.writerInput.markAsFinished()
                             context.writer.cancelWriting()
-                            context.continuation.resume(
-                                throwing: context.writer.error ?? VocalSeparatorError.trimFailed
-                            )
+                            if context.cancellationState.claimContinuationResume() {
+                                context.continuation.resume(
+                                    throwing: context.writer.error ?? VocalSeparatorError.trimFailed
+                                )
+                            }
                             return
                         }
                     }
@@ -719,6 +763,19 @@ final class VocalSeparator: ObservableObject {
             }
         } onCancel: {
             cancellationState.cancel()
+            // The writer may never signal readiness again, so the readiness
+            // callback alone cannot be relied on to resume the continuation.
+            // Hop onto the trim queue to tear the pipeline down and resume
+            // it there, serialized against any in-flight readiness pass.
+            Self.trimWriteQueue.async {
+                guard let context = contextBox.context,
+                      cancellationState.claimContinuationResume()
+                else { return }
+                context.reader.cancelReading()
+                context.writerInput.markAsFinished()
+                context.writer.cancelWriting()
+                context.continuation.resume(throwing: CancellationError())
+            }
         }
     }
 
@@ -848,6 +905,10 @@ final class VocalSeparator: ObservableObject {
                 vocalsDestination: vocalsDestination,
                 instrumentsDestination: instrumentsDestination
             )
+        }
+
+        nonisolated static func cleanupTmpFilesForTesting(_ urls: [URL]) {
+            cleanupTmpFiles(urls)
         }
     #endif
 
