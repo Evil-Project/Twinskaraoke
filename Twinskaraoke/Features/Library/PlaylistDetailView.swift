@@ -131,7 +131,11 @@ struct PlaylistDetailView: View {
             filterTask = Task {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
-                filteredSongs = PlaylistSongSearch.filter(songs, matching: newValue)
+                // Resolve the source list now, not at body-eval time, so a
+                // loader.$songs update during the debounce isn't overwritten
+                // by a filter of the stale snapshot.
+                let currentSongs = loader.songs ?? playlist.songListDTOs ?? []
+                filteredSongs = PlaylistSongSearch.filter(currentSongs, matching: newValue)
             }
         }
         .onReceive(loader.$songs) { newSongs in

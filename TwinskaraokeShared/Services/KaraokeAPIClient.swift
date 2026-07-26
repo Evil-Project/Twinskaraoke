@@ -79,6 +79,10 @@ actor PlaylistDetailCache {
   private let lifetime: TimeInterval
   private var entries: [String: Entry] = [:]
   private var inFlight: [String: (id: UUID, task: Task<Data, Error>)] = [:]
+  // Guards against stale writes: a fetch that started before an invalidation
+  // must not re-cache its pre-mutation payload when it resolves.
+  private var generations: [String: Int] = [:]
+  private var epoch = 0
 
   init(lifetime: TimeInterval) {
     self.lifetime = lifetime
@@ -89,10 +93,15 @@ actor PlaylistDetailCache {
     at now: Date = Date(),
     loader: @escaping @Sendable () async throws -> Data
   ) async throws -> Data {
-    if let entry = entries[playlistID], entry.expiresAt > now {
+    // Multi-MB payloads: purge expired entries so browsing many playlists
+    // doesn't retain every detail payload for the process lifetime.
+    entries = entries.filter { $0.value.expiresAt > now }
+    if let entry = entries[playlistID] {
       return entry.data
     }
 
+    let startGeneration = generations[playlistID, default: 0]
+    let startEpoch = epoch
     let request: (id: UUID, task: Task<Data, Error>)
     if let existing = inFlight[playlistID] {
       request = existing
@@ -105,7 +114,9 @@ actor PlaylistDetailCache {
 
     do {
       let data = try await request.task.value
-      entries[playlistID] = Entry(data: data, expiresAt: now.addingTimeInterval(lifetime))
+      if epoch == startEpoch, generations[playlistID, default: 0] == startGeneration {
+        entries[playlistID] = Entry(data: data, expiresAt: now.addingTimeInterval(lifetime))
+      }
       if inFlight[playlistID]?.id == request.id {
         inFlight[playlistID] = nil
       }
@@ -120,6 +131,14 @@ actor PlaylistDetailCache {
 
   func invalidate(playlistID: String) {
     entries[playlistID] = nil
+    generations[playlistID, default: 0] &+= 1
+    inFlight[playlistID] = nil
+  }
+
+  func invalidateAll() {
+    entries.removeAll()
+    inFlight.removeAll()
+    epoch &+= 1
   }
 }
 
@@ -135,6 +154,9 @@ actor FavoriteCatalogMetadataCache {
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
   private var inFlight: (key: String, id: UUID, task: Task<[Song], Error>)?
+  // Bumped on invalidate() so a fetch started before signout can't re-cache
+  // the previous user's favorites when it resolves.
+  private var epoch = 0
 
   init(lifetime: TimeInterval) {
     self.lifetime = lifetime
@@ -151,6 +173,7 @@ actor FavoriteCatalogMetadataCache {
       return cachedValue.songs
     }
 
+    let startEpoch = epoch
     let request: (id: UUID, task: Task<[Song], Error>)
     if let inFlight, inFlight.key == key {
       request = (inFlight.id, inFlight.task)
@@ -163,7 +186,9 @@ actor FavoriteCatalogMetadataCache {
 
     do {
       let songs = try await request.task.value
-      cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
+      if epoch == startEpoch {
+        cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
+      }
       if inFlight?.id == request.id {
         inFlight = nil
       }
@@ -174,6 +199,12 @@ actor FavoriteCatalogMetadataCache {
       }
       throw error
     }
+  }
+
+  func invalidate() {
+    cachedValue = nil
+    inFlight = nil
+    epoch &+= 1
   }
 }
 
@@ -552,6 +583,13 @@ nonisolated enum KaraokeAPIClient {
   /// without explicit invalidation.
   static func invalidatePlaylistDetail(id: String) async {
     await playlistDetailCache.invalidate(playlistID: id)
+  }
+
+  /// Drop all account-scoped cached payloads on signout so the previous
+  /// user's playlist details and favorites can't leak into the next session.
+  static func invalidateAccountScopedCaches() async {
+    await playlistDetailCache.invalidateAll()
+    await favoriteCatalogMetadataCache.invalidate()
   }
 
   private static func decodeSongSearchResults(from data: Data) throws -> [Song] {

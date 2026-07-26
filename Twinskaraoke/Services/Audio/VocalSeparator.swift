@@ -618,6 +618,16 @@ final class VocalSeparator: ObservableObject {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
                 while writerInput.isReadyForMoreMediaData {
+                    // Bail promptly on job cancellation instead of writing the
+                    // remaining LPCM; cancelReading() alone can't interrupt an
+                    // in-flight copyNextSampleBuffer().
+                    if Task.isCancelled {
+                        reader.cancelReading()
+                        writerInput.markAsFinished()
+                        writer.cancelWriting()
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
                     guard reader.status != .failed else {
                         writerInput.markAsFinished()
                         writer.cancelWriting()

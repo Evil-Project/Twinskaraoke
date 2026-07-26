@@ -413,6 +413,7 @@ final class AuthManager: NSObject, ObservableObject {
     private func clearAccountScopedState() {
         FavoritesManager.shared.clear()
         UserPlaylistsManager.shared.clear()
+        Task { await KaraokeAPIClient.invalidateAccountScopedCaches() }
     }
 
     private func makeVerifier() -> String {

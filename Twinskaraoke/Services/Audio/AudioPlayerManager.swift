@@ -2380,6 +2380,10 @@ class AudioPlayerManager: ObservableObject {
                     let t = Float(counter.step) / Float(max(1, steps))
                     self.streamPlayer?.volume = max(0, 1.0 - t)
                     if t >= 1.0 {
+                        // Bump the generation so a tick already enqueued on
+                        // main before the cancel can't re-enter and force the
+                        // volume back to 0 after the fade completed.
+                        self.streamFadeGeneration &+= 1
                         self.streamFadeTimer = nil
                         timer.cancel()
                     }
@@ -3405,6 +3409,10 @@ class AudioPlayerManager: ObservableObject {
                     let t = Float(counter.step) / Float(max(1, steps))
                     self.avEngine.setMasterVolume(1.0 - t)
                     if t >= 1.0 {
+                        // Bump the generation so a tick already enqueued on
+                        // main before the cancel can't re-enter and tear down
+                        // the transition state for the song play() just started.
+                        self.quickCutGeneration &+= 1
                         self.quickCutTimer = nil
                         DebugLogger.log("Quick cut transition complete -> play(\(song.id))", category: .playback)
                         self.activeCrossfadePlan = nil
