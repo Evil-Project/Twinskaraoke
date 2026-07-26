@@ -635,7 +635,7 @@ final class DownloadManager: ObservableObject {
             "Download started: \(songID) (active=\(tasks.count + 1), queued=\(queuedDownloadOrder.count))",
             category: .network
         )
-        let completion: (URL?, URLResponse?, Error?) -> Void = { [weak self] tempURL, response, error in
+        let completion: @Sendable (URL?, URLResponse?, Error?) -> Void = { [weak self] tempURL, response, error in
             var moved = false
             let expectedBytes = response?.expectedContentLength ?? NSURLSessionTransferSizeUnknown
             let downloadedBytes = tempURL.map { Self.downloadedByteCount(at: $0) } ?? 0
@@ -687,7 +687,7 @@ final class DownloadManager: ObservableObject {
                         // An interrupted transfer carries resume data; continue
                         // from the partial bytes instead of failing the download.
                         if let resumeData = Self.resumeData(from: error) {
-                            Task { @MainActor [weak self, song, songID, token] in
+                            Task { @MainActor [weak self, song, token] in
                                 self?.retryDownload(
                                     resumeData: resumeData,
                                     song: song,

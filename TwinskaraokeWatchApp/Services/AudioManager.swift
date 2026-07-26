@@ -49,17 +49,17 @@ class AudioManager: ObservableObject {
     private var volumePersistWorkItem: DispatchWorkItem?
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
-    private static let audioCacheDir: URL = {
+    private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
 
-    private static let maxCachedFiles = 10
+    private nonisolated static let maxCachedFiles = 10
     /// Total on-disk budget for the audio cache: once past it, the oldest
     /// files are evicted even when the count limit has not been reached.
-    private static let maxCacheBytes = 128 * 1024 * 1024
+    private nonisolated static let maxCacheBytes = 128 * 1024 * 1024
     private static let volumeDefaultsKey = "nk.watchVolume"
     init() {
         setupRemoteCommands()
