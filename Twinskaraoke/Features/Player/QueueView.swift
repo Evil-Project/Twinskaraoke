@@ -296,6 +296,7 @@ struct QueueView: View {
               let idx = audioManager.queue.firstIndex(where: { $0.id == current.id }),
               idx + 1 < audioManager.queue.count
         else {
+            ArtworkPrefetcher.shared.cancel(reason: "queue up next")
             upNextSongs = []
             return
         }

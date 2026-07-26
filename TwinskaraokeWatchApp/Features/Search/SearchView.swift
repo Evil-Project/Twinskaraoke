@@ -140,6 +140,9 @@ struct SearchView: View {
             PlayerView()
                 .environmentObject(audioManager)
         }
+        .onAppear {
+            prefetchArtwork()
+        }
         .onChange(of: viewModel.resolvedResults.map(\.id)) {
             prefetchArtwork()
         }
