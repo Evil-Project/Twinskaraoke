@@ -21,6 +21,10 @@ All credits go to the website creator "Soul". This is a companion app for the we
 Sideloading is still available as an optional install method, but with a free Apple ID you must re-sign the app every 7 days. TestFlight is the recommended way to install.
 :::
 
+::: info REQUIREMENTS
+Twinskaraoke requires **iOS 26 or later** (and **watchOS 10.6 or later** for the Apple Watch companion app). Building from source requires a recent **Xcode 26** or newer.
+:::
+
 ## Features
 
 *   **Native Experience:** Better than the website!

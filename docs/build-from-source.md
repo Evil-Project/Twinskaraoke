@@ -12,6 +12,10 @@ If you are familiar with Swift development you may skip ahead to [Step 6C](#part
 2. **An Apple ID** (A standard, free account works perfectly).
 3. **Your iPhone/iPad** and a USB cable to connect it to your Mac.
 
+::: warning Version Requirements
+The app targets **iOS 26 or later** (and **watchOS 10.6 or later** for the Apple Watch companion app), so you need a recent **Xcode 26** (or newer) to build it.
+:::
+
 ::: tip Getting Help
 If you need help during installation you can ask in the neurosama discord server (neurocord) in the *"Neuro & Evil Karaoke Web Player"* thread, but please look up the issue first.
 :::
@@ -72,8 +76,8 @@ Xcode needs your Apple ID to create a free temporary signing certificate so your
 4. Check the box that says **Automatically manage signing**. (Should already be checked.)
 5. In the **Team** dropdown menu, change it from the red "Unknown Name" to **Your Name (Personal Team)**.
 6. **Crucial Step:** You must change the **Bundle Identifier** to something globally unique.
-   - It currently says: `org.evilneuro.Twinskaraoke`
-   - Change `evilneuro` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
+   - It currently says: `com.Mag1cByt3s.Twinskaraoke`
+   - Change `Mag1cByt3s` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
    - Press `Enter` on your keyboard after typing it. Xcode should spin for a second and the red errors should disappear.
 
 ### Part B: Update the Watch App Target

@@ -72,8 +72,8 @@ Xcode 需要你的 Apple ID 来创建免费临时签名证书，这样你的 iPh
 4. 勾选 **Automatically manage signing**（通常已默认勾选）。
 5. 在 **Team** 下拉菜单中，将红色「Unknown Name」改为 **你的名字 (Personal Team)**。
 6. **关键步骤：** 你必须将 **Bundle Identifier** 改为全局唯一的名称。
-   - 当前显示为：`org.evilneuro.Twinskaraoke`
-   - 将 `evilneuro` 替换为你的名字（不含空格）。例如：`com.zhangsan.Twinskaraoke`
+   - 当前显示为：`com.Mag1cByt3s.Twinskaraoke`
+   - 将 `Mag1cByt3s` 替换为你的名字（不含空格）。例如：`com.zhangsan.Twinskaraoke`
    - 输入后按 `Enter`。Xcode 短暂加载后，红色报错应消失。
 
 ### B 部分：更新 Watch 应用目标
