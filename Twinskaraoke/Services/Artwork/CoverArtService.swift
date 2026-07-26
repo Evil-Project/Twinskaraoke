@@ -56,7 +56,7 @@ nonisolated enum CoverArtService {
     }
 }
 
-private struct RandomYuriArtItem: Decodable {
+private nonisolated struct RandomYuriArtItem: Decodable {
     let url: String
     let artistCredit: String?
 }
