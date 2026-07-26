@@ -6,8 +6,8 @@ private struct DownloadedSongRowIdentity: Hashable {
 }
 
 struct DownloadedSongsView: View {
-    @StateObject private var downloads = DownloadManager.shared
-    @StateObject private var recentlyPlayed = RecentlyPlayedStore.shared
+    @ObservedObject private var downloads = DownloadManager.shared
+    @ObservedObject private var recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var localSongs: [Song] = []
     @State private var refreshTask: Task<Void, Never>?
@@ -128,7 +128,7 @@ struct DownloadedSongsView: View {
     }
 
     private var downloadedSubtitle: String {
-        let count = localSongs.count == 1 ? "1 song" : "\(localSongs.count) songs"
+        let count = SongCountText.songs(localSongs.count)
         guard let duration = downloadedDurationText else { return count }
         return "\(count) • \(duration)"
     }

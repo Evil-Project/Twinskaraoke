@@ -35,6 +35,9 @@ struct MarqueeText: View {
                             Text(text).font(font).foregroundStyle(color).fixedSize()
                         }
                     }
+                    // The invisible base Text below is the accessibility
+                    // element; these overlay copies are visual-only.
+                    .accessibilityHidden(true)
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
                     .clipped()
                     .mask(
@@ -69,6 +72,8 @@ struct MarqueeText: View {
                     .font(font)
                     .fixedSize()
                     .hidden()
+                    // Measuring copy only; keep it out of the accessibility tree.
+                    .accessibilityHidden(true)
                     .background(
                         GeometryReader { t in
                             Color.clear.preference(key: TextSizeKey.self, value: t.size)

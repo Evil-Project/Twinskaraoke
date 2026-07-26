@@ -1253,6 +1253,16 @@
         }
       }
     },
+    "1 song" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 song"
+          }
+        }
+      }
+    },
     "1 song queued" : {
       "localizations" : {
         "de" : {
@@ -4720,6 +4730,16 @@
     },
     "Coverage" : {
 
+    },
+    "Cover by %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cover by %@"
+          }
+        }
+      }
     },
     "Create playlist" : {
       "localizations" : {
@@ -21179,6 +21199,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登入時不可用"
+          }
+        }
+      }
+    },
+    "Unknown Artist" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown Artist"
           }
         }
       }

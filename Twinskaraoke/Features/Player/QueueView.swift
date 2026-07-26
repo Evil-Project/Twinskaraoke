@@ -5,7 +5,7 @@ struct QueueView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCurrentAddToPlaylist = false
-    @State private var upNextSongs: [Song] = []
+    @State private var upNextEntries: [UpNextEntry] = []
 
     private var queueToggleAnimation: Animation? {
         reduceMotion ? nil : AppMotion.quick
@@ -32,7 +32,7 @@ struct QueueView: View {
     }
 
     var body: some View {
-        let upNext = upNextSongs
+        let upNext = upNextEntries
         ZStack {
             LinearGradient(
                 colors: [.appSheetGradientTop, .appSheetGradientBottom],
@@ -93,16 +93,16 @@ struct QueueView: View {
                     .transition(emptyQueueTransition)
                 } else {
                     List {
-                        ForEach(Array(upNext.enumerated()), id: \.offset) { index, song in
+                        ForEach(upNext) { entry in
                             QueueRow(
-                                song: song,
-                                position: index + 1,
-                                isPlayingNext: index == 0,
+                                song: entry.song,
+                                position: entry.position,
+                                isPlayingNext: entry.position == 1,
                                 onPlay: {
-                                    playQueuedSong(song)
+                                    playQueuedSong(entry.song)
                                 },
                                 onRemove: {
-                                    removeUpNextSong(at: index)
+                                    removeUpNextSong(at: entry.position - 1)
                                 }
                             )
                             .listRowBackground(Color.clear)
@@ -110,7 +110,7 @@ struct QueueView: View {
                             .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 14))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    removeUpNextSong(at: index)
+                                    removeUpNextSong(at: entry.position - 1)
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
@@ -118,7 +118,7 @@ struct QueueView: View {
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 Button {
                                     AppHaptic.selection.play()
-                                    audioManager.playNext(song: song)
+                                    audioManager.playNext(song: entry.song)
                                 } label: {
                                     Label("Play Next", systemImage: "text.insert")
                                 }
@@ -297,17 +297,31 @@ struct QueueView: View {
               idx + 1 < audioManager.queue.count
         else {
             ArtworkPrefetcher.shared.cancel(reason: "queue up next")
-            upNextSongs = []
+            upNextEntries = []
             return
         }
-        upNextSongs = Array(audioManager.queue[(idx + 1)...])
+        let songs = Array(audioManager.queue[(idx + 1)...])
+        // Fresh stable identities per refresh: rows are reorderable, and
+        // positional ForEach identity mis-tracks rows across a move.
+        upNextEntries = songs.enumerated().map { offset, song in
+            UpNextEntry(song: song, position: offset + 1)
+        }
         // Rows otherwise rely on the source list having warmed these; the queue
         // can outlive that list, so warm the row variants here too.
         ArtworkPrefetcher.shared.prefetchSongs(
-            Array(upNextSongs.prefix(12)),
+            Array(songs.prefix(12)),
             limit: 12,
             reason: "queue up next",
             variant: .row
         )
     }
+}
+
+/// Stable identity for a queue row: positional `ForEach` identity mis-tracks
+/// rows while the user reorders the up-next list.
+private struct UpNextEntry: Identifiable {
+    let id = UUID()
+    let song: Song
+    /// 1-based display position; also the index into the up-next slice + 1.
+    let position: Int
 }

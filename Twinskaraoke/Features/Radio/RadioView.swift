@@ -38,7 +38,7 @@ private final class RadioPlaybackState: ObservableObject {
 }
 
 struct RadioView: View {
-    @StateObject private var radio = RadioController.shared
+    @ObservedObject private var radio = RadioController.shared
     @ObservedObject private var playback = RadioPlaybackState.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
