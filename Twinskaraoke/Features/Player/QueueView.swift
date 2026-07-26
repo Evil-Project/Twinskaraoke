@@ -152,6 +152,9 @@ struct QueueView: View {
         .onAppear { refreshUpNextSongs() }
         .onChange(of: audioManager.queue) { _, _ in refreshUpNextSongs() }
         .onChange(of: audioManager.currentSong?.id) { _, _ in refreshUpNextSongs() }
+        .onDisappear {
+            ArtworkPrefetcher.shared.cancel(reason: "queue up next")
+        }
     }
 
     private func header(upNextCount: Int) -> some View {
@@ -297,5 +300,13 @@ struct QueueView: View {
             return
         }
         upNextSongs = Array(audioManager.queue[(idx + 1)...])
+        // Rows otherwise rely on the source list having warmed these; the queue
+        // can outlive that list, so warm the row variants here too.
+        ArtworkPrefetcher.shared.prefetchSongs(
+            Array(upNextSongs.prefix(12)),
+            limit: 12,
+            reason: "queue up next",
+            variant: .row
+        )
     }
 }

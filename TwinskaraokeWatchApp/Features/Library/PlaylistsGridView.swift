@@ -78,7 +78,19 @@ struct PlaylistsGridView: View {
         .animation(loadingAnimation, value: viewModel.isLoading)
         .onAppear {
             viewModel.fetchMusic()
+            prefetchArtwork()
         }
+        .onChange(of: viewModel.playlists.map(\.id)) {
+            prefetchArtwork()
+        }
+        .onDisappear {
+            WatchArtworkPrefetcher.shared.cancel(reason: "playlistsGrid")
+        }
+    }
+
+    private func prefetchArtwork() {
+        let urls = viewModel.playlists.compactMap { $0.thumbnailURL ?? $0.imageURL }
+        WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "playlistsGrid")
     }
 
     private var totalSongCount: Int {

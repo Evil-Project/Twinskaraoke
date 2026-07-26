@@ -5,10 +5,12 @@ final class WatchImageCache {
     static let shared = WatchImageCache()
 
     private let memory = NSCache<NSURL, UIImage>()
-    private let disk = URLCache.shared
+    // Dedicated, bounded disk cache instead of the default shared URLCache.
+    private let disk = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 64 * 1024 * 1024)
 
     private init() {
         memory.countLimit = 200
+        memory.totalCostLimit = 32 * 1024 * 1024
     }
 
     /// Synchronous memory-cache lookup used to seed views without a placeholder frame.
@@ -23,7 +25,7 @@ final class WatchImageCache {
         let request = URLRequest(url: url)
         if let stored = disk.cachedResponse(for: request),
            let image = UIImage(data: stored.data) {
-            memory.setObject(image, forKey: key)
+            memory.setObject(image, forKey: key, cost: stored.data.count)
             return image
         }
 
@@ -31,7 +33,7 @@ final class WatchImageCache {
               let image = UIImage(data: data)
         else { return nil }
 
-        memory.setObject(image, forKey: key)
+        memory.setObject(image, forKey: key, cost: data.count)
         disk.storeCachedResponse(CachedURLResponse(response: response, data: data), for: request)
         return image
     }

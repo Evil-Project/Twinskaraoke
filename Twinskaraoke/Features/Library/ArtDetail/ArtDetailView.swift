@@ -105,25 +105,32 @@ struct ArtDetailView: View {
         saveGeneration &+= 1
         let generation = saveGeneration
         #if canImport(UIKit)
-            // RemoteArtworkImage already downloaded this exact URL into the
-            // shared SDWebImage memory cache; reuse it instead of re-downloading.
-            if let cached = SDImageCache.shared.imageFromMemoryCache(forKey: url.absoluteString) {
-                saveLoadedImage(cached, generation: generation)
-                return
-            }
-        #endif
-        URLSession.shared.dataTask(with: url) { data, _, error in
-            DispatchQueue.main.async {
-                #if canImport(UIKit)
-                    if let data, let image = UIImage(data: data) {
+            // Reuse whatever SDWebImage already has (memory first, then disk)
+            // and only hit the network on a real miss — the full-res variant
+            // is usually cached from the detail view's own load.
+            SDWebImageManager.shared.loadImage(
+                with: url,
+                options: [],
+                context: ImageCacheConfig.memoryAndDiskCacheContext,
+                progress: nil
+            ) { image, _, error, _, _, _ in
+                DispatchQueue.main.async {
+                    if let image {
                         saveLoadedImage(image, generation: generation)
                         return
                     }
-                #endif
-                saveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
-                resetSaveStatusLater(generation: generation)
+                    saveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
+                    resetSaveStatusLater(generation: generation)
+                }
             }
-        }.resume()
+        #else
+            URLSession.shared.dataTask(with: url) { data, _, error in
+                DispatchQueue.main.async {
+                    saveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
+                    resetSaveStatusLater(generation: generation)
+                }
+            }.resume()
+        #endif
     }
 
     #if canImport(UIKit)

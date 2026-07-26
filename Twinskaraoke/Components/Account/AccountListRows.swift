@@ -76,11 +76,10 @@ struct ProfileHeaderRow: View {
     @ViewBuilder
     private var avatarView: some View {
         if let urlStr = avatarUrl, let url = URL(string: urlStr), !urlStr.isEmpty {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(img): img.resizable().scaledToFill()
-                default: initials
-                }
+            WebImage(url: url, options: ImageCacheConfig.defaultOptions) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                initials
             }
         } else {
             initials

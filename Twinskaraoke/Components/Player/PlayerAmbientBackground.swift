@@ -73,9 +73,13 @@ struct PlayerAmbientBackground: View {
     @ViewBuilder
     private var blurredArtworkLayer: some View {
         if let artworkURL {
+            // The backdrop is blurred beyond recognition anyway, so load the
+            // 32px server-blurred variant instead of the full card image:
+            // far less decode, memory and GPU work for the same visual result.
+            let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
             GeometryReader { geo in
                 WebImage(
-                    url: artworkURL,
+                    url: backdropURL,
                     options: ImageCacheConfig.defaultOptions,
                     context: ImageCacheConfig.visibleImageContext
                 ) { image in
@@ -160,7 +164,8 @@ struct PlayerAmbientBackground: View {
 
     private var runtimeBlurRadius: CGFloat {
         guard let artworkURL else { return 0 }
-        let options = Self.imageTransformOptions(from: artworkURL)
+        let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
+        let options = Self.imageTransformOptions(from: backdropURL)
         let sourceBlur = options["blur"].flatMap(Double.init) ?? 0
         let sourceWidth = options["width"].flatMap(Double.init)
         return sourceBlur > 0 || sourceWidth.map { $0 <= 32 } == true ? 12 : 42

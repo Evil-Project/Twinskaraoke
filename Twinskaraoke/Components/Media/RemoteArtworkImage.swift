@@ -44,9 +44,12 @@ struct RemoteArtworkImage: View {
                 MusicArtworkPlaceholder(cornerRadius: cornerRadius)
             }
             if let lowResURL, !fullLoaded, shouldPreferProgressiveArtwork {
+                // The blur variant is a ~1 KB WebP; loading it (not just from
+                // cache) gives every image a progressive preview, even when the
+                // prefetcher hasn't warmed this URL yet.
                 WebImage(
                     url: lowResURL,
-                    options: [.fromCacheOnly],
+                    options: ImageCacheConfig.defaultOptions,
                     context: context
                 ) { image in
                     image
