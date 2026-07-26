@@ -49,19 +49,39 @@ private nonisolated final class TrimWriteContext: @unchecked Sendable {
     let writer: AVAssetWriter
     let writerInput: AVAssetWriterInput
     let continuation: CheckedContinuation<Void, Error>
+    let cancellationState: TrimCancellationState
 
     init(
         reader: AVAssetReader,
         readerOutput: AVAssetReaderTrackOutput,
         writer: AVAssetWriter,
         writerInput: AVAssetWriterInput,
-        continuation: CheckedContinuation<Void, Error>
+        continuation: CheckedContinuation<Void, Error>,
+        cancellationState: TrimCancellationState
     ) {
         self.reader = reader
         self.readerOutput = readerOutput
         self.writer = writer
         self.writerInput = writerInput
         self.continuation = continuation
+        self.cancellationState = cancellationState
+    }
+}
+
+private nonisolated final class TrimCancellationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
     }
 }
 
@@ -592,6 +612,7 @@ final class VocalSeparator: ObservableObject {
     private static func trim(source: URL, from startSeconds: TimeInterval, to output: URL)
         async throws
     {
+        try Task.checkCancellation()
         try? FileManager.default.removeItem(at: output)
         let asset = AVURLAsset(url: source)
         let duration = try await asset.load(.duration)
@@ -640,57 +661,64 @@ final class VocalSeparator: ObservableObject {
             throw reader.error ?? writer.error ?? VocalSeparatorError.trimFailed
         }
         writer.startSession(atSourceTime: safeStart)
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let context = TrimWriteContext(
-                reader: reader,
-                readerOutput: readerOutput,
-                writer: writer,
-                writerInput: writerInput,
-                continuation: continuation
-            )
-            context.writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
-                while context.writerInput.isReadyForMoreMediaData {
-                    // Bail promptly on job cancellation instead of writing the
-                    // remaining LPCM; cancelReading() alone can't interrupt an
-                    // in-flight copyNextSampleBuffer().
-                    if Task.isCancelled {
-                        context.reader.cancelReading()
-                        context.writerInput.markAsFinished()
-                        context.writer.cancelWriting()
-                        context.continuation.resume(throwing: CancellationError())
-                        return
-                    }
-                    guard context.reader.status != .failed else {
-                        context.writerInput.markAsFinished()
-                        context.writer.cancelWriting()
-                        context.continuation.resume(
-                            throwing: context.reader.error ?? VocalSeparatorError.trimFailed
-                        )
-                        return
-                    }
-                    guard let buffer = context.readerOutput.copyNextSampleBuffer() else {
-                        context.writerInput.markAsFinished()
-                        context.writer.finishWriting {
-                            if context.writer.status == .completed {
-                                context.continuation.resume()
-                            } else {
-                                context.continuation.resume(
-                                    throwing: context.writer.error ?? VocalSeparatorError.trimFailed
-                                )
-                            }
+        let cancellationState = TrimCancellationState()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                let context = TrimWriteContext(
+                    reader: reader,
+                    readerOutput: readerOutput,
+                    writer: writer,
+                    writerInput: writerInput,
+                    continuation: continuation,
+                    cancellationState: cancellationState
+                )
+                context.writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
+                    while context.writerInput.isReadyForMoreMediaData {
+                        if context.cancellationState.isCancelled {
+                            context.reader.cancelReading()
+                            context.writerInput.markAsFinished()
+                            context.writer.cancelWriting()
+                            context.continuation.resume(throwing: CancellationError())
+                            return
                         }
-                        return
-                    }
-                    if !context.writerInput.append(buffer) {
-                        context.writerInput.markAsFinished()
-                        context.writer.cancelWriting()
-                        context.continuation.resume(
-                            throwing: context.writer.error ?? VocalSeparatorError.trimFailed
-                        )
-                        return
+                        guard context.reader.status != .failed else {
+                            context.writerInput.markAsFinished()
+                            context.writer.cancelWriting()
+                            context.continuation.resume(
+                                throwing: context.reader.error ?? VocalSeparatorError.trimFailed
+                            )
+                            return
+                        }
+                        guard let buffer = context.readerOutput.copyNextSampleBuffer() else {
+                            context.writerInput.markAsFinished()
+                            context.writer.finishWriting {
+                                if context.cancellationState.isCancelled {
+                                    context.continuation.resume(throwing: CancellationError())
+                                } else if context.writer.status == .completed {
+                                    context.continuation.resume()
+                                } else {
+                                    context.continuation.resume(
+                                        throwing: context.writer.error
+                                            ?? VocalSeparatorError.trimFailed
+                                    )
+                                }
+                            }
+                            return
+                        }
+                        if !context.writerInput.append(buffer) {
+                            context.writerInput.markAsFinished()
+                            context.writer.cancelWriting()
+                            context.continuation.resume(
+                                throwing: context.writer.error ?? VocalSeparatorError.trimFailed
+                            )
+                            return
+                        }
                     }
                 }
             }
+        } onCancel: {
+            cancellationState.cancel()
         }
     }
 
