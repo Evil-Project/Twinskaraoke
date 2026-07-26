@@ -214,8 +214,8 @@ Xcode needs your Apple ID to create a free temporary signing certificate so your
    ![xcode4](readmeimages/xcode4.png)
 5. In the **Team** dropdown menu, change it from the red "Unknown Name" to **Your Name (Personal Team)**.
 6. **Crucial Step:** You must change the **Bundle Identifier** to something globally unique.
-   * It currently says: `com.Mag1cByt3s.Twinskaraoke`
-   * Change `Mag1cByt3s` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
+   * It currently says: `org.evilneuro.Twinskaraoke`
+   * Change `evilneuro` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
    * *Press `Enter` on your keyboard after typing it.* Xcode should spin for a second and the red errors should disappear.
    ![xcodenamechange1](readmeimages/xcodenamechange.png)
 
