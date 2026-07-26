@@ -76,8 +76,8 @@ Xcode needs your Apple ID to create a free temporary signing certificate so your
 4. Check the box that says **Automatically manage signing**. (Should already be checked.)
 5. In the **Team** dropdown menu, change it from the red "Unknown Name" to **Your Name (Personal Team)**.
 6. **Crucial Step:** You must change the **Bundle Identifier** to something globally unique.
-   - It currently says: `com.Mag1cByt3s.Twinskaraoke`
-   - Change `Mag1cByt3s` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
+   - It currently says: `org.evilneuro.Twinskaraoke`
+   - Change `evilneuro` to your own name without spaces. For example: `com.johnsmith.Twinskaraoke`
    - Press `Enter` on your keyboard after typing it. Xcode should spin for a second and the red errors should disappear.
 
 ### Part B: Update the Watch App Target
