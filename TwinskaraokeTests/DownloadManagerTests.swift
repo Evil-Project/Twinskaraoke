@@ -323,4 +323,112 @@ struct DownloadManagerTests {
         #expect(FileManager.default.fileExists(atPath: current.path))
         #expect(FileManager.default.fileExists(atPath: download.path))
     }
+
+    @Test("Interrupted downloads expose resume data, cancellations do not")
+    func resumeDataExtraction() {
+        let resumeData = Data([1, 2, 3])
+        let interrupted = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorNetworkConnectionLost,
+            userInfo: [NSURLSessionDownloadTaskResumeData: resumeData]
+        )
+        #expect(DownloadManager.resumeData(from: interrupted) == resumeData)
+
+        let cancelled = NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+        #expect(DownloadManager.resumeData(from: cancelled) == nil)
+
+        let noProgress = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+        #expect(DownloadManager.resumeData(from: noProgress) == nil)
+    }
+
+    @Test("Lyrics cache save after clear writes into the recreated directory")
+    func lyricsSaveSurvivesClear() {
+        let songID = "lyrics-clear-\(UUID().uuidString)"
+        let lines = [LyricLine(time: 1, text: "hello", translatedText: nil)]
+
+        LyricsCacheStore.save(lines, songID: songID, variant: .original)
+        LyricsCacheStore.clear()
+        LyricsCacheStore.save(lines, songID: songID, variant: .original)
+
+        #expect(LyricsCacheStore.load(songID: songID, variant: .original)?.map(\.text) == ["hello"])
+    }
+
+    @Test("Lyrics cache clear serializes with concurrent saves")
+    func lyricsClearSerializesWithSaves() {
+        let songID = "lyrics-race-\(UUID().uuidString)"
+        let lines = [LyricLine(time: 1, text: "hello", translatedText: nil)]
+
+        DispatchQueue.concurrentPerform(iterations: 20) { iteration in
+            if iteration.isMultiple(of: 2) {
+                LyricsCacheStore.clear()
+            } else {
+                LyricsCacheStore.save(lines, songID: songID, variant: .original)
+            }
+        }
+
+        LyricsCacheStore.save(lines, songID: songID, variant: .original)
+        #expect(LyricsCacheStore.load(songID: songID, variant: .original)?.first?.text == "hello")
+    }
+
+    @Test("Decompressing a compressed stem keeps the compressed copy current")
+    func decompressTouchesCompressedCopy() throws {
+        let songID = "decompress-touch-\(UUID().uuidString)"
+        defer { AudioCacheStore.removeSongCache(for: songID) }
+
+        let directory = AudioCacheStore.ensureSongDirectory(for: songID)
+        let wavData = Self.makeSilentWAVData(seconds: 2)
+        for name in ["vocals.wav", "instruments.wav"] {
+            try wavData.write(to: directory.appendingPathComponent(name))
+        }
+        AudioCacheStore.compressAssets(for: songID)
+
+        let compressedVocals = AudioCacheStore.compressedURL(
+            for: directory.appendingPathComponent("vocals.wav")
+        )
+        #expect(FileManager.default.fileExists(atPath: compressedVocals.path))
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("vocals.wav").path))
+
+        let stems = try #require(AudioCacheStore.playableStems(for: songID, startOffset: 0))
+
+        // The producing .nkz must not look older than the freshly decompressed
+        // wav, or the idle compressor would recompress the pair after every play.
+        let wavDate = try #require(
+            stems.vocals.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
+        )
+        let compressedDate = try #require(
+            compressedVocals.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate
+        )
+        #expect(compressedDate >= wavDate)
+    }
+
+    /// Minimal PCM WAV (mono, 16-bit silence) large enough to pass the cache's
+    /// size floor and readable by AVAudioFile for duration checks.
+    private static func makeSilentWAVData(seconds: Int, sampleRate: Int = 8000) -> Data {
+        let dataSize = seconds * sampleRate * 2
+        var data = Data()
+        data.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // "RIFF"
+        data.appendLittleEndian(UInt32(36 + dataSize))
+        data.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // "WAVE"
+        data.append(contentsOf: [0x66, 0x6D, 0x74, 0x20]) // "fmt "
+        data.appendLittleEndian(UInt32(16)) // PCM chunk size
+        data.appendLittleEndian(UInt16(1)) // PCM format
+        data.appendLittleEndian(UInt16(1)) // mono
+        data.appendLittleEndian(UInt32(sampleRate))
+        data.appendLittleEndian(UInt32(sampleRate * 2)) // byte rate
+        data.appendLittleEndian(UInt16(2)) // block align
+        data.appendLittleEndian(UInt16(16)) // bits per sample
+        data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
+        data.appendLittleEndian(UInt32(dataSize))
+        data.append(Data(count: dataSize))
+        return data
+    }
+}
+
+private extension Data {
+    mutating func appendLittleEndian(_ value: some FixedWidthInteger) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { append(contentsOf: $0) }
+    }
 }

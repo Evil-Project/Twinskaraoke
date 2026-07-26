@@ -244,6 +244,9 @@ nonisolated enum AudioCacheStore {
 
     static func removeSongCache(for songID: String) {
         try? fm.removeItem(at: files(for: songID).directory)
+        // The music tree changed outside an enforcement pass; tell the
+        // debounced enforcer so it re-measures instead of reusing a stale size.
+        CacheManager.noteMusicCacheCommit()
     }
 
     static func removeStemCache(for songID: String) {
@@ -397,6 +400,10 @@ nonisolated enum AudioCacheStore {
     }
 
     static func compressAssets(for songID: String) {
+        // Match compressIdleAssets: the wav deletes below must hold the same
+        // lock playableURL try-locks before handing a file out.
+        guard compressionLock.try() else { return }
+        defer { compressionLock.unlock() }
         compressAssets(in: files(for: songID).directory)
     }
 
@@ -426,6 +433,7 @@ nonisolated enum AudioCacheStore {
 
         let now = Date()
         try? fm.setAttributes([.modificationDate: now], ofItemAtPath: standardizedURL.path)
+        carryProbeMemosAcrossTouch(of: standardizedURL)
 
         let songDirectory = standardizedURL.hasDirectoryPath
             ? standardizedURL
@@ -435,6 +443,22 @@ nonisolated enum AudioCacheStore {
         {
             try? fm.setAttributes([.modificationDate: now], ofItemAtPath: songDirectory.path)
         }
+    }
+
+    /// The probe memos are keyed by modification date, which touch() just
+    /// bumped; carry any memoized results forward to the new date so the next
+    /// lookup doesn't re-open the file with AVAudioFile.
+    private static func carryProbeMemosAcrossTouch(of url: URL) {
+        let path = url.path
+        let modified = modificationDate(of: url)
+        probeMemoLock.lock()
+        if let entry = durationMemo[path] {
+            durationMemo[path] = (modified: modified, duration: entry.duration)
+        }
+        if let entry = validityMemo[path] {
+            validityMemo[path] = (modified: modified, valid: entry.valid)
+        }
+        probeMemoLock.unlock()
     }
 
     private static func validateMainSource(for songID: String, expectedRemoteURL: URL?) -> Bool {
@@ -482,15 +506,22 @@ nonisolated enum AudioCacheStore {
     private static let minimumPlayableFileSize = 4096
 
     private static func playableURL(for url: URL) -> URL? {
-        if fm.fileExists(atPath: url.path) {
-            if !isValidAudioFile(at: url) {
-                DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
-                try? fm.removeItem(at: url)
-                try? fm.removeItem(at: compressedURL(for: url))
-                return nil
+        // The compressor deletes wav files it has compressed; only hand out an
+        // existing file while holding the same lock so it cannot be deleted
+        // between the existence check and the return. When the lock is busy,
+        // fall through to the compressed copy instead of racing the delete.
+        if compressionLock.try() {
+            defer { compressionLock.unlock() }
+            if fm.fileExists(atPath: url.path) {
+                if !isValidAudioFile(at: url) {
+                    DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
+                    try? fm.removeItem(at: url)
+                    try? fm.removeItem(at: compressedURL(for: url))
+                    return nil
+                }
+                touch(url)
+                return url
             }
-            touch(url)
-            return url
         }
         let compressed = compressedURL(for: url)
         guard fm.fileExists(atPath: compressed.path) else { return nil }
@@ -503,6 +534,10 @@ nonisolated enum AudioCacheStore {
                 return nil
             }
             touch(url)
+            // The fresh decompression bumped the wav's modification date;
+            // touch the producing .nkz too so compressedIsCurrent doesn't see
+            // it as stale and recompress the pair after every play.
+            touch(compressed)
             return url
         } catch {
             DebugLogger.log("Audio cache decompress failed for \(url.lastPathComponent): \(error)", category: .cache)
@@ -606,6 +641,8 @@ nonisolated enum AudioCacheStore {
             && instrumentsDuration + expectedTolerance >= expectedStemDuration
     }
 
+    // Callers must hold compressionLock (see compressIdleAssets /
+    // compressAssets(for:)); the wav deletes here race playableURL otherwise.
     private static func compressPlayableFileIfNeeded(at url: URL) {
         guard shouldCompressPlayableFile(at: url), !Task.isCancelled else { return }
         guard fm.fileExists(atPath: url.path) else { return }

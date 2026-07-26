@@ -8,7 +8,8 @@ final class CacheManager: ObservableObject {
 
     nonisolated static let imageCacheLimit: UInt64 = 2 * 1024 * 1024 * 1024
     nonisolated static let musicCacheLimit: UInt64 = 4 * 1024 * 1024 * 1024
-    nonisolated static let lyricsCacheLimit: UInt64 = 2 * 1024 * 1024 * 1024
+    // Lyrics are KB-sized JSON documents; a few MB already holds thousands.
+    nonisolated static let lyricsCacheLimit: UInt64 = 64 * 1024 * 1024
     nonisolated static let maxCacheAge: TimeInterval = 6 * 30 * 24 * 3600
 
     @Published private(set) var imageCacheSize: UInt64 = 0
@@ -42,7 +43,7 @@ final class CacheManager: ObservableObject {
             DebugLogger.log("Pruned \(pruned) expired cache entries", category: .cache)
             // The enforcement passes already measure each tree; reuse their
             // sizes instead of walking every cache directory a second time.
-            let image = enforceImageCacheLimitsBlocking(imageDirectory: directories.image)
+            let image = enforceImageCacheLimitsBlocking()
             let music = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
             let lyrics = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
             publishSizes((image: image, music: music, lyrics: lyrics))
@@ -50,15 +51,15 @@ final class CacheManager: ObservableObject {
         }
     }
 
-    private static var directories: (image: URL, music: URL, lyrics: URL) {
-        (imageCacheDirectory, AudioPlayerManager.audioCacheDir, LyricsCacheStore.cacheDirectory)
+    private static var directories: (music: URL, lyrics: URL) {
+        (AudioPlayerManager.audioCacheDir, LyricsCacheStore.cacheDirectory)
     }
 
     func enforceAllLimits() {
         let directories = Self.directories
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
-            let image = enforceImageCacheLimitsBlocking(imageDirectory: directories.image)
+            let image = enforceImageCacheLimitsBlocking()
             let music = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
             let lyrics = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
             publishSizes((image: image, music: music, lyrics: lyrics))
@@ -80,10 +81,9 @@ final class CacheManager: ObservableObject {
     }
 
     func enforceImageCacheLimits() {
-        let imageDirectory = Self.imageCacheDirectory
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
-            let size = enforceImageCacheLimitsBlocking(imageDirectory: imageDirectory)
+            let size = enforceImageCacheLimitsBlocking()
             publishSizes((image: size, music: nil, lyrics: nil))
         }
     }
@@ -165,6 +165,12 @@ final class CacheManager: ObservableObject {
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
             removeAllFiles(in: dir)
+            // The tree changed outside an enforcement pass; drop the debounced
+            // size/run markers so the next pass re-measures instead of
+            // republishing the pre-clear size.
+            lastMusicEnforcementAt = nil
+            lastMusicCacheSize = nil
+            Self.lastMusicCommitAt = Date()
             let remainingSize = measuredDirectorySize(at: dir)
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -187,6 +193,10 @@ final class CacheManager: ObservableObject {
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
             LyricsCacheStore.clear()
+            // Same as clearMusicCache: drop the debounced markers so the next
+            // enforcement pass re-measures instead of republishing stale sizes.
+            lastLyricsEnforcementAt = nil
+            lastLyricsCacheSize = nil
             let remainingSize = measuredDirectorySize(at: LyricsCacheStore.cacheDirectory)
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -217,11 +227,6 @@ final class CacheManager: ObservableObject {
         formatBytes(lyricsCacheSize)
     }
 
-    private static var imageCacheDirectory: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("com.hackemist.SDImageCache/default", isDirectory: true)
-    }
-
     // MARK: - Maintenance cores (run on maintenanceQueue, never the main actor)
 
     private nonisolated func publishSizes(
@@ -242,7 +247,7 @@ final class CacheManager: ObservableObject {
     }
 
     private nonisolated func computeSizesBlocking(
-        directories: (image: URL, music: URL, lyrics: URL)
+        directories: (music: URL, lyrics: URL)
     ) -> (image: UInt64?, music: UInt64?, lyrics: UInt64?) {
         (
             image: UInt64(SDImageCache.shared.totalDiskSize()),
@@ -251,7 +256,7 @@ final class CacheManager: ObservableObject {
         )
     }
 
-    private nonisolated func enforceImageCacheLimitsBlocking(imageDirectory: URL) -> UInt64 {
+    private nonisolated func enforceImageCacheLimitsBlocking() -> UInt64 {
         let sdCache = SDImageCache.shared
         let diskSize = UInt64(sdCache.totalDiskSize())
 
@@ -260,10 +265,16 @@ final class CacheManager: ObservableObject {
                 "Image cache \(formatBytes(diskSize)) exceeds limit \(formatBytes(Self.imageCacheLimit)), clearing oldest",
                 category: .cache
             )
-            sdCache.deleteOldFiles(completionBlock: nil)
+            // SDWebImage prunes its own tree against the maxDiskSize set in
+            // ImageCacheConfig; a manual eviction walk here would race that
+            // I/O. Wait for the pass so the published size is post-evict.
+            let evictionDone = DispatchSemaphore(value: 0)
+            sdCache.deleteOldFiles {
+                evictionDone.signal()
+            }
+            evictionDone.wait()
         }
 
-        _ = evictOldestFiles(in: imageDirectory, limit: Self.imageCacheLimit, label: "image")
         return UInt64(sdCache.totalDiskSize())
     }
 
@@ -308,7 +319,7 @@ final class CacheManager: ObservableObject {
     }
 
     private nonisolated func pruneExpiredEntriesBlocking(
-        directories: (image: URL, music: URL, lyrics: URL)
+        directories: (music: URL, lyrics: URL)
     ) -> Int {
         let cutoff = Date().addingTimeInterval(-Self.maxCacheAge)
         DebugLogger.log("Pruning cache entries older than \(cutoff)", category: .cache)
@@ -404,6 +415,9 @@ final class CacheManager: ObservableObject {
         for folder in songDirectoriesOrderedByDate(in: directory) {
             guard currentSize > limit else { break }
             if protectedIDs.contains(folder.lastPathComponent) { continue }
+            // A streaming download commits into the song folder through a
+            // .partial file; never evict a folder mid-commit.
+            if containsPartialFiles(folder) { continue }
             let size = directorySize(at: folder)
             do {
                 try fm.removeItem(at: folder)
@@ -416,7 +430,17 @@ final class CacheManager: ObservableObject {
                 )
             }
         }
+        if currentSize > limit {
+            // The running total was subtracted from a stale pre-pass size and
+            // skips protected/partial folders; re-stat what actually remains.
+            currentSize = directorySize(at: directory)
+        }
         return currentSize
+    }
+
+    private nonisolated func containsPartialFiles(_ directory: URL) -> Bool {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else { return false }
+        return entries.contains { $0.contains(".partial.") }
     }
 
     private nonisolated func pruneOldFiles(in directory: URL, olderThan cutoff: Date) -> Int {

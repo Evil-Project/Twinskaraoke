@@ -7,6 +7,10 @@ enum LyricsCacheVariant: String {
 
 enum LyricsCacheStore {
     private static let fm = FileManager.default
+    // Entries are KB-sized JSON documents, so I/O stays synchronous on the
+    // caller; the lock serializes clear() with loads/saves so a save can't
+    // write into a directory clear() just deleted.
+    private static let ioLock = NSLock()
 
     nonisolated static let cacheDirectory: URL = {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -17,13 +21,14 @@ enum LyricsCacheStore {
 
     static func load(songID: String, variant: LyricsCacheVariant) -> [LyricLine]? {
         let url = cacheFileURL(for: songID, variant: variant)
-        guard let data = try? Data(contentsOf: url),
-              let cached = try? JSONDecoder().decode(CachedLyricsDocument.self, from: data)
-        else {
-            return nil
-        }
-        if cached.lines.isEmpty {
+        ioLock.lock()
+        let cached = (try? Data(contentsOf: url))
+            .flatMap { try? JSONDecoder().decode(CachedLyricsDocument.self, from: $0) }
+        if let cached, cached.lines.isEmpty {
             try? fm.removeItem(at: url)
+        }
+        ioLock.unlock()
+        guard let cached, !cached.lines.isEmpty else {
             return nil
         }
         CacheManager.shared.recordAccess(for: url)
@@ -33,7 +38,9 @@ enum LyricsCacheStore {
     static func save(_ lyrics: [LyricLine], songID: String, variant: LyricsCacheVariant) {
         let url = cacheFileURL(for: songID, variant: variant)
         guard !lyrics.isEmpty else {
+            ioLock.lock()
             try? fm.removeItem(at: url)
+            ioLock.unlock()
             return
         }
         let document = CachedLyricsDocument(
@@ -41,14 +48,18 @@ enum LyricsCacheStore {
             lines: lyrics.map(CachedLyricLine.init)
         )
         guard let data = try? JSONEncoder().encode(document) else { return }
+        ioLock.lock()
         try? data.write(to: url, options: .atomic)
+        ioLock.unlock()
         CacheManager.shared.recordAccess(for: url)
         CacheManager.shared.enforceLyricsCacheLimits()
     }
 
     static func clear() {
+        ioLock.lock()
         try? fm.removeItem(at: cacheDirectory)
         try? fm.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        ioLock.unlock()
     }
 
     private static func cacheFileURL(for songID: String, variant: LyricsCacheVariant) -> URL {
