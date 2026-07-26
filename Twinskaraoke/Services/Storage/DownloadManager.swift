@@ -219,7 +219,7 @@ final class DownloadManager: ObservableObject {
         )
     }
 
-    func localURL(for songID: String) -> URL {
+    nonisolated func localURL(for songID: String) -> URL {
         files(for: songID).audio
     }
 
@@ -1085,6 +1085,29 @@ final class DownloadManager: ObservableObject {
     }
 
     func playableURL(for song: Song) -> URL? {
+        let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+        // Fast path: a prewarmed validation entry needs only the
+        // modification-date stat in hasCachedValidation, skipping the
+        // migration and source-file reads below.
+        if let cached = validDownloadCache[song.id],
+           cached.source == song.audioURL?.absoluteString,
+           let source = cached.source,
+           let sourceURL = URL(string: source)
+        {
+            let audio = Self.downloadedAudioURL(
+                in: downloadDirectory(for: song.id),
+                sourceURL: sourceURL
+            )
+            if hasCachedValidation(
+                for: song.id,
+                audioURL: audio,
+                source: source,
+                expectedDuration: expectedDuration
+            ) {
+                downloadedMetadata[song.id] = song
+                return audio
+            }
+        }
         migrateLegacyDownloadIfNeeded(for: song.id)
         migrateMislabeledDownloadedAudioIfNeeded(
             for: song.id,
@@ -1100,7 +1123,6 @@ final class DownloadManager: ObservableObject {
             discardBrokenDownloadAndScheduleRepair(for: song, reason: "audio file is missing")
             return nil
         }
-        let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         let expectedSource = song.audioURL?.absoluteString
         if let cachedSource, let expectedSource, cachedSource != expectedSource {
             DebugLogger.log(

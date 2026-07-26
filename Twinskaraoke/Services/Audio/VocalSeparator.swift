@@ -76,6 +76,10 @@ final class VocalSeparator: ObservableObject {
 
     @Published private(set) var processingSongID: String?
     @Published private(set) var progressFraction: Float = 0
+    // progressFraction fans out to the whole player tree; only publish >=1%
+    // deltas (plus exact completion) so minute-long analyses don't publish
+    // hundreds of times.
+    private var lastPublishedProgressFraction: Float = -1
     @Published private(set) var isBackgroundAnalyzing: Bool = false
 
     let isAvailable: Bool
@@ -230,6 +234,7 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            lastPublishedProgressFraction = -1
             jobOwnership.cancelCurrent()
         }
         try Task.checkCancellation()
@@ -296,6 +301,7 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            lastPublishedProgressFraction = -1
             jobOwnership.cancelCurrent()
         }
 
@@ -325,7 +331,7 @@ final class VocalSeparator: ObservableObject {
             let trimmedTemp: URL?
             if normalizedStart > 1.0 {
                 let tmp = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("\(jobID.uuidString).rt.trim.m4a")
+                    .appendingPathComponent("\(jobID.uuidString).rt.trim.wav")
                 try await Self.trim(source: sourceURL, from: normalizedStart, to: tmp)
                 trimmedSource = tmp
                 trimmedTemp = tmp
@@ -430,6 +436,7 @@ final class VocalSeparator: ObservableObject {
             activeTaskKind = nil
             processingSongID = nil
             progressFraction = 0
+            lastPublishedProgressFraction = -1
             jobOwnership.cancelCurrent()
             old?.cancel()
         }
@@ -446,6 +453,7 @@ final class VocalSeparator: ObservableObject {
         activeTaskKind = nil
         processingSongID = nil
         progressFraction = 0
+        lastPublishedProgressFraction = -1
         jobOwnership.cancelCurrent()
         old?.cancel()
         if hadWork {
@@ -510,15 +518,19 @@ final class VocalSeparator: ObservableObject {
     }
 
     private func updateProgress(jobID: UUID, songID: String, fraction: Float) {
-        if jobOwnership.owns(jobID), processingSongID == songID {
-            progressFraction = fraction
+        guard jobOwnership.owns(jobID), processingSongID == songID else { return }
+        guard fraction >= 1.0 || abs(fraction - lastPublishedProgressFraction) >= 0.01 else {
+            return
         }
+        lastPublishedProgressFraction = fraction
+        progressFraction = fraction
     }
 
     private func finishJob(jobID: UUID) {
         guard jobOwnership.finish(jobID) else { return }
         processingSongID = nil
         progressFraction = 0
+        lastPublishedProgressFraction = -1
         activeTask = nil
         activeTaskKind = nil
     }
@@ -539,6 +551,7 @@ final class VocalSeparator: ObservableObject {
             instrumentsDestination: destinations.instruments
         )
         AudioCacheStore.clearMainOffset(for: songID)
+        CacheManager.noteMusicCacheCommit()
         finishJob(jobID: jobID)
         NotificationCenter.default.post(
             name: .vocalSeparatorDidCacheStems,
@@ -546,27 +559,95 @@ final class VocalSeparator: ObservableObject {
         )
     }
 
+    private nonisolated static let trimWriteQueue = DispatchQueue(
+        label: "com.Mag1cByt3s.Twinskaraoke.vocal-separator-trim",
+        qos: .utility
+    )
+
     private static func trim(source: URL, from startSeconds: TimeInterval, to output: URL)
         async throws
     {
         try? FileManager.default.removeItem(at: output)
         let asset = AVURLAsset(url: source)
-        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A)
-        else { throw VocalSeparatorError.trimFailed }
-        let start = CMTime(seconds: startSeconds, preferredTimescale: 600)
         let duration = try await asset.load(.duration)
+        guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
+            throw VocalSeparatorError.trimFailed
+        }
+        let start = CMTime(seconds: startSeconds, preferredTimescale: 600)
         let safeStartSeconds = min(startSeconds, max(0, duration.seconds - 0.5))
         let safeStart = safeStartSeconds < startSeconds
             ? CMTime(seconds: safeStartSeconds, preferredTimescale: 600) : start
-        export.timeRange = CMTimeRange(start: safeStart, end: duration)
-        export.outputURL = output
-        export.outputFileType = .m4a
-        if #available(iOS 18.0, *) {
-            try await export.export(to: output, as: .m4a)
-        } else {
-            await export.export()
-            guard export.status == .completed else {
-                throw export.error ?? VocalSeparatorError.trimFailed
+
+        // Decode once into uncompressed LPCM/WAV instead of a full AAC
+        // re-encode: ML inference decodes the trimmed file again, and a WAV
+        // passthrough is far cheaper than an AAC encode + decode round-trip.
+        var sampleRate = 44100.0
+        var channels = 2
+        if let formatDescription = try await track.load(.formatDescriptions).first,
+           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)
+        {
+            if asbd.pointee.mSampleRate > 0 { sampleRate = asbd.pointee.mSampleRate }
+            if asbd.pointee.mChannelsPerFrame > 0 { channels = Int(asbd.pointee.mChannelsPerFrame) }
+        }
+        let pcmSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: channels,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+        ]
+        guard let reader = try? AVAssetReader(asset: asset) else {
+            throw VocalSeparatorError.trimFailed
+        }
+        reader.timeRange = CMTimeRange(start: safeStart, end: duration)
+        let readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: pcmSettings)
+        guard reader.canAdd(readerOutput) else { throw VocalSeparatorError.trimFailed }
+        reader.add(readerOutput)
+        guard let writer = try? AVAssetWriter(outputURL: output, fileType: .wav) else {
+            throw VocalSeparatorError.trimFailed
+        }
+        let writerInput = AVAssetWriterInput(mediaType: .audio, outputSettings: pcmSettings)
+        guard writer.canAdd(writerInput) else { throw VocalSeparatorError.trimFailed }
+        writer.add(writerInput)
+        guard reader.startReading(), writer.startWriting() else {
+            throw reader.error ?? writer.error ?? VocalSeparatorError.trimFailed
+        }
+        writer.startSession(atSourceTime: safeStart)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
+                while writerInput.isReadyForMoreMediaData {
+                    guard reader.status != .failed else {
+                        writerInput.markAsFinished()
+                        writer.cancelWriting()
+                        continuation.resume(
+                            throwing: reader.error ?? VocalSeparatorError.trimFailed
+                        )
+                        return
+                    }
+                    guard let buffer = readerOutput.copyNextSampleBuffer() else {
+                        writerInput.markAsFinished()
+                        writer.finishWriting {
+                            if writer.status == .completed {
+                                continuation.resume()
+                            } else {
+                                continuation.resume(
+                                    throwing: writer.error ?? VocalSeparatorError.trimFailed
+                                )
+                            }
+                        }
+                        return
+                    }
+                    if !writerInput.append(buffer) {
+                        writerInput.markAsFinished()
+                        writer.cancelWriting()
+                        continuation.resume(
+                            throwing: writer.error ?? VocalSeparatorError.trimFailed
+                        )
+                        return
+                    }
+                }
             }
         }
     }

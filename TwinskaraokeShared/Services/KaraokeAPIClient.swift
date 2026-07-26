@@ -66,6 +66,117 @@ actor UploadedSongMetadataCache {
   }
 }
 
+/// TTL + in-flight-dedup cache for full playlist detail payloads (the multi-MB
+/// song-list response shared by cover art, song count, and the detail view).
+/// Playlist content mutations (UserPlaylistsManager.addSong) should call
+/// `KaraokeAPIClient.invalidatePlaylistDetail(id:)`; the 60s TTL bounds staleness otherwise.
+actor PlaylistDetailCache {
+  private struct Entry: Sendable {
+    let data: Data
+    let expiresAt: Date
+  }
+
+  private let lifetime: TimeInterval
+  private var entries: [String: Entry] = [:]
+  private var inFlight: [String: (id: UUID, task: Task<Data, Error>)] = [:]
+
+  init(lifetime: TimeInterval) {
+    self.lifetime = lifetime
+  }
+
+  func data(
+    for playlistID: String,
+    at now: Date = Date(),
+    loader: @escaping @Sendable () async throws -> Data
+  ) async throws -> Data {
+    if let entry = entries[playlistID], entry.expiresAt > now {
+      return entry.data
+    }
+
+    let request: (id: UUID, task: Task<Data, Error>)
+    if let existing = inFlight[playlistID] {
+      request = existing
+    } else {
+      let id = UUID()
+      let task = Task { try await loader() }
+      request = (id, task)
+      inFlight[playlistID] = request
+    }
+
+    do {
+      let data = try await request.task.value
+      entries[playlistID] = Entry(data: data, expiresAt: now.addingTimeInterval(lifetime))
+      if inFlight[playlistID]?.id == request.id {
+        inFlight[playlistID] = nil
+      }
+      return data
+    } catch {
+      if inFlight[playlistID]?.id == request.id {
+        inFlight[playlistID] = nil
+      }
+      throw error
+    }
+  }
+
+  func invalidate(playlistID: String) {
+    entries[playlistID] = nil
+  }
+}
+
+/// Short-TTL cache for the canonical (catalog) half of favorite-song hydration,
+/// keyed by the exact favorite ID set so any favorite change is a cache miss.
+actor FavoriteCatalogMetadataCache {
+  private struct Entry: Sendable {
+    let key: String
+    let songs: [Song]
+    let expiresAt: Date
+  }
+
+  private let lifetime: TimeInterval
+  private var cachedValue: Entry?
+  private var inFlight: (key: String, id: UUID, task: Task<[Song], Error>)?
+
+  init(lifetime: TimeInterval) {
+    self.lifetime = lifetime
+  }
+
+  func value(
+    for ids: [String],
+    at now: Date = Date(),
+    loader: @escaping @Sendable () async throws -> [Song]
+  ) async throws -> [Song] {
+    guard !ids.isEmpty else { return [] }
+    let key = ids.sorted().joined(separator: ",")
+    if let cachedValue, cachedValue.key == key, cachedValue.expiresAt > now {
+      return cachedValue.songs
+    }
+
+    let request: (id: UUID, task: Task<[Song], Error>)
+    if let inFlight, inFlight.key == key {
+      request = (inFlight.id, inFlight.task)
+    } else {
+      let id = UUID()
+      let task = Task { try await loader() }
+      request = (id, task)
+      inFlight = (key, id, task)
+    }
+
+    do {
+      let songs = try await request.task.value
+      cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
+      if inFlight?.id == request.id {
+        inFlight = nil
+      }
+      return songs
+    } catch {
+      if inFlight?.id == request.id {
+        inFlight = nil
+      }
+      throw error
+    }
+  }
+}
+
 nonisolated enum KaraokeAPIClient {
   enum APIError: Error {
     case invalidURL
@@ -80,6 +191,8 @@ nonisolated enum KaraokeAPIClient {
     category: "Network"
   )
   private static let uploadedSongMetadataCache = UploadedSongMetadataCache(lifetime: 60)
+  private static let playlistDetailCache = PlaylistDetailCache(lifetime: 60)
+  private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
 
   static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
     try await trendingSongs(days: String(days), take: take)
@@ -203,7 +316,9 @@ nonisolated enum KaraokeAPIClient {
 
   private static func favoriteCatalogMetadata(ids: [String]) async throws -> [Song] {
     do {
-      return try await fetchSongs(ids: ids)
+      return try await favoriteCatalogMetadataCache.value(for: ids) {
+        try await fetchSongs(ids: ids)
+      }
     } catch {
       try rethrowIfCancelled(error)
       favoriteMetadataLogger.error(
@@ -297,8 +412,8 @@ nonisolated enum KaraokeAPIClient {
     let data = try await data(for: request)
     if let song = try? decode(Song.self, from: data) { return song }
     if let envelope = try? decode(FavoriteSongEnvelope.self, from: data), let song = envelope.song { return song }
-    if let response = try? decode(SearchResponse.self, from: data), let song = response.items.first { return song }
     if let songs = SongPayloadDecoder.decodeSongs(from: data), let song = songs.first { return song }
+    if let response = try? decode(SearchResponse.self, from: data), let song = response.items.first { return song }
     if let songs = try? decode([Song].self, from: data), let song = songs.first { return song }
     if let song = songFromJSONObject(data) { return song }
     throw APIError.decodeFailed
@@ -425,9 +540,18 @@ nonisolated enum KaraokeAPIClient {
     return try await data(for: request, retriesNonIdempotentRequest: true)
   }
 
-  private static func playlistDetailData(id: String) async throws -> Data {
-    let request = try request(pathSegments: ["api", "playlist", id])
-    return try await data(for: request)
+  static func playlistDetailData(id: String) async throws -> Data {
+    try await playlistDetailCache.data(for: id) {
+      let request = try request(pathSegments: ["api", "playlist", id])
+      return try await data(for: request)
+    }
+  }
+
+  /// Drop the cached detail payload for a playlist after its contents change
+  /// (e.g. UserPlaylistsManager.addSong). The 60s TTL bounds staleness even
+  /// without explicit invalidation.
+  static func invalidatePlaylistDetail(id: String) async {
+    await playlistDetailCache.invalidate(playlistID: id)
   }
 
   private static func decodeSongSearchResults(from data: Data) throws -> [Song] {
@@ -442,16 +566,16 @@ nonisolated enum KaraokeAPIClient {
 
   private static func decodePlaylists(from data: Data) -> [Playlist] {
     let decoder = JSONDecoder()
-    if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements {
-      return items.map { $0.asPlaylist() }
-    }
     if let items = try? decoder.decode([PlaylistListItem].self, from: data) {
       return items.map { $0.asPlaylist() }
     }
-    if let items = (try? decoder.decode(LossyArray<Playlist>.self, from: data))?.elements {
-      return items
+    if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements {
+      return items.map { $0.asPlaylist() }
     }
     if let items = try? decoder.decode([Playlist].self, from: data) {
+      return items
+    }
+    if let items = (try? decoder.decode(LossyArray<Playlist>.self, from: data))?.elements {
       return items
     }
     return []
@@ -481,6 +605,7 @@ nonisolated enum KaraokeAPIClient {
       throw APIError.invalidURL
     }
     var request = URLRequest(url: url)
+    request.timeoutInterval = 30
     if let token = CredentialStore.token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
@@ -509,6 +634,7 @@ nonisolated enum KaraokeAPIClient {
     components.queryItems = queryItems.isEmpty ? nil : queryItems
     guard let url = components.url else { throw APIError.invalidURL }
     var request = URLRequest(url: url)
+    request.timeoutInterval = 30
     if let token = CredentialStore.token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }

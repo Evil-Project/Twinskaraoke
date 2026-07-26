@@ -33,7 +33,21 @@ final class RecentlyPlayedStore: ObservableObject {
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(playlists) {
+        // Persist lightweight metadata only: songListDTOs embeds full song
+        // arrays (~1MB for a 900-song playlist) and stays in memory. load()
+        // still decodes older blobs that include the songs.
+        let stripped = playlists.map {
+            Playlist(
+                id: $0.id,
+                name: $0.name,
+                songCount: $0.songCount,
+                media: $0.media,
+                mosaicMedia: $0.mosaicMedia,
+                songListDTOs: nil,
+                isPersonal: $0.isPersonal
+            )
+        }
+        if let data = try? JSONEncoder().encode(stripped) {
             UserDefaults.standard.set(data, forKey: Self.storageKey)
         }
     }

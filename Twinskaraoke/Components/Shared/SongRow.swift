@@ -87,7 +87,7 @@ struct SongRow: View {
                     RemoteArtworkImage(
                         url: playback.displayImageURL(for: song, variant: .row),
                         cornerRadius: size.cornerRadius,
-                        lowResURL: song.thumbnailURL,
+                        lowResURL: playback.displayImageURL(for: song, variant: .row),
                         fixedDisplaySize: CGSize(width: size.artSize, height: size.artSize)
                     )
                     .frame(width: size.artSize, height: size.artSize)

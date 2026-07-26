@@ -18,13 +18,23 @@ enum PlaybackMode {
 @MainActor
 class AudioManager: ObservableObject {
     static let shared = AudioManager()
-    @Published var currentSong: Song?
+    @Published var currentSong: Song? {
+        didSet { refreshUpNext() }
+    }
     @Published var isPlaying = false
     @Published var isLoading = false
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
-    @Published var queue: [Song] = []
-    @Published var currentIndex: Int = 0
+    @Published var queue: [Song] = [] {
+        didSet { refreshUpNext() }
+    }
+    @Published var currentIndex: Int = 0 {
+        didSet { refreshUpNext() }
+    }
+    /// Up-next slice of the queue plus its summary string, recomputed only when
+    /// the queue or current track changes (views re-evaluate on every 0.5s tick).
+    @Published private(set) var upNextSongs: [Song] = []
+    @Published private(set) var queueSummaryText = "End of queue"
     @Published var playbackMode: PlaybackMode = .listLoop
     @Published var isShuffleOn = false
     @Published var volume: Double = AudioManager.storedVolume()
@@ -36,6 +46,7 @@ class AudioManager: ObservableObject {
     private var downloadToken: UUID?
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
     private var recoveringFromBrokenCache: Set<String> = []
+    private var volumePersistWorkItem: DispatchWorkItem?
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
     private static let audioCacheDir: URL = {
@@ -57,11 +68,37 @@ class AudioManager: ObservableObject {
         return currentTime / duration
     }
 
-    var upNextSongs: [Song] {
-        guard let index = resolvedCurrentQueueIndex else { return [] }
+    private func refreshUpNext() {
+        guard let index = resolvedCurrentQueueIndex else {
+            upNextSongs = []
+            queueSummaryText = "End of queue"
+            return
+        }
         let nextIndex = index + 1
-        guard nextIndex < queue.endIndex else { return [] }
-        return Array(queue[nextIndex...])
+        guard nextIndex < queue.endIndex else {
+            upNextSongs = []
+            queueSummaryText = "End of queue"
+            return
+        }
+        let songs = Array(queue[nextIndex...])
+        upNextSongs = songs
+        let countText = songs.count == 1 ? "1 song next" : "\(songs.count) songs next"
+        queueSummaryText = "\(countText) - \(Self.queueDurationText(for: songs))"
+    }
+
+    private static func queueDurationText(for songs: [Song]) -> String {
+        let totalSeconds = songs.reduce(0) { $0 + max(0, $1.duration) }
+        guard totalSeconds > 0 else { return "0:00" }
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
     }
 
     func play(song: Song, context: [Song] = []) {
@@ -339,8 +376,14 @@ class AudioManager: ObservableObject {
     func setVolume(_ value: Double) {
         let clamped = min(max(value, 0), 1)
         volume = clamped
-        UserDefaults.standard.set(clamped, forKey: AudioManager.volumeDefaultsKey)
         player?.volume = Float(clamped)
+        // Crown rotation streams values continuously; persist only the settled value.
+        volumePersistWorkItem?.cancel()
+        let item = DispatchWorkItem {
+            UserDefaults.standard.set(clamped, forKey: AudioManager.volumeDefaultsKey)
+        }
+        volumePersistWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
     }
 
     private static func storedVolume() -> Double {

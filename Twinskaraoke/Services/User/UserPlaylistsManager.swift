@@ -112,6 +112,7 @@ final class UserPlaylistsManager: ObservableObject {
             if ok {
                 bumpSongCount(forPlaylist: playlistID)
                 PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
+                await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
             }
             completion?(ok)
         }

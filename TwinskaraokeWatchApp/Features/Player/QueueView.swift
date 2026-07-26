@@ -25,7 +25,7 @@ struct QueueView: View {
                     isPlaying: audioManager.isPlaying,
                     isLoading: audioManager.isLoading,
                     progress: audioManager.progress,
-                    queueSummary: queueSummaryText(for: upNext),
+                    queueSummary: audioManager.queueSummaryText,
                     playPauseAction: toggleCurrentPlayback,
                     previousAction: {
                         audioManager.playPrevious()
@@ -99,7 +99,6 @@ struct QueueView: View {
         }
         .navigationTitle("Queue")
         .animation(queueAnimation, value: audioManager.currentSong?.id)
-        .animation(queueAnimation, value: audioManager.queue.map(\.id))
     }
 
     private var upNextSongs: [Song] {
@@ -120,27 +119,6 @@ struct QueueView: View {
             return "Up next"
         }
         return "Up next \(offset + 1) of \(total)"
-    }
-
-    private func queueSummaryText(for songs: [Song]) -> String {
-        guard !songs.isEmpty else { return "End of queue" }
-        let countText = songs.count == 1 ? "1 song next" : "\(songs.count) songs next"
-        return "\(countText) - \(queueDurationText(for: songs))"
-    }
-
-    private func queueDurationText(for songs: [Song]) -> String {
-        let totalSeconds = songs.reduce(0) { $0 + max(0, $1.duration) }
-        guard totalSeconds > 0 else { return "0:00" }
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
     }
 }
 

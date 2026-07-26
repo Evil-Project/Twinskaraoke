@@ -80,19 +80,19 @@ struct SearchView: View {
                     WatchSearchResultsSummary(
                         query: trimmedSearchText,
                         totalCount: viewModel.results.count,
-                        playableCount: playableSongs.count,
+                        playableCount: viewModel.playableSongs.count,
                         isLoading: viewModel.isLoading
                     )
                     .listRowBackground(Color.clear)
-                    ForEach(viewModel.results) { item in
+                    ForEach(viewModel.resolvedResults) { result in
                         Button {
-                            if let song = item.toSong() {
-                                play(song, context: playableSongs)
+                            if let song = result.song {
+                                play(song, context: viewModel.playableSongs)
                             } else {
                                 WatchHaptic.play(.failure)
                             }
                         } label: {
-                            if let song = item.toSong() {
+                            if let song = result.song {
                                 let isCurrent = audioManager.currentSong?.id == song.id
                                 WatchSongRow(
                                     song: song,
@@ -103,6 +103,7 @@ struct SearchView: View {
                                         : nil
                                 )
                             } else {
+                                let item = result.item
                                 HStack(spacing: 10) {
                                     WatchSongArtwork(url: item.rowImageURL, size: 38)
                                         .accessibilityHidden(true)
@@ -125,7 +126,7 @@ struct SearchView: View {
                             }
                         }
                         .buttonStyle(.watchPressable)
-                        .accessibilityHint(accessibilityHint(for: item))
+                        .accessibilityHint(accessibilityHint(for: result))
                     }
                 }
             }
@@ -139,10 +140,6 @@ struct SearchView: View {
             PlayerView()
                 .environmentObject(audioManager)
         }
-    }
-
-    private var playableSongs: [Song] {
-        viewModel.results.compactMap { $0.toSong() }
     }
 
     private var trimmedSearchText: String {
@@ -159,8 +156,8 @@ struct SearchView: View {
         showPlayer = true
     }
 
-    private func accessibilityHint(for item: SearchSongItem) -> String {
-        guard let song = item.toSong() else {
+    private func accessibilityHint(for result: WatchSearchResult) -> String {
+        guard let song = result.song else {
             return "This result cannot be played on Apple Watch."
         }
         if audioManager.currentSong?.id == song.id {

@@ -361,12 +361,22 @@ final class TransitionCoordinator {
         }
     }
 
+    private var bpmPersistTask: Task<Void, Never>?
+
     private func persistBPMCache() {
-        let defaults = UserDefaults.standard
-        if let data = try? JSONEncoder().encode(bpmCache) {
-            defaults.set(data, forKey: Self.bpmCacheKey)
-        } else {
-            defaults.removeObject(forKey: Self.bpmCacheKey)
+        // Encoding + UserDefaults write run off-main; tasks chain so writes
+        // stay ordered, with each task snapshotting the latest cache.
+        let snapshot = bpmCache
+        let key = Self.bpmCacheKey
+        let previous = bpmPersistTask
+        bpmPersistTask = Task.detached(priority: .utility) {
+            await previous?.value
+            let defaults = UserDefaults.standard
+            if let data = try? JSONEncoder().encode(snapshot) {
+                defaults.set(data, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
         }
     }
 }

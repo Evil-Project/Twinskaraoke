@@ -4,10 +4,6 @@ struct UploadedSongsView: View {
     @StateObject private var viewModel = UploadedSongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
 
-    private var listAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.quick
-    }
-
     var body: some View {
         let songs = viewModel.displayedSongs
         let isSearching = !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -83,8 +79,6 @@ struct UploadedSongsView: View {
         .onDisappear {
             ArtworkPrefetcher.shared.cancel(reason: "uploaded visible songs")
         }
-        .animation(listAnimation, value: songs.map(\.id))
-        .animation(listAnimation, value: viewModel.sort)
         .accessibilityIdentifier("Library.UploadedSongs")
     }
 

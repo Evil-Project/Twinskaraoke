@@ -203,9 +203,6 @@ struct DownloadedSongsView: View {
     private func refresh() {
         let cached = recentlyPlayed.playlists.flatMap { $0.songListDTOs ?? [] }
         let songs = downloads.downloadedSongs(knownSongs: cached)
-        let localAudioCandidates = songs.reduce(into: [String: URL]()) { urls, song in
-            urls[song.id] = downloads.localURL(for: song.id)
-        }
         ArtworkPrefetcher.shared.prefetchSongs(
             Array(songs.prefix(18)),
             limit: 18,
@@ -216,11 +213,16 @@ struct DownloadedSongsView: View {
 
         durationTask?.cancel()
         durationTask = Task { @MainActor in
-            // File-existence checks hit the disk once per song; keep them off
-            // the main actor so refresh/onAppear stays responsive.
+            // Resolving each song's local URL reads its per-song source file
+            // and may enumerate the download directory; together with the
+            // file-existence checks that is disk I/O per song, so keep the
+            // whole scan off the main actor.
             let scanTask = Task.detached(priority: .utility) {
-                localAudioCandidates.filter {
-                    !Task.isCancelled && FileManager.default.fileExists(atPath: $0.value.path)
+                songs.reduce(into: [String: URL]()) { urls, song in
+                    guard !Task.isCancelled else { return }
+                    let url = downloads.localURL(for: song.id)
+                    guard FileManager.default.fileExists(atPath: url.path) else { return }
+                    urls[song.id] = url
                 }
             }
             let localAudioURLs = await withTaskCancellationHandler {

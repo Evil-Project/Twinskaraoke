@@ -4,7 +4,9 @@ import Foundation
 
 @MainActor
 final class UploadedSongsViewModel: ObservableObject {
-    @Published private(set) var songs: [Song] = []
+    @Published private(set) var songs: [Song] = [] {
+        didSet { songsGeneration &+= 1 }
+    }
     @Published private(set) var displayedSongs: [Song] = []
     @Published private(set) var isLoading = false
     @Published private(set) var requiresSignIn = false
@@ -12,13 +14,22 @@ final class UploadedSongsViewModel: ObservableObject {
     @Published var sort: LibrarySongSort = .recentlyAdded {
         didSet { rebuildDisplayedSongs() }
     }
-    @Published var searchText = "" {
-        didSet { rebuildDisplayedSongs() }
-    }
+    @Published var searchText = ""
 
     private var hasLoaded = false
     private var loadTask: Task<Void, Never>?
     private var requestGeneration = 0
+    private var cancellables = Set<AnyCancellable>()
+    private var songsGeneration: UInt64 = 0
+    private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
+
+    init() {
+        $searchText
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.rebuildDisplayedSongs() }
+            .store(in: &cancellables)
+    }
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -84,7 +95,15 @@ final class UploadedSongsViewModel: ObservableObject {
         }
     }
 
-    private func rebuildDisplayedSongs() {
+    // Sorting is the expensive half of a rebuild; cache it per (sort, songs)
+    // so search keystrokes only pay for the filter pass.
+    private var sortedSongs: [Song] {
+        if let sortCache,
+           sortCache.sort == sort,
+           sortCache.generation == songsGeneration
+        {
+            return sortCache.songs
+        }
         let sorted: [Song] = switch sort {
         case .recentlyAdded:
             songs
@@ -97,6 +116,12 @@ final class UploadedSongsViewModel: ObservableObject {
         case .duration:
             songs.sorted { $0.duration < $1.duration }
         }
+        sortCache = (sort, songsGeneration, sorted)
+        return sorted
+    }
+
+    private func rebuildDisplayedSongs() {
+        let sorted = sortedSongs
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {

@@ -7,7 +7,9 @@ final class WatchImageCache {
     private let memory = NSCache<NSURL, UIImage>()
     private let disk = URLCache.shared
 
-    private init() {}
+    private init() {
+        memory.countLimit = 200
+    }
 
     /// Synchronous memory-cache lookup used to seed views without a placeholder frame.
     func cachedImage(for url: URL) -> UIImage? {

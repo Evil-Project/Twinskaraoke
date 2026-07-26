@@ -9,7 +9,7 @@ import SwiftUI
     import UIKit
 #endif
 
-/// Tick counter for fade timers; only mutated on the main run loop, but lives
+/// Tick counter for fade timers; only mutated on the main actor, but lives
 /// in a @Sendable timer closure so it needs an unchecked-Sendable box.
 private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
@@ -352,7 +352,18 @@ class AudioPlayerManager: ObservableObject {
     private var cacheRecoverySongID: String?
     private var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
-    private var streamFadeTimer: Timer?
+    // Volume ramps run on a background DispatchSourceTimer (like the engine
+    // crossfade ramp) so they don't fire on RunLoop.main during scroll
+    // tracking; per-tick work is dispatched back to the main actor.
+    private nonisolated static let volumeRampQueue = DispatchQueue(
+        label: "com.Mag1cByt3s.Twinskaraoke.volume-ramp",
+        qos: .userInteractive
+    )
+    private var streamFadeTimer: DispatchSourceTimer?
+    // Bumped whenever the fade timer is cancelled so a tick already dispatched
+    // to the main actor by the background timer no-ops instead of applying a
+    // stale volume step.
+    private var streamFadeGeneration: UInt64 = 0
     private var streamStartedAt: Date?
 
     private var _suppressModeSwitch = false
@@ -369,7 +380,7 @@ class AudioPlayerManager: ObservableObject {
     private var backgroundAnalysisRetryTask: Task<Void, Never>?
     private var cacheCompressionTask: Task<Void, Never>?
     private var aiStemSwitchInFlightSongID: String?
-    private var quickCutTimer: Timer?
+    private var quickCutTimer: DispatchSourceTimer?
     private var quickCutGeneration: UInt64 = 0
     private var separationGeneration: UInt64 = 0
     private var transitionTimeoutGeneration: UInt64 = 0
@@ -634,8 +645,8 @@ class AudioPlayerManager: ObservableObject {
         // down, the last reference is released on the main thread.
         MainActor.assumeIsolated {
             pollTimer?.invalidate()
-            quickCutTimer?.invalidate()
-            streamFadeTimer?.invalidate()
+            quickCutTimer?.cancel()
+            streamFadeTimer?.cancel()
             transitionStartTask?.cancel()
             instrumentalTask?.cancel()
             preparedStemTask?.cancel()
@@ -1072,7 +1083,8 @@ class AudioPlayerManager: ObservableObject {
     }
 
     private func cancelQuickCutTimer(resetVolume: Bool = true) {
-        quickCutTimer?.invalidate()
+        quickCutGeneration &+= 1
+        quickCutTimer?.cancel()
         quickCutTimer = nil
         if resetVolume {
             avEngine.setMasterVolume(1.0)
@@ -1087,7 +1099,8 @@ class AudioPlayerManager: ObservableObject {
         activeCrossfadePlan = nil
         cancelQuickCutTimer(resetVolume: resetVolume)
         avEngine.cancelCrossfade()
-        streamFadeTimer?.invalidate()
+        streamFadeGeneration &+= 1
+        streamFadeTimer?.cancel()
         streamFadeTimer = nil
         if resetVolume { streamPlayer?.volume = 1.0 }
         transitionCoordinator.reset()
@@ -2339,7 +2352,8 @@ class AudioPlayerManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             streamEndObserver = nil
         }
-        streamFadeTimer?.invalidate()
+        streamFadeGeneration &+= 1
+        streamFadeTimer?.cancel()
         streamFadeTimer = nil
         streamPlayer?.pause()
         streamPlayer?.replaceCurrentItem(with: nil)
@@ -2349,27 +2363,31 @@ class AudioPlayerManager: ObservableObject {
 
     private func fadeOutStreamPlayer(duration: TimeInterval) {
         guard streamPlayer != nil else { return }
-        streamFadeTimer?.invalidate()
+        streamFadeGeneration &+= 1
+        let gen = streamFadeGeneration
+        streamFadeTimer?.cancel()
         let interval = AVEnginePlayback.transitionTimerInterval
         let steps = max(1, Int((duration / interval).rounded(.up)))
         let counter = TimerStepCounter()
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] timer in
-            guard self != nil else { timer.invalidate(); return }
-            let finished = MainActor.assumeIsolated { () -> Bool in
-                guard let self else { return true }
-                counter.step += 1
-                let t = Float(counter.step) / Float(max(1, steps))
-                self.streamPlayer?.volume = max(0, 1.0 - t)
-                if t >= 1.0 {
-                    self.streamFadeTimer = nil
-                    return true
+        let timer = DispatchSource.makeTimerSource(queue: Self.volumeRampQueue)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { timer.cancel(); return }
+                    guard self.streamFadeGeneration == gen else { return }
+                    counter.step += 1
+                    let t = Float(counter.step) / Float(max(1, steps))
+                    self.streamPlayer?.volume = max(0, 1.0 - t)
+                    if t >= 1.0 {
+                        self.streamFadeTimer = nil
+                        timer.cancel()
+                    }
                 }
-                return false
             }
-            if finished { timer.invalidate() }
         }
         streamFadeTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
+        timer.resume()
     }
 
     func updateRadioMetadata(song: Song, artworkURL: URL?) {
@@ -3372,37 +3390,35 @@ class AudioPlayerManager: ObservableObject {
         let interval = AVEnginePlayback.transitionTimerInterval
         let steps = max(1, Int((fadeDuration / interval).rounded(.up)))
         let counter = TimerStepCounter()
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] timer in
-            guard self != nil else {
-                timer.invalidate()
-                return
-            }
-            let finished = MainActor.assumeIsolated { () -> Bool in
-                guard let self else { return true }
-                guard self.quickCutGeneration == gen else { return false }
-                guard self.transitionCoordinator.state.isCrossfading, !self.isRadioMode else {
-                    self.cancelPendingTransitionWork()
-                    return false
+        let timer = DispatchSource.makeTimerSource(queue: Self.volumeRampQueue)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { timer.cancel(); return }
+                    guard self.quickCutGeneration == gen else { return }
+                    guard self.transitionCoordinator.state.isCrossfading, !self.isRadioMode else {
+                        self.cancelPendingTransitionWork()
+                        return
+                    }
+                    counter.step += 1
+                    let t = Float(counter.step) / Float(max(1, steps))
+                    self.avEngine.setMasterVolume(1.0 - t)
+                    if t >= 1.0 {
+                        self.quickCutTimer = nil
+                        DebugLogger.log("Quick cut transition complete -> play(\(song.id))", category: .playback)
+                        self.activeCrossfadePlan = nil
+                        self.transitionCoordinator.reset()
+                        self.avEngine.setMasterVolume(0)
+                        self.play(song: song, resetTransitionVolume: false)
+                        self.avEngine.setMasterVolume(1.0)
+                        timer.cancel()
+                    }
                 }
-                counter.step += 1
-                let t = Float(counter.step) / Float(max(1, steps))
-                self.avEngine.setMasterVolume(1.0 - t)
-                if t >= 1.0 {
-                    self.quickCutTimer = nil
-                    DebugLogger.log("Quick cut transition complete -> play(\(song.id))", category: .playback)
-                    self.activeCrossfadePlan = nil
-                    self.transitionCoordinator.reset()
-                    self.avEngine.setMasterVolume(0)
-                    self.play(song: song, resetTransitionVolume: false)
-                    self.avEngine.setMasterVolume(1.0)
-                    return true
-                }
-                return false
             }
-            if finished { timer.invalidate() }
         }
         quickCutTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
+        timer.resume()
     }
 
     private func transitionCoordinatorDidFinish() {
