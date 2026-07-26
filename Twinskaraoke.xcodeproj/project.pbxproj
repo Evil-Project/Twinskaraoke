@@ -702,6 +702,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LM_ENABLE_LINK_GENERATION = NO;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -737,6 +738,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LM_ENABLE_LINK_GENERATION = NO;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -781,6 +783,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LM_ENABLE_LINK_GENERATION = NO;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -823,6 +826,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LM_ENABLE_LINK_GENERATION = NO;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1137,7 +1141,7 @@
 			repositoryURL = "https://github.com/LeoNatan/LNPopupUI";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 3.1.0;
+				minimumVersion = 3.1.2;
 			};
 		};
 		D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */ = {

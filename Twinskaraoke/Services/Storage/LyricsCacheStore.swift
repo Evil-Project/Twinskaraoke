@@ -8,7 +8,7 @@ enum LyricsCacheVariant: String {
 enum LyricsCacheStore {
     private static let fm = FileManager.default
 
-    static let cacheDirectory: URL = {
+    nonisolated static let cacheDirectory: URL = {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("LyricsCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

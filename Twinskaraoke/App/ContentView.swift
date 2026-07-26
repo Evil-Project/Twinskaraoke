@@ -14,6 +14,10 @@ private final class PopupPlaybackState: ObservableObject {
         snapshot.id != nil
     }
 
+    var id: String {
+        snapshot.id ?? "now-playing"
+    }
+
     var title: String {
         snapshot.title
     }
@@ -527,57 +531,40 @@ private struct PopupContent: View {
     var body: some View {
         FullScreenPlayerView()
             .environmentObject(AudioPlayerManager.shared)
-            // The popup bar only picks up title/image modifiers applied directly to the
-            // popup content view; hosting them in a background child leaves the bar blank.
-            .modifier(
-                PopupTitleModifier(
-                    title: popupState.title,
-                    subtitle: popupState.subtitle
-                )
-            )
-            .modifier(PopupImageModifier(artwork: popupState.artwork))
-            .popupBarButtons {
-                PopupBarTrailingItems(
-                    isPlaying: popupState.isPlaying,
-                    isRadioMode: popupState.isRadioMode,
-                    onTogglePlayPause: {
-                        #if canImport(UIKit)
-                            PopupOpenIntentGate.shared.suppressNextOpen()
-                        #endif
-                        AudioPlayerManager.shared.togglePlayPause()
-                    },
-                    onNext: {
-                        #if canImport(UIKit)
-                            PopupOpenIntentGate.shared.suppressNextOpen()
-                        #endif
-                        AudioPlayerManager.shared.playNextOrRandom()
+            .popupItem {
+                PopupItem(
+                    id: popupState.id,
+                    verbatimTitle: popupState.title,
+                    verbatimSubtitle: popupState.subtitle.isEmpty ? nil : popupState.subtitle,
+                    image: popupImage
+                ) {
+                    ToolbarItemGroup(placement: .popupBar) {
+                        PopupBarTrailingItems(
+                            isPlaying: popupState.isPlaying,
+                            isRadioMode: popupState.isRadioMode,
+                            onTogglePlayPause: {
+                                #if canImport(UIKit)
+                                    PopupOpenIntentGate.shared.suppressNextOpen()
+                                #endif
+                                AudioPlayerManager.shared.togglePlayPause()
+                            },
+                            onNext: {
+                                #if canImport(UIKit)
+                                    PopupOpenIntentGate.shared.suppressNextOpen()
+                                #endif
+                                AudioPlayerManager.shared.playNextOrRandom()
+                            }
+                        )
                     }
-                )
+                }
             }
     }
-}
 
-private struct PopupTitleModifier: ViewModifier, Equatable {
-    let title: String
-    let subtitle: String
-
-    func body(content: Content) -> some View {
-        content.popupTitle(verbatim: title, subtitle: subtitle)
-    }
-}
-
-private struct PopupImageModifier: ViewModifier, Equatable {
-    let artwork: UIImage?
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.artwork === rhs.artwork
-    }
-
-    func body(content: Content) -> some View {
-        if let artwork {
-            content.popupImage(Image(uiImage: artwork))
+    private var popupImage: Image {
+        if let artwork = popupState.artwork {
+            Image(uiImage: artwork)
         } else {
-            content.popupImage(Image(systemName: "music.note"))
+            Image(systemName: "music.note")
         }
     }
 }
