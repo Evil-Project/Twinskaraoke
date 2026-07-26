@@ -40,6 +40,31 @@ nonisolated struct CachedStems {
     }
 }
 
+/// Owns one AVFoundation trim pipeline after it moves onto `trimWriteQueue`.
+/// The referenced AVFoundation objects are not `Sendable`, but every mutation
+/// after setup is serialized by that queue and its completion callback.
+private nonisolated final class TrimWriteContext: @unchecked Sendable {
+    let reader: AVAssetReader
+    let readerOutput: AVAssetReaderTrackOutput
+    let writer: AVAssetWriter
+    let writerInput: AVAssetWriterInput
+    let continuation: CheckedContinuation<Void, Error>
+
+    init(
+        reader: AVAssetReader,
+        readerOutput: AVAssetReaderTrackOutput,
+        writer: AVAssetWriter,
+        writerInput: AVAssetWriterInput,
+        continuation: CheckedContinuation<Void, Error>
+    ) {
+        self.reader = reader
+        self.readerOutput = readerOutput
+        self.writer = writer
+        self.writerInput = writerInput
+        self.continuation = continuation
+    }
+}
+
 struct SeparationJobOwnership {
     private(set) var activeID: UUID?
 
@@ -616,44 +641,51 @@ final class VocalSeparator: ObservableObject {
         }
         writer.startSession(atSourceTime: safeStart)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
-                while writerInput.isReadyForMoreMediaData {
+            let context = TrimWriteContext(
+                reader: reader,
+                readerOutput: readerOutput,
+                writer: writer,
+                writerInput: writerInput,
+                continuation: continuation
+            )
+            context.writerInput.requestMediaDataWhenReady(on: Self.trimWriteQueue) {
+                while context.writerInput.isReadyForMoreMediaData {
                     // Bail promptly on job cancellation instead of writing the
                     // remaining LPCM; cancelReading() alone can't interrupt an
                     // in-flight copyNextSampleBuffer().
                     if Task.isCancelled {
-                        reader.cancelReading()
-                        writerInput.markAsFinished()
-                        writer.cancelWriting()
-                        continuation.resume(throwing: CancellationError())
+                        context.reader.cancelReading()
+                        context.writerInput.markAsFinished()
+                        context.writer.cancelWriting()
+                        context.continuation.resume(throwing: CancellationError())
                         return
                     }
-                    guard reader.status != .failed else {
-                        writerInput.markAsFinished()
-                        writer.cancelWriting()
-                        continuation.resume(
-                            throwing: reader.error ?? VocalSeparatorError.trimFailed
+                    guard context.reader.status != .failed else {
+                        context.writerInput.markAsFinished()
+                        context.writer.cancelWriting()
+                        context.continuation.resume(
+                            throwing: context.reader.error ?? VocalSeparatorError.trimFailed
                         )
                         return
                     }
-                    guard let buffer = readerOutput.copyNextSampleBuffer() else {
-                        writerInput.markAsFinished()
-                        writer.finishWriting {
-                            if writer.status == .completed {
-                                continuation.resume()
+                    guard let buffer = context.readerOutput.copyNextSampleBuffer() else {
+                        context.writerInput.markAsFinished()
+                        context.writer.finishWriting {
+                            if context.writer.status == .completed {
+                                context.continuation.resume()
                             } else {
-                                continuation.resume(
-                                    throwing: writer.error ?? VocalSeparatorError.trimFailed
+                                context.continuation.resume(
+                                    throwing: context.writer.error ?? VocalSeparatorError.trimFailed
                                 )
                             }
                         }
                         return
                     }
-                    if !writerInput.append(buffer) {
-                        writerInput.markAsFinished()
-                        writer.cancelWriting()
-                        continuation.resume(
-                            throwing: writer.error ?? VocalSeparatorError.trimFailed
+                    if !context.writerInput.append(buffer) {
+                        context.writerInput.markAsFinished()
+                        context.writer.cancelWriting()
+                        context.continuation.resume(
+                            throwing: context.writer.error ?? VocalSeparatorError.trimFailed
                         )
                         return
                     }
