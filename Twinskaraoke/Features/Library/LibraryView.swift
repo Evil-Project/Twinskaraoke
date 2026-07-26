@@ -45,7 +45,6 @@ struct LibraryView: View {
     @StateObject var viewModel = PlaylistsViewModel()
     @StateObject private var recentSongsViewModel = LibrarySongsViewModel()
     @ObservedObject private var savedStore = SavedPlaylistsStore.shared
-    @ObservedObject private var addedTracker = RecentlyAddedTracker.shared
     @ObservedObject private var favorites = FavoritesManager.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateSheet = false
@@ -378,6 +377,7 @@ private struct WideLibraryHero: View {
 struct LibrarySongsView: View {
     @StateObject private var viewModel = LibrarySongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
+    @State private var prefetchedIDs: [String] = []
 
     var body: some View {
         let songs = viewModel.displayedSongs
@@ -456,9 +456,15 @@ struct LibrarySongsView: View {
         .task {
             viewModel.loadIfNeeded()
         }
-        .onChange(of: Array(songs.prefix(18)).map(\.id)) { _, _ in
+        // Diffing on displayedSongs (Equatable) avoids allocating the prefix
+        // id array on every body eval; it only builds when the list changes.
+        .onChange(of: viewModel.displayedSongs) { _, newSongs in
+            let visible = Array(newSongs.prefix(18))
+            let ids = visible.map(\.id)
+            guard ids != prefetchedIDs else { return }
+            prefetchedIDs = ids
             ArtworkPrefetcher.shared.prefetchSongs(
-                Array(songs.prefix(18)),
+                visible,
                 limit: 18,
                 reason: "library visible songs",
                 variant: .row
@@ -636,17 +642,12 @@ struct PlaylistsGridScreen: View {
         return uniqueUser + all
     }
 
-    private var displayedPlaylists: [Playlist] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return combinedPlaylists }
-        return combinedPlaylists.filter { playlist in
-            playlist.name.localizedCaseInsensitiveContains(query)
-        }
-    }
-
     var body: some View {
         let all = combinedPlaylists
-        let displayed = displayedPlaylists
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayed = query.isEmpty ? all : all.filter { playlist in
+            playlist.name.localizedCaseInsensitiveContains(query)
+        }
         ScrollView {
             Group {
                 if viewModel.isLoading, userManager.isLoading, all.isEmpty {

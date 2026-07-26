@@ -5,6 +5,7 @@ struct QueueView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCurrentAddToPlaylist = false
+    @State private var upNextSongs: [Song] = []
 
     private var queueToggleAnimation: Animation? {
         reduceMotion ? nil : AppMotion.quick
@@ -146,6 +147,11 @@ struct QueueView: View {
                 AddToPlaylistSheet(song: current)
             }
         }
+        // Snapshot up-next only when the queue or current song changes, so
+        // unrelated AudioPlayerManager publishes don't redo the O(n) slice.
+        .onAppear { refreshUpNextSongs() }
+        .onChange(of: audioManager.queue) { _, _ in refreshUpNextSongs() }
+        .onChange(of: audioManager.currentSong?.id) { _, _ in refreshUpNextSongs() }
     }
 
     private func header(upNextCount: Int) -> some View {
@@ -280,13 +286,16 @@ struct QueueView: View {
         audioManager.play(song: song, context: audioManager.queue)
     }
 
-    private var upNextSongs: [Song] {
+    private func refreshUpNextSongs() {
         // Match by id: applyEnrichedMetadata replaces currentSong with a fresh
         // instance that no longer == the queue copy.
         guard let current = audioManager.currentSong,
               let idx = audioManager.queue.firstIndex(where: { $0.id == current.id }),
               idx + 1 < audioManager.queue.count
-        else { return [] }
-        return Array(audioManager.queue[(idx + 1)...])
+        else {
+            upNextSongs = []
+            return
+        }
+        upNextSongs = Array(audioManager.queue[(idx + 1)...])
     }
 }

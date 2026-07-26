@@ -284,20 +284,7 @@ struct PlayerView: View {
                 }
             }
             .background(
-                Group {
-                    if let url = audioManager.currentSong?.thumbnailURL {
-                        WatchCachedImage(url: url) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            backgroundBase
-                        }
-                        .blur(radius: 30)
-                        .opacity(0.35)
-                        .ignoresSafeArea()
-                    } else {
-                        backgroundBase.ignoresSafeArea()
-                    }
-                }
+                WatchPlayerBackground(song: audioManager.currentSong, base: backgroundBase)
             )
             .navigationTitle("Now Playing")
             .onAppear {
@@ -394,6 +381,34 @@ struct PlayerView: View {
         guard step != lastVolumeFeedbackStep else { return }
         lastVolumeFeedbackStep = step
         WatchHaptic.play(.click)
+    }
+}
+
+/// Full-screen blurred backdrop. Uses the tiny server-side blurred artwork variant
+/// (32px, upscaled) instead of an on-device .blur to avoid continuous GPU cost.
+private struct WatchPlayerBackground: View {
+    let song: Song?
+    let base: Color
+
+    private var blurURL: URL? {
+        guard let url = song?.thumbnailURL else { return nil }
+        return ArtworkURLBuilder.variantURL(from: url, variant: .blur)
+    }
+
+    var body: some View {
+        Group {
+            if let url = blurURL {
+                WatchCachedImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    base
+                }
+                .opacity(0.35)
+                .ignoresSafeArea()
+            } else {
+                base.ignoresSafeArea()
+            }
+        }
     }
 }
 

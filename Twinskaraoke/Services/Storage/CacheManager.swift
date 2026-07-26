@@ -25,16 +25,27 @@ final class CacheManager: ObservableObject {
         label: "nk.cacheMaintenance", qos: .utility
     )
 
+    // Debounce state for the per-transition/per-save enforcement passes.
+    // Only touched on the serial maintenanceQueue.
+    private nonisolated static let enforcementDebounceInterval: TimeInterval = 60
+    private nonisolated(unsafe) var lastMusicEnforcementAt: Date?
+    private nonisolated(unsafe) static var lastMusicCommitAt: Date?
+    private nonisolated(unsafe) var lastMusicCacheSize: UInt64?
+    private nonisolated(unsafe) var lastLyricsEnforcementAt: Date?
+    private nonisolated(unsafe) var lastLyricsCacheSize: UInt64?
+
     private init() {
         let directories = Self.directories
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
             let pruned = pruneExpiredEntriesBlocking(directories: directories)
             DebugLogger.log("Pruned \(pruned) expired cache entries", category: .cache)
-            _ = enforceImageCacheLimitsBlocking(imageDirectory: directories.image)
-            _ = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
-            _ = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
-            publishSizes(computeSizesBlocking(directories: directories))
+            // The enforcement passes already measure each tree; reuse their
+            // sizes instead of walking every cache directory a second time.
+            let image = enforceImageCacheLimitsBlocking(imageDirectory: directories.image)
+            let music = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
+            let lyrics = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
+            publishSizes((image: image, music: music, lyrics: lyrics))
             DebugLogger.log("CacheManager initialized", category: .cache)
         }
     }
@@ -110,7 +121,19 @@ final class CacheManager: ObservableObject {
     }
 
     func recordAccess(for url: URL) {
-        AudioCacheStore.touch(url)
+        // touch() performs two synchronous setAttributes calls; keep them off
+        // the caller's thread (usually main, once per play).
+        Self.maintenanceQueue.async {
+            AudioCacheStore.touch(url)
+        }
+    }
+
+    /// Marks that a file was committed to the music cache, so the debounced
+    /// enforcement pass knows the tree changed since its last run.
+    nonisolated static func noteMusicCacheCommit() {
+        maintenanceQueue.async {
+            lastMusicCommitAt = Date()
+        }
     }
 
     func totalImageCacheSize() -> UInt64 {
@@ -240,7 +263,7 @@ final class CacheManager: ObservableObject {
             sdCache.deleteOldFiles(completionBlock: nil)
         }
 
-        evictOldestFiles(in: imageDirectory, limit: Self.imageCacheLimit, label: "image")
+        _ = evictOldestFiles(in: imageDirectory, limit: Self.imageCacheLimit, label: "image")
         return UInt64(sdCache.totalDiskSize())
     }
 
@@ -248,13 +271,40 @@ final class CacheManager: ObservableObject {
         musicDirectory: URL,
         excluding protectedIDs: Set<String>
     ) -> UInt64 {
-        evictOldestSongDirectories(in: musicDirectory, limit: Self.musicCacheLimit, excluding: protectedIDs)
-        return directorySize(at: musicDirectory)
+        // Runs on every track transition and after every vocal separation;
+        // skip the tree walk when nothing was committed since the last run.
+        let now = Date()
+        if let lastRun = lastMusicEnforcementAt,
+           now.timeIntervalSince(lastRun) < Self.enforcementDebounceInterval,
+           (Self.lastMusicCommitAt ?? .distantPast) <= lastRun,
+           let lastSize = lastMusicCacheSize
+        {
+            return lastSize
+        }
+        lastMusicEnforcementAt = now
+        let size = evictOldestSongDirectories(
+            in: musicDirectory,
+            limit: Self.musicCacheLimit,
+            excluding: protectedIDs
+        )
+        lastMusicCacheSize = size
+        return size
     }
 
     private nonisolated func enforceLyricsCacheLimitsBlocking(lyricsDirectory: URL) -> UInt64 {
-        evictOldestFiles(in: lyricsDirectory, limit: Self.lyricsCacheLimit, label: "lyrics")
-        return directorySize(at: lyricsDirectory)
+        // Lyrics saves trigger this per save; the files are tiny, so a light
+        // debounce avoids a full enumeration for every cached lyric.
+        let now = Date()
+        if let lastRun = lastLyricsEnforcementAt,
+           now.timeIntervalSince(lastRun) < Self.enforcementDebounceInterval,
+           let lastSize = lastLyricsCacheSize
+        {
+            return lastSize
+        }
+        lastLyricsEnforcementAt = now
+        let size = evictOldestFiles(in: lyricsDirectory, limit: Self.lyricsCacheLimit, label: "lyrics")
+        lastLyricsCacheSize = size
+        return size
     }
 
     private nonisolated func pruneExpiredEntriesBlocking(
@@ -297,12 +347,12 @@ final class CacheManager: ObservableObject {
         return total
     }
 
-    private nonisolated func evictOldestFiles(in directory: URL, limit: UInt64, label: String) {
+    private nonisolated func evictOldestFiles(in directory: URL, limit: UInt64, label: String) -> UInt64 {
         let fm = FileManager.default
-        guard fm.fileExists(atPath: directory.path) else { return }
+        guard fm.fileExists(atPath: directory.path) else { return 0 }
 
         var currentSize = directorySize(at: directory)
-        guard currentSize > limit else { return }
+        guard currentSize > limit else { return currentSize }
 
         DebugLogger.log(
             "\(label) cache \(formatBytes(currentSize)) > limit \(formatBytes(limit)), evicting oldest",
@@ -332,18 +382,19 @@ final class CacheManager: ObservableObject {
             "\(label) cache eviction complete: removed \(evicted) files, new size \(formatBytes(currentSize))",
             category: .cache
         )
+        return currentSize
     }
 
     private nonisolated func evictOldestSongDirectories(
         in directory: URL,
         limit: UInt64,
         excluding protectedIDs: Set<String> = []
-    ) {
+    ) -> UInt64 {
         let fm = FileManager.default
-        guard fm.fileExists(atPath: directory.path) else { return }
+        guard fm.fileExists(atPath: directory.path) else { return 0 }
 
         var currentSize = directorySize(at: directory)
-        guard currentSize > limit else { return }
+        guard currentSize > limit else { return currentSize }
 
         DebugLogger.log(
             "music cache \(formatBytes(currentSize)) > limit \(formatBytes(limit)), evicting oldest song folders",
@@ -365,6 +416,7 @@ final class CacheManager: ObservableObject {
                 )
             }
         }
+        return currentSize
     }
 
     private nonisolated func pruneOldFiles(in directory: URL, olderThan cutoff: Date) -> Int {

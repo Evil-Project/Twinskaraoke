@@ -17,6 +17,7 @@ nonisolated enum CredentialStore {
 
   private static let tokenCacheLock = NSLock()
   private nonisolated(unsafe) static var cachedToken: String?
+  private nonisolated(unsafe) static var tokenCacheValid = false
   private nonisolated(unsafe) static var cacheGeneration: UInt64 = 0
 
   static var token: String? {
@@ -24,18 +25,18 @@ nonisolated enum CredentialStore {
       return nil
     }
     tokenCacheLock.lock()
-    let cached = cachedToken
-    let generation = cacheGeneration
-    tokenCacheLock.unlock()
-    if let cached {
+    if tokenCacheValid {
+      let cached = cachedToken
+      tokenCacheLock.unlock()
       return cached
     }
-    guard let resolved = resolveToken() else {
-      return nil
-    }
+    let generation = cacheGeneration
+    tokenCacheLock.unlock()
+    let resolved = resolveToken()
     tokenCacheLock.lock()
     if cacheGeneration == generation {
       cachedToken = resolved
+      tokenCacheValid = true
     }
     tokenCacheLock.unlock()
     return resolved
@@ -103,6 +104,7 @@ nonisolated enum CredentialStore {
   private static func setCachedToken(_ token: String?) {
     tokenCacheLock.lock()
     cachedToken = token
+    tokenCacheValid = true
     cacheGeneration &+= 1
     tokenCacheLock.unlock()
   }

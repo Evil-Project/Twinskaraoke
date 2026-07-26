@@ -22,22 +22,14 @@ final class PlaylistCoverLoader: ObservableObject {
         artworkURLs = Self.extractArtworkURLs(fromSongs: fallbackSongs)
         loadTask?.cancel()
 
-        guard let request = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "playlist", playlistID]
-        ) else {
-            loadedID = nil
-            return
-        }
-
-        loadTask = Task { [weak self, request] in
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode) else {
+        loadTask = Task { [weak self] in
+            guard let data = try? await KaraokeAPIClient.playlistDetailData(id: playlistID) else {
                 self?.handleLoadFailure(playlistID: playlistID)
                 return
             }
+            let decoded = await Self.decodeArtworkPayload(data)
             guard !Task.isCancelled else { return }
-            self?.applyLoadedPlaylistData(data, playlistID: playlistID)
+            self?.applyDecodedArtwork(decoded, playlistID: playlistID)
         }
     }
 
@@ -50,10 +42,22 @@ final class PlaylistCoverLoader: ObservableObject {
         loadedID = nil
     }
 
-    private func applyLoadedPlaylistData(_ data: Data, playlistID: String) {
+    private struct DecodedArtworkPayload: Sendable {
+        let playlist: Playlist?
+        let songs: [Song]?
+    }
+
+    /// Decodes off the main actor; callers hop back to main only to assign results.
+    nonisolated private static func decodeArtworkPayload(_ data: Data) async -> DecodedArtworkPayload {
+        let playlist = try? JSONDecoder().decode(Playlist.self, from: data)
+        let songs = playlist?.songListDTOs ?? SongPayloadDecoder.decodeSongs(from: data)
+        return DecodedArtworkPayload(playlist: playlist, songs: songs)
+    }
+
+    private func applyDecodedArtwork(_ decoded: DecodedArtworkPayload, playlistID: String) {
         guard loadedID == playlistID else { return }
-        loadedPlaylist = try? JSONDecoder().decode(Playlist.self, from: data)
-        fallbackSongs = loadedPlaylist?.songListDTOs ?? SongPayloadDecoder.decodeSongs(from: data) ?? fallbackSongs
+        loadedPlaylist = decoded.playlist
+        fallbackSongs = decoded.songs ?? fallbackSongs
         refreshFallbackArtwork()
     }
 

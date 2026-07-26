@@ -4,7 +4,27 @@ struct PlayerVolumeRow: View {
     @EnvironmentObject var audioManager: AudioPlayerManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var volumeBridgeGeneration = 0
+    // In-drag volume lives here so the 60-120Hz drag updates don't publish
+    // through AudioPlayerManager; the manager is committed once on drag end.
+    @State private var dragVolume: Double?
     var horizontalPadding: CGFloat = 32
+
+    private var displayVolume: Double {
+        dragVolume ?? audioManager.volume
+    }
+
+    private var volumeBinding: Binding<Double> {
+        Binding(
+            get: { displayVolume },
+            set: { newValue in
+                if audioManager.isUserScrubbingVolume {
+                    dragVolume = newValue
+                } else {
+                    audioManager.volume = newValue
+                }
+            }
+        )
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -13,15 +33,18 @@ struct PlayerVolumeRow: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             AppleMusicProgressBar(
-                progress: $audioManager.volume,
+                progress: volumeBinding,
                 isScrubbing: $audioManager.isUserScrubbingVolume,
-                onSeekEnd: { _ in },
+                onSeekEnd: { final in
+                    audioManager.volume = final
+                    dragVolume = nil
+                },
                 trackColor: Color.primary.opacity(0.18),
                 fillColor: .primary,
                 idleHeight: 7,
                 activeHeight: 12,
                 accessibilityLabel: "Volume",
-                accessibilityValueText: "\(Int(audioManager.volume * 100)) percent",
+                accessibilityValueText: "\(Int(displayVolume * 100)) percent",
                 accessibilityHint: "Drag or swipe up and down to adjust volume."
             )
             Image(systemName: "speaker.wave.3.fill")
@@ -33,7 +56,7 @@ struct PlayerVolumeRow: View {
         #if canImport(UIKit)
             .background(
                 SystemVolumeBridge(
-                    volume: $audioManager.volume,
+                    volume: volumeBinding,
                     isUserScrubbing: $audioManager.isUserScrubbingVolume
                 )
                 .id(volumeBridgeGeneration)

@@ -21,6 +21,8 @@ struct PlaylistDetailView: View {
     @State private var isActivelyPulling = false
     @State private var shouldActivateSearchAfterPull = false
     @State private var searchRevealState = PlaylistSearchRevealState()
+    @State private var filterTask: Task<Void, Never>?
+    @State private var favoritesRefreshTask: Task<Void, Never>?
     @FocusState private var isSearchFocused: Bool
 
     init(playlist: Playlist) {
@@ -122,8 +124,19 @@ struct PlaylistDetailView: View {
             }
             prefetchArtwork(songs: displayedSongs)
         }
-        .onChange(of: searchText) { _, _ in
-            filteredSongs = PlaylistSongSearch.filter(songs, matching: searchText)
+        .onChange(of: searchText) { _, newValue in
+            // Filtering a large playlist runs 3 localized comparisons per song;
+            // debounce so typing doesn't stall the main thread per keystroke.
+            filterTask?.cancel()
+            filterTask = Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                // Resolve the source list now, not at body-eval time, so a
+                // loader.$songs update during the debounce isn't overwritten
+                // by a filter of the stale snapshot.
+                let currentSongs = loader.songs ?? playlist.songListDTOs ?? []
+                filteredSongs = PlaylistSongSearch.filter(currentSongs, matching: newValue)
+            }
         }
         .onReceive(loader.$songs) { newSongs in
             let next = PlaylistSongSearch.filter(
@@ -139,7 +152,15 @@ struct PlaylistDetailView: View {
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in
             guard playlist.isFavorites else { return }
-            loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
+            // Every star tap anywhere in the app fires this; coalesce rapid
+            // toggles into a single refetch instead of reloading the whole
+            // playlist per tap.
+            favoritesRefreshTask?.cancel()
+            favoritesRefreshTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
+            }
         }
         .onChange(of: isSearchFocused) { _, isFocused in
             guard isFocused, !isSearchModeActive else { return }

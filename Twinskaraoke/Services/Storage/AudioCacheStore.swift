@@ -18,6 +18,14 @@ nonisolated enum AudioCacheStore {
     private nonisolated(unsafe) static let compressionAlgorithm: Algorithm = .lzfse
     private static let chunkSize = 64 * 1024
     private static let maximumPlayableFileSize: Int64 = 256 * 1024 * 1024
+    // Track-start paths probe the same cached file several times per song
+    // (header validation + duration), each opening a fresh AVAudioFile. Memoize
+    // per (path, modificationDate); `touch` bumps the modification date, so
+    // entries invalidate conservatively whenever the file changes.
+    private static let probeMemoLock = NSLock()
+    private static let probeMemoLimit = 256
+    private nonisolated(unsafe) static var durationMemo: [String: (modified: Date, duration: TimeInterval)] = [:]
+    private nonisolated(unsafe) static var validityMemo: [String: (modified: Date, valid: Bool)] = [:]
     static let supportedMainAudioExtensions: Set<String> = [
         "aac", "aif", "aiff", "caf", "flac", "m4a", "m4b", "mp3", "mp4", "wav",
     ]
@@ -70,6 +78,7 @@ nonisolated enum AudioCacheStore {
         // and alternate legacy-extension variants.
         try? fm.removeItem(at: compressedURL(for: finalURL))
         removeMainAudioFiles(for: songID, excluding: finalURL)
+        CacheManager.noteMusicCacheCommit()
     }
 
     private static func songFiles(in directory: URL) -> SongFiles {
@@ -212,18 +221,6 @@ nonisolated enum AudioCacheStore {
         touch(vocals)
         touch(instruments)
         return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
-    }
-
-    static func hasCachedMainAudio(for songID: String, expectedRemoteURL: URL? = nil, expectedDuration: TimeInterval? = nil) -> Bool {
-        playableMainURL(
-            for: songID,
-            expectedRemoteURL: expectedRemoteURL,
-            expectedDuration: expectedDuration
-        ) != nil
-    }
-
-    static func hasCachedStems(for songID: String) -> Bool {
-        playableStems(for: songID, startOffset: readStartOffset(for: songID)) != nil
     }
 
     static func compressedURL(for playableURL: URL) -> URL {
@@ -419,7 +416,13 @@ nonisolated enum AudioCacheStore {
         let standardizedURL = url.standardizedFileURL
         let standardizedCacheDirectory = cacheDirectory.standardizedFileURL
         let cachePathPrefix = standardizedCacheDirectory.path + "/"
-        guard standardizedURL.path.hasPrefix(cachePathPrefix) else { return }
+        // Lyrics cache files live outside AudioCache but share the same
+        // access-date LRU bookkeeping.
+        let standardizedLyricsDirectory = LyricsCacheStore.cacheDirectory.standardizedFileURL
+        let lyricsPathPrefix = standardizedLyricsDirectory.path + "/"
+        guard standardizedURL.path.hasPrefix(cachePathPrefix)
+            || standardizedURL.path.hasPrefix(lyricsPathPrefix)
+        else { return }
 
         let now = Date()
         try? fm.setAttributes([.modificationDate: now], ofItemAtPath: standardizedURL.path)
@@ -427,7 +430,9 @@ nonisolated enum AudioCacheStore {
         let songDirectory = standardizedURL.hasDirectoryPath
             ? standardizedURL
             : standardizedURL.deletingLastPathComponent()
-        if songDirectory != standardizedCacheDirectory {
+        if songDirectory != standardizedCacheDirectory,
+           songDirectory != standardizedLyricsDirectory
+        {
             try? fm.setAttributes([.modificationDate: now], ofItemAtPath: songDirectory.path)
         }
     }
@@ -508,20 +513,53 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func isValidAudioFile(at url: URL) -> Bool {
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-              size >= minimumPlayableFileSize else { return false }
-        return AVEnginePlayback.hasValidAudioHeader(at: url)
+        let path = url.path
+        let modified = modificationDate(of: url)
+        probeMemoLock.lock()
+        if let entry = validityMemo[path], entry.modified == modified {
+            probeMemoLock.unlock()
+            return entry.valid
+        }
+        probeMemoLock.unlock()
+        let valid: Bool = {
+            guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                  size >= minimumPlayableFileSize else { return false }
+            return AVEnginePlayback.hasValidAudioHeader(at: url)
+        }()
+        probeMemoLock.lock()
+        if validityMemo.count >= probeMemoLimit { validityMemo.removeAll() }
+        validityMemo[path] = (modified, valid)
+        probeMemoLock.unlock()
+        return valid
     }
 
     static func audioDuration(at url: URL) -> TimeInterval {
+        let path = url.path
+        let modified = modificationDate(of: url)
+        probeMemoLock.lock()
+        if let entry = durationMemo[path], entry.modified == modified {
+            probeMemoLock.unlock()
+            return entry.duration
+        }
+        probeMemoLock.unlock()
+        var duration: TimeInterval = 0
         if let file = try? AVAudioFile(forReading: url) {
             let sampleRate = file.fileFormat.sampleRate
             if sampleRate > 0 {
-                let duration = Double(file.length) / sampleRate
-                if duration.isFinite, duration > 0 { return duration }
+                let candidate = Double(file.length) / sampleRate
+                if candidate.isFinite, candidate > 0 { duration = candidate }
             }
         }
-        return 0
+        probeMemoLock.lock()
+        if durationMemo.count >= probeMemoLimit { durationMemo.removeAll() }
+        durationMemo[path] = (modified, duration)
+        probeMemoLock.unlock()
+        return duration
+    }
+
+    private static func modificationDate(of url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            ?? .distantPast
     }
 
     static func acceptsAudioResponse(_ response: URLResponse?) -> Bool {

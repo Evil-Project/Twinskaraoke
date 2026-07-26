@@ -1,9 +1,24 @@
 import Combine
 import Foundation
 
+/// A search result paired with its playable Song, resolved once per results change
+/// so rows don't re-run toSong() on every body evaluation.
+struct WatchSearchResult: Identifiable {
+    let item: SearchSongItem
+    let song: Song?
+    var id: String { item.id }
+}
+
 @MainActor
 final class SearchViewModel: ObservableObject {
-    @Published var results: [SearchSongItem] = []
+    @Published var results: [SearchSongItem] = [] {
+        didSet {
+            resolvedResults = results.map { WatchSearchResult(item: $0, song: $0.toSong()) }
+            playableSongs = resolvedResults.compactMap(\.song)
+        }
+    }
+    @Published private(set) var resolvedResults: [WatchSearchResult] = []
+    @Published private(set) var playableSongs: [Song] = []
     @Published var isLoading = false
     @Published var searchText = ""
     private var cancellables = Set<AnyCancellable>()

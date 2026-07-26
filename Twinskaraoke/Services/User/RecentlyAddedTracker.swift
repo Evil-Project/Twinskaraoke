@@ -15,13 +15,18 @@ final class RecentlyAddedTracker: ObservableObject {
     }
 
     func registerIfNew(_ ids: [String]) {
+        // Mutate a local copy and assign once so a batch of new IDs publishes
+        // a single dates change instead of one per inserted ID.
+        var updated = dates
         var changed = false
         let now = Date()
-        for id in ids where dates[id] == nil {
-            dates[id] = now
+        for id in ids where updated[id] == nil {
+            updated[id] = now
             changed = true
         }
-        if changed { save() }
+        guard changed else { return }
+        dates = updated
+        save()
     }
 
     func bump(_ id: String) {

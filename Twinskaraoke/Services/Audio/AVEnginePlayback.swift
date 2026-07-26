@@ -813,6 +813,12 @@ final class AVEnginePlayback {
         aiStartOffset = 0
         mode = .single
         resetInstrumentalEQ()
+        // Auto-shutdown is disabled, so without this the engine would keep
+        // rendering silence for the app's lifetime (radio/stream playback uses
+        // AVPlayer and never touches the engine). Every engine playback path
+        // (play/playStems/switchToStems/revertToMain/resume/beginCrossfade)
+        // restarts it through startEngineIfNeeded().
+        engine.pause()
     }
 
     @discardableResult

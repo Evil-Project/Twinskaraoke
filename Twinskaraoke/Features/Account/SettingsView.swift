@@ -619,9 +619,14 @@ private struct StrengthSlider: View {
 
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var lastFeedbackStep: Int?
+    // In-drag value is local so per-frame drag updates don't publish through
+    // the bound model; commits are throttled to ~10Hz for live audio feedback
+    // and finalized on drag end.
+    @State private var dragValue: Float?
+    @State private var lastCommitUptime: TimeInterval = 0
 
     private var clampedValue: Float {
-        min(1, max(0, value))
+        min(1, max(0, dragValue ?? value))
     }
 
     private var percent: Int {
@@ -658,9 +663,20 @@ private struct StrengthSlider: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { drag in
                         let v = max(0, min(1, drag.location.x / max(1, geo.size.width)))
-                        setValue(Float(v), feedback: true)
+                        dragValue = Float(v)
+                        playStepFeedback(for: Float(v))
+                        let now = ProcessInfo.processInfo.systemUptime
+                        if now - lastCommitUptime >= 0.1 {
+                            lastCommitUptime = now
+                            commitValue(Float(v))
+                        }
                     }
                     .onEnded { _ in
+                        if let final = dragValue {
+                            commitValue(final)
+                        }
+                        dragValue = nil
+                        lastCommitUptime = 0
                         lastFeedbackStep = nil
                     }
             )
@@ -689,6 +705,12 @@ private struct StrengthSlider: View {
         if feedback {
             playStepFeedback(for: clamped)
         }
+    }
+
+    private func commitValue(_ newValue: Float) {
+        let clamped = min(1, max(0, newValue))
+        guard abs(clamped - value) > 0.001 else { return }
+        value = clamped
     }
 
     private func playStepFeedback(for value: Float) {
@@ -778,9 +800,14 @@ private struct EqualizerBand: View {
 
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var lastFeedbackStep: Int?
+    // In-drag value is local so per-frame drag updates don't rewrite the whole
+    // eqGainsDB array (UserDefaults + engine gains) every frame; commits are
+    // throttled to ~10Hz for live audio feedback and finalized on drag end.
+    @State private var dragValue: Float?
+    @State private var lastCommitUptime: TimeInterval = 0
 
     private var clampedValue: Float {
-        min(range.upperBound, max(range.lowerBound, value))
+        min(range.upperBound, max(range.lowerBound, dragValue ?? value))
     }
 
     private var valueText: String {
@@ -826,9 +853,21 @@ private struct EqualizerBand: View {
                     .onChanged { drag in
                         let y = max(0, min(trackHeight, drag.location.y))
                         let n = 1 - (y / max(1, trackHeight))
-                        setValue(range.lowerBound + Float(n) * span, feedback: true)
+                        let next = range.lowerBound + Float(n) * span
+                        dragValue = next
+                        playStepFeedback(for: next)
+                        let now = ProcessInfo.processInfo.systemUptime
+                        if now - lastCommitUptime >= 0.1 {
+                            lastCommitUptime = now
+                            commitValue(next)
+                        }
                     }
                     .onEnded { _ in
+                        if let final = dragValue {
+                            commitValue(final)
+                        }
+                        dragValue = nil
+                        lastCommitUptime = 0
                         lastFeedbackStep = nil
                     }
             )
@@ -856,6 +895,12 @@ private struct EqualizerBand: View {
         if feedback {
             playStepFeedback(for: clamped)
         }
+    }
+
+    private func commitValue(_ newValue: Float) {
+        let clamped = min(range.upperBound, max(range.lowerBound, newValue))
+        guard abs(clamped - value) > 0.001 else { return }
+        value = clamped
     }
 
     private func playStepFeedback(for value: Float) {
