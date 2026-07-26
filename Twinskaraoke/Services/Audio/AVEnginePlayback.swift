@@ -191,9 +191,9 @@ final class AVEnginePlayback {
     private(set) var currentURL: URL?
     private(set) var aiStartOffset: TimeInterval = 0
 
-    // Read from audio-thread completion callbacks to detect stale completions;
-    // written only on the main actor.
-    private nonisolated(unsafe) var suppressionToken: UInt64 = 0
+    // Bumped on every user-intent change to detect stale load completions;
+    // accessed only on the main actor.
+    private var suppressionToken: UInt64 = 0
     private var _paused: Bool = false
 
     private(set) var isCrossfading = false
@@ -693,32 +693,17 @@ final class AVEnginePlayback {
         DebugLogger.log("Reverting to main player", category: .playback)
         let wasPaused = _paused
         _paused = false
-        if currentURL != nil {
-            mainPlayer.volume = 1
-            stopAllStems()
-            mode = .single
-            aiStartOffset = 0
-            resetInstrumentalEQ()
-            if wasPaused {
-                mainPlayer.pause()
-                _paused = true
-            }
-            return
-        }
-        var pos = stemInstrumental.currentTime + aiStartOffset
-        if !pos.isFinite || pos < 0 { pos = 0 }
-        suppressionToken &+= 1
-        resetCrossfadePlayback()
-        let dur = mainPlayer.duration.isFinite && mainPlayer.duration > 0
-            ? mainPlayer.duration : (stemInstrumental.duration + aiStartOffset)
-        let clampedPos = min(pos, max(0, dur - 0.25))
+        // mode == .aiStems guarantees currentURL != nil: playStems sets it,
+        // and switchToStems is only reachable while a main track is loaded.
         mainPlayer.volume = 1
-        resetInstrumentalEQ()
-        startEngineIfNeeded()
-        safePlay(mainPlayer, from: clampedPos)
-        stopAllStems()
+        stopAllStems(releasingMedia: true)
         mode = .single
         aiStartOffset = 0
+        resetInstrumentalEQ()
+        if wasPaused {
+            mainPlayer.pause()
+            _paused = true
+        }
     }
 
     private func stopAllStems(releasingMedia: Bool = false) {
@@ -824,6 +809,10 @@ final class AVEnginePlayback {
     @discardableResult
     func seek(to seconds: TimeInterval) -> Bool {
         guard seconds.isFinite else { return true }
+        // safePlay/synchronizedPlay stop and restart the nodes, which clears
+        // their paused state; without re-pausing, a seek while paused would
+        // make resume() fall through to play(from: 0).
+        let wasPaused = _paused
         if mode == .aiStems {
             let stemTarget = seconds - aiStartOffset
             if stemTarget < 0 { return false }
@@ -835,6 +824,7 @@ final class AVEnginePlayback {
             suppressionToken &+= 1
             let when = synchronizedStartTime()
             synchronizedPlay(mainPos: seconds, stemPos: target, when: when)
+            if wasPaused { pause() }
             return true
         }
         let dur = mainPlayer.duration
@@ -844,6 +834,7 @@ final class AVEnginePlayback {
         let target = max(0, min(seconds, upper))
         suppressionToken &+= 1
         safePlay(mainPlayer, from: target)
+        if wasPaused { pause() }
         return true
     }
 

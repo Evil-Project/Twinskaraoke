@@ -472,10 +472,10 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         let cancelled = isCancelled
         fileHandle?.closeFile()
         fileHandle = nil
-        stateLock.unlock()
-        session.invalidateAndCancel()
         self.task = nil
         self.session = nil
+        stateLock.unlock()
+        session.invalidateAndCancel()
         guard !cancelled else { return }
         if error == nil, AudioCacheStore.acceptsAudioResponse(task.response),
            AudioCacheStore.isPlayableAudioFile(at: partialURL),
@@ -508,10 +508,18 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     }
 
     private func finish() {
-        guard !didComplete else { return }
+        // cancel() (main thread) and didCompleteWithError (delegate queue) can
+        // race here; the check-and-set must be atomic or the continuation
+        // guarded by onCompletion would be resumed twice.
+        stateLock.lock()
+        guard !didComplete else {
+            stateLock.unlock()
+            return
+        }
         didComplete = true
         let completion = onCompletion
         onCompletion = nil
+        stateLock.unlock()
         if Thread.isMainThread {
             completion?()
         } else {

@@ -1345,11 +1345,7 @@ class AudioPlayerManager: ObservableObject {
             }
         }
         progress = 0
-        if currentSong?.id != song.id {
-            currentSong = song
-        } else {
-            currentSong = song
-        }
+        currentSong = song
         warmPlayerArtwork(for: song)
         if !context.isEmpty {
             queue = context

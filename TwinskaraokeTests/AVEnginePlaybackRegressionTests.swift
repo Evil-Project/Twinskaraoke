@@ -47,12 +47,48 @@ struct AVEnginePlaybackRegressionTests {
         try player.load(file: AVAudioFile(forReading: sourceURL))
 
         var completionCount = 0
-        player.completionHandler = { completionCount += 1 }
-        player.play(from: player.duration)
-        await Task.yield()
+        await confirmation("end-of-file completion fires once", expectedCount: 1) { completion in
+            // The completion is delivered through a MainActor task hop, so the
+            // body must suspend until it fires: confirmation() checks the
+            // count as soon as its body returns and does not wait on its own.
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                var didResume = false
+                player.completionHandler = {
+                    completionCount += 1
+                    completion()
+                    guard !didResume else { return }
+                    didResume = true
+                    continuation.resume()
+                }
+                player.play(from: player.duration)
+            }
+        }
 
         #expect(!player.isPlaying)
         #expect(completionCount == 1)
+    }
+
+    @Test("Seek while paused then resume continues from the seek target")
+    func pausedSeekThenResumeKeepsPosition() async throws {
+        let sourceURL = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let engine = AVEnginePlayback()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            engine.play(url: sourceURL, onReady: { continuation.resume() })
+        }
+
+        engine.pause()
+        #expect(engine.seek(to: 5))
+        // The seek must not leave the decks playing behind the paused facade.
+        #expect(!engine.isPlaying)
+        #expect(abs(engine.currentTime - 5) < 0.5)
+
+        // Regression: resume used to fall through to play(from: 0) because
+        // the seek's internal stop()/play() had cleared the paused state.
+        engine.resume()
+        #expect(engine.currentTime >= 4.5)
+        engine.stop()
     }
 
     private func makeSilentWaveFile(duration: TimeInterval, sampleRate: Double) throws -> URL {
