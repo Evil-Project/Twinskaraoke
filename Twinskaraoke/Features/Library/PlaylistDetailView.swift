@@ -61,7 +61,15 @@ struct PlaylistDetailView: View {
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, scrollOffset in
-                updateSearchInteraction(scrollOffset: scrollOffset)
+                // Defer out of the geometry-update pass: updateSearchInteraction
+                // toggles the search safe-area inset and hero pull override,
+                // which changes this geometry in the same frame — SwiftUI then
+                // logs "tried to update multiple times per frame" and drops
+                // the intermediate scroll events. main.async is enough here:
+                // lighter than a Task per scroll event and strictly FIFO.
+                DispatchQueue.main.async {
+                    updateSearchInteraction(scrollOffset: scrollOffset)
+                }
             }
             .onScrollPhaseChange { _, phase in
                 let wasActivelyPulling = isActivelyPulling
@@ -105,10 +113,13 @@ struct PlaylistDetailView: View {
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle
         )
-        // No container .animation(value:) for isLoading / isSearchModeActive:
-        // an implicit animation on those flips animates the whole scroll
-        // content swap, which makes SwiftUI re-measure every row of a large
-        // playlist per frame and can hang the main thread. The section-level
+        // No animation for isLoading / isSearchModeActive flips — neither a
+        // container .animation(value:) nor an explicit withAnimation at any
+        // mutation site (activateSearchAfterPull, the isSearchFocused change,
+        // dismissSearch, auto-hide; marked "Unanimated on purpose" below).
+        // Animating the whole scroll-content swap makes SwiftUI re-measure
+        // every row of a large playlist per frame and hangs the main thread
+        // (watchdog kill) on big playlists. The section-level
         // .transition(.opacity) modifiers still animate the swap cheaply.
         .scrollIndicators(.hidden)
         .musicScreenBackground()
@@ -168,9 +179,8 @@ struct PlaylistDetailView: View {
             guard isFocused, !isSearchModeActive else { return }
             shouldActivateSearchAfterPull = false
             isArtworkPullOverridden = false
-            withAnimation(reduceMotion ? nil : AppMotion.quick) {
-                isSearchModeActive = true
-            }
+            // Unanimated on purpose (see "No animation" note above).
+            isSearchModeActive = true
         }
         .onDisappear {
             ArtworkPrefetcher.shared.cancel(reason: "playlist cover \(playlist.id)")
@@ -294,9 +304,11 @@ struct PlaylistDetailView: View {
         searchText = ""
         canAutoHideSearch = false
         shouldActivateSearchAfterPull = false
+        // Unanimated on purpose (see "No animation" note above); only the
+        // search field inset and hero override animate.
+        isSearchModeActive = false
         withAnimation(reduceMotion ? nil : AppMotion.quick) {
             isSearchVisible = false
-            isSearchModeActive = false
             isArtworkPullOverridden = false
         }
     }
@@ -307,9 +319,11 @@ struct PlaylistDetailView: View {
         canAutoHideSearch = false
         shouldActivateSearchAfterPull = false
         searchRevealState.reset()
+        // Unanimated on purpose (see "No animation" note above); only the
+        // search field inset and hero override animate.
+        isSearchModeActive = false
         withAnimation(reduceMotion ? nil : AppMotion.quick) {
             isSearchVisible = false
-            isSearchModeActive = false
             isArtworkPullOverridden = false
         }
     }
@@ -318,14 +332,12 @@ struct PlaylistDetailView: View {
         guard shouldActivateSearchAfterPull, isSearchVisible else { return }
         shouldActivateSearchAfterPull = false
 
-        withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.18)) {
-            isSearchModeActive = true
-        } completion: {
-            Task { @MainActor in
-                await Task.yield()
-                guard isSearchVisible, isSearchModeActive else { return }
-                isSearchFocused = true
-            }
+        // Unanimated on purpose (see "No animation" note above).
+        isSearchModeActive = true
+        Task { @MainActor in
+            await Task.yield()
+            guard isSearchVisible, isSearchModeActive else { return }
+            isSearchFocused = true
         }
     }
 
