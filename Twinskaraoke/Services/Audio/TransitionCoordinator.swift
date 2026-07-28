@@ -36,6 +36,11 @@ final class TransitionCoordinator {
     private(set) var state: State = .idle
     private var bpmTask: Task<Void, Never>?
     private var predownloadSession: PredownloadSession?
+    // Retry-storm guard: when preparing the upcoming song fails, poll ticks
+    // would otherwise restart prepare+download every 250 ms for the rest of
+    // the prepare window. The record clears once the current song changes.
+    private var failedPreparationCurrentSongID: String?
+    private var failedPreparationNextSongID: String?
 
     weak var avEngine: AVEnginePlayback?
 
@@ -90,6 +95,10 @@ final class TransitionCoordinator {
         aiEffectActive: Bool
     ) {
         guard totalDuration > 0, let currentSong else { return }
+        if failedPreparationCurrentSongID != nil, failedPreparationCurrentSongID != currentSong.id {
+            failedPreparationCurrentSongID = nil
+            failedPreparationNextSongID = nil
+        }
         guard autoMixEnabled || crossfadeEnabled else {
             if case .idle = state {} else { reset() }
             return
@@ -102,6 +111,7 @@ final class TransitionCoordinator {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
             if let nextSong = nextSongInQueue(current: currentSong, queue: queue, repeatMode: repeatMode) {
+                guard failedPreparationNextSongID != nextSong.id else { return }
                 beginPreparing(
                     nextSong: nextSong, currentSong: currentSong,
                     autoMixEnabled: autoMixEnabled, crossfadeSeconds: crossfadeSeconds,
@@ -138,11 +148,15 @@ final class TransitionCoordinator {
         bpmTask?.cancel()
         predownloadSession?.cancel()
         predownloadSession = nil
-        bpmTask = Task { [weak self] in
+        // Detached: audioFileURL can synchronously decompress .wav caches
+        // (AudioCacheStore.playableMainURL), blocking file I/O that must not
+        // run on this @MainActor class's executor; results are applied back
+        // on the main actor below.
+        bpmTask = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
 
-            let currentURL = audioFileURL(for: currentSong)
-            let nextURL = audioFileURL(for: nextSong)
+            let currentURL = await Self.audioFileURL(for: currentSong)
+            let nextURL = await Self.audioFileURL(for: nextSong)
 
             if nextURL == nil, let remoteURL = nextSong.audioURL {
                 DebugLogger.log(
@@ -152,7 +166,7 @@ final class TransitionCoordinator {
                 await predownload(song: nextSong, from: remoteURL)
             }
 
-            let nextFileURL = audioFileURL(for: nextSong)
+            let nextFileURL = await Self.audioFileURL(for: nextSong)
             let shouldAnalyzeBPM = autoMixEnabled && !aiEffectActive
             let outBPM: Double?
             let inBPM: Double?
@@ -186,8 +200,16 @@ final class TransitionCoordinator {
                 rampStyle = .equalPower
             }
 
-            guard let fileURL = audioFileURL(for: nextSong) else {
-                await MainActor.run { [weak self] in self?.reset() }
+            guard let fileURL = await Self.audioFileURL(for: nextSong) else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // Only record the failure (and reset) if this preparation
+                    // is still the active one.
+                    guard case let .preparing(s) = state, s.id == nextSong.id else { return }
+                    failedPreparationCurrentSongID = currentSong.id
+                    failedPreparationNextSongID = nextSong.id
+                    reset()
+                }
                 return
             }
 
@@ -240,7 +262,7 @@ final class TransitionCoordinator {
         return bpm
     }
 
-    static func computeFade(
+    nonisolated static func computeFade(
         outBPM: Double?, inBPM: Double?
     ) -> (duration: TimeInterval, style: AVEnginePlayback.RampStyle) {
         guard let out = outBPM, let inB = inBPM,
@@ -260,12 +282,16 @@ final class TransitionCoordinator {
         }
     }
 
-    static func harmonicBPMDifference(_ a: Double, _ b: Double) -> Double {
+    nonisolated static func harmonicBPMDifference(_ a: Double, _ b: Double) -> Double {
         [b, b * 2, b / 2].map { abs(a - $0) }.min()!
     }
 
-    private func audioFileURL(for song: Song) -> URL? {
-        if let downloaded = DownloadManager.shared.playableURL(for: song) {
+    // nonisolated: AudioCacheStore.playableMainURL may synchronously run
+    // decompressFileIfNeeded for .wav caches — blocking file I/O that must
+    // stay off the main actor (callers on the main actor use the
+    // non-decompressing immediatelyPlayableMainURL variant instead).
+    private nonisolated static func audioFileURL(for song: Song) async -> URL? {
+        if let downloaded = await DownloadManager.shared.playableURL(for: song) {
             return downloaded
         }
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
