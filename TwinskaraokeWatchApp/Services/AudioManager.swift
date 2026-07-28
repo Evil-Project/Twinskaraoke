@@ -42,6 +42,9 @@ class AudioManager: ObservableObject {
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    // Player-item/player publishers live here so cleanupPlayer can drop them
+    // without touching the audio-session handlers in `cancellables`.
+    private var playerCancellables = Set<AnyCancellable>()
     private var downloadTask: URLSessionDownloadTask?
     private var downloadToken: UUID?
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
@@ -117,6 +120,29 @@ class AudioManager: ObservableObject {
         prepareAndPlay()
     }
 
+    /// Plays the song at `index` in `context`. The position is picked by
+    /// index rather than by song lookup so tapping a repeated song targets
+    /// that occurrence instead of the first match in the context.
+    func playSong(at index: Int, context: [Song]) {
+        guard context.indices.contains(index) else { return }
+        queue = context
+        currentIndex = index
+        currentSong = context[index]
+        prepareAndPlay()
+    }
+
+    /// Plays the up-next row at `offset`. The queue position is picked by
+    /// offset rather than by song lookup so tapping a repeated song targets
+    /// that occurrence instead of the first match in the queue.
+    func playUpNext(at offset: Int) {
+        guard let baseIndex = resolvedCurrentQueueIndex else { return }
+        let index = baseIndex + 1 + offset
+        guard queue.indices.contains(index) else { return }
+        currentIndex = index
+        currentSong = queue[index]
+        prepareAndPlay()
+    }
+
     private func prepareAndPlay() {
         cleanupPlayer()
         currentTime = 0
@@ -180,6 +206,10 @@ class AudioManager: ObservableObject {
     }
 
     private func setupPlayer(with localURL: URL) {
+        // Raced async cache validations can both reach here for one song;
+        // tear down any existing player and its observers so two players
+        // never run at once and no orphaned observer keeps firing.
+        cleanupPlayer()
         do {
             try AVAudioSession.sharedInstance().setCategory(
                 .playback, mode: .default, policy: .longFormAudio
@@ -199,7 +229,7 @@ class AudioManager: ObservableObject {
                     self?.duration = seconds
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &playerCancellables)
         playerItem.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
@@ -219,13 +249,13 @@ class AudioManager: ObservableObject {
                     }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &playerCancellables)
         player.publisher(for: \.timeControlStatus, options: [.initial, .new])
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshPlaybackState()
             }
-            .store(in: &cancellables)
+            .store(in: &playerCancellables)
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
@@ -424,6 +454,10 @@ class AudioManager: ObservableObject {
     }
 
     private func cleanupPlayer() {
+        // Drop the player's Combine sinks first: a raced second setupPlayer
+        // would otherwise leave the old player's status callbacks firing
+        // against the replacement.
+        playerCancellables.removeAll()
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
             timeObserver = nil
@@ -603,6 +637,10 @@ class AudioManager: ObservableObject {
         recoveringFromBrokenCache.insert(songID)
         try? FileManager.default.removeItem(at: playbackURL)
         cleanupPlayer()
+        // As in prepareAndPlay, drop the dead player's Combine sinks; this
+        // also drops the session handlers, so re-register them.
+        cancellables.removeAll()
+        setupInterruptionHandler()
         isLoading = true
         downloadTask?.cancel()
         downloadToken = nil

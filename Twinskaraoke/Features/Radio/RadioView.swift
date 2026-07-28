@@ -426,7 +426,8 @@ struct RadioView: View {
             RadioSectionHeader("New & Recent")
                 .padding(.horizontal, horizontalPadding)
             LazyVStack(spacing: 0) {
-                ForEach(Array(history.prefix(10).enumerated()), id: \.offset) { _, item in
+                ForEach(history.prefix(10).enumerated().map { PositionedRadioHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
+                    let item = positioned.item
                     Button {
                         showLiveSchedule()
                     } label: {
@@ -449,6 +450,25 @@ struct RadioView: View {
             }
         }
         .accessibilityIdentifier("Radio.HistorySection")
+    }
+}
+
+/// Row identity for the radio history list. The offset keeps IDs unique when
+/// the same song appears twice (duplicate ForEach IDs can hang
+/// AttributeGraph). The song ID makes the ID change when a poll prepends new
+/// items: with purely positional identity every row keeps its old view, so
+/// all visible artwork flashes back through placeholders on each track change.
+private struct PositionedRadioHistoryItem: Identifiable {
+    struct ID: Hashable {
+        let offset: Int
+        let songID: String
+    }
+
+    let offset: Int
+    let item: RadioNowPlaying.HistoryItem
+
+    var id: ID {
+        ID(offset: offset, songID: item.song.id)
     }
 }
 

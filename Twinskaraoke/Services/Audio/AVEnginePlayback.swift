@@ -37,6 +37,11 @@ final class SimpleAudioPlayer {
     private var pausedPosition: TimeInterval?
     private var _isPaused = false
     private var scheduleGeneration: UInt64 = 0
+    // True while the node holds a not-yet-consumed scheduled segment. A pause
+    // after natural playback end leaves the segment fully played out, and
+    // resuming such a node would report isPlaying while rendering silence
+    // with no completion ever firing.
+    private(set) var hasScheduledMedia = false
 
     var volume: Float {
         get { playerNode.volume }
@@ -128,6 +133,7 @@ final class SimpleAudioPlayer {
 
     private func invalidateScheduledPlayback() {
         scheduleGeneration &+= 1
+        hasScheduledMedia = false
         // Completion handlers can run when stop() unschedules media. Incrementing
         // first makes those callbacks stale by construction.
         playerNode.stop()
@@ -148,11 +154,13 @@ final class SimpleAudioPlayer {
                 self?.deliverCompletion(for: generation)
             }
         }
+        hasScheduledMedia = true
         return true
     }
 
     private func deliverCompletion(for generation: UInt64) {
         guard scheduleGeneration == generation else { return }
+        hasScheduledMedia = false
         completionHandler?()
     }
 
@@ -754,6 +762,16 @@ final class AVEnginePlayback {
     var isPlaying: Bool {
         if _paused { return false }
         return mainPlayer.isPlaying
+    }
+
+    /// False when the active deck's scheduled segment has fully played out —
+    /// the state end-of-queue leaves behind when it pauses instead of
+    /// stopping. Resuming then would render silence; callers must reload.
+    var hasScheduledMedia: Bool {
+        if mode == .aiStems {
+            return mainPlayer.hasScheduledMedia && stemInstrumental.hasScheduledMedia
+        }
+        return mainPlayer.hasScheduledMedia
     }
 
     func pause() {

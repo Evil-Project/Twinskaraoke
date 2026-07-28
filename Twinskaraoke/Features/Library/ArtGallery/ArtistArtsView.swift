@@ -97,7 +97,6 @@ private struct ArtistArtsHero: View {
                         url: imageURL,
                         cornerRadius: 0,
                         contentMode: .fill,
-                        showsLoading: false,
                         lowResURL: lowResURL,
                         transparentBackground: true
                     )
@@ -156,7 +155,6 @@ private struct HeroArtwork: View {
                 RemoteArtworkImage(
                     url: url,
                     cornerRadius: 18,
-                    showsLoading: false,
                     lowResURL: art.blurPreviewURL,
                     transparentBackground: true
                 )

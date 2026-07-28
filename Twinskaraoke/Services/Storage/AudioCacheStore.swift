@@ -401,7 +401,7 @@ nonisolated enum AudioCacheStore {
 
     static func compressAssets(for songID: String) {
         // Match compressIdleAssets: the wav deletes below must hold the same
-        // lock playableURL try-locks before handing a file out.
+        // lock playableURL holds while decompressing and handing a file out.
         guard compressionLock.try() else { return }
         defer { compressionLock.unlock() }
         compressAssets(in: files(for: songID).directory)
@@ -508,21 +508,21 @@ nonisolated enum AudioCacheStore {
     private static func playableURL(for url: URL) -> URL? {
         // Only wav stems ever get a compressed sibling; the compressor never
         // touches other files, so they skip the lock dance entirely. Taking
-        // the try-lock for them would falsely report a cache miss whenever a
-        // long compressIdleAssets sweep holds the lock.
+        // the lock for them would stall reads whenever a long
+        // compressIdleAssets sweep holds it.
         guard shouldCompressPlayableFile(at: url) else {
             guard fm.fileExists(atPath: url.path) else { return nil }
             return validateAndHandOut(url)
         }
-        // The compressor deletes wav files it has compressed; only hand out an
-        // existing file while holding the same lock so it cannot be deleted
-        // between the existence check and the return. When the lock is busy,
-        // fall through to the compressed copy instead of racing the delete.
-        if compressionLock.try() {
-            defer { compressionLock.unlock() }
-            if fm.fileExists(atPath: url.path) {
-                return validateAndHandOut(url)
-            }
+        // The compressor deletes wav files it has compressed; hold the same
+        // lock across the existence check, decompression, validation, and
+        // handout so the file cannot be deleted or replaced mid-flight.
+        // Blocking acquire is fine: decompressing callers run on background
+        // threads (main-thread paths use the immediatelyPlayable variants).
+        compressionLock.lock()
+        defer { compressionLock.unlock() }
+        if fm.fileExists(atPath: url.path) {
+            return validateAndHandOut(url)
         }
         let compressed = compressedURL(for: url)
         guard fm.fileExists(atPath: compressed.path) else { return nil }
@@ -703,7 +703,11 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func compressFile(from sourceURL: URL, to destinationURL: URL) throws {
-        let tempURL = destinationURL.appendingPathExtension("tmp")
+        // Per-operation temp name: cache operations for the same destination
+        // must never share (and corrupt) a temp file.
+        let tempURL = destinationURL
+            .appendingPathExtension(UUID().uuidString)
+            .appendingPathExtension("tmp")
         try? fm.removeItem(at: tempURL)
         fm.createFile(atPath: tempURL.path, contents: nil)
 
@@ -738,7 +742,11 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func decompressFileIfNeeded(from sourceURL: URL, to destinationURL: URL) throws {
-        let tempURL = destinationURL.appendingPathExtension("tmp")
+        // Per-operation temp name: cache operations for the same destination
+        // must never share (and corrupt) a temp file.
+        let tempURL = destinationURL
+            .appendingPathExtension(UUID().uuidString)
+            .appendingPathExtension("tmp")
         try? fm.removeItem(at: tempURL)
         fm.createFile(atPath: tempURL.path, contents: nil)
 

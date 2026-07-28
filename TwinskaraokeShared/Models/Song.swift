@@ -304,11 +304,10 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   var displayArtist: String {
     let original = originalArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
     let cover = coverArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
-    let coverBy = String(localized: "Cover by \(cover)")
     switch (original.isEmpty, cover.isEmpty) {
-    case (false, false): return "\(original) · \(coverBy)"
+    case (false, false): return "\(original) · \(String(localized: "Cover by \(cover)"))"
     case (false, true): return original
-    case (true, false): return coverBy
+    case (true, false): return String(localized: "Cover by \(cover)")
     case (true, true):
       let apiProvidedArtists = originalArtists != nil || coverArtists != nil
       return apiProvidedArtists ? String(localized: "Unknown Artist") : ""
@@ -316,10 +315,15 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var artistName: String {
-    if let originals = originalArtists, !originals.isEmpty {
+    // decodeArtists can yield a non-nil empty array ("coverArtists": []), and
+    // directly constructed songs can carry whitespace-only entries, so filter
+    // blanks and fall back like displayArtist instead of returning "".
+    let originals = originalArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+    if !originals.isEmpty {
       return originals.joined(separator: ", ")
     }
-    return coverArtists?.joined(separator: ", ") ?? String(localized: "Unknown Artist")
+    let covers = coverArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+    return covers.isEmpty ? String(localized: "Unknown Artist") : covers.joined(separator: ", ")
   }
 
   var hasArtistMetadata: Bool {

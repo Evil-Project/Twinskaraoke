@@ -349,7 +349,12 @@ class AudioPlayerManager: ObservableObject {
     private var streamPlaybackRequested = false
     private var remotePlaybackCacheTask: Task<Void, Never>?
     private var remotePlaybackCacheToken: UUID?
+    private var fetchRandomTrendingToken: UUID?
     private var cacheRecoverySongID: String?
+    // Song IDs already sent through enrichSongMetadataIfNeeded this session;
+    // repeat-one loops would otherwise re-issue the search + trending
+    // fallback requests on every replay.
+    private var enrichmentAttemptedSongIDs = Set<String>()
     private var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
     // Volume ramps run on a background DispatchSourceTimer (like the engine
@@ -379,7 +384,15 @@ class AudioPlayerManager: ObservableObject {
     private var preparedStemTask: Task<Void, Never>?
     private var backgroundAnalysisRetryTask: Task<Void, Never>?
     private var cacheCompressionTask: Task<Void, Never>?
+    // Set while a stem-switch load is in flight so its failure can drop the
+    // broken stem cache. Must be cleared on every pause/stop/new-play path:
+    // those bump the engine's suppression token, the load completion then
+    // returns early before clearing this, and a stale ID would make a later
+    // unrelated engine error delete a valid stem cache.
     private var aiStemSwitchInFlightSongID: String?
+    // The isPlaybackRequested snapshot of the in-flight stem switch, so a
+    // load failure for a paused switch can fall back without un-pausing.
+    private var aiStemSwitchInFlightShouldResume = true
     private var quickCutTimer: DispatchSourceTimer?
     private var quickCutGeneration: UInt64 = 0
     private var separationGeneration: UInt64 = 0
@@ -515,6 +528,7 @@ class AudioPlayerManager: ObservableObject {
             guard let self else { return }
             DebugLogger.log("AVEngine playback error: \(error)", category: .playback)
             let failedStemSwitchSongID = aiStemSwitchInFlightSongID
+            let failedStemSwitchShouldResume = aiStemSwitchInFlightShouldResume
             aiStemSwitchInFlightSongID = nil
             let pendingTransitionSong: Song? = if case let .crossfading(plan) = transitionCoordinator.state {
                 plan.nextSong
@@ -546,7 +560,11 @@ class AudioPlayerManager: ObservableObject {
                 vocalEnhanceMode = false
                 instrumentalEnhanceMode = false
                 _suppressModeSwitch = false
-                fallBackToMainPlayback(for: song, startAt: lastKnownPlaybackTime)
+                fallBackToMainPlayback(
+                    for: song,
+                    startAt: lastKnownPlaybackTime,
+                    resume: failedStemSwitchSongID != song.id || failedStemSwitchShouldResume
+                )
                 return
             }
             if let song = currentSong, !self.isRadioMode,
@@ -1043,6 +1061,7 @@ class AudioPlayerManager: ObservableObject {
         let startAt = activePlaybackTime(for: song)
         currentPlaybackURL = sourceURL
         aiStemSwitchInFlightSongID = song.id
+        aiStemSwitchInFlightShouldResume = shouldResume
         configureAudioSessionCategory()
         activateAudioSession()
         if shouldResume {
@@ -1304,7 +1323,8 @@ class AudioPlayerManager: ObservableObject {
         song: Song,
         context: [Song] = [],
         resetTransitionVolume: Bool,
-        preserveCacheRecoveryState: Bool = false
+        preserveCacheRecoveryState: Bool = false,
+        reportsPlayCount: Bool = true
     ) {
         if !preserveCacheRecoveryState {
             cacheRecoverySongID = nil
@@ -1322,6 +1342,7 @@ class AudioPlayerManager: ObservableObject {
         cancelPendingTransitionWork(resetVolume: resetTransitionVolume)
         avEngine.cancelCrossfade()
         avEngine.stop()
+        aiStemSwitchInFlightSongID = nil
         instrumentalTask?.cancel()
         instrumentalTask = nil
         preparedStemTask?.cancel()
@@ -1330,7 +1351,9 @@ class AudioPlayerManager: ObservableObject {
         VocalSeparator.shared.cancel()
         VocalSeparator.shared.cancelBackgroundAnalysis()
         VocalSeparator.shared.cleanupRealtimeTemp()
-        reportPlayCount(for: song.id)
+        if reportsPlayCount {
+            reportPlayCount(for: song.id)
+        }
         enrichSongMetadataIfNeeded(for: song)
         if previousSongID != song.id {
             var excludeIDs = activeSongIDs()
@@ -1474,6 +1497,7 @@ class AudioPlayerManager: ObservableObject {
         }
         streamStartedAt = nil
         currentPlaybackURL = url
+        aiStemSwitchInFlightSongID = nil
         configureAudioSessionCategory()
         activateAudioSession()
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
@@ -1529,7 +1553,7 @@ class AudioPlayerManager: ObservableObject {
         playerArtworkWarmupTasks.removeAll()
     }
 
-    private func fallBackToMainPlayback(for song: Song, startAt: TimeInterval) {
+    private func fallBackToMainPlayback(for song: Song, startAt: TimeInterval, resume: Bool = true) {
         suppressPlaybackEndedCallbacks()
         stopRadioPlayer()
         stopStreamPlayer()
@@ -1543,6 +1567,18 @@ class AudioPlayerManager: ObservableObject {
             avEngine.revertToMain()
         }
         let resumeAt = max(0, startAt.isFinite ? startAt : 0)
+        guard resume else {
+            // A paused stem switch whose stem load failed must not un-pause:
+            // leave the deck unloaded and keep the position so the next
+            // explicit resume reloads the main file at the same spot.
+            lastKnownPlaybackTime = resumeAt
+            setPlaybackState(
+                playing: false,
+                buffering: false,
+                reason: "fallBackToMainPlayback.paused"
+            )
+            return
+        }
         if let fileURL = localPlaybackFileURL(for: song) {
             startPlayingFile(fileURL, startAt: resumeAt, resetSeparation: false)
             return
@@ -1653,6 +1689,7 @@ class AudioPlayerManager: ObservableObject {
         cancelPendingTransitionWork()
         lastKnownPlaybackTime = activePlaybackTime()
         avEngine.pause()
+        aiStemSwitchInFlightSongID = nil
         setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")
         return true
     }
@@ -1731,8 +1768,13 @@ class AudioPlayerManager: ObservableObject {
             return true
         }
         guard let song = currentSong else { return false }
-        if !isPlaying, avEngine.currentURL == nil {
-            let resumeAt = preferredStreamResumeTime(for: song) ?? lastKnownPlaybackTime
+        // End-of-queue pauses the engine with the deck's scheduled segment
+        // fully consumed but currentURL still set; resuming that node would
+        // report isPlaying while rendering silence, so reload from the start
+        // through the normal start-playing path instead.
+        let deckExhausted = avEngine.currentURL != nil && !avEngine.hasScheduledMedia
+        if !isPlaying, avEngine.currentURL == nil || deckExhausted {
+            let resumeAt = deckExhausted ? 0 : (preferredStreamResumeTime(for: song) ?? lastKnownPlaybackTime)
             if let fileURL = localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
                 startPlayingFile(fileURL, startAt: resumeAt)
@@ -1854,7 +1896,8 @@ class AudioPlayerManager: ObservableObject {
         configureAudioSessionCategory()
         activateAudioSession()
         if repeatMode == .one, let current = currentSong {
-            play(song: current)
+            // Repeat-one replay: not a new listen, so don't count it again.
+            play(song: current, context: [], resetTransitionVolume: true, reportsPlayCount: false)
             return
         }
         if let current = currentSong, !queue.isEmpty,
@@ -2093,6 +2136,7 @@ class AudioPlayerManager: ObservableObject {
         }
         cancelPendingTransitionWork()
         avEngine.stop()
+        aiStemSwitchInFlightSongID = nil
         stopStreamPlayer()
         instrumentalTask?.cancel()
         instrumentalTask = nil
@@ -2161,6 +2205,7 @@ class AudioPlayerManager: ObservableObject {
         stopStreamPlayer()
         stopRadioPlayer()
         avEngine.stop()
+        aiStemSwitchInFlightSongID = nil
         currentPlaybackURL = url
         DebugLogger.log(
             "Starting cached remote playback for \(songID): source=\(playbackSourceDescription(url)), startAt=\(startAt), autoplay=\(autoplay)",
@@ -3259,10 +3304,24 @@ class AudioPlayerManager: ObservableObject {
     }
 
     private func fetchRandomTrending() {
+        // Staleness fence (same idea as remotePlaybackCacheToken): the fetch
+        // is unstructured, so if the user starts other playback while it is
+        // in flight, the completion must not stomp that playback.
+        let fenceSongID = currentSong?.id
+        let requestToken = UUID()
+        fetchRandomTrendingToken = requestToken
         Task {
             guard let songs = try? await KaraokeAPIClient.trendingSongs(days: 7, take: 50),
                   let random = songs.randomElement()
             else {
+                // Only touch state/the background task while this request
+                // still owns the playback flow.
+                guard fetchRandomTrendingToken == requestToken, currentSong?.id == fenceSongID else { return }
+                setPlaybackState(
+                    playing: false,
+                    buffering: false,
+                    reason: "fetchRandomTrending.failed"
+                )
                 #if canImport(UIKit)
                     endTrackTransitionBackgroundTask()
                 #endif
@@ -3273,6 +3332,7 @@ class AudioPlayerManager: ObservableObject {
             } else {
                 songs
             }
+            guard fetchRandomTrendingToken == requestToken, currentSong?.id == fenceSongID else { return }
             play(song: random, context: rotatedQueue)
         }
     }
@@ -3289,6 +3349,7 @@ class AudioPlayerManager: ObservableObject {
 
     private func enrichSongMetadataIfNeeded(for song: Song) {
         guard !song.hasArtistMetadata else { return }
+        guard enrichmentAttemptedSongIDs.insert(song.id).inserted else { return }
         let songID = song.id
         Task { [weak self] in
             guard let self else { return }

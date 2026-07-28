@@ -61,9 +61,11 @@ struct QueueView: View {
             }
             if !upNext.isEmpty {
                 Section("Playing Next") {
-                    ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
+                    ForEach(indexedUpNext) { item in
+                        let offset = item.offset
+                        let song = item.song
                         Button {
-                            audioManager.play(song: song, context: audioManager.queue)
+                            audioManager.playUpNext(at: offset)
                             WatchHaptic.play(.start)
                         } label: {
                             WatchQueuedSongRow(song: song, offset: offset, total: upNext.count)
@@ -117,6 +119,14 @@ struct QueueView: View {
 
     private var upNextSongs: [Song] {
         audioManager.upNextSongs
+    }
+
+    // Karaoke setlists legitimately repeat a song and Song identity is the id
+    // alone, so rows use a composite id to keep ForEach identifiers unique.
+    private var indexedUpNext: [QueuedSongRowItem] {
+        upNextSongs.enumerated().map { offset, song in
+            QueuedSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
+        }
     }
 
     private func toggleCurrentPlayback() {
@@ -374,4 +384,11 @@ private struct WatchQueueProgressRing: View {
         }
         .frame(width: 28, height: 28)
     }
+}
+
+
+private struct QueuedSongRowItem: Identifiable {
+    let id: String
+    let offset: Int
+    let song: Song
 }

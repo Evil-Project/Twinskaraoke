@@ -64,10 +64,12 @@ struct PlaylistDetailView: View {
                 .listRowBackground(Color.clear)
 
                 Section {
-                    ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { offset, song in
+                    ForEach(indexedSongs) { item in
+                        let offset = item.offset
+                        let song = item.song
                         let isCurrent = audioManager.currentSong?.id == song.id
                         Button {
-                            play(song)
+                            play(item)
                         } label: {
                             WatchSongRow(
                                 song: song,
@@ -102,6 +104,14 @@ struct PlaylistDetailView: View {
         }
     }
 
+    // Karaoke setlists legitimately repeat a song and Song identity is the id
+    // alone, so rows use a composite id to keep ForEach identifiers unique.
+    private var indexedSongs: [PlaylistSongRowItem] {
+        viewModel.songs.enumerated().map { offset, song in
+            PlaylistSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
+        }
+    }
+
     private var songCountText: String {
         let count = viewModel.songs.count
         if count == 1 { return "1 song" }
@@ -117,6 +127,18 @@ struct PlaylistDetailView: View {
             return "\(hours)h \(minutes)m"
         }
         return "\(minutes)m"
+    }
+
+    // Row taps pass the row item so a repeated song starts at the tapped
+    // occurrence; play(song:context:) would resolve the first match instead.
+    private func play(_ item: PlaylistSongRowItem) {
+        if audioManager.currentSong?.id != item.song.id {
+            audioManager.playSong(at: item.offset, context: viewModel.songs)
+            WatchHaptic.play(.start)
+        } else {
+            WatchHaptic.play(.click)
+        }
+        showPlayer = true
     }
 
     private func play(_ song: Song) {
@@ -264,4 +286,11 @@ private struct WatchPlaylistHeaderButton: View {
         .buttonStyle(.watchPressable)
         .accessibilityLabel(title)
     }
+}
+
+
+private struct PlaylistSongRowItem: Identifiable {
+    let id: String
+    let offset: Int
+    let song: Song
 }

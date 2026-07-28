@@ -96,7 +96,8 @@ final class PublicPlaylistsViewModel: ObservableObject {
                 canLoadMore = items.count >= pageSize
             } catch {
                 guard token == requestToken else { return }
-                if replace { playlists = [] }
+                // Keep the current items on a failed replace fetch so the view
+                // can retry instead of landing on a dead-end empty state.
                 canLoadMore = false
             }
             isLoadingMore = false
@@ -215,7 +216,10 @@ final class GenresViewModel: ObservableObject {
     private var pendingDetailOrder: [String] = []
     private var pendingDetails: [String: GenreSummary] = [:]
     private var detailTasks: [String: Task<Void, Never>] = [:]
-    private var detailGeneration: UInt64 = 0
+    // Published so views can key work on it: a purge cancels in-flight detail
+    // tasks, and without a generation-keyed restart those views would spin
+    // forever on their loading branch.
+    @Published private(set) var detailGeneration: UInt64 = 0
     private var pageGeneration: UInt64 = 0
     private var detailFailureDates: [String: Date] = [:]
     private let maxConcurrentDetailRequests = 4
@@ -257,6 +261,10 @@ final class GenresViewModel: ObservableObject {
 
     func refresh() {
         hasLoaded = false
+        // Bypass the isLoading guard so a pull-to-refresh during the initial
+        // fetch starts a new replace-fetch; the new pageGeneration token in
+        // fetchPage invalidates the in-flight response.
+        isLoading = false
         loadIfNeeded()
     }
 

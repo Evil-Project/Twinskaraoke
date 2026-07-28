@@ -20,7 +20,7 @@ struct ZoomableImageViewer: View {
             Color.black.ignoresSafeArea()
             if let url {
                 RemoteArtworkImage(
-                    url: url, cornerRadius: 0, contentMode: .fit, showsLoading: true,
+                    url: url, cornerRadius: 0, contentMode: .fit,
                     lowResURL: lowResURL, transparentBackground: true, fullResolution: true
                 )
                 .scaleEffect(scale)

@@ -641,7 +641,7 @@ struct PlaylistsGridScreen: View {
         }
         ScrollView {
             Group {
-                if viewModel.isLoading, userManager.isLoading, all.isEmpty {
+                if (viewModel.isLoading || userManager.isLoading), all.isEmpty {
                     PlaylistsSkeletonView()
                 } else if displayed.isEmpty {
                     MusicEmptyState(

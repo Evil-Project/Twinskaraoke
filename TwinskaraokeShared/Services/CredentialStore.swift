@@ -35,9 +35,14 @@ nonisolated enum CredentialStore {
     if cacheGeneration == generation {
       cachedToken = resolved
       tokenCacheValid = true
+      tokenCacheLock.unlock()
+      return resolved
     }
+    // A save/delete raced the cold read: the resolved value may be a revoked
+    // token, so hand out the current cached value (nil if it was cleared).
+    let current = tokenCacheValid ? cachedToken : nil
     tokenCacheLock.unlock()
-    return resolved
+    return current
   }
 
   private static func resolveToken() -> String? {

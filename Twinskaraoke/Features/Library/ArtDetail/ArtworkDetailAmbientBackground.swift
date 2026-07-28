@@ -11,7 +11,6 @@ struct ArtworkDetailAmbientBackground: View {
                     url: url,
                     cornerRadius: 0,
                     contentMode: .fill,
-                    showsLoading: false,
                     lowResURL: art.blurPreviewURL,
                     transparentBackground: true
                 )

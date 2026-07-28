@@ -31,6 +31,7 @@ final class AuthManager: NSObject, ObservableObject {
     private let defaults = UserDefaults.standard
     private var webAuthenticationSession: ASWebAuthenticationSession?
     private var webAuthenticationContextProvider: WebAuthenticationPresentationContextProvider?
+    private var sessionExpiredObserver: NSObjectProtocol?
 
     private enum K {
         static let userId = "nk.userId"
@@ -58,7 +59,7 @@ final class AuthManager: NSObject, ObservableObject {
     override init() {
         super.init()
         loadPersisted()
-        NotificationCenter.default.addObserver(
+        sessionExpiredObserver = NotificationCenter.default.addObserver(
             forName: .karaokeSessionExpired,
             object: nil,
             queue: .main
@@ -66,6 +67,14 @@ final class AuthManager: NSObject, ObservableObject {
             Task { @MainActor [weak self] in
                 self?.handleExpiredSession()
             }
+        }
+    }
+
+    deinit {
+        // AccountView mints a fresh AuthManager per visit; without removal
+        // the block-based observer would accumulate for the app's lifetime.
+        if let sessionExpiredObserver {
+            NotificationCenter.default.removeObserver(sessionExpiredObserver)
         }
     }
 

@@ -515,7 +515,10 @@ struct GenreDetailView: View {
                 .transition(.opacity)
             }
         }
-        .task {
+        // Keyed on the purge generation, not the cache entry: a memory-warning
+        // purge cancels in-flight detail tasks without changing allSongs, so a
+        // nil-entry key would never change and the load would never restart.
+        .task(id: viewModel.detailGeneration) {
             viewModel.loadDetailIfNeeded(for: genre)
         }
     }
