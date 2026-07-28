@@ -164,24 +164,24 @@ struct RandomSongsView: View {
                 }
 
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(songs.enumerated()), id: \.offset) { idx, song in
+                    ForEach(songs.enumerated().map { PositionedRandomSong(offset: $0.offset, song: $0.element) }) { item in
                         Button {
-                            play(song, context: songs)
+                            play(item.song, context: songs)
                         } label: {
                             PlaylistRow(
-                                song: song,
+                                song: item.song,
                                 showsArtwork: true,
                                 horizontalPadding: rowHorizontalPadding
                             )
                             .contentShape(Rectangle())
-                            .songRowAccessibility(song: song) {
-                                play(song, context: songs)
+                            .songRowAccessibility(song: item.song) {
+                                play(item.song, context: songs)
                             }
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("RandomSongs.song.\(song.id)")
-                        if idx < songs.count - 1 {
+                        .accessibilityIdentifier("RandomSongs.song.\(item.offset).\(item.song.id)")
+                        if item.offset < songs.count - 1 {
                             Divider().padding(.leading, rowHorizontalPadding + 60)
                         }
                     }
@@ -256,6 +256,33 @@ struct RandomSongsView: View {
         Task {
             await viewModel.reload()
         }
+    }
+}
+
+/// Row identity for the random songs list. The offset keeps IDs unique when
+/// the same song appears twice (duplicate ForEach IDs can hang
+/// AttributeGraph). The song fields make the ID change when refresh replaces
+/// the whole set at the same offsets: with purely positional identity, an
+/// already-composed row keeps showing the previous random pick, and its
+/// SongDownloadRowState stays subscribed to the old song's downloads.
+private struct PositionedRandomSong: Identifiable {
+    struct ID: Hashable {
+        let offset: Int
+        let songID: String
+        let displayArtist: String
+        let durationText: String
+    }
+
+    let offset: Int
+    let song: Song
+
+    var id: ID {
+        ID(
+            offset: offset,
+            songID: song.id,
+            displayArtist: song.displayArtist,
+            durationText: song.durationText
+        )
     }
 }
 

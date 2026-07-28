@@ -63,8 +63,8 @@ struct RadioQueueView: View {
                         if !history.isEmpty {
                             section(title: "Recently Played") {
                                 VStack(spacing: 0) {
-                                    ForEach(Array(history.enumerated()), id: \.offset) { _, item in
-                                        row(song: item.song, isCurrent: false)
+                                    ForEach(history.enumerated().map { PositionedRadioQueueHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
+                                        row(song: positioned.item.song, isCurrent: false)
                                         Rectangle()
                                             .fill(Color.appDivider)
                                             .frame(height: 0.5)
@@ -219,5 +219,24 @@ struct RadioQueueView: View {
 
     private var rowTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom))
+    }
+}
+
+/// Row identity for the radio queue history list. The offset keeps IDs unique
+/// when the same song appears twice (duplicate ForEach IDs can hang
+/// AttributeGraph). The song ID makes the ID change when a poll prepends new
+/// items: with purely positional identity every row keeps its old view, so
+/// all visible artwork flashes back through placeholders on each track change.
+private struct PositionedRadioQueueHistoryItem: Identifiable {
+    struct ID: Hashable {
+        let offset: Int
+        let songID: String
+    }
+
+    let offset: Int
+    let item: RadioNowPlaying.HistoryItem
+
+    var id: ID {
+        ID(offset: offset, songID: item.song.id)
     }
 }
