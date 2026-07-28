@@ -9,7 +9,9 @@ final class PlaylistListLoader: ObservableObject {
     private var urlBuilder: ((Int, Int) -> String)?
 
     func bootstrap(initial: [Playlist], urlBuilder: @escaping (Int, Int) -> String) {
-        guard self.urlBuilder == nil else { return }
+        // Re-bootstrap when the view opened before page 1 arrived: the loader
+        // is still empty and loadMoreIfNeeded can't fire on an empty list.
+        guard self.urlBuilder == nil || (playlists.isEmpty && !initial.isEmpty) else { return }
         self.urlBuilder = urlBuilder
         playlists = initial
         canLoadMore = true
@@ -42,6 +44,12 @@ final class PlaylistListLoader: ObservableObject {
             let data = try? await KaraokeAPIClient.data(for: request)
             DispatchQueue.main.async {
                 guard let self else { return }
+                // A nil response is a transient failure — keep canLoadMore so
+                // the next cell onAppear retries instead of disabling pagination.
+                guard let data else {
+                    self.isLoadingMore = false
+                    return
+                }
                 let items = Self.decode(data: data)
                 if !items.isEmpty {
                     let existing = Set(self.playlists.map(\.id))

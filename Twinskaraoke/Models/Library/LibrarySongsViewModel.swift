@@ -197,7 +197,9 @@ final class LibrarySongsViewModel: ObservableObject {
         }
         rebuildDisplayedSongs()
 
-        canLoadMore = pageSongs.count == pageSize
+        // The server paginates on the unfiltered count; using the filtered
+        // pageSongs here would stop infinite scroll on a page with filtered items.
+        canLoadMore = decoded.count == pageSize
         if !pageSongs.isEmpty || replace {
             self.page = page
         }

@@ -96,7 +96,8 @@ final class PublicPlaylistsViewModel: ObservableObject {
                 canLoadMore = items.count >= pageSize
             } catch {
                 guard token == requestToken else { return }
-                if replace { playlists = [] }
+                // Keep the current items on a failed replace fetch so the view
+                // can retry instead of landing on a dead-end empty state.
                 canLoadMore = false
             }
             isLoadingMore = false
@@ -257,6 +258,10 @@ final class GenresViewModel: ObservableObject {
 
     func refresh() {
         hasLoaded = false
+        // Bypass the isLoading guard so a pull-to-refresh during the initial
+        // fetch starts a new replace-fetch; the new pageGeneration token in
+        // fetchPage invalidates the in-flight response.
+        isLoading = false
         loadIfNeeded()
     }
 

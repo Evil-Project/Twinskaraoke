@@ -3,6 +3,7 @@ import SwiftUI
 struct UploadedSongsView: View {
     @StateObject private var viewModel = UploadedSongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
+    @State private var prefetchedIDs: [String] = []
 
     var body: some View {
         let songs = viewModel.displayedSongs
@@ -68,9 +69,15 @@ struct UploadedSongsView: View {
         .task {
             viewModel.loadIfNeeded()
         }
-        .onChange(of: Array(songs.prefix(18)).map(\.id)) { _, _ in
+        // Diffing on displayedSongs (Equatable, id-only ==) avoids allocating
+        // the prefix id array on every body eval; it only builds when the list changes.
+        .onChange(of: viewModel.displayedSongs) { _, newSongs in
+            let visible = Array(newSongs.prefix(18))
+            let ids = visible.map(\.id)
+            guard ids != prefetchedIDs else { return }
+            prefetchedIDs = ids
             ArtworkPrefetcher.shared.prefetchSongs(
-                Array(songs.prefix(18)),
+                visible,
                 limit: 18,
                 reason: "uploaded visible songs",
                 variant: .row

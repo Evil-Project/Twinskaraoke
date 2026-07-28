@@ -515,7 +515,9 @@ struct GenreDetailView: View {
                 .transition(.opacity)
             }
         }
-        .task {
+        // Keyed on the cache entry so the load re-fires after a memory-warning
+        // purge flips the view back to its loading branch.
+        .task(id: viewModel.allSongs[genre.id] == nil) {
             viewModel.loadDetailIfNeeded(for: genre)
         }
     }

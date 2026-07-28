@@ -70,10 +70,13 @@ final class HomeViewModel: ObservableObject {
                 topPicksPage = 1
                 canLoadMoreTopPicks = playlists.count == topPicksPageSize
             }
-            let releases = loadedReleases ?? []
-            newReleases = releases
-            latestSingle = releases.first
-            latestSingleContext = releases
+            // Match the sections above: a failed refresh keeps the existing
+            // New Releases shelf instead of erasing it mid-session.
+            if let loadedReleases {
+                newReleases = loadedReleases
+                latestSingle = loadedReleases.first
+                latestSingleContext = loadedReleases
+            }
             isLoading = false
             homeLoadTask = nil
         }
