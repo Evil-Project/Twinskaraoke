@@ -332,20 +332,12 @@ final class TwinskaraokeUITests: XCTestCase {
       "Expected the selected song title to be visible in the player."
     )
 
-    let lyricsButton = app.buttons["Show Lyrics"].firstMatch
-    XCTAssertTrue(
-      lyricsButton.waitForExistence(timeout: 8),
-      "Expected the full-screen player to expose lyrics controls."
-    )
-    lyricsButton.tap()
-
-    XCTAssertTrue(
-      app.buttons["Hide Lyrics"].waitForExistence(timeout: 8)
-        || app.buttons["Hide lyrics"].waitForExistence(timeout: 8),
-      "Expected the player to switch into lyrics mode."
-    )
-
     if isRunningOnPad {
+      // iPad opens straight into lyrics, so the toggle starts in the "on" state.
+      XCTAssertTrue(
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
+        "Expected the iPad player to open with lyrics already showing."
+      )
       XCTAssertTrue(
         accessibleElementExists(
           identifier: "FullScreenPlayer.wideLyricsTitle",
@@ -354,10 +346,29 @@ final class TwinskaraokeUITests: XCTestCase {
         ),
         "Expected the iPad player to expose a dedicated lyrics column."
       )
-    } else {
+
+      app.buttons["Hide Lyrics"].firstMatch.tap()
       XCTAssertTrue(
-        app.buttons["Hide lyrics"].exists || app.buttons["Hide Lyrics"].exists,
-        "Expected the compact player to expose its lyrics controls."
+        app.buttons["Show Lyrics"].waitForExistence(timeout: 8),
+        "Expected the iPad player to fall back to the artwork layout."
+      )
+      app.buttons["Show Lyrics"].firstMatch.tap()
+      XCTAssertTrue(
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
+        "Expected the iPad player to return to lyrics mode."
+      )
+    } else {
+      let lyricsButton = app.buttons["Show Lyrics"].firstMatch
+      XCTAssertTrue(
+        lyricsButton.waitForExistence(timeout: 8),
+        "Expected the full-screen player to expose lyrics controls."
+      )
+      lyricsButton.tap()
+
+      XCTAssertTrue(
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8)
+          || app.buttons["Hide lyrics"].waitForExistence(timeout: 8),
+        "Expected the player to switch into lyrics mode."
       )
     }
   }
