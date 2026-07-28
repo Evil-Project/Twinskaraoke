@@ -128,7 +128,7 @@ Twinskaraoke now has a native **Apple TV** app!
 </details>
 
 > [!NOTE]
-> The Apple TV app is on the TestFlight or you can install by building from source with Xcode (see the **Build from Source** section below, including the extra Apple TV target step). It requires **tvOS 26 or later**.
+> The Apple TV app is available on TestFlight, or you can install it by building from source with Xcode (see the **Build from Source** section below, including the extra Apple TV target step). It requires **tvOS 26 or later**.
 
 # Twinskaraoke - iOS Installation Guide
 

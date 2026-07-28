@@ -20,7 +20,7 @@ The Apple TV app requires **tvOS 26 or later**. it is available within the TestF
 
 ### Home
 
-with trending and the latest setlists
+The Home screen highlights trending songs and the latest setlists.
 
 ### Search
 
