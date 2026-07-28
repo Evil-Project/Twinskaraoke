@@ -69,7 +69,7 @@ struct PlaylistDetailView: View {
                         let song = item.song
                         let isCurrent = audioManager.currentSong?.id == song.id
                         Button {
-                            play(song)
+                            play(item)
                         } label: {
                             WatchSongRow(
                                 song: song,
@@ -127,6 +127,18 @@ struct PlaylistDetailView: View {
             return "\(hours)h \(minutes)m"
         }
         return "\(minutes)m"
+    }
+
+    // Row taps pass the row item so a repeated song starts at the tapped
+    // occurrence; play(song:context:) would resolve the first match instead.
+    private func play(_ item: PlaylistSongRowItem) {
+        if audioManager.currentSong?.id != item.song.id {
+            audioManager.playSong(at: item.offset, context: viewModel.songs)
+            WatchHaptic.play(.start)
+        } else {
+            WatchHaptic.play(.click)
+        }
+        showPlayer = true
     }
 
     private func play(_ song: Song) {

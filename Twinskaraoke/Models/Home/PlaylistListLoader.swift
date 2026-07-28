@@ -51,6 +51,12 @@ final class PlaylistListLoader: ObservableObject {
                     return
                 }
                 let items = Self.decode(data: data)
+                // An undecodable payload is a server-side anomaly, not the
+                // last page — keep canLoadMore so scrolling retries.
+                guard let items else {
+                    self.isLoadingMore = false
+                    return
+                }
                 if !items.isEmpty {
                     let existing = Set(self.playlists.map(\.id))
                     self.playlists += items.filter { !existing.contains($0.id) }
@@ -68,8 +74,9 @@ final class PlaylistListLoader: ObservableObject {
         }
     }
 
-    private static func decode(data: Data?) -> [Playlist] {
-        guard let data else { return [] }
+    /// Returns nil when the payload matches no known shape; a genuinely
+    /// empty page decodes fine as an empty array.
+    private static func decode(data: Data) -> [Playlist]? {
         let decoder = JSONDecoder()
         if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements {
             return items.map { $0.asPlaylist() }
@@ -77,6 +84,6 @@ final class PlaylistListLoader: ObservableObject {
         if let items = try? decoder.decode([PlaylistListItem].self, from: data) {
             return items.map { $0.asPlaylist() }
         }
-        return []
+        return nil
     }
 }

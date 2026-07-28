@@ -1025,4 +1025,34 @@ struct SongModelTests {
         )
         #expect(mixedBlanks.artistName == "ABBA")
     }
+
+    @Test("artistName falls back for whitespace-only artist entries")
+    func artistNameFallsBackForWhitespaceOnlyArtists() {
+        // Directly constructed songs skip the decoder's whitespace trimming.
+        let whitespaceCover = Song(
+            id: "song-whitespace-cover",
+            title: "Test Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: nil,
+            coverArtists: ["   "],
+            userUploaded: false
+        )
+        let whitespaceOriginal = Song(
+            id: "song-whitespace-original",
+            title: "Test Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: [" "],
+            coverArtists: nil,
+            userUploaded: false
+        )
+
+        #expect(whitespaceCover.artistName == "Unknown Artist")
+        #expect(whitespaceOriginal.artistName == "Unknown Artist")
+    }
 }

@@ -126,8 +126,10 @@ nonisolated enum ArtworkURLBuilder {
   private static func isResizeOptionsSegment(_ segment: String) -> Bool {
     let options = segment.split(separator: ",")
     return !options.isEmpty && options.allSatisfy { option in
-      let pair = option.split(separator: "=", maxSplits: 1)
-      return pair.count == 2 && resizeOptionKeys.contains(String(pair[0]))
+      // Exactly one '=' with non-empty key and value: "width=300=x.jpg" is a
+      // real filename, not an option list.
+      let pair = option.split(separator: "=", omittingEmptySubsequences: false)
+      return pair.count == 2 && !pair[1].isEmpty && resizeOptionKeys.contains(String(pair[0]))
     }
   }
 

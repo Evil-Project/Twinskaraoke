@@ -199,11 +199,11 @@ final class ArtworkFailureBackoff: ObservableObject {
         lock.lock()
         defer { lock.unlock() }
         guard let until = blockedUntil[url] else { return false }
-        guard until > now else {
-            blockedUntil.removeValue(forKey: url)
-            return false
-        }
-        return true
+        // Don't remove elapsed entries here: expire(_:) removes them and
+        // bumps generation, which is what recomposes blocked views. Removing
+        // here would skip that publish and leave those views on the
+        // placeholder until they are recreated.
+        return until > now
     }
 
     func recordFailure(_ url: URL) {

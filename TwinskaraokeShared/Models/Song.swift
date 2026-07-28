@@ -315,13 +315,14 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var artistName: String {
-    // decodeArtists can yield a non-nil empty array ("coverArtists": []), so
-    // filter empties and fall back like displayArtist instead of returning "".
-    let originals = originalArtists?.filter { !$0.isEmpty } ?? []
+    // decodeArtists can yield a non-nil empty array ("coverArtists": []), and
+    // directly constructed songs can carry whitespace-only entries, so filter
+    // blanks and fall back like displayArtist instead of returning "".
+    let originals = originalArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
     if !originals.isEmpty {
       return originals.joined(separator: ", ")
     }
-    let covers = coverArtists?.filter { !$0.isEmpty } ?? []
+    let covers = coverArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
     return covers.isEmpty ? String(localized: "Unknown Artist") : covers.joined(separator: ", ")
   }
 

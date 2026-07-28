@@ -216,7 +216,10 @@ final class GenresViewModel: ObservableObject {
     private var pendingDetailOrder: [String] = []
     private var pendingDetails: [String: GenreSummary] = [:]
     private var detailTasks: [String: Task<Void, Never>] = [:]
-    private var detailGeneration: UInt64 = 0
+    // Published so views can key work on it: a purge cancels in-flight detail
+    // tasks, and without a generation-keyed restart those views would spin
+    // forever on their loading branch.
+    @Published private(set) var detailGeneration: UInt64 = 0
     private var pageGeneration: UInt64 = 0
     private var detailFailureDates: [String: Date] = [:]
     private let maxConcurrentDetailRequests = 4
