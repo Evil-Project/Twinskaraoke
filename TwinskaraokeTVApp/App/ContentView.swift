@@ -44,9 +44,7 @@ struct ContentView: View {
 
     /// Plays a song within its list context and jumps to the full-screen player.
     private func play(_ song: Song, context: [Song]) {
-        if audioManager.currentSong?.id != song.id {
-            audioManager.play(song: song, context: context)
-        }
+        audioManager.play(song: song, context: context)
         selectedTab = .nowPlaying
     }
 }

@@ -248,6 +248,7 @@ final class TVAuthManager: ObservableObject {
 
             do {
                 let poll = try await TVQRSignIn.status(of: session.id)
+                guard !Task.isCancelled, qrSession?.id == session.id else { return }
                 // The server owns the deadline; the value from `createSession`
                 // is only a placeholder until the first poll lands.
                 if let expiresAt = poll.expiresAt, expiresAt != session.expiresAt {
@@ -267,7 +268,7 @@ final class TVAuthManager: ObservableObject {
                     return
                 }
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, qrSession?.id == session.id else { return }
                 consecutiveFailures += 1
                 if consecutiveFailures >= 3 {
                     qrError = friendlyMessage(for: error)

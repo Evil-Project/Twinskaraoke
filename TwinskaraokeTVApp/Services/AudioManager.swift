@@ -29,6 +29,7 @@ final class AudioManager: ObservableObject {
     }
     @Published var isPlaying = false
     @Published var isLoading = false
+    @Published private(set) var playbackError: String?
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var queue: [Song] = [] {
@@ -48,6 +49,7 @@ final class AudioManager: ObservableObject {
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
+    private var failedQueueIndices = Set<Int>()
 
     private init() {
         configureAudioSession()
@@ -86,15 +88,33 @@ final class AudioManager: ObservableObject {
     // MARK: - Playback control
 
     func play(song: Song, context: [Song] = []) {
+        let isCurrentSong = currentSong?.id == song.id
         var playbackQueue = context.isEmpty ? [song] : context
+        let selectedIndex: Int
         if let index = playbackQueue.firstIndex(of: song) {
-            currentIndex = index
+            selectedIndex = index
         } else {
             playbackQueue.insert(song, at: 0)
-            currentIndex = 0
+            selectedIndex = 0
         }
+
+        resetPlaybackFailures()
         queue = playbackQueue
+        currentIndex = selectedIndex
         currentSong = song
+
+        if isCurrentSong,
+           let player,
+           player.currentItem?.status != .failed
+        {
+            if !playbackRequested {
+                _ = resumePlayback()
+            } else {
+                updateNowPlayingInfo()
+            }
+            return
+        }
+
         prepareAndPlay()
     }
 
@@ -110,6 +130,15 @@ final class AudioManager: ObservableObject {
         guard let song = currentSong, let url = song.audioURL else {
             playbackRequested = false
             isLoading = false
+            let failedSongID = currentSong?.id
+            let failedIndex = currentIndex
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.currentSong?.id == failedSongID,
+                      self.currentIndex == failedIndex
+                else { return }
+                self.handlePlaybackFailure()
+            }
             return
         }
         isLoading = true
@@ -126,9 +155,10 @@ final class AudioManager: ObservableObject {
         playerItem.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] dur in
+                guard let self, self.player === player else { return }
                 let seconds = CMTimeGetSeconds(dur)
                 if !seconds.isNaN, seconds > 0 {
-                    self?.duration = seconds
+                    duration = seconds
                 }
             }
             .store(in: &cancellables)
@@ -136,23 +166,24 @@ final class AudioManager: ObservableObject {
         playerItem.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
-                guard let self else { return }
+                guard let self, self.player === player else { return }
                 if status == .readyToPlay {
+                    resetPlaybackFailures()
                     if playbackRequested { player.play() }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
                 } else if status == .failed {
-                    isLoading = false
-                    isPlaying = false
-                    playbackRequested = false
-                    playNext()
+                    handlePlaybackFailure()
                 }
             }
             .store(in: &cancellables)
 
         player.publisher(for: \.timeControlStatus, options: [.initial, .new])
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshPlaybackState() }
+            .sink { [weak self] _ in
+                guard let self, self.player === player else { return }
+                refreshPlaybackState()
+            }
             .store(in: &cancellables)
 
         // 0.1s rather than 0.5s: `currentTime` is what drives lyric highlighting,
@@ -211,8 +242,9 @@ final class AudioManager: ObservableObject {
 
     @discardableResult
     private func resumePlayback() -> Bool {
-        guard let player else {
+        guard let player, player.currentItem?.status != .failed else {
             if currentSong != nil {
+                resetPlaybackFailures()
                 prepareAndPlay()
                 return true
             }
@@ -231,6 +263,7 @@ final class AudioManager: ObservableObject {
     }
 
     func playNextOrRandom() {
+        resetPlaybackFailures()
         guard !queue.isEmpty else { return }
         currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
         if isShuffleOn, queue.count > 1 {
@@ -247,6 +280,7 @@ final class AudioManager: ObservableObject {
     }
 
     func playPrevious() {
+        resetPlaybackFailures()
         if currentTime > 3.0 {
             player?.seek(to: .zero)
             return
@@ -263,6 +297,31 @@ final class AudioManager: ObservableObject {
         } else {
             player?.seek(to: .zero)
         }
+    }
+
+    private func resetPlaybackFailures() {
+        failedQueueIndices.removeAll()
+        playbackError = nil
+    }
+
+    private func handlePlaybackFailure() {
+        isLoading = false
+        isPlaying = false
+        playbackRequested = false
+
+        if let failedIndex = resolvedCurrentQueueIndex {
+            failedQueueIndices.insert(failedIndex)
+        }
+
+        guard let nextIndex = queue.indices.first(where: { !failedQueueIndices.contains($0) }) else {
+            playbackError = "Unable to play this queue. Check your connection and try again."
+            updateNowPlayingInfo()
+            return
+        }
+
+        currentIndex = nextIndex
+        currentSong = queue[nextIndex]
+        prepareAndPlay()
     }
 
     private func playEnded() {

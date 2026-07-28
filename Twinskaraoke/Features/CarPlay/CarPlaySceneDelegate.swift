@@ -5,7 +5,9 @@ import SDWebImage
 import UIKit
 
 @MainActor
-final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate, CPNowPlayingTemplateObserver {
+final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate,
+    CPNowPlayingTemplateObserver, CPInterfaceControllerDelegate
+{
     private weak var interfaceController: CPInterfaceController?
     private let player = AudioPlayerManager.shared
     private let radio = RadioController.shared
@@ -36,6 +38,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         log("CarPlay scene connected")
         self.interfaceController = interfaceController
+        interfaceController.delegate = self
         configureNowPlayingTemplate()
         observeContentChanges()
 
@@ -71,6 +74,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         didDisconnectInterfaceController interfaceController: CPInterfaceController
     ) {
         CPNowPlayingTemplate.shared.remove(self)
+        interfaceController.delegate = nil
         contentTasks.forEach { $0.cancel() }
         playlistLoadTasks.values.forEach { $0.cancel() }
         artworkLoader.cancelAll()
@@ -90,6 +94,19 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         showQueueTemplate()
     }
 
+    func templateDidDisappear(_ aTemplate: CPTemplate, animated: Bool) {
+        guard let interfaceController,
+              !interfaceController.templates.contains(where: { $0 === aTemplate }),
+              let playlistID = openPlaylistTemplates.first(where: { $0.value === aTemplate })?.key,
+              openPlaylistTemplates[playlistID] === aTemplate
+        else { return }
+
+        playlistLoadTasks.removeValue(forKey: playlistID)?.cancel()
+        openPlaylistTemplates.removeValue(forKey: playlistID)
+        openPlaylistSongs.removeValue(forKey: playlistID)
+        openPlaylists.removeValue(forKey: playlistID)
+    }
+
     private func configureNowPlayingTemplate() {
         let nowPlayingTemplate = CPNowPlayingTemplate.shared
         nowPlayingTemplate.add(self)
@@ -102,19 +119,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         cancellables.removeAll()
 
         let signals: [AnyPublisher<Void, Never>] = [
-            player.$currentSong.map { _ in }.eraseToAnyPublisher(),
-            player.$isPlaying.map { _ in }.eraseToAnyPublisher(),
-            player.$queue.map { _ in }.eraseToAnyPublisher(),
-            radio.$nowPlaying.map { _ in }.eraseToAnyPublisher(),
-            radio.$isRefreshing.map { _ in }.eraseToAnyPublisher(),
-            radio.$refreshErrorMessage.map { _ in }.eraseToAnyPublisher(),
-            radio.$lastUpdated.map { _ in }.eraseToAnyPublisher(),
-            SavedPlaylistsStore.shared.$playlists.map { _ in }.eraseToAnyPublisher(),
-            UserPlaylistsManager.shared.$playlists.map { _ in }.eraseToAnyPublisher(),
-            FavoritesManager.shared.$favoriteIDs.map { _ in }.eraseToAnyPublisher(),
+            player.$currentSong.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            player.$isPlaying.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            player.$queue.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            radio.$nowPlaying.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            radio.$isRefreshing.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            radio.$refreshErrorMessage.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            radio.$lastUpdated.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            SavedPlaylistsStore.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            UserPlaylistsManager.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
+            FavoritesManager.shared.$favoriteIDs.dropFirst().map { _ in }.eraseToAnyPublisher(),
         ]
 
         Publishers.MergeMany(signals)
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in
                 self?.refreshVisibleTemplates()
@@ -400,13 +418,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             self.loadPlaylistSongs(for: playlist, into: template)
         })
 
-        openPlaylists[playlist.id] = playlist
-        openPlaylistTemplates[playlist.id] = template
-
         guard let interfaceController else {
             completion()
             return
         }
+
+        openPlaylists[playlist.id] = playlist
+        openPlaylistTemplates[playlist.id] = template
 
         interfaceController.pushTemplate(template, animated: true) { [weak self] _, _ in
             completion()

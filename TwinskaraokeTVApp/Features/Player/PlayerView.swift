@@ -153,6 +153,13 @@ struct PlayerView: View {
             }
             .font(.callout.monospacedDigit())
             .foregroundStyle(.secondary)
+
+            if let playbackError = audioManager.playbackError {
+                Label(playbackError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
