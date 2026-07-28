@@ -407,7 +407,12 @@ nonisolated enum KaraokeAPIClient {
         queryItems: [URLQueryItem(name: "type", value: "0")]
       )
       let data = try await data(for: request)
-      let songs = SongPayloadDecoder.decodeSongs(from: data) ?? []
+      // A valid empty list decodes fine; nil means no known shape matched,
+      // which must surface as an error rather than an empty favorites list
+      // (callers treat [] as authoritative star state).
+      guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
+        throw APIError.decodeFailed
+      }
       return try await hydrateFavoriteSongs(songs)
     }
   }

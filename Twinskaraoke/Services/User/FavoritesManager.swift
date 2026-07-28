@@ -59,14 +59,16 @@ final class FavoritesManager: ObservableObject {
         let generation = stateGeneration
         Task {
             let ok = await send(songID: songID)
+            if ok {
+                // Serialize invalidation ahead of the reload below: a racing
+                // load()/reload() must not read the pre-toggle list from the
+                // cache and commit stale star state as loaded.
+                await KaraokeAPIClient.invalidateFavoriteSongs()
+            }
             await MainActor.run {
                 guard stateGeneration == generation else { return }
                 inFlight.remove(songID)
-                if ok {
-                    // Drop the cached favorite-song list so the next read
-                    // reflects the toggle.
-                    Task { await KaraokeAPIClient.invalidateFavoriteSongs() }
-                } else {
+                if !ok {
                     if wasFavorite {
                         favoriteIDs.insert(songID)
                     } else {
@@ -94,8 +96,14 @@ final class FavoritesManager: ObservableObject {
         // (starred songs showed an inactive star everywhere), while
         // favoriteSongs() returns the complete set and shares the
         // FavoriteSongsCache with the playlist.
-        guard let songs = try? await KaraokeAPIClient.favoriteSongs()
-        else {
+        let songs: [Song]
+        do {
+            songs = try await KaraokeAPIClient.favoriteSongs()
+        } catch {
+            DebugLogger.log(
+                "Favorites load failed: \(error.localizedDescription)",
+                category: .network
+            )
             if stateGeneration == generation {
                 lastLoadFailure = Date()
             }
