@@ -59,14 +59,16 @@ final class FavoritesManager: ObservableObject {
         let generation = stateGeneration
         Task {
             let ok = await send(songID: songID)
+            if ok {
+                // Serialize invalidation ahead of the reload below: a racing
+                // load()/reload() must not read the pre-toggle list from the
+                // cache and commit stale star state as loaded.
+                await KaraokeAPIClient.invalidateFavoriteSongs()
+            }
             await MainActor.run {
                 guard stateGeneration == generation else { return }
                 inFlight.remove(songID)
-                if ok {
-                    // Drop the cached favorite-song list so the next read
-                    // reflects the toggle.
-                    Task { await KaraokeAPIClient.invalidateFavoriteSongs() }
-                } else {
+                if !ok {
                     if wasFavorite {
                         favoriteIDs.insert(songID)
                     } else {
@@ -89,9 +91,19 @@ final class FavoritesManager: ObservableObject {
                 scheduleReloadAfterMutationsIfNeeded()
             }
         }
-        guard let req = try? KaraokeAPIClient.request(path: "/api/user/favorites"),
-              let data = try? await KaraokeAPIClient.data(for: req)
-        else {
+        // Read from the same source as the Favorites playlist. The old
+        // /api/user/favorites ID list did not match the playlist's songs
+        // (starred songs showed an inactive star everywhere), while
+        // favoriteSongs() returns the complete set and shares the
+        // FavoriteSongsCache with the playlist.
+        let songs: [Song]
+        do {
+            songs = try await KaraokeAPIClient.favoriteSongs()
+        } catch {
+            DebugLogger.log(
+                "Favorites load failed: \(error.localizedDescription)",
+                category: .network
+            )
             if stateGeneration == generation {
                 lastLoadFailure = Date()
             }
@@ -102,8 +114,7 @@ final class FavoritesManager: ObservableObject {
             reloadAfterMutations = true
             return
         }
-        let ids = Self.parseIDs(from: data)
-        favoriteIDs = Set(ids)
+        favoriteIDs = Set(songs.map(\.id))
         loaded = true
         lastLoadFailure = nil
     }
@@ -123,20 +134,5 @@ final class FavoritesManager: ObservableObject {
         else { return false }
         req.httpMethod = "PUT"
         return (try? await KaraokeAPIClient.data(for: req)) != nil
-    }
-
-    private static func parseIDs(from data: Data) -> [String] {
-        if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            return arr.compactMap { $0["id"] as? String ?? $0["songId"] as? String }
-        }
-        if let arr = try? JSONSerialization.jsonObject(with: data) as? [String] {
-            return arr
-        }
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let arr = (obj["favorites"] ?? obj["items"]) as? [[String: Any]]
-        {
-            return arr.compactMap { $0["id"] as? String ?? $0["songId"] as? String }
-        }
-        return []
     }
 }
