@@ -520,7 +520,7 @@ struct PlaylistDetailView: View {
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("PlaylistDetail.song.\(item.song.id)")
+                        .accessibilityIdentifier("PlaylistDetail.song.\(item.offset).\(item.song.id)")
                         if item.offset < displayedSongs.count - 1 {
                             Divider().padding(.leading, rowHorizontalPadding + 60)
                         }
@@ -592,10 +592,24 @@ struct PlaylistDetailView: View {
 /// "Unknown Artist" from the artist-less list DTOs even after the detail
 /// fetch lands, until the whole list is torn down and rebuilt.
 private struct PositionedPlaylistSong: Identifiable {
+    struct ID: Hashable {
+        let offset: Int
+        let songID: String
+        let displayArtist: String
+        let durationText: String
+    }
+
     let offset: Int
     let song: Song
 
-    var id: String { "\(offset)|\(song.id)|\(song.displayArtist)|\(song.durationText)" }
+    var id: ID {
+        ID(
+            offset: offset,
+            songID: song.id,
+            displayArtist: song.displayArtist,
+            durationText: song.durationText
+        )
+    }
 }
 
 private struct PlaylistLoadingRows: View {

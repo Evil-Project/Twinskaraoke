@@ -165,12 +165,12 @@ final class TwinskaraokeUITests: XCTestCase {
     }
     scrollToVisibleItem(
       "Wake Me Up Before You Go-Go",
-      identifier: "PlaylistDetail.song.ui-search-song-1",
+      identifier: "PlaylistDetail.song.0.ui-search-song-1",
       in: app
     )
     XCTAssertTrue(
       accessibleElementExists(
-        identifier: "PlaylistDetail.song.ui-search-song-1",
+        identifier: "PlaylistDetail.song.0.ui-search-song-1",
         in: app,
         timeout: 8
       )
