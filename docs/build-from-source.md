@@ -10,10 +10,10 @@ If you are familiar with Swift development you may skip ahead to [Step 6C](#part
 
 1. **A Mac computer** (Xcode is only available on macOS, any Mac will do).
 2. **An Apple ID** (A standard, free account works perfectly).
-3. **Your iPhone/iPad** and a USB cable to connect it to your Mac.
+3. **Your iPhone/iPad** and a USB cable to connect it to your Mac. (For the Apple TV app, your **Apple TV on the same Wi-Fi network** instead.)
 
 ::: warning Version Requirements
-The app targets **iOS 26 or later** (and **watchOS 10.6 or later** for the Apple Watch companion app), so you need a recent **Xcode 26** (or newer) to build it.
+The app targets **iOS 26 or later** (**watchOS 10.6 or later** for the Apple Watch companion app, **tvOS 26 or later** for the [Apple TV app](/apple-tv)), so you need a recent **Xcode 26** (or newer) to build it.
 :::
 
 ::: tip Getting Help
@@ -108,6 +108,18 @@ Do **NOT** include `.watchkitapp` at the end of this value!
 
 5. Press `Enter`.
 
+### Part D: Update the Apple TV App Target
+
+Only needed if you want the [Apple TV app](/apple-tv) — the iPhone app builds fine without it.
+
+1. In the **TARGETS** list, click on **Twinskaraoke TV App**.
+2. Go to the **Signing & Capabilities** tab.
+3. Change the **Team** dropdown to **Your Name (Personal Team)**.
+4. Change the **Bundle Identifier** to match what you typed in Part A, but keep the `.tvos` at the end.
+   - It currently says: `org.evilneuro.Twinskaraoke.tvos`
+   - Example: `com.johnsmith.Twinskaraoke.tvos`
+   - Press `Enter`.
+
 ## Step 7: Prepare your iPhone
 
 1. Plug your iPhone into your Mac using a USB cable.
@@ -137,6 +149,18 @@ The Twinskaraoke app icon will now be on your iPhone's home screen, but if you t
 2. Go to **General** -> **VPN & Device Management**.
 3. Under the "Developer App" section, tap on your Apple ID email address.
 4. Tap **Trust "[Your Email]"** and confirm.
+
+## Optional: Install on your Apple TV
+
+The Apple TV app is installed from Xcode over your network — there is no `.ipa` to sideload.
+
+1. Put your Mac and your Apple TV on the **same Wi-Fi network**.
+2. On the Apple TV, go to **Settings** → **Remotes and Devices** → **Remote App and Devices**. It will wait there for a connection.
+3. In Xcode, open **Window** → **Devices and Simulators**, find your Apple TV, and pair it (entering the code the TV displays if asked).
+4. If your Apple TV asks you to enable **Developer Mode** (Settings → Privacy & Security), turn it on and let it restart.
+5. In Xcode, select the **Twinskaraoke TV App** scheme, choose your Apple TV as the run destination, and press the **Play (▶) button**.
+
+See the [Apple TV page](/apple-tv) for what the app can do and how to sign in from your phone.
 
 ## Common Errors
 
