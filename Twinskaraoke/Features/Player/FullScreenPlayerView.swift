@@ -260,9 +260,33 @@ struct FullScreenPlayerView: View {
                         lyrics: upcomingLyricsViewModel.lyrics,
                         hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
                     )
+                } else if upcomingLyricsViewModel.isLoading {
+                    // Prefetch for this song may still be in flight; the
+                    // isLoading handoff below adopts it (or fetches on
+                    // failure) instead of firing a duplicate GET.
                 } else {
                     lyricsViewModel.fetch(songID: id)
                 }
+            }
+        }
+        .onChange(of: upcomingLyricsViewModel.isLoading) { _, isLoading in
+            // Hand off an in-flight prefetch that just settled: adopt it when
+            // it landed for the current song, otherwise fetch fresh.
+            guard !isLoading, !audioManager.isRadioMode,
+                  let id = audioManager.currentSong?.id,
+                  lyricsViewModel.loadedSongID != id
+            else { return }
+            if upcomingLyricsViewModel.loadedSongID == id,
+               !upcomingLyricsViewModel.didFail,
+               !upcomingLyricsViewModel.lyrics.isEmpty || upcomingLyricsViewModel.hasNoLyrics
+            {
+                lyricsViewModel.adopt(
+                    songID: id,
+                    lyrics: upcomingLyricsViewModel.lyrics,
+                    hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
+                )
+            } else {
+                lyricsViewModel.fetch(songID: id)
             }
         }
         .onChange(of: audioManager.upcomingSong?.id) { _, upcomingId in
@@ -1029,8 +1053,13 @@ struct FullScreenPlayerView: View {
     }
 
     private func resetCoverArtSaveStatusLater() {
+        // A second save may start within the window; only reset if the status
+        // hasn't moved on since this timer was scheduled.
+        let status = coverArtSaveStatus
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            coverArtSaveStatus = .idle
+            if coverArtSaveStatus == status {
+                coverArtSaveStatus = .idle
+            }
         }
     }
 

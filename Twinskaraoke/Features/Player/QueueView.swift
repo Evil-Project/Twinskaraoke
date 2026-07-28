@@ -301,10 +301,24 @@ struct QueueView: View {
             return
         }
         let songs = Array(audioManager.queue[(idx + 1)...])
-        // Fresh stable identities per refresh: rows are reorderable, and
-        // positional ForEach identity mis-tracks rows across a move.
+        // Stable identities across refreshes: match each occurrence to the
+        // previous entry with the same (song id, occurrence index) pair, so
+        // identity follows the song occurrence rather than the position — a
+        // moved row keeps its UUID, and minting fresh UUIDs here would destroy
+        // every row (killing sheets/drags) on each track advance.
+        var previousIDs: [String: UUID] = [:]
+        var previousCounts: [String: Int] = [:]
+        for entry in upNextEntries {
+            let occurrence = previousCounts[entry.song.id, default: 0]
+            previousCounts[entry.song.id] = occurrence + 1
+            previousIDs["\(entry.song.id)#\(occurrence)"] = entry.id
+        }
+        var newCounts: [String: Int] = [:]
         upNextEntries = songs.enumerated().map { offset, song in
-            UpNextEntry(song: song, position: offset + 1)
+            let occurrence = newCounts[song.id, default: 0]
+            newCounts[song.id] = occurrence + 1
+            let id = previousIDs["\(song.id)#\(occurrence)"] ?? UUID()
+            return UpNextEntry(id: id, song: song, position: offset + 1)
         }
         // Rows otherwise rely on the source list having warmed these; the queue
         // can outlive that list, so warm the row variants here too.
@@ -318,9 +332,10 @@ struct QueueView: View {
 }
 
 /// Stable identity for a queue row: positional `ForEach` identity mis-tracks
-/// rows while the user reorders the up-next list.
+/// rows while the user reorders the up-next list, so each queue occurrence
+/// gets a UUID that refreshUpNextSongs carries across refreshes.
 private struct UpNextEntry: Identifiable {
-    let id = UUID()
+    let id: UUID
     let song: Song
     /// 1-based display position; also the index into the up-next slice + 1.
     let position: Int
