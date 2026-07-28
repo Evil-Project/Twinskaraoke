@@ -1,7 +1,7 @@
-# Twinskaraoke client for Apple Mobile Devices
-![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20iPadOS%20%7C%20watchOS-black?logo=apple) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Language](https://img.shields.io/badge/Language-Swift-FA7343?logo=swift&logoColor=white)
+# Twinskaraoke client for Apple Devices
+![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20iPadOS%20%7C%20tvOS%20%7C%20watchOS-black?logo=apple) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Language](https://img.shields.io/badge/Language-Swift-FA7343?logo=swift&logoColor=white)
 
-A karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad and Apple Watch
+A karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad, Apple TV and Apple Watch
 
 All credits go to the website creator "Soul". This is a companion app for the website with extra features.
 
@@ -10,11 +10,14 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@Mag1cByt3s](https://github.com/Mag1cByt3s) (MagicBytes)
 - [@ytsodacan](https://github.com/ytsodacan) (SillyProotSoda) 
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
+- [@cosmii02](https://github.com/cosmii02) (cosmii02)
 
 
 > **Update : We are officially live on TestFlight, see installation info below! Stay tuned for the App Store!**
 >
 > Note: The watchOS app is still 100% in development please be patient with us, thank you!
+>
+> New: There is now an **Apple TV app** — see [Apple TV](#apple-tv-app) below. It is brand new, so expect rough edges.
 
 
 ## Features
@@ -23,6 +26,8 @@ All credits go to the website creator "Soul". This is a companion app for the we
 
 *  **Background Playback:** Full integration with the iOS Lock Screen and Control Center.
 *  **Apple Watch Companion:** Control from your wrist (work in progress)
+
+*  **Apple TV App:** Sing in the living room — big-screen shelves, playlists and full-screen synced lyrics.
 
 *  **Offline Play:** Listen to neuro and evil sing anywhere, even without the internet.
 
@@ -85,6 +90,45 @@ All credits go to the website creator "Soul". This is a companion app for the we
 </p>
 
 </details>
+
+## Apple TV app
+
+Twinskaraoke now has a native **Apple TV** app!
+
+<details>
+<summary><b>Apple TV Screenshots</b></summary>
+<br>
+
+<p align="center">
+  <img src="readmeimages/TVhome.png" width="80%" title="Apple TV Home">
+  <br>
+  <em>Home — Trending &amp; New Releases</em>
+</p>
+
+<p align="center">
+  <img src="readmeimages/TVlyrics.png" width="80%" title="Apple TV Now Playing">
+  <br>
+  <em>Now Playing with time-synced lyrics</em>
+</p>
+
+<p align="center">
+  <img src="readmeimages/TVsearch.png" width="49%" title="Apple TV Search">
+  <img src="readmeimages/TVlibrary.png" width="49%" title="Apple TV Library">
+  <br>
+  <em>Search the catalog &nbsp;&bull;&nbsp; Browse playlists</em>
+</p>
+
+<p align="center">
+  <img src="readmeimages/TVplaylist.png" width="49%" title="Apple TV Playlist">
+  <img src="readmeimages/TVaccount.png" width="49%" title="Apple TV Account">
+  <br>
+  <em>Playlist detail &nbsp;&bull;&nbsp; Your account, level and badges</em>
+</p>
+
+</details>
+
+> [!NOTE]
+> The Apple TV app is available on TestFlight, or you can install it by building from source with Xcode (see the **Build from Source** section below, including the extra Apple TV target step). It requires **tvOS 26 or later**.
 
 # Twinskaraoke - iOS Installation Guide
 
@@ -152,8 +196,8 @@ If you are familiar with the "magic" that is swift dev you may skip to 6c
 ### Requirements
 1. **A Mac computer** (Xcode is only available on macOS, any mac will do).
 2. **An Apple ID** (A standard, free account works perfectly).
-3. **Your iPhone/iPad** and a USB cable to connect it to your Mac
-4. **A recent Xcode 26 (or newer)** — the app targets **iOS 26+** (and **watchOS 10.6+** for the Apple Watch companion app).
+3. **Your iPhone/iPad** and a USB cable to connect it to your Mac (or **your Apple TV** on the same Wi-Fi network, for the TV app)
+4. **A recent Xcode 26 (or newer)** — the app targets **iOS 26+** (and **watchOS 10.6+** for the Apple Watch companion app, **tvOS 26+** for the Apple TV app).
 
 ##### Getting Help
 * If you need help during installation you can ask in the neurosama discord server (neurocord) in the *"Neuro & Evil Karaoke Web Player"* Thread but please look up the issue first
@@ -240,6 +284,16 @@ This step links the Watch App to the Phone App.
 5. Press `Enter`.
    ![xcodenamechange2](readmeimages/xcodenamechange2.png)
 
+#### Part D: Update the Apple TV App target (only if you want the TV app)
+The Apple TV app is a separate target and is **not** required to build the iPhone app — skip this part if you only care about iPhone/iPad.
+1. In the **TARGETS** list, click on **Twinskaraoke TV App**.
+2. Go to the **Signing & Capabilities** tab.
+3. Change the **Team** dropdown to **Your Name (Personal Team)**.
+4. Change the **Bundle Identifier** to match what you typed in Part A, but keep the `.tvos` at the end.
+   * It currently says: `org.evilneuro.Twinskaraoke.tvos`
+   * Example: `com.johnsmith.Twinskaraoke.tvos`
+   * *Press `Enter`.*
+
 ---
 
 ### Step 7: Prepare your iPhone
@@ -269,6 +323,19 @@ The Twinskaraoke app icon will now be on your iPhone's home screen, but if you t
 2. Go to **General** -> **VPN & Device Management**
 3. Under the "Developer App" section, tap on your Apple ID email address.
 4. Tap **Trust "[Your Email]"** and confirm.
+
+---
+
+### Step 10 (Optional): Install on your Apple TV
+The Apple TV app is installed from Xcode over your network — there is no `.ipa` to sideload.
+1. Put your Mac and your Apple TV on the **same Wi-Fi network**.
+2. On the Apple TV, go to **Settings** -> **Remotes and Devices** -> **Remote App and Devices**. It will sit there waiting for a connection.
+3. In Xcode, open **Window** -> **Devices and Simulators**, find your Apple TV in the list, and pair it (enter the code the TV shows if asked).
+4. If your Apple TV asks you to enable **Developer Mode** (Settings -> Privacy & Security), turn it on and let it restart.
+5. Back in Xcode, pick the **Twinskaraoke TV App** scheme (top left, next to the device selector), choose your Apple TV as the destination, and hit the **Play (▶) button**.
+6. Sign in on the TV by opening the **Account** tab and scanning the QR code with the Twinskaraoke iPhone app.
+
+*The same 7-day free-account certificate expiry applies here — re-run from Xcode to refresh it.*
 
 ---
 

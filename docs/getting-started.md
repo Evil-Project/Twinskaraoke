@@ -4,7 +4,7 @@ outline: deep
 
 # Getting Started
 
-Twinskaraoke is a karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad and Apple Watch.
+Twinskaraoke is a karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad, Apple TV and Apple Watch.
 
 All credits go to the website creator "Soul". This is a companion app for the website with extra features.
 
@@ -21,8 +21,12 @@ All credits go to the website creator "Soul". This is a companion app for the we
 Sideloading is still available as an optional install method, but with a free Apple ID you must re-sign the app every 7 days. TestFlight is the recommended way to install.
 :::
 
+::: tip NEW — APPLE TV
+There is now a native **Apple TV app**, with big-screen browsing, full-screen synced lyrics and QR sign-in from your phone. See the [Apple TV page](/apple-tv).
+:::
+
 ::: info REQUIREMENTS
-Twinskaraoke requires **iOS 26 or later** (and **watchOS 10.6 or later** for the Apple Watch companion app). Building from source requires a recent **Xcode 26** or newer.
+Twinskaraoke requires **iOS 26 or later** (**watchOS 10.6 or later** for the Apple Watch companion app, **tvOS 26 or later** for the Apple TV app). Building from source requires a recent **Xcode 26** or newer.
 :::
 
 ## Features
@@ -30,6 +34,7 @@ Twinskaraoke requires **iOS 26 or later** (and **watchOS 10.6 or later** for the
 *   **Native Experience:** Better than the website!
 *   **Background Playback:** Full integration with the iOS Lock Screen and Control Center.
 *   **Apple Watch Companion:** Control from your wrist (work in progress).
+*   **Apple TV App:** Sing in the living room, with full-screen synced lyrics — see [Apple TV](/apple-tv).
 *   **Offline Play:** Listen to neuro and evil sing anywhere, even without the internet.
 *   **Advanced Audio Controls:** A built-in 10-band parametric EQ.
 *   **Vocal & Instrumental Slider:** to separate tracks in real-time.
@@ -57,7 +62,6 @@ Twinskaraoke requires **iOS 26 or later** (and **watchOS 10.6 or later** for the
   <img src="../readmeimages/downloaded.png" width="32%" title="Downloaded">
   <br>
   <em>Built-in EQ &nbsp;&bull;&nbsp; Download Songs &nbsp;&bull;&nbsp; Play Offline</em>
-  <em>Built In EQ &nbsp;&bull;&nbsp; Download Songs &nbsp;&bull;&nbsp; Play Offline</em>
 </p>
 
 <p align="center">
@@ -139,6 +143,10 @@ If you wish to use the Apple Watch companion app, download the **`Twinskaraoke-W
 ::: info
 Free Apple accounts are limited to creating **10 App IDs every 7 days**. Because Watch apps use multiple App IDs at once, sideloading the Watch version may fail if you have hit Apple's server limit. If this happens, please stick to the iPhone-only IPA.
 :::
+
+## Apple TV
+
+The Apple TV app is **not on TestFlight and has no `.ipa` in the nightly releases yet** — you install it by building from source and running it on your Apple TV from Xcode. The [Apple TV page](/apple-tv) walks through what the app does, how to sign in with a QR code from your phone, and how to get it onto your TV.
 
 ## License
 

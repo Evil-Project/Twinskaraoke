@@ -5,11 +5,14 @@ layout: home
 hero:
   name: "Twinskaraoke"
   text: "for Apple Devices"
-  tagline: "A karaoke player for twinskaraoke.com — available for iPhone, iPad and Apple Watch"
+  tagline: "A karaoke player for twinskaraoke.com — available for iPhone, iPad, Apple TV and Apple Watch"
   actions:
     - theme: brand
       text: Getting Started
       link: /getting-started
+    - theme: alt
+      text: Apple TV App
+      link: /apple-tv
     - theme: alt
       text: Get Nightly Builds
       link: https://github.com/Evil-Project/Twinskaraoke/releases
@@ -20,6 +23,9 @@ hero:
 features:
   - title:  Now on TestFlight
     details: We are now on TestFlight!
+  - title: New — Apple TV App
+    details: Sing in the living room. Big-screen shelves, playlists, full-screen synced lyrics, and QR sign-in from your phone.
+    link: /apple-tv
   - title: Advanced Audio & Offline Play
     details: Download songs to listen anywhere. Fine-tune your audio with a built-in 10-band EQ and real-time vocal/instrumental separation.
   - title: Native Background Playback

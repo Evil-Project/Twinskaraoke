@@ -4,7 +4,7 @@ outline: deep
 
 # 快速上手
 
-Twinskaraoke 是 [twinskaraoke.com](https://neurokaraoke.com) 的卡拉 OK 播放器，支持 iPhone、iPad 与 Apple Watch。
+Twinskaraoke 是 [twinskaraoke.com](https://neurokaraoke.com) 的卡拉 OK 播放器，支持 iPhone、iPad、Apple TV 与 Apple Watch。
 
 网站归功于创始人 "Soul"。本应用是网站的配套客户端，提供额外功能。
 
@@ -42,6 +42,10 @@ Sideloadly 用户：我们的 IPA 已为你预优化，**无需**在高级选项
 ::: info
 免费 Apple 账号每 7 天最多创建 **10 个 App ID**。由于 Watch 应用会一次性占用多个 App ID，如果你已达到 Apple 的服务器限制，Watch 版本可能侧载失败。如遇此情况，请仅使用 iPhone 版。
 :::
+
+## Apple TV
+
+Apple TV 应用尚未上架 TestFlight，Nightly Releases 中也没有对应的 `.ipa` —— 需要从源码构建，并用 Xcode 安装到你的 Apple TV 上。功能介绍、扫码登录方式与安装步骤请见 [Apple TV 页面](/zh/apple-tv)。
 
 ## 功能特色
 
