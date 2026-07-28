@@ -89,8 +89,12 @@ final class FavoritesManager: ObservableObject {
                 scheduleReloadAfterMutationsIfNeeded()
             }
         }
-        guard let req = try? KaraokeAPIClient.request(path: "/api/user/favorites"),
-              let data = try? await KaraokeAPIClient.data(for: req)
+        // Read from the same source as the Favorites playlist. The old
+        // /api/user/favorites ID list did not match the playlist's songs
+        // (starred songs showed an inactive star everywhere), while
+        // favoriteSongs() returns the complete set and shares the
+        // FavoriteSongsCache with the playlist.
+        guard let songs = try? await KaraokeAPIClient.favoriteSongs()
         else {
             if stateGeneration == generation {
                 lastLoadFailure = Date()
@@ -102,8 +106,7 @@ final class FavoritesManager: ObservableObject {
             reloadAfterMutations = true
             return
         }
-        let ids = Self.parseIDs(from: data)
-        favoriteIDs = Set(ids)
+        favoriteIDs = Set(songs.map(\.id))
         loaded = true
         lastLoadFailure = nil
     }
@@ -123,20 +126,5 @@ final class FavoritesManager: ObservableObject {
         else { return false }
         req.httpMethod = "PUT"
         return (try? await KaraokeAPIClient.data(for: req)) != nil
-    }
-
-    private static func parseIDs(from data: Data) -> [String] {
-        if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            return arr.compactMap { $0["id"] as? String ?? $0["songId"] as? String }
-        }
-        if let arr = try? JSONSerialization.jsonObject(with: data) as? [String] {
-            return arr
-        }
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let arr = (obj["favorites"] ?? obj["items"]) as? [[String: Any]]
-        {
-            return arr.compactMap { $0["id"] as? String ?? $0["songId"] as? String }
-        }
-        return []
     }
 }
