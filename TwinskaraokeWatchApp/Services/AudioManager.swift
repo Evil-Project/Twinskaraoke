@@ -117,6 +117,18 @@ class AudioManager: ObservableObject {
         prepareAndPlay()
     }
 
+    /// Plays the up-next row at `offset`. The queue position is picked by
+    /// offset rather than by song lookup so tapping a repeated song targets
+    /// that occurrence instead of the first match in the queue.
+    func playUpNext(at offset: Int) {
+        guard let baseIndex = resolvedCurrentQueueIndex else { return }
+        let index = baseIndex + 1 + offset
+        guard queue.indices.contains(index) else { return }
+        currentIndex = index
+        currentSong = queue[index]
+        prepareAndPlay()
+    }
+
     private func prepareAndPlay() {
         cleanupPlayer()
         currentTime = 0
@@ -180,6 +192,10 @@ class AudioManager: ObservableObject {
     }
 
     private func setupPlayer(with localURL: URL) {
+        // Raced async cache validations can both reach here for one song;
+        // tear down any existing player and its observers so two players
+        // never run at once and no orphaned observer keeps firing.
+        cleanupPlayer()
         do {
             try AVAudioSession.sharedInstance().setCategory(
                 .playback, mode: .default, policy: .longFormAudio
@@ -603,6 +619,10 @@ class AudioManager: ObservableObject {
         recoveringFromBrokenCache.insert(songID)
         try? FileManager.default.removeItem(at: playbackURL)
         cleanupPlayer()
+        // As in prepareAndPlay, drop the dead player's Combine sinks; this
+        // also drops the session handlers, so re-register them.
+        cancellables.removeAll()
+        setupInterruptionHandler()
         isLoading = true
         downloadTask?.cancel()
         downloadToken = nil

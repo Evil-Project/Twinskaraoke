@@ -64,7 +64,9 @@ struct PlaylistDetailView: View {
                 .listRowBackground(Color.clear)
 
                 Section {
-                    ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { offset, song in
+                    ForEach(indexedSongs) { item in
+                        let offset = item.offset
+                        let song = item.song
                         let isCurrent = audioManager.currentSong?.id == song.id
                         Button {
                             play(song)
@@ -99,6 +101,14 @@ struct PlaylistDetailView: View {
         }
         .onAppear {
             viewModel.fetchSongs()
+        }
+    }
+
+    // Karaoke setlists legitimately repeat a song and Song identity is the id
+    // alone, so rows use a composite id to keep ForEach identifiers unique.
+    private var indexedSongs: [PlaylistSongRowItem] {
+        viewModel.songs.enumerated().map { offset, song in
+            PlaylistSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
         }
     }
 
@@ -264,4 +274,11 @@ private struct WatchPlaylistHeaderButton: View {
         .buttonStyle(.watchPressable)
         .accessibilityLabel(title)
     }
+}
+
+
+private struct PlaylistSongRowItem: Identifiable {
+    let id: String
+    let offset: Int
+    let song: Song
 }
