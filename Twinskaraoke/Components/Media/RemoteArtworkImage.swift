@@ -1,3 +1,4 @@
+import Combine
 import SDWebImageSwiftUI
 import SwiftUI
 
@@ -5,13 +6,15 @@ struct RemoteArtworkImage: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
     var contentMode: ContentMode = .fill
-    var showsLoading: Bool = true
     var lowResURL: URL?
     var transparentBackground: Bool = false
     var fullResolution: Bool = false
 
     var fixedDisplaySize: CGSize?
     @ObservedObject private var scrollState = ScrollPerformanceState.shared
+    // Observed so a view composed during a failure-backoff window re-evaluates
+    // isBlocked when the window ends instead of showing the placeholder forever.
+    @ObservedObject private var failureBackoff = ArtworkFailureBackoff.shared
     @State private var fullLoaded: Bool = false
     @State private var loadFailed: Bool = false
     @State private var renderedFullURL: URL?
@@ -175,12 +178,17 @@ struct RemoteArtworkImage: View {
 
 }
 
-final class ArtworkFailureBackoff {
+final class ArtworkFailureBackoff: ObservableObject {
     static let shared = ArtworkFailureBackoff()
 
     private let cooldown: TimeInterval = 300
     private let lock = NSLock()
     private var blockedUntil: [URL: Date] = [:]
+
+    // Bumped whenever the blocked set changes so observing views re-evaluate
+    // isBlocked. Never written from isBlocked itself — that runs during view
+    // body evaluation, where publishing a change is illegal.
+    @Published private(set) var generation = 0
 
     var cooldownNanoseconds: UInt64 {
         UInt64(cooldown * 1_000_000_000)
@@ -206,12 +214,40 @@ final class ArtworkFailureBackoff {
         }
         blockedUntil[url] = Date().addingTimeInterval(cooldown)
         lock.unlock()
+        bumpGeneration()
+        // Views composed while this URL is blocked render no WebImage and
+        // schedule no retry of their own; unblock proactively so they
+        // recompose when the cooldown ends.
+        DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
+            self?.expire(url)
+        }
     }
 
     func clear(_ url: URL) {
         lock.lock()
-        blockedUntil.removeValue(forKey: url)
+        let removed = blockedUntil.removeValue(forKey: url) != nil
         lock.unlock()
+        if removed { bumpGeneration() }
+    }
+
+    private func expire(_ url: URL) {
+        lock.lock()
+        // A failure re-recorded after this expiry was scheduled extends the
+        // deadline; only remove entries whose window actually ended.
+        let expired = blockedUntil[url].map { $0 <= Date() } ?? false
+        if expired {
+            blockedUntil.removeValue(forKey: url)
+        }
+        lock.unlock()
+        if expired { bumpGeneration() }
+    }
+
+    private func bumpGeneration() {
+        if Thread.isMainThread {
+            generation += 1
+        } else {
+            DispatchQueue.main.async { self.generation += 1 }
+        }
     }
 }
 

@@ -165,7 +165,7 @@ struct DownloadedSongsView: View {
     private var mosaicArtwork: some View {
         let arts = Playlist.songArtworkURLs(localSongs, limit: 4)
         if arts.count > 1 {
-            PlaylistMosaicArtwork(urls: arts, cornerRadius: 0, showsLoading: true)
+            PlaylistMosaicArtwork(urls: arts, cornerRadius: 0)
         } else if let url = arts.first {
             RemoteArtworkImage(url: url, cornerRadius: 0)
         } else {

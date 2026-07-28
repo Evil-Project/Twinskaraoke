@@ -8,7 +8,7 @@ struct ArtistCircleCard: View {
             ZStack {
                 if let art = artist.arts?.first, let url = art.imageURL(variant: .thumbnail) {
                     RemoteArtworkImage(
-                        url: url, cornerRadius: 100, showsLoading: false, lowResURL: art.blurPreviewURL,
+                        url: url, cornerRadius: 100, lowResURL: art.blurPreviewURL,
                         transparentBackground: true
                     )
                 } else {

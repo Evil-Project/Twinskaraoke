@@ -6,7 +6,7 @@ struct ArtThumbnail: View {
         Group {
             if let url = art.imageURL {
                 RemoteArtworkImage(
-                    url: url, cornerRadius: 8, showsLoading: false, lowResURL: art.blurPreviewURL,
+                    url: url, cornerRadius: 8, lowResURL: art.blurPreviewURL,
                     transparentBackground: true
                 )
             } else {

@@ -126,7 +126,7 @@ private struct VideoThumbnail: View {
             .overlay(
                 Group {
                     if let url {
-                        RemoteArtworkImage(url: url, cornerRadius: cornerRadius, showsLoading: false)
+                        RemoteArtworkImage(url: url, cornerRadius: cornerRadius)
                     } else {
                         MusicArtworkPlaceholder(cornerRadius: cornerRadius)
                     }

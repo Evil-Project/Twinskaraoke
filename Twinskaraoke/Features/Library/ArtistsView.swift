@@ -123,7 +123,7 @@ private struct ArtistAvatar: View {
     var body: some View {
         Group {
             if let url {
-                RemoteArtworkImage(url: url, cornerRadius: 0, showsLoading: false)
+                RemoteArtworkImage(url: url, cornerRadius: 0)
             } else {
                 ArtistAvatarPlaceholder()
             }

@@ -82,7 +82,6 @@ struct ArtworkDetailHero: View {
                 url: url,
                 cornerRadius: 20,
                 contentMode: .fit,
-                showsLoading: false,
                 lowResURL: art.blurPreviewURL,
                 transparentBackground: true
             )

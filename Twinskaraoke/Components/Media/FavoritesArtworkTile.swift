@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 struct FavoritesArtworkTile: View {
@@ -77,7 +76,6 @@ private struct PlaylistCoverWithLoader: View {
     let playlist: Playlist
     let cornerRadius: CGFloat
     @StateObject private var loader = PlaylistCoverLoader()
-    @ObservedObject private var fallbackArt = FallbackArtProvider.shared
 
     var body: some View {
         PlaylistArtworkContent(
@@ -91,16 +89,12 @@ private struct PlaylistCoverWithLoader: View {
         .onChange(of: playlist.id) { _, newID in
             loader.load(playlistID: newID, fallback: playlist.songListDTOs)
         }
-        .onReceive(fallbackArt.objectWillChange) { _ in
-            loader.refreshFallbackArtwork()
-        }
     }
 }
 
 struct PlaylistMosaicArtwork: View {
     let urls: [URL]
     var cornerRadius: CGFloat = 10
-    var showsLoading = false
 
     var body: some View {
         GeometryReader { geo in
@@ -120,7 +114,6 @@ struct PlaylistMosaicArtwork: View {
                         RemoteArtworkImage(
                             url: optimizedURL,
                             cornerRadius: 0,
-                            showsLoading: showsLoading,
                             fixedDisplaySize: CGSize(width: cell, height: cell)
                         )
                             .frame(width: cell, height: cell)

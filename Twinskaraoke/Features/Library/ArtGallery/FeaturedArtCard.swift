@@ -9,7 +9,7 @@ struct FeaturedArtCard: View {
             Group {
                 if let url = art.imageURL {
                     RemoteArtworkImage(
-                        url: url, cornerRadius: 16, showsLoading: false, lowResURL: art.blurPreviewURL,
+                        url: url, cornerRadius: 16, lowResURL: art.blurPreviewURL,
                         transparentBackground: true
                     )
                 } else {
