@@ -901,7 +901,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan QR codes to sign in on the web.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save artwork from the Art Gallery to your Photos library.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -944,7 +944,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan QR codes to sign in on the web.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save artwork from the Art Gallery to your Photos library.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
