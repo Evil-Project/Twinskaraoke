@@ -967,4 +967,62 @@ struct SongModelTests {
         #expect(song.displayArtist == "Original · Cover by Neuro")
         #expect(song.hasArtistMetadata)
     }
+
+    @Test("artistName falls back to Unknown Artist for empty artist arrays")
+    func artistNameFallsBackForEmptyArtistArrays() {
+        let emptyCoverArtists = Song(
+            id: "song-empty-cover",
+            title: "Test Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: nil,
+            coverArtists: [],
+            userUploaded: false
+        )
+        let emptyOriginalArtists = Song(
+            id: "song-empty-original",
+            title: "Test Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: [],
+            coverArtists: nil,
+            userUploaded: false
+        )
+
+        #expect(emptyCoverArtists.artistName == "Unknown Artist")
+        #expect(emptyOriginalArtists.artistName == "Unknown Artist")
+    }
+
+    @Test("artistName ignores blank artist entries")
+    func artistNameIgnoresBlankArtistEntries() throws {
+        // FlexibleArtistList trims whitespace-only artists, so a blank entry
+        // decodes to a non-nil empty array and must not surface as "".
+        let json = """
+        {
+          "id": "song-blank-artist",
+          "title": "Test Song",
+          "duration": 180,
+          "coverArtists": ["   "]
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(Song.self, from: json)
+        #expect(decoded.artistName == "Unknown Artist")
+
+        let mixedBlanks = Song(
+            id: "song-mixed-blanks",
+            title: "Test Song",
+            duration: 180,
+            absolutePath: nil,
+            cloudflareID: nil,
+            coverArt: nil,
+            originalArtists: ["", "ABBA"],
+            coverArtists: nil,
+            userUploaded: false
+        )
+        #expect(mixedBlanks.artistName == "ABBA")
+    }
 }

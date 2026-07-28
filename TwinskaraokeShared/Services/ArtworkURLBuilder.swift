@@ -102,7 +102,7 @@ nonisolated enum ArtworkURLBuilder {
       path = String(path[..<range.lowerBound])
     } else if !path.hasSuffix("/public") {
       let parts = path.split(separator: "/")
-      if let last = parts.last, last.contains("=") {
+      if let last = parts.last, isResizeOptionsSegment(String(last)) {
         path = "/" + parts.dropLast().joined(separator: "/")
       }
     }
@@ -113,6 +113,22 @@ nonisolated enum ArtworkURLBuilder {
 
     let deliveryPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     return deliveryPath.isEmpty ? nil : deliveryPath
+  }
+
+  // Legacy resize URLs end in a cdn-cgi option list (e.g. "width=180,quality=78").
+  // Only a trailing segment of comma-separated key=value pairs with known option
+  // keys counts as resize options, so real filenames containing "=" (e.g.
+  // "cover=final.jpg") are not mangled into 404s.
+  private static let resizeOptionKeys: Set<String> = [
+    "width", "height", "quality", "format", "fit", "blur", "dpr", "gravity",
+  ]
+
+  private static func isResizeOptionsSegment(_ segment: String) -> Bool {
+    let options = segment.split(separator: ",")
+    return !options.isEmpty && options.allSatisfy { option in
+      let pair = option.split(separator: "=", maxSplits: 1)
+      return pair.count == 2 && resizeOptionKeys.contains(String(pair[0]))
+    }
   }
 
   private static func storageDeliveryPath(from rawPath: String) -> String? {

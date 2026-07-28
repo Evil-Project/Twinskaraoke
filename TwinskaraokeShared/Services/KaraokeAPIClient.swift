@@ -144,11 +144,18 @@ actor PlaylistDetailCache {
   func invalidate(playlistID: String) {
     entries[playlistID] = nil
     generations[playlistID, default: 0] &+= 1
+    // Cancel the in-flight load so awaiters get CancellationError (and
+    // re-fetch) instead of the pre-mutation payload, and the multi-MB
+    // download stops instead of running to completion.
+    inFlight[playlistID]?.task.cancel()
     inFlight[playlistID] = nil
   }
 
   func invalidateAll() {
     entries.removeAll()
+    // Same as invalidate(playlistID:): cancel in-flight loads so signout
+    // awaiters can't resolve with the previous user's payload.
+    inFlight.values.forEach { $0.task.cancel() }
     inFlight.removeAll()
     epoch &+= 1
   }
@@ -165,7 +172,9 @@ actor FavoriteCatalogMetadataCache {
 
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
-  private var inFlight: (key: String, id: UUID, task: Task<[Song], Error>)?
+  // Keyed like PlaylistDetailCache so a concurrent request with a different
+  // key doesn't clobber the slot and fire a duplicate POST.
+  private var inFlight: [String: (id: UUID, task: Task<[Song], Error>)] = [:]
   // Bumped on invalidate() so a fetch started before signout can't re-cache
   // the previous user's favorites when it resolves.
   private var epoch = 0
@@ -187,13 +196,13 @@ actor FavoriteCatalogMetadataCache {
 
     let startEpoch = epoch
     let request: (id: UUID, task: Task<[Song], Error>)
-    if let inFlight, inFlight.key == key {
-      request = (inFlight.id, inFlight.task)
+    if let existing = inFlight[key] {
+      request = existing
     } else {
       let id = UUID()
       let task = Task { try await loader() }
       request = (id, task)
-      inFlight = (key, id, task)
+      inFlight[key] = request
     }
 
     do {
@@ -201,13 +210,13 @@ actor FavoriteCatalogMetadataCache {
       if epoch == startEpoch {
         cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
       }
-      if inFlight?.id == request.id {
-        inFlight = nil
+      if inFlight[key]?.id == request.id {
+        inFlight[key] = nil
       }
       return songs
     } catch {
-      if inFlight?.id == request.id {
-        inFlight = nil
+      if inFlight[key]?.id == request.id {
+        inFlight[key] = nil
       }
       throw error
     }
@@ -215,7 +224,7 @@ actor FavoriteCatalogMetadataCache {
 
   func invalidate() {
     cachedValue = nil
-    inFlight = nil
+    inFlight.removeAll()
     epoch &+= 1
   }
 }
@@ -395,7 +404,7 @@ nonisolated enum KaraokeAPIClient {
   static func playlistSongCount(id: String) async throws -> Int? {
     let data = try await playlistDetailData(id: id)
     if let playlist = try? decode(Playlist.self, from: data) {
-      return playlist.songListDTOs?.count ?? (playlist.songCount > 0 ? playlist.songCount : nil)
+      return playlist.songListDTOs?.count ?? max(playlist.songCount, 0)
     }
     return SongPayloadDecoder.decodeSongs(from: data)?.count
   }
