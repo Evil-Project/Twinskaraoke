@@ -508,22 +508,20 @@ struct PlaylistDetailView: View {
                     actionButtons(songs: displayedSongs)
                 }
                 LazyVStack(spacing: 0) {
-                    // Positional identity: playlists can contain the same song
-                    // twice, and duplicate ForEach IDs can hang AttributeGraph.
-                    ForEach(Array(displayedSongs.enumerated()), id: \.offset) { idx, song in
+                    ForEach(displayedSongs.enumerated().map { PositionedPlaylistSong(offset: $0.offset, song: $0.element) }) { item in
                         Button {
-                            play(song, context: displayedSongs)
+                            play(item.song, context: displayedSongs)
                         } label: {
-                            PlaylistRow(song: song, showsArtwork: true, horizontalPadding: rowHorizontalPadding)
+                            PlaylistRow(song: item.song, showsArtwork: true, horizontalPadding: rowHorizontalPadding)
                                 .contentShape(Rectangle())
-                                .songRowAccessibility(song: song) {
-                                    play(song, context: displayedSongs)
+                                .songRowAccessibility(song: item.song) {
+                                    play(item.song, context: displayedSongs)
                                 }
                         }
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("PlaylistDetail.song.\(song.id)")
-                        if idx < displayedSongs.count - 1 {
+                        .accessibilityIdentifier("PlaylistDetail.song.\(item.song.id)")
+                        if item.offset < displayedSongs.count - 1 {
                             Divider().padding(.leading, rowHorizontalPadding + 60)
                         }
                     }
@@ -584,6 +582,20 @@ struct PlaylistDetailView: View {
         AppHaptic.selection.play()
         AudioPlayerManager.shared.play(song: song, context: context)
     }
+}
+
+/// Row identity for the playlist song list. The offset keeps IDs unique when
+/// a playlist contains the same song twice (duplicate ForEach IDs can hang
+/// AttributeGraph). The content fields make the ID change when metadata
+/// (artist, duration) arrives after a row was first composed: with purely
+/// positional identity, an already-composed row keeps showing the stale
+/// "Unknown Artist" from the artist-less list DTOs even after the detail
+/// fetch lands, until the whole list is torn down and rebuilt.
+private struct PositionedPlaylistSong: Identifiable {
+    let offset: Int
+    let song: Song
+
+    var id: String { "\(offset)|\(song.id)|\(song.displayArtist)|\(song.durationText)" }
 }
 
 private struct PlaylistLoadingRows: View {
