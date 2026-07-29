@@ -3,6 +3,8 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var audioManager: AudioManager
     @StateObject var homeViewModel = HomeViewModel()
+    @ObservedObject private var auth = WatchAuthManager.shared
+    @ObservedObject private var recents = RecentlyPlayedStore.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var navigateToPlayer = false
@@ -54,6 +56,24 @@ struct HomeView: View {
                         )
                     }
                 }
+                if !recentlyPlayed.isEmpty {
+                    Section("Recently Played") {
+                        ForEach(Array(recentlyPlayed.enumerated()), id: \.element.id) { index, song in
+                            Button {
+                                // Queue the whole history, not just the rows
+                                // shown, so playing the last one keeps going.
+                                play(song, context: recents.songs)
+                            } label: {
+                                WatchSongRow(song: song)
+                            }
+                            .buttonStyle(.watchPressable)
+                            .accessibilityIdentifier("WatchHome.recent.\(index)")
+                            .accessibilityLabel(song.title)
+                            .accessibilityValue("\(song.artistName), \(song.durationText)")
+                            .accessibilityHint("Double tap to play this song again.")
+                        }
+                    }
+                }
                 if !homeViewModel.trending.isEmpty {
                     Section("Trending") {
                         ForEach(Array(homeViewModel.trending.prefix(5).enumerated()), id: \.element.id) { index, song in
@@ -100,6 +120,21 @@ struct HomeView: View {
                     .accessibilityLabel("Playlists")
                     .accessibilityHint("Opens curated playlists.")
                     .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    if auth.linkState == .signedIn {
+                        NavigationLink(destination: FavoritesView().environmentObject(audioManager)) {
+                            WatchBrowseLinkRow(
+                                title: "Favorites",
+                                subtitle: "Songs you starred",
+                                systemImage: "star.fill",
+                                tint: .yellow
+                            )
+                        }
+                        .accessibilityIdentifier("WatchHome.favorites")
+                        .buttonStyle(.watchPressable)
+                        .accessibilityLabel("Favorites")
+                        .accessibilityHint("Opens songs you starred.")
+                        .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    }
                     NavigationLink(destination: SongsView().environmentObject(audioManager)) {
                         WatchBrowseLinkRow(
                             title: "Songs",
@@ -112,6 +147,19 @@ struct HomeView: View {
                     .buttonStyle(.watchPressable)
                     .accessibilityLabel("Songs")
                     .accessibilityHint("Opens trending songs.")
+                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    NavigationLink(destination: RadioView().environmentObject(audioManager)) {
+                        WatchBrowseLinkRow(
+                            title: "Radio",
+                            subtitle: "Listen live",
+                            systemImage: "dot.radiowaves.left.and.right",
+                            tint: .orange
+                        )
+                    }
+                    .accessibilityIdentifier("WatchHome.radio")
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Radio")
+                    .accessibilityHint("Opens the live station.")
                     .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                     NavigationLink(destination: SearchView().environmentObject(audioManager)) {
                         WatchBrowseLinkRow(
@@ -129,7 +177,7 @@ struct HomeView: View {
                     NavigationLink(destination: AccountView()) {
                         WatchBrowseLinkRow(
                             title: "Account",
-                            subtitle: "Guest session",
+                            subtitle: accountSubtitle,
                             systemImage: "person.crop.circle",
                             tint: .green
                         )
@@ -152,6 +200,27 @@ struct HomeView: View {
             .onAppear {
                 homeViewModel.fetchTrending()
             }
+        }
+    }
+
+    /// The current song already has its own section above, so it is dropped
+    /// here rather than appearing twice on one short screen.
+    private var recentlyPlayed: [Song] {
+        Array(
+            recents.songs
+                .filter { $0.id != audioManager.currentSong?.id }
+                .prefix(3)
+        )
+    }
+
+    private var accountSubtitle: String {
+        switch auth.linkState {
+        case .signedIn:
+            auth.username ?? "Signed in"
+        case .awaitingPhone:
+            "Waiting for iPhone"
+        case .signedOut:
+            "Guest session"
         }
     }
 

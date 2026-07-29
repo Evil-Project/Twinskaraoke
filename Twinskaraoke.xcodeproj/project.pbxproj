@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */; };
 		D0C385982FB0BD870055284E /* Spleeter in Frameworks */ = {isa = PBXBuildFile; productRef = D0C385972FB0BD870055284E /* Spleeter */; };
 		D0DB31F82FA8A3F80089C24C /* LNPopupUI in Frameworks */ = {isa = PBXBuildFile; productRef = D0DB31F72FA8A3F80089C24C /* LNPopupUI */; };
@@ -15,6 +16,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		D0BB0000000000000000E00E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D0F981AD2F94C10900FD69AB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D0BB0000000000000000E003;
+			remoteInfo = TwinskaraokeWatchWidgets;
+		};
 		D0F981DA2F94C10A00FD69AB /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D0F981AD2F94C10900FD69AB /* Project object */;
@@ -53,6 +61,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		D0BB0000000000000000E00C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0DB31FA2FA8A3F80089C24C /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -78,6 +97,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "TwinskaraokeWatchWidgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0AA0000000000000000E00A /* Twinskaraoke TV App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke TV App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0F981B52F94C10900FD69AB /* Twinskaraoke.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Twinskaraoke.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -88,6 +108,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D0BB0000000000000000E002 /* Exceptions for "TwinskaraokeWatchWidgets" folder in "TwinskaraokeWatchWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */;
+		};
 		D01D91C82FA07A4100E300C5 /* Exceptions for "Twinskaraoke" folder in "Twinskaraoke" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -112,6 +139,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		D0BB0000000000000000E001 /* TwinskaraokeWatchWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D0BB0000000000000000E002 /* Exceptions for "TwinskaraokeWatchWidgets" folder in "TwinskaraokeWatchWidgets" target */,
+			);
+			path = TwinskaraokeWatchWidgets;
+			sourceTree = "<group>";
+		};
 		D0A500002FBD000100000001 /* TwinskaraokeShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TwinskaraokeShared;
@@ -164,6 +199,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D0BB0000000000000000E005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0AA0000000000000000E005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -233,6 +275,7 @@
 				D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */,
 				D0A500002FBD000100000001 /* TwinskaraokeShared */,
 				D0AA0000000000000000E002 /* TwinskaraokeTVApp */,
+				D0BB0000000000000000E001 /* TwinskaraokeWatchWidgets */,
 				D1A000052FAD000100000005 /* TwinskaraokeTests */,
 				D1A000062FAD000100000006 /* TwinskaraokeUITests */,
 				D1A000072FAD000100000007 /* TwinskaraokeWatchAppTests */,
@@ -248,6 +291,7 @@
 				D0F981B52F94C10900FD69AB /* Twinskaraoke.app */,
 				D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */,
 				D0AA0000000000000000E00A /* Twinskaraoke TV App.app */,
+				D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */,
 				D1A000012FAD000100000001 /* TwinskaraokeTests.xctest */,
 				D1A000022FAD000100000002 /* TwinskaraokeUITests.xctest */,
 				D1A000032FAD000100000003 /* Twinskaraoke Watch AppTests.xctest */,
@@ -259,6 +303,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0BB0000000000000000E007 /* Build configuration list for PBXNativeTarget "TwinskaraokeWatchWidgets" */;
+			buildPhases = (
+				D0BB0000000000000000E004 /* Sources */,
+				D0BB0000000000000000E005 /* Frameworks */,
+				D0BB0000000000000000E006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
+				D0BB0000000000000000E001 /* TwinskaraokeWatchWidgets */,
+			);
+			name = TwinskaraokeWatchWidgets;
+			packageProductDependencies = (
+			);
+			productName = TwinskaraokeWatchWidgets;
+			productReference = D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		D0AA0000000000000000E003 /* Twinskaraoke TV App */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D0AA0000000000000000E007 /* Build configuration list for PBXNativeTarget "Twinskaraoke TV App" */;
@@ -364,10 +431,12 @@
 				D0F981D42F94C10A00FD69AB /* Sources */,
 				D0F981D52F94C10A00FD69AB /* Frameworks */,
 				D0F981D62F94C10A00FD69AB /* Resources */,
+				D0BB0000000000000000E00C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D0BB0000000000000000E00D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				D0A500002FBD000100000001 /* TwinskaraokeShared */,
@@ -496,11 +565,19 @@
 				D0F981E62F94C10B00FD69AB /* Twinskaraoke Watch AppTests */,
 				D0F981F02F94C10B00FD69AB /* Twinskaraoke Watch AppUITests */,
 				D0AA0000000000000000E003 /* Twinskaraoke TV App */,
+				D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D0BB0000000000000000E006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0AA0000000000000000E006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -553,6 +630,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D0BB0000000000000000E004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D0AA0000000000000000E004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -605,6 +689,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		D0BB0000000000000000E00D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */;
+			targetProxy = D0BB0000000000000000E00E /* PBXContainerItemProxy */;
+		};
 		D0F981DB2F94C10A00FD69AB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = D0F981D72F94C10A00FD69AB /* Twinskaraoke Watch App */;
@@ -633,6 +722,65 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D0BB0000000000000000E009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GQCU59RKTN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Radio;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LM_ENABLE_LINK_GENERATION = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D0BB0000000000000000E008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GQCU59RKTN;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Radio;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LM_ENABLE_LINK_GENERATION = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.6;
+			};
+			name = Debug;
+		};
 		D0AA0000000000000000E008 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -831,7 +979,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				LM_ENABLE_LINK_GENERATION = NO;
+				LM_ENABLE_LINK_GENERATION = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -867,7 +1015,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				LM_ENABLE_LINK_GENERATION = NO;
+				LM_ENABLE_LINK_GENERATION = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = org.evilneuro.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1191,6 +1339,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D0BB0000000000000000E007 /* Build configuration list for PBXNativeTarget "TwinskaraokeWatchWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0BB0000000000000000E008 /* Debug */,
+				D0BB0000000000000000E009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D0AA0000000000000000E007 /* Build configuration list for PBXNativeTarget "Twinskaraoke TV App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

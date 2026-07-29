@@ -21,13 +21,21 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
       "Expected the compact Listen Now header to be visible."
     )
 
-    scrollToVisibleItem("Playlists", identifier: "WatchHome.playlists", in: app)
-
-    for item in ["Playlists", "Songs", "Search", "Account"] {
+    // Checked one at a time: the Browse section is taller than the screen, so
+    // only a few cells are ever in the hierarchy together and asserting them
+    // all at once would depend on how many rows happen to fit.
+    let browseLinks = [
+      ("Playlists", "WatchHome.playlists"),
+      ("Radio", "WatchHome.radio"),
+      ("Songs", "WatchHome.songs"),
+      ("Search", "WatchHome.search"),
+      ("Account", "WatchHome.account"),
+    ]
+    for (title, identifier) in browseLinks {
+      scrollToVisibleItem(title, identifier: identifier, in: app)
       XCTAssertTrue(
-        app.staticTexts[item].waitForExistence(timeout: 8)
-          || app.buttons[item].waitForExistence(timeout: 8),
-        "Expected \(item) browse link to be visible on watch Home."
+        isVisible(title, identifier: identifier, in: app),
+        "Expected \(title) browse link to be reachable on watch Home."
       )
     }
 
@@ -138,23 +146,43 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     matchingText.tap()
   }
 
+  /// Scrolls a watch list until `title` is in the hierarchy.
+  ///
+  /// The Digital Crown moves in small, predictable steps, unlike a swipe: a
+  /// flick carries a 248pt screen clean past the target, and a row that scrolls
+  /// out is recycled out of the accessibility hierarchy, so `exists` never
+  /// recovers. Each lookup rewinds to the top first so it does not depend on
+  /// where a previous lookup left the list.
   private func scrollToVisibleItem(_ title: String, identifier: String, in app: XCUIApplication) {
-    for _ in 0..<5 {
-      if app.buttons[identifier].exists
-        || app.otherElements[identifier].exists
-        || app.staticTexts[title].exists
-        || app.buttons[title].exists
-      {
+    if isVisible(title, identifier: identifier, in: app) {
+      return
+    }
+    // Scan downwards first: callers walk a screen top to bottom, so the target
+    // is almost always below where the last lookup stopped.
+    for _ in 0..<12 {
+      XCUIDevice.shared.rotateDigitalCrown(delta: 0.4)
+      if isVisible(title, identifier: identifier, in: app) {
         return
       }
-      app.swipeUp()
+    }
+    // Not below: rewind to the top and sweep the whole list once.
+    XCUIDevice.shared.rotateDigitalCrown(delta: -12)
+    for _ in 0..<24 {
+      if isVisible(title, identifier: identifier, in: app) {
+        return
+      }
+      XCUIDevice.shared.rotateDigitalCrown(delta: 0.4)
     }
     XCTAssertTrue(
-      app.buttons[identifier].exists
-        || app.otherElements[identifier].exists
-        || app.staticTexts[title].exists
-        || app.buttons[title].exists,
+      isVisible(title, identifier: identifier, in: app),
       "Missing visible item \(title) after scrolling."
     )
+  }
+
+  private func isVisible(_ title: String, identifier: String, in app: XCUIApplication) -> Bool {
+    app.buttons[identifier].exists
+      || app.otherElements[identifier].exists
+      || app.staticTexts[title].exists
+      || app.buttons[title].exists
   }
 }

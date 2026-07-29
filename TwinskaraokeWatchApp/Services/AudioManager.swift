@@ -38,6 +38,14 @@ class AudioManager: ObservableObject {
     @Published var playbackMode: PlaybackMode = .listLoop
     @Published var isShuffleOn = false
     @Published var volume: Double = AudioManager.storedVolume()
+    /// Live radio plays a stream straight from the network instead of going
+    /// through the download-then-play cache pipeline, and has no queue,
+    /// duration, or seekable position. Everything that assumes those is gated
+    /// on this.
+    @Published private(set) var isRadioMode = false
+    /// Radio artwork comes from the station metadata, not from `Song`, which
+    /// carries only a synthetic ID for the current track.
+    private var radioArtworkURL: URL?
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
@@ -143,7 +151,106 @@ class AudioManager: ObservableObject {
         prepareAndPlay()
     }
 
+    // MARK: - Live radio
+
+    func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        // Already tuned in: the track changed under us, not the station.
+        if isRadioMode, player != nil, currentSong?.id == song.id {
+            radioArtworkURL = artworkURL
+            currentSong = song
+            updateNowPlayingInfo()
+            return
+        }
+        cleanupPlayer()
+        downloadTask?.cancel()
+        downloadToken = nil
+        downloadTask = nil
+        cancellables.removeAll()
+        setupInterruptionHandler()
+
+        isRadioMode = true
+        radioArtworkURL = artworkURL
+        // A stream has no queue to advance through and no position to scrub.
+        queue = []
+        currentIndex = 0
+        currentTime = 0
+        duration = 0
+        currentSong = song
+        playbackRequested = true
+        isLoading = true
+        startRadioStream(url: streamURL)
+    }
+
+    /// Applies a metadata poll to the track already playing, without touching
+    /// the stream itself.
+    func updateRadioMetadata(song: Song, artworkURL: URL?) {
+        guard isRadioMode else { return }
+        radioArtworkURL = artworkURL
+        currentSong = song
+        updateNowPlayingInfo()
+    }
+
+    func stopRadio() {
+        guard isRadioMode else { return }
+        cleanupPlayer()
+        isRadioMode = false
+        radioArtworkURL = nil
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        currentSong = nil
+        currentTime = 0
+        duration = 0
+        updateNowPlayingInfo()
+    }
+
+    private func startRadioStream(url: URL) {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, policy: .longFormAudio
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
+        let playerItem = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: playerItem)
+        player.volume = Float(volume)
+        // A live stream is better served by waiting out a stall than by
+        // dropping back to the start of the buffer.
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        self.player = player
+
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self else { return }
+                if status == .readyToPlay {
+                    if playbackRequested {
+                        player.play()
+                    }
+                    refreshPlaybackState()
+                    updateNowPlayingInfo()
+                } else if status == .failed {
+                    // No cache to fall back on and no next track to skip to:
+                    // surface it as stopped and let the listener retry.
+                    stopRadio()
+                }
+            }
+            .store(in: &playerCancellables)
+        player.publisher(for: \.timeControlStatus, options: [.initial, .new])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshPlaybackState()
+            }
+            .store(in: &playerCancellables)
+        player.playImmediately(atRate: 1.0)
+    }
+
     private func prepareAndPlay() {
+        // Any ordinary song leaves the station behind; this is the single
+        // funnel every play path goes through.
+        isRadioMode = false
+        radioArtworkURL = nil
         cleanupPlayer()
         currentTime = 0
         duration = 0
@@ -158,6 +265,9 @@ class AudioManager: ObservableObject {
             isLoading = false
             return
         }
+        // Every play path funnels through here, so recents are recorded once
+        // rather than at each of the four call sites that set `currentSong`.
+        RecentlyPlayedStore.shared.record(song)
         let localURL = localCacheURL(for: song.id)
         if FileManager.default.fileExists(atPath: localURL.path) {
             isLoading = true
@@ -325,6 +435,14 @@ class AudioManager: ObservableObject {
                 updateNowPlayingInfo()
                 return true
             }
+            // A dead radio player has nothing to restart from: there is no
+            // downloadable URL behind it, and `prepareAndPlay` would file the
+            // station's synthetic song into recently played.
+            if isRadioMode {
+                isPlaying = false
+                playbackRequested = false
+                return false
+            }
             // Pausing during the initial download cancelled it with nothing
             // in flight; restart the prepare/download pipeline instead of
             // dead-ending.
@@ -356,6 +474,7 @@ class AudioManager: ObservableObject {
     }
 
     func playNext() {
+        guard !isRadioMode else { return }
         guard !queue.isEmpty else { return }
         currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
         if isShuffleOn, queue.count > 1 {
@@ -372,6 +491,9 @@ class AudioManager: ObservableObject {
     }
 
     func playPrevious() {
+        // Seeking a live stream would drop back into the buffer rather than
+        // restart anything, and there is no queue behind it.
+        guard !isRadioMode else { return }
         if currentTime > 3.0 {
             player?.seek(to: .zero)
             return
@@ -423,6 +545,8 @@ class AudioManager: ObservableObject {
     }
 
     func seek(to time: Double) {
+        // A live stream has no meaningful position to seek to.
+        guard !isRadioMode else { return }
         player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
         updateNowPlayingInfo()
     }
@@ -572,6 +696,22 @@ class AudioManager: ObservableObject {
             for url in entries {
                 try? fm.removeItem(at: url)
             }
+        }
+    }
+
+    /// Bytes currently held by the downloaded-audio cache.
+    ///
+    /// Walks the directory on each call rather than tracking a running total:
+    /// eviction, playback and manual clearing all mutate it, and the only
+    /// caller is a settings screen the listener has to deliberately open.
+    nonisolated static func cacheSizeBytes(in directory: URL = audioCacheDir) -> Int64 {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return entries.reduce(into: Int64(0)) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            total += Int64(size)
         }
     }
 
@@ -811,7 +951,9 @@ class AudioManager: ObservableObject {
     /// Now Playing artwork served from the image cache the player view
     /// already warms; falls back to no artwork until the thumbnail arrives.
     private func nowPlayingArtwork(for song: Song) -> MPMediaItemArtwork? {
-        guard let url = song.thumbnailURL else { return nil }
+        // A radio track's `Song` is synthesised from station metadata and has
+        // no artwork path of its own.
+        guard let url = isRadioMode ? radioArtworkURL : song.thumbnailURL else { return nil }
         if let image = WatchImageCache.shared.cachedImage(for: url) {
             return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
         }
