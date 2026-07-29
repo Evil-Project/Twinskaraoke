@@ -667,19 +667,24 @@ class AudioManager: ObservableObject {
             )
         else { return }
         // Oldest first; both budgets drop the least-recently-played files.
-        let sorted = files.sorted {
-            let d1 =
-                (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? .distantPast
-            let d2 =
-                (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? .distantPast
-            return d1 < d2
-        }
+        // Stat each file once up front rather than inside the comparator, which
+        // would re-hit the filesystem twice per comparison.
+        let keySet = Set(keys)
+        let sorted = files
+            .map { url -> (url: URL, date: Date, size: Int) in
+                let values = try? url.resourceValues(forKeys: keySet)
+                return (
+                    url: url,
+                    date: values?.contentModificationDate ?? .distantPast,
+                    size: values?.fileSize ?? 0
+                )
+            }
+            .sorted { $0.date < $1.date }
         var keptCount = 0
         var keptBytes = 0
-        for (index, file) in sorted.reversed().enumerated() {
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        for (index, entry) in sorted.reversed().enumerated() {
+            let file = entry.url
+            let size = entry.size
             if index == 0 || (keptCount < maxCount && keptBytes + size <= maxBytes) {
                 keptCount += 1
                 keptBytes += size

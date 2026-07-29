@@ -55,14 +55,13 @@ extension View {
     }
 }
 
-private struct ReduceMotionInjector: View {
-    let content: AnyView
+// Generic over Content rather than boxing in AnyView: this wraps the root of
+// every view tree, and an AnyView there erases the static type SwiftUI relies
+// on to diff the whole app structurally.
+private struct ReduceMotionInjector<Content: View>: View {
+    let content: Content
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-
-    init(content: some View) {
-        self.content = AnyView(content)
-    }
 
     var body: some View {
         content.environment(\.appReduceMotion, AppMotion.reduceMotion(
