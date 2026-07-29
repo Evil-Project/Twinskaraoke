@@ -332,32 +332,45 @@ final class TwinskaraokeUITests: XCTestCase {
       "Expected the selected song title to be visible in the player."
     )
 
-    let lyricsButton = app.buttons["Show Lyrics"].firstMatch
-    XCTAssertTrue(
-      lyricsButton.waitForExistence(timeout: 8),
-      "Expected the full-screen player to expose lyrics controls."
-    )
-    lyricsButton.tap()
-
-    XCTAssertTrue(
-      app.buttons["Hide Lyrics"].waitForExistence(timeout: 8)
-        || app.buttons["Hide lyrics"].waitForExistence(timeout: 8),
-      "Expected the player to switch into lyrics mode."
-    )
-
-    if isRunningOnPad {
+    // The lyrics-first default follows the canvas, not the device idiom: an
+    // iPad Slide Over or half-width Split View window runs the compact layout
+    // and opens on artwork, so gate on the dedicated lyrics column actually
+    // being present rather than on the device being an iPad. The column's title
+    // is unique to the wide lyrics layout, and unlike its enclosing
+    // `FullScreenPlayer.layout.wideLyrics` container it is queryable here.
+    if accessibleElementExists(
+      identifier: "FullScreenPlayer.wideLyricsTitle",
+      in: app,
+      timeout: 8
+    ) {
+      // The wide canvas opens straight into lyrics, so the toggle starts "on".
       XCTAssertTrue(
-        accessibleElementExists(
-          identifier: "FullScreenPlayer.wideLyricsTitle",
-          in: app,
-          timeout: 8
-        ),
-        "Expected the iPad player to expose a dedicated lyrics column."
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
+        "Expected the wide player to open with lyrics already showing."
+      )
+
+      app.buttons["Hide Lyrics"].firstMatch.tap()
+      XCTAssertTrue(
+        app.buttons["Show Lyrics"].waitForExistence(timeout: 8),
+        "Expected the wide player to fall back to the artwork layout."
+      )
+      app.buttons["Show Lyrics"].firstMatch.tap()
+      XCTAssertTrue(
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
+        "Expected the wide player to return to lyrics mode."
       )
     } else {
+      let lyricsButton = app.buttons["Show Lyrics"].firstMatch
       XCTAssertTrue(
-        app.buttons["Hide lyrics"].exists || app.buttons["Hide Lyrics"].exists,
-        "Expected the compact player to expose its lyrics controls."
+        lyricsButton.waitForExistence(timeout: 8),
+        "Expected the full-screen player to expose lyrics controls."
+      )
+      lyricsButton.tap()
+
+      XCTAssertTrue(
+        app.buttons["Hide Lyrics"].waitForExistence(timeout: 8)
+          || app.buttons["Hide lyrics"].waitForExistence(timeout: 8),
+        "Expected the player to switch into lyrics mode."
       )
     }
   }

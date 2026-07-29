@@ -56,6 +56,9 @@
         }
       }
     },
+    "@%@" : {
+
+    },
     "%@ artwork" : {
       "localizations" : {
         "de" : {
@@ -159,6 +162,12 @@
           }
         }
       }
+    },
+    "%@ XP" : {
+
+    },
+    "%@ XP to the next level" : {
+
     },
     "%@, %@" : {
       "localizations" : {
@@ -3879,6 +3888,9 @@
         }
       }
     },
+    "Check this code matches the one on your phone before approving." : {
+
+    },
     "Checking Camera Access" : {
       "localizations" : {
         "de" : {
@@ -4242,6 +4254,9 @@
           }
         }
       }
+    },
+    "Code expired" : {
+
     },
     "Coin Art" : {
       "localizations" : {
@@ -4728,9 +4743,6 @@
         }
       }
     },
-    "Coverage" : {
-
-    },
     "Cover by %@" : {
       "localizations" : {
         "en" : {
@@ -4740,6 +4752,9 @@
           }
         }
       }
+    },
+    "Coverage" : {
+
     },
     "Create playlist" : {
       "localizations" : {
@@ -8734,6 +8749,9 @@
         }
       }
     },
+    "Level %lld" : {
+
+    },
     "Level Up" : {
       "localizations" : {
         "de" : {
@@ -9833,6 +9851,9 @@
         }
       }
     },
+    "Loading profile…" : {
+
+    },
     "Loading Radio" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10628,6 +10649,9 @@
           }
         }
       }
+    },
+    "New Code" : {
+
     },
     "New Playlist" : {
       "localizations" : {
@@ -11929,6 +11953,9 @@
         }
       }
     },
+    "Open Twinskaraoke on your iPhone, go to Account → Sign in on web, and scan the code to sign in here." : {
+
+    },
     "Opens %@ songs" : {
       "localizations" : {
         "de" : {
@@ -11980,6 +12007,9 @@
           }
         }
       }
+    },
+    "Opens account and session status." : {
+
     },
     "Opens account and settings." : {
       "localizations" : {
@@ -12034,6 +12064,7 @@
       }
     },
     "Opens account and sync status." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -12410,6 +12441,7 @@
 
     },
     "Opens the full song catalog." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -12564,6 +12596,9 @@
           }
         }
       }
+    },
+    "Opens trending songs." : {
+
     },
     "OR" : {
       "localizations" : {
@@ -15264,6 +15299,9 @@
     "Refresh Playlist" : {
 
     },
+    "Refresh Profile" : {
+
+    },
     "Refresh radio metadata" : {
       "localizations" : {
         "de" : {
@@ -15578,6 +15616,9 @@
           }
         }
       }
+    },
+    "Refreshing…" : {
+
     },
     "Removal Level" : {
       "localizations" : {
@@ -18769,6 +18810,9 @@
         }
       }
     },
+    "Sign in with your Twinskaraoke username and password to see your profile, badges, and upload limits." : {
+
+    },
     "Sign Out" : {
       "localizations" : {
         "de" : {
@@ -18976,6 +19020,9 @@
           }
         }
       }
+    },
+    "Signing In…" : {
+
     },
     "Signs in with your Twinskaraoke account." : {
       "localizations" : {
@@ -19237,6 +19284,9 @@
         }
       }
     },
+    "Something went wrong" : {
+
+    },
     "Songs" : {
       "localizations" : {
         "de" : {
@@ -19452,6 +19502,9 @@
           }
         }
       }
+    },
+    "Songs, artists" : {
+
     },
     "Songs, Artists, Lyrics, and More" : {
       "localizations" : {
@@ -20136,6 +20189,7 @@
       }
     },
     "Sync" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20657,6 +20711,9 @@
           }
         }
       }
+    },
+    "Try Again" : {
+
     },
     "Try another song title or artist." : {
 
@@ -22427,6 +22484,9 @@
         }
       }
     },
+    "You’ll need to sign in again to access your account." : {
+
+    },
     "You'll need to sign in again to access your library and account features." : {
       "localizations" : {
         "de" : {
@@ -22530,6 +22590,9 @@
           }
         }
       }
+    },
+    "Your karaoke profile,\nright on Apple TV." : {
+
     }
   },
   "version" : "1.0"
