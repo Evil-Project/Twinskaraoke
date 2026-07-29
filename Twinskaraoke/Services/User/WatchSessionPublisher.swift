@@ -42,15 +42,21 @@ final class WatchSessionPublisher: NSObject {
     ///   the watch knows to re-pull the token. `false` when merely resending
     ///   the state we already published (activation, watch app installed).
     private func publish(bumpingGeneration: Bool) {
+        // Recorded before the guards below, because the guards are about
+        // whether anyone is listening, not about whether the change happened.
+        // Signing out and back in as the same user with the watch unpaired
+        // used to leave the generation untouched, and the resend that follows
+        // reconnection carries `bumpingGeneration: false` — so the watch saw
+        // the number it had already applied and kept the old session's token.
+        if bumpingGeneration {
+            defaults.set(currentGeneration + 1, forKey: Self.generationKey)
+        }
+
         let session = WCSession.default
         guard session.activationState == .activated else { return }
         // Nothing to talk to yet; `sessionWatchStateDidChange` republishes once
         // a watch is paired and the app installed.
         guard session.isPaired, session.isWatchAppInstalled else { return }
-
-        if bumpingGeneration {
-            defaults.set(currentGeneration + 1, forKey: Self.generationKey)
-        }
 
         var descriptor = AuthManager.persistedDescriptor()
         descriptor.generation = currentGeneration

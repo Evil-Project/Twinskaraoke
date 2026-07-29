@@ -6,6 +6,26 @@ import Foundation
 /// These conform to `AudioPlaybackIntent` rather than plain `AppIntent` so the
 /// system lets them start audio without bringing the app to the front — the
 /// point of asking a watch to play something is not having to look at it.
+/// Why an intent could not do what it was asked.
+///
+/// Siri reads the `failureReason` back, so these say what is missing rather
+/// than that something went wrong: an intent that returns `.result()` after
+/// doing nothing leaves the listener staring at a silent watch that just
+/// told them it had started playing.
+enum WatchPlaybackIntentError: Swift.Error, CustomLocalizedStringResourceConvertible {
+    case stationUnavailable
+    case nothingLoaded
+
+    var localizedStringResource: LocalizedStringResource {
+        switch self {
+        case .stationUnavailable:
+            "The live station isn't reachable right now."
+        case .nothingLoaded:
+            "There's nothing loaded to play on this watch."
+        }
+    }
+}
+
 struct PlayLiveRadioIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Radio"
     static let description = IntentDescription(
@@ -20,6 +40,12 @@ struct PlayLiveRadioIntent: AudioPlaybackIntent {
         if radio.nowPlaying == nil {
             await radio.refresh()
         }
+        // `playLiveStream` schedules its own retry when the station is still
+        // unknown, which would report success now and start audio later or
+        // never. Better to say so.
+        guard radio.nowPlaying != nil else {
+            throw WatchPlaybackIntentError.stationUnavailable
+        }
         radio.playLiveStream()
         return .result()
     }
@@ -33,7 +59,12 @@ struct ResumePlaybackIntent: AudioPlaybackIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        _ = AudioManager.shared.togglePlayPause()
+        // `togglePlayPause` returns false only when there is no player, no
+        // queued song and no download in flight — nothing a "resumed" reply
+        // could be about.
+        guard AudioManager.shared.togglePlayPause() else {
+            throw WatchPlaybackIntentError.nothingLoaded
+        }
         return .result()
     }
 }

@@ -9,10 +9,30 @@ import SwiftUI
 struct PlaylistRoute: Hashable {
     let id: String
     let name: String
+    /// The songs the list endpoint already handed over, for personal playlists.
+    ///
+    /// `/api/user/playlists` returns each playlist with its songs inline, and
+    /// the curated detail endpoint the watch would otherwise ask has never
+    /// heard of a personal playlist ID. Dropping them here is what made your
+    /// own playlists open onto an empty state.
+    let fallbackSongs: [Song]
 
     init(playlist: Playlist) {
         id = playlist.id
         name = playlist.name
+        fallbackSongs = playlist.isPersonal ? playlist.songListDTOs ?? [] : []
+    }
+
+    // A route is the playlist it points at, not the snapshot of songs it
+    // happened to be built with: two pushes of the same playlist must land on
+    // the same destination even if one was built before a refresh.
+    static func == (lhs: PlaylistRoute, rhs: PlaylistRoute) -> Bool {
+        lhs.id == rhs.id && lhs.name == rhs.name
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
     }
 }
 
@@ -47,13 +67,19 @@ struct PlaylistsGridView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if showsUserPlaylists {
                     userPlaylistsSection
+                } else if showsUserPlaylistsError {
+                    userPlaylistsErrorSection
                 }
                 curatedContent
             }
         }
         .navigationTitle("Playlists")
         .navigationDestination(for: PlaylistRoute.self) { route in
-            PlaylistDetailView(playlistID: route.id, playlistName: route.name)
+            PlaylistDetailView(
+                playlistID: route.id,
+                playlistName: route.name,
+                fallbackSongs: route.fallbackSongs
+            )
         }
         .animation(listAnimation, value: viewModel.playlists.count)
         .animation(listAnimation, value: userViewModel.playlists.count)
@@ -85,6 +111,58 @@ struct PlaylistsGridView: View {
 
     private var showsUserPlaylists: Bool {
         auth.linkState == .signedIn && !userViewModel.playlists.isEmpty
+    }
+
+    /// A signed-in listener whose own playlists failed to load used to get the
+    /// curated grid and nothing else — indistinguishable from having no
+    /// playlists, and with no way to ask again.
+    private var showsUserPlaylistsError: Bool {
+        auth.linkState == .signedIn
+            && userViewModel.playlists.isEmpty
+            && userViewModel.loadError != nil
+    }
+
+    /// One row rather than `WatchLoadErrorState`: the curated playlists below
+    /// did load, and this is a note about the missing section, not the screen.
+    private var userPlaylistsErrorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Yours")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.leading, 4)
+
+            HStack(spacing: 9) {
+                Image(systemName: "exclamationmark.icloud")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+
+                Text(userViewModel.loadError ?? "Check your connection and try again.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 4)
+            }
+
+            Button("Retry") {
+                userViewModel.fetch(force: true)
+                WatchHaptic.play(.click)
+            }
+            .buttonStyle(.watchPressable)
+            .font(.system(size: 12, weight: .semibold))
+            .disabled(userViewModel.isLoading)
+            .accessibilityHint("Loads your playlists again.")
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.secondary.opacity(0.1))
+        )
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .accessibilityElement(children: .contain)
     }
 
     private var userPlaylistsSection: some View {

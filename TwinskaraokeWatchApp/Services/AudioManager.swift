@@ -43,6 +43,14 @@ class AudioManager: ObservableObject {
     /// duration, or seekable position. Everything that assumes those is gated
     /// on this.
     @Published private(set) var isRadioMode = false
+    /// Bumped whenever the downloaded-audio cache gains or loses a file.
+    ///
+    /// The size itself is not published, because working it out means walking
+    /// the directory and almost nobody is looking. This is the cheap signal a
+    /// screen that *is* looking can watch, so a download finishing behind the
+    /// Account screen updates the figure on it instead of leaving it stale
+    /// until the listener navigates away and back.
+    @Published private(set) var cacheRevision = 0
     /// Radio artwork comes from the station metadata, not from `Song`, which
     /// carries only a synthetic ID for the current track.
     private var radioArtworkURL: URL?
@@ -707,11 +715,13 @@ class AudioManager: ObservableObject {
             guard let self, currentSong?.id == song.id else { return }
             guard valid else {
                 try? FileManager.default.removeItem(at: destinationURL)
+                noteCacheChanged()
                 isLoading = false
                 playbackRequested = false
                 return
             }
             evictOldCacheFiles()
+            noteCacheChanged()
             setupPlayer(with: destinationURL)
         }
     }
@@ -788,6 +798,12 @@ class AudioManager: ObservableObject {
                 try? fm.removeItem(at: url)
             }
         }
+        noteCacheChanged()
+    }
+
+    /// Tells anyone displaying the cache that the figure they have is old.
+    private func noteCacheChanged() {
+        cacheRevision &+= 1
     }
 
     /// Bytes currently held by the downloaded-audio cache.
@@ -848,6 +864,7 @@ class AudioManager: ObservableObject {
                 return
             }
             try? FileManager.default.removeItem(at: cacheURL)
+            noteCacheChanged()
             guard let remoteURL = song.audioURL else {
                 isLoading = false
                 playbackRequested = false
@@ -867,6 +884,7 @@ class AudioManager: ObservableObject {
         let songID = song.id
         recoveringFromBrokenCache.insert(songID)
         try? FileManager.default.removeItem(at: playbackURL)
+        noteCacheChanged()
         cleanupPlayer()
         // As in prepareAndPlay, drop the dead player's Combine sinks; this
         // also drops the session handlers, so re-register them.

@@ -132,42 +132,11 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     )
   }
 
-  /// Tuning in, end to end.
-  ///
-  /// The stream is now built, activated and started off the main actor, which
-  /// means the player is adopted a beat after the tap rather than during it.
-  /// A station that fails to open calls `stopRadio`, which puts the button back
-  /// to "Listen Live" — so a control still reading "Stop" well after the tap is
-  /// the evidence that the hand-off actually landed.
-  func testWatchRadioListenLiveStartsAndStaysTunedIn() throws {
-    let app = launchApp()
-
-    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
-    XCTAssertTrue(
-      app.staticTexts["Listen Now"].waitForExistence(timeout: 10)
-        || app.otherElements["WatchHome.listenNow"].waitForExistence(timeout: 10),
-      "Expected Home to finish loading before browsing."
-    )
-    // Walked in order, the way the browse test does: each lookup starts from
-    // where the last one left the list.
-    scrollToVisibleItem("Playlists", identifier: "WatchHome.playlists", in: app)
-    scrollToVisibleItem("Radio", identifier: "WatchHome.radio", in: app)
-    openVisibleItem("Radio", identifier: "WatchHome.radio", in: app)
-
-    let listen = app.buttons["WatchRadio.listen"]
-    XCTAssertTrue(listen.waitForExistence(timeout: 15), "Expected the radio screen to open.")
-    listen.tap()
-
-    XCTAssertTrue(
-      app.buttons["Stop"].waitForExistence(timeout: 15),
-      "Expected the station to tune in."
-    )
-    Thread.sleep(forTimeInterval: 10)
-    XCTAssertTrue(
-      app.buttons["Stop"].exists,
-      "Expected to still be tuned in — the stream dropped back out after starting."
-    )
-  }
+  // A "Listen Live starts and stays tuned in" test used to live here. It cost
+  // roughly eleven minutes and could not earn them: a simulator streams over
+  // the Mac's network with no media daemon to stall on, so it never reproduced
+  // the main-actor freeze the off-actor tune-in was written to fix. The
+  // behaviour it was reaching for has to be confirmed on a wrist.
 
   /// The Crown's volume mapping, pinned by direction rather than by arithmetic.
   ///
@@ -212,15 +181,18 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     ).firstMatch
     XCTAssertTrue(readout.waitForExistence(timeout: 5), "Missing the Crown readout.")
 
+    // Four samples a third of a second apart. The turn itself already took
+    // five seconds to return, so the value is usually settled on the first
+    // read; this is the cheapest window that still catches one that isn't.
     var previous: Int?
-    for _ in 0..<10 {
+    for _ in 0..<4 {
       let text = (readout.value as? String) ?? readout.label
       let percent = try XCTUnwrap(
         Int(text.filter(\.isNumber)), "Unreadable Crown volume: \(text)"
       )
       if percent == previous { return percent }
       previous = percent
-      Thread.sleep(forTimeInterval: 0.5)
+      Thread.sleep(forTimeInterval: 0.3)
     }
     return try XCTUnwrap(previous)
   }
@@ -259,32 +231,53 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     matchingText.tap()
   }
 
+  /// One turn of the Crown, in list terms.
+  ///
+  /// `rotateDigitalCrown` blocks for about 5.4 seconds whatever delta it is
+  /// handed, so the only thing that makes a scroll cheap is asking for fewer,
+  /// larger turns. Half a rotation moves a watch list by roughly a screenful:
+  /// measured on Home, where one `+0.5` from the top brings the whole Browse
+  /// section into the hierarchy and a second reaches the bottom.
+  private static let crownScrollStep = 0.5
+
+  /// Turns needed to cross the longest list under test, with room to spare.
+  private static let crownScrollSpan = 4
+
   /// Scrolls a watch list until `title` is in the hierarchy.
   ///
-  /// The Digital Crown moves in small, predictable steps, unlike a swipe: a
-  /// flick carries a 248pt screen clean past the target, and a row that scrolls
-  /// out is recycled out of the accessibility hierarchy, so `exists` never
-  /// recovers. Each lookup rewinds to the top first so it does not depend on
-  /// where a previous lookup left the list.
+  /// The Crown moves in predictable steps, unlike a swipe: a row that scrolls
+  /// out is recycled out of the accessibility hierarchy, so overshooting a
+  /// target means `exists` never recovers on the way past.
+  ///
+  /// Positive is *down* the list. This is measured, not read off the
+  /// documentation, which describes the sign in terms of scroll direction
+  /// rather than value: `+0.5` from the top of Home reveals the Browse rows
+  /// and `-0.5` puts them away again. The helper used to scan with a negative
+  /// delta, which held it against the top stop for thirty-six turns — three
+  /// minutes of doing nothing, and then a failure.
   private func scrollToVisibleItem(_ title: String, identifier: String, in app: XCUIApplication) {
     if isVisible(title, identifier: identifier, in: app) {
       return
     }
-    // Scan downwards first: callers walk a screen top to bottom, so the target
-    // is almost always below where the last lookup stopped.
-    for _ in 0..<12 {
-      XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
+    // Downwards first: callers walk a screen top to bottom, so the target is
+    // almost always below wherever the last lookup stopped.
+    for _ in 0..<Self.crownScrollSpan {
+      XCUIDevice.shared.rotateDigitalCrown(delta: Self.crownScrollStep)
       if isVisible(title, identifier: identifier, in: app) {
         return
       }
     }
-    // Not below: rewind to the top and sweep the whole list once.
-    XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
-    for _ in 0..<24 {
+    // Not below, so it is above: rewind and come down the whole list once.
+    // One big turn rather than several small ones — the top is a hard stop,
+    // so there is nothing to overshoot into.
+    XCUIDevice.shared.rotateDigitalCrown(
+      delta: -Self.crownScrollStep * Double(Self.crownScrollSpan + 1)
+    )
+    for _ in 0..<Self.crownScrollSpan {
       if isVisible(title, identifier: identifier, in: app) {
         return
       }
-      XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
+      XCUIDevice.shared.rotateDigitalCrown(delta: Self.crownScrollStep)
     }
     XCTAssertTrue(
       isVisible(title, identifier: identifier, in: app),

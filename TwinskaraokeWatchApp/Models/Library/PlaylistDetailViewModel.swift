@@ -9,22 +9,40 @@ final class PlaylistDetailViewModel: ObservableObject {
     /// of showing a misleading empty state.
     @Published var loadError: String?
     let playlistID: String
+    /// Songs the caller already had — personal playlists arrive from
+    /// `/api/user/playlists` with their contents inline. Shown immediately so
+    /// the screen is never blank while the network answers, and kept if the
+    /// answer is an empty list, which is what the curated endpoint says about
+    /// a playlist ID it does not know.
+    private let fallbackSongs: [Song]
+    private var hasLoadedRemoteSongs = false
 
-    init(playlistID: String) {
+    init(playlistID: String, fallbackSongs: [Song] = []) {
         self.playlistID = playlistID
+        self.fallbackSongs = fallbackSongs
+        songs = fallbackSongs
     }
 
     func fetchSongs() {
-        guard !isLoading, songs.isEmpty else { return }
+        guard !isLoading, !hasLoadedRemoteSongs else { return }
         isLoading = true
         loadError = nil
         Task { [weak self] in
             guard let self else { return }
             defer { isLoading = false }
             do {
-                songs = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+                let loaded = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+                hasLoadedRemoteSongs = true
+                if !loaded.isEmpty || fallbackSongs.isEmpty {
+                    songs = loaded
+                }
             } catch {
-                loadError = "Check your connection and try again."
+                // Only worth saying when there is nothing on screen to say it
+                // over; a personal playlist showing its inline songs does not
+                // need an error about the fetch that would have replaced them.
+                if songs.isEmpty {
+                    loadError = "Check your connection and try again."
+                }
             }
         }
     }
