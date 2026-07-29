@@ -2,6 +2,9 @@ import SwiftUI
 
 private struct WatchPlayerLayoutMetrics {
     let containerSize: CGSize
+    /// Radio drops the secondary row, which changes how much height is left
+    /// over for the artwork.
+    let showsSecondaryRow: Bool
 
     private var compactWidth: Bool {
         containerSize.width < 180
@@ -11,12 +14,32 @@ private struct WatchPlayerLayoutMetrics {
         containerSize.height < 205
     }
 
+    /// Every row below the artwork has a height we can name, so the artwork
+    /// takes whatever is left rather than a fixed fraction of the screen.
+    /// That is what lets the page fit a 40mm watch without scrolling, and
+    /// without shrinking the controls people actually have to hit.
     var artworkSize: CGFloat {
-        min(containerSize.width * (compactWidth ? 0.49 : 0.54), compactHeight ? 80 : 96)
+        let titleBlock = titleSize + artistSize + 8
+        let statusRow: CGFloat = 22
+        let rowsBelowArtwork: CGFloat = showsSecondaryRow ? 4 : 3
+        let used = titleBlock
+            + statusRow
+            + primaryControlDiameter
+            + (showsSecondaryRow ? secondaryControlSize : 0)
+            + contentSpacing * rowsBelowArtwork
+            // The paged TabView draws its dots inside the page.
+            + pageIndicatorAllowance
+        let leftover = containerSize.height - used
+        let ceiling = min(containerSize.width * (compactWidth ? 0.52 : 0.56), compactHeight ? 80 : 96)
+        return min(max(leftover, 36), ceiling)
+    }
+
+    var pageIndicatorAllowance: CGFloat {
+        10
     }
 
     var contentSpacing: CGFloat {
-        compactHeight ? 6 : 9
+        compactHeight ? 5 : 8
     }
 
     var titleSize: CGFloat {
@@ -58,10 +81,6 @@ private struct WatchPlayerLayoutMetrics {
     var secondaryControlSize: CGFloat {
         compactWidth ? 26 : 28
     }
-
-    var volumeHorizontalPadding: CGFloat {
-        compactWidth ? 4 : 10
-    }
 }
 
 struct PlayerView: View {
@@ -84,12 +103,20 @@ struct PlayerView: View {
     /// in scrub mode would seek the player to its own position on every tick,
     /// and switching targets would fire a spurious adjustment.
     @State private var seatedCrownValue: Double?
+    @State private var page: Page = .nowPlaying
 
     /// What the Digital Crown drives. A watch has one precise input and two
     /// things worth pointing it at, so it is switched rather than split.
     enum CrownTarget {
         case volume
         case position
+    }
+
+    /// The player and its queue sit side by side rather than stacked in the
+    /// navigation stack, so the queue is one swipe left instead of a push.
+    enum Page: Hashable {
+        case nowPlaying
+        case queue
     }
 
     private var reduceMotion: Bool {
@@ -105,264 +132,23 @@ struct PlayerView: View {
 
     var body: some View {
         if let song = audioManager.currentSong {
-            GeometryReader { geo in
-                let metrics = WatchPlayerLayoutMetrics(containerSize: geo.size)
-                ScrollView {
-                    VStack(spacing: metrics.contentSpacing) {
-                        ZStack {
-                            WatchCachedImage(url: song.thumbnailURL) { image in
-                                image.resizable().scaledToFit()
-                            } placeholder: {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.secondary.opacity(0.25))
-                            }
-                            .frame(width: metrics.artworkSize, height: metrics.artworkSize)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
-                            .scaleEffect(reduceMotion ? 1 : (audioManager.isPlaying ? 1 : 0.95))
-                            if audioManager.isLoading {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(overlayColor)
-                                    .frame(width: metrics.artworkSize, height: metrics.artworkSize)
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                        }
-                        .frame(width: metrics.artworkSize, height: metrics.artworkSize)
-                        .animation(playbackAnimation, value: audioManager.isPlaying)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Artwork")
-                        .accessibilityValue(playerStateAccessibilityValue(for: song))
-                        .accessibilityHint("Double tap to \(audioManager.isPlaying ? "pause" : "play").")
-                        .accessibilityAction {
-                            togglePlayPause()
-                        }
+            TabView(selection: $page) {
+                nowPlayingPage(song: song)
+                    .tag(Page.nowPlaying)
 
-                        VStack(spacing: 2) {
-                            Text(song.title)
-                                .font(.system(size: metrics.titleSize, weight: .semibold))
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.78)
-                            Text(song.artistName)
-                                .font(.system(size: metrics.artistSize))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Now Playing")
-                        .accessibilityValue(playerStateAccessibilityValue(for: song))
-                        .accessibilityHint("Use the playback controls below.")
-                        if audioManager.isRadioMode {
-                            // A live stream has no duration to fill a bar with
-                            // and nowhere to seek to.
-                            Label("Live", systemImage: "dot.radiowaves.left.and.right")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.appAccent)
-                                .padding(.horizontal, 8)
-                                .frame(minHeight: 20)
-                                .background(Capsule().fill(Color.appAccent.opacity(0.12)))
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("Live radio")
-                        } else {
-                            VStack(spacing: 1) {
-                                let total = max(audioManager.duration, 1)
-                                ProgressView(value: min(audioManager.currentTime, total), total: total)
-                                    .tint(.secondary.opacity(0.8))
-                                    .scaleEffect(y: 0.6)
-                                HStack {
-                                    Text(formatTime(audioManager.currentTime))
-                                    Spacer()
-                                    Text("-" + formatTime(max(0, audioManager.duration - audioManager.currentTime)))
-                                }
-                                .font(.system(size: 9, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            }
-                            .padding(.horizontal, metrics.progressHorizontalPadding)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Playback Position")
-                            .accessibilityValue(progressAccessibilityValue)
-                            .accessibilityHint("Swipe up or down to seek by 15 seconds.")
-                            .accessibilityAdjustableAction { direction in
-                                switch direction {
-                                case .increment:
-                                    seek(by: 15)
-                                case .decrement:
-                                    seek(by: -15)
-                                @unknown default:
-                                    break
-                                }
-                            }
-                        }
-
-                        HStack(spacing: metrics.mainControlSpacing) {
-                            if !audioManager.isRadioMode {
-                                WatchPlayerIconButton(
-                                    systemName: "backward.fill",
-                                    diameter: metrics.sideControlDiameter,
-                                    iconSize: metrics.sideControlIconSize,
-                                    tint: .primary,
-                                    fill: Color.secondary.opacity(0.14),
-                                    isDisabled: audioManager.isLoading,
-                                    accessibilityLabel: "Previous Track",
-                                    accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
-                                    accessibilityHint: "Restarts the song or plays the previous track."
-                                ) {
-                                    audioManager.playPrevious()
-                                    WatchHaptic.play(.previous)
-                                }
-                            }
-
-                            WatchPlayerIconButton(
-                                systemName: audioManager.isPlaying ? "pause.fill" : "play.fill",
-                                diameter: metrics.primaryControlDiameter,
-                                iconSize: metrics.primaryControlIconSize,
-                                tint: .white,
-                                fill: Color.appAccent,
-                                accessibilityLabel: audioManager.isPlaying ? "Pause" : "Play",
-                                accessibilityValue: audioManager.isLoading ? "Loading" : song.title,
-                                accessibilityHint: audioManager.isPlaying ? "Pauses \(song.title)." : "Plays \(song.title)."
-                            ) {
-                                togglePlayPause()
-                            }
-
-                            if !audioManager.isRadioMode {
-                                WatchPlayerIconButton(
-                                    systemName: "forward.fill",
-                                    diameter: metrics.sideControlDiameter,
-                                    iconSize: metrics.sideControlIconSize,
-                                    tint: .primary,
-                                    fill: Color.secondary.opacity(0.14),
-                                    isDisabled: audioManager.isLoading,
-                                    accessibilityLabel: "Next Track",
-                                    accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
-                                    accessibilityHint: "Skips to the next track."
-                                ) {
-                                    audioManager.playNext()
-                                    WatchHaptic.play(.next)
-                                }
-                            }
-                        }
-
-                        // Shuffle, repeat, the queue and starring are all
-                        // library concepts; the station decides what plays.
-                        if !audioManager.isRadioMode {
-                            HStack(spacing: metrics.secondaryControlSpacing) {
-                                if auth.linkState == .signedIn {
-                                    let isFavorite = favorites.isFavorite(song.id)
-                                    Button {
-                                        favorites.toggle(songID: song.id)
-                                        WatchHaptic.play(isFavorite ? .click : .success)
-                                    } label: {
-                                        Image(systemName: isFavorite ? "star.fill" : "star")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(isFavorite ? .appAccent : .secondary)
-                                            .frame(
-                                                width: metrics.secondaryControlSize,
-                                                height: metrics.secondaryControlSize
-                                            )
-                                            .background(
-                                                Circle().fill(
-                                                    isFavorite ? Color.appAccent.opacity(0.14) : Color.clear
-                                                )
-                                            )
-                                    }
-                                    .buttonStyle(.watchPressable)
-                                    .accessibilityLabel("Favorite")
-                                    .accessibilityValue(isFavorite ? "On" : "Off")
-                                    .accessibilityHint(
-                                        isFavorite
-                                            ? "Removes \(song.title) from your favorites."
-                                            : "Adds \(song.title) to your favorites."
-                                    )
-                                }
-                                Button {
-                                    audioManager.toggleShuffle()
-                                    WatchHaptic.play(audioManager.isShuffleOn ? .success : .click)
-                                } label: {
-                                    Image(systemName: "shuffle")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(audioManager.isShuffleOn ? .appAccent : .secondary)
-                                        .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
-                                        .background(
-                                            Circle().fill(audioManager.isShuffleOn ? Color.appAccent.opacity(0.14) : Color.clear)
-                                        )
-                                }
-                                .buttonStyle(.watchPressable)
-                                .accessibilityLabel("Shuffle")
-                                .accessibilityValue(audioManager.isShuffleOn ? "On" : "Off")
-                                .accessibilityHint(audioManager.isShuffleOn ? "Turns shuffle off." : "Turns shuffle on.")
-                                Button {
-                                    audioManager.toggleMode()
-                                    WatchHaptic.play(.click)
-                                } label: {
-                                    Image(systemName: audioManager.playbackMode.iconName)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(
-                                            audioManager.playbackMode == .singleLoop ? .appAccent : .secondary
-                                        )
-                                        .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
-                                        .background(
-                                            Circle().fill(
-                                                audioManager.playbackMode == .singleLoop
-                                                    ? Color.appAccent.opacity(0.14) : Color.clear
-                                            )
-                                        )
-                                }
-                                .buttonStyle(.watchPressable)
-                                .accessibilityLabel("Repeat")
-                                .accessibilityValue(
-                                    audioManager.playbackMode == .singleLoop ? "Repeat One" : "Repeat All"
-                                )
-                                .accessibilityHint("Cycles repeat mode.")
-                                NavigationLink(destination: QueueView().environmentObject(audioManager)) {
-                                    Image(systemName: "list.bullet")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.secondary)
-                                        .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
-                                }
-                                .buttonStyle(.watchPressable)
-                                .accessibilityLabel("Playing Next")
-                                .accessibilityValue(queueAccessibilityValue)
-                                .accessibilityHint("Show the queue for \(song.title)")
-                                .accessibilityIdentifier("WatchPlayer.queue")
-                                .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
-                            }
-                        }
-
-                        WatchCrownControl(
-                            target: crownTarget,
-                            fraction: crownValue,
-                            valueText: crownValueText,
-                            canSwitchTarget: canScrub,
-                            onAdjust: { applyCrown($0, feedback: true) },
-                            onSwitchTarget: switchCrownTarget
-                        )
-                        .padding(.horizontal, metrics.volumeHorizontalPadding)
-                        .padding(.top, 1)
-                        .focusable(true)
-                        .digitalCrownRotation(
-                            $crownValue,
-                            from: 0,
-                            through: 1,
-                            by: crownTarget == .volume ? 0.05 : 0.01,
-                            sensitivity: .medium,
-                            // Never wrap: rolling past the end of a track back
-                            // to its start is not something anyone means to do.
-                            isContinuous: false,
-                            isHapticFeedbackEnabled: true
-                        )
-                    }
-                    .frame(minHeight: geo.size.height)
-                    .padding(.horizontal, 2)
+                // The station picks what plays next, so there is no queue to
+                // swipe to while the radio is on.
+                if !audioManager.isRadioMode {
+                    QueueView(showsCurrentSong: false)
+                        .environmentObject(audioManager)
+                        .tag(Page.queue)
                 }
             }
+            .tabViewStyle(.page)
             .background(
                 WatchPlayerBackground(song: audioManager.currentSong, base: backgroundBase)
             )
-            .navigationTitle("Now Playing")
+            .navigationTitle(page == .queue ? "Playing Next" : "Now Playing")
             .onAppear {
                 seatCrown(audioManager.volume)
                 lastCrownFeedbackStep = Int((crownValue * 20).rounded())
@@ -383,12 +169,14 @@ struct PlayerView: View {
                 syncCrownToPlayback()
             }
             .compatibleOnChange(of: audioManager.isRadioMode) { isRadio in
-                // A live stream has no position, so the Crown has nowhere else
-                // to point.
-                if isRadio, crownTarget == .position {
+                guard isRadio else { return }
+                // A live stream has no position for the Crown to point at, and
+                // the queue page it may be sitting on no longer exists.
+                if crownTarget == .position {
                     crownTarget = .volume
                     seatCrown(audioManager.volume)
                 }
+                page = .nowPlaying
             }
         } else {
             WatchEmptyState(
@@ -400,6 +188,280 @@ struct PlayerView: View {
         }
     }
 
+    /// The player itself: one screenful, sized to fit rather than scroll.
+    private func nowPlayingPage(song: Song) -> some View {
+        GeometryReader { geo in
+            let metrics = WatchPlayerLayoutMetrics(
+                containerSize: geo.size,
+                showsSecondaryRow: !audioManager.isRadioMode
+            )
+            VStack(spacing: metrics.contentSpacing) {
+                ZStack {
+                    WatchCachedImage(url: song.thumbnailURL) { image in
+                        image.resizable().scaledToFit()
+                    } placeholder: {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.secondary.opacity(0.25))
+                    }
+                    .frame(width: metrics.artworkSize, height: metrics.artworkSize)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
+                    .scaleEffect(reduceMotion ? 1 : (audioManager.isPlaying ? 1 : 0.95))
+                    if audioManager.isLoading {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(overlayColor)
+                            .frame(width: metrics.artworkSize, height: metrics.artworkSize)
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+                .frame(width: metrics.artworkSize, height: metrics.artworkSize)
+                .animation(playbackAnimation, value: audioManager.isPlaying)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Artwork")
+                .accessibilityValue(playerStateAccessibilityValue(for: song))
+                .accessibilityHint("Double tap to \(audioManager.isPlaying ? "pause" : "play").")
+                .accessibilityAction {
+                    togglePlayPause()
+                }
+
+                VStack(spacing: 2) {
+                    Text(song.title)
+                        .font(.system(size: metrics.titleSize, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                    Text(song.artistName)
+                        .font(.system(size: metrics.artistSize))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Now Playing")
+                .accessibilityValue(playerStateAccessibilityValue(for: song))
+                .accessibilityHint("Use the playback controls below.")
+                if audioManager.isRadioMode {
+                    // A live stream has no duration to fill a bar with
+                    // and nowhere to seek to.
+                    Label("Live", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.appAccent)
+                        .padding(.horizontal, 8)
+                        .frame(minHeight: 20)
+                        .background(Capsule().fill(Color.appAccent.opacity(0.12)))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Live radio")
+                } else {
+                    // Doubles as the Crown's target switch: the bar is
+                    // the thing being scrubbed, so it is also the thing
+                    // you tap to point the Crown at it.
+                    Button(action: switchCrownTarget) {
+                        VStack(spacing: 1) {
+                            let total = max(audioManager.duration, 1)
+                            ProgressView(value: min(audioManager.currentTime, total), total: total)
+                                .tint(crownTarget == .position ? Color.appAccent : .secondary.opacity(0.8))
+                                .scaleEffect(y: crownTarget == .position ? 1.0 : 0.6)
+                            HStack {
+                                Text(formatTime(audioManager.currentTime))
+                                Spacer()
+                                Text("-" + formatTime(max(0, audioManager.duration - audioManager.currentTime)))
+                            }
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(crownTarget == .position ? .appAccent : .secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canScrub)
+                    .padding(.horizontal, metrics.progressHorizontalPadding)
+                    .animation(playbackAnimation, value: crownTarget)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Playback Position")
+                    .accessibilityValue(progressAccessibilityValue)
+                    .accessibilityHint(
+                        canScrub
+                            ? "Double tap to point the Digital Crown here. Swipe up or down to seek by 15 seconds."
+                            : "Swipe up or down to seek by 15 seconds."
+                    )
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment:
+                            seek(by: 15)
+                        case .decrement:
+                            seek(by: -15)
+                        @unknown default:
+                            break
+                        }
+                    }
+                }
+
+                HStack(spacing: metrics.mainControlSpacing) {
+                    if !audioManager.isRadioMode {
+                        WatchPlayerIconButton(
+                            systemName: "backward.fill",
+                            diameter: metrics.sideControlDiameter,
+                            iconSize: metrics.sideControlIconSize,
+                            tint: .primary,
+                            fill: Color.secondary.opacity(0.14),
+                            isDisabled: audioManager.isLoading,
+                            accessibilityLabel: "Previous Track",
+                            accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
+                            accessibilityHint: "Restarts the song or plays the previous track."
+                        ) {
+                            audioManager.playPrevious()
+                            WatchHaptic.play(.previous)
+                        }
+                    }
+
+                    WatchPlayerIconButton(
+                        systemName: audioManager.isPlaying ? "pause.fill" : "play.fill",
+                        diameter: metrics.primaryControlDiameter,
+                        iconSize: metrics.primaryControlIconSize,
+                        tint: .white,
+                        fill: Color.appAccent,
+                        accessibilityLabel: audioManager.isPlaying ? "Pause" : "Play",
+                        accessibilityValue: audioManager.isLoading ? "Loading" : song.title,
+                        accessibilityHint: audioManager.isPlaying ? "Pauses \(song.title)." : "Plays \(song.title)."
+                    ) {
+                        togglePlayPause()
+                    }
+
+                    if !audioManager.isRadioMode {
+                        WatchPlayerIconButton(
+                            systemName: "forward.fill",
+                            diameter: metrics.sideControlDiameter,
+                            iconSize: metrics.sideControlIconSize,
+                            tint: .primary,
+                            fill: Color.secondary.opacity(0.14),
+                            isDisabled: audioManager.isLoading,
+                            accessibilityLabel: "Next Track",
+                            accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
+                            accessibilityHint: "Skips to the next track."
+                        ) {
+                            audioManager.playNext()
+                            WatchHaptic.play(.next)
+                        }
+                    }
+                }
+
+                // Shuffle, repeat, the queue and starring are all
+                // library concepts; the station decides what plays.
+                if !audioManager.isRadioMode {
+                    HStack(spacing: metrics.secondaryControlSpacing) {
+                        if auth.linkState == .signedIn {
+                            let isFavorite = favorites.isFavorite(song.id)
+                            Button {
+                                favorites.toggle(songID: song.id)
+                                WatchHaptic.play(isFavorite ? .click : .success)
+                            } label: {
+                                Image(systemName: isFavorite ? "star.fill" : "star")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(isFavorite ? .appAccent : .secondary)
+                                    .frame(
+                                        width: metrics.secondaryControlSize,
+                                        height: metrics.secondaryControlSize
+                                    )
+                                    .background(
+                                        Circle().fill(
+                                            isFavorite ? Color.appAccent.opacity(0.14) : Color.clear
+                                        )
+                                    )
+                            }
+                            .buttonStyle(.watchPressable)
+                            .accessibilityLabel("Favorite")
+                            .accessibilityValue(isFavorite ? "On" : "Off")
+                            .accessibilityHint(
+                                isFavorite
+                                    ? "Removes \(song.title) from your favorites."
+                                    : "Adds \(song.title) to your favorites."
+                            )
+                        }
+                        Button {
+                            audioManager.toggleShuffle()
+                            WatchHaptic.play(audioManager.isShuffleOn ? .success : .click)
+                        } label: {
+                            Image(systemName: "shuffle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(audioManager.isShuffleOn ? .appAccent : .secondary)
+                                .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
+                                .background(
+                                    Circle().fill(audioManager.isShuffleOn ? Color.appAccent.opacity(0.14) : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.watchPressable)
+                        .accessibilityLabel("Shuffle")
+                        .accessibilityValue(audioManager.isShuffleOn ? "On" : "Off")
+                        .accessibilityHint(audioManager.isShuffleOn ? "Turns shuffle off." : "Turns shuffle on.")
+                        Button {
+                            audioManager.toggleMode()
+                            WatchHaptic.play(.click)
+                        } label: {
+                            Image(systemName: audioManager.playbackMode.iconName)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(
+                                    audioManager.playbackMode == .singleLoop ? .appAccent : .secondary
+                                )
+                                .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
+                                .background(
+                                    Circle().fill(
+                                        audioManager.playbackMode == .singleLoop
+                                            ? Color.appAccent.opacity(0.14) : Color.clear
+                                    )
+                                )
+                        }
+                        .buttonStyle(.watchPressable)
+                        .accessibilityLabel("Repeat")
+                        .accessibilityValue(
+                            audioManager.playbackMode == .singleLoop ? "Repeat One" : "Repeat All"
+                        )
+                        .accessibilityHint("Cycles repeat mode.")
+                        // The queue is a swipe away rather than a push,
+                        // but VoiceOver has no swipe to give it, so it
+                        // keeps a button of its own.
+                        Button {
+                            page = .queue
+                            WatchHaptic.play(.click)
+                        } label: {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
+                        }
+                        .buttonStyle(.watchPressable)
+                        .accessibilityLabel("Playing Next")
+                        .accessibilityValue(queueAccessibilityValue)
+                        .accessibilityHint("Show the queue for \(song.title)")
+                        .accessibilityIdentifier("WatchPlayer.queue")
+                    }
+                }
+            }
+            .frame(
+                width: geo.size.width,
+                height: max(0, geo.size.height - metrics.pageIndicatorAllowance)
+            )
+            .padding(.horizontal, 2)
+        }
+        .focusable(true)
+        .digitalCrownRotation(
+            $crownValue,
+            from: 0,
+            through: 1,
+            by: crownTarget == .volume ? 0.05 : 0.01,
+            sensitivity: .medium,
+            // Never wrap: rolling past the end of a track back
+            // to its start is not something anyone means to do.
+            isContinuous: false,
+            isHapticFeedbackEnabled: true
+        )
+        // watchOS has no volume control a SwiftUI app can embed, so the Crown
+        // stays the volume control — but its readout belongs in the system's
+        // accessory next to the Crown, not in a bar taking a row of the screen.
+        .digitalCrownAccessory {
+            WatchCrownReadout(target: crownTarget, valueText: crownValueText)
+        }
+    }
     private var backgroundBase: Color {
         colorScheme == .dark
             ? Color.black
@@ -624,102 +686,18 @@ private struct WatchPlayerIconButton: View {
     }
 }
 
-/// The Digital Crown's readout: a filled track showing whatever the Crown is
-/// currently pointed at, and a tap target to point it at the other thing.
-private struct WatchCrownControl: View {
+/// What the Crown is pointed at, shown in the system's Crown accessory beside
+/// the Crown itself. It costs no room in the layout and puts the readout where
+/// the listener's eye already is while turning.
+private struct WatchCrownReadout: View {
     let target: PlayerView.CrownTarget
-    let fraction: Double
     let valueText: String
-    let canSwitchTarget: Bool
-    let onAdjust: (Double) -> Void
-    let onSwitchTarget: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
-
-    private var reduceMotion: Bool {
-        AppMotion.reduceMotion(
-            systemReduceMotion: systemReduceMotion,
-            respectPreference: respectReducedMotion
-        )
-    }
-
-    private var iconName: String {
-        switch target {
-        case .volume:
-            fraction < 0.05 ? "speaker.slash.fill" : "speaker.wave.2.fill"
-        case .position:
-            "timeline.selection"
-        }
-    }
-
-    private var label: String {
-        target == .volume ? "Volume" : "Playback Position"
-    }
-
-    private var step: Double {
-        target == .volume ? 0.05 : 0.02
-    }
 
     var body: some View {
-        HStack(spacing: 7) {
-            Button(action: onSwitchTarget) {
-                Image(systemName: iconName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(target == .position ? .appAccent : .secondary)
-                    .frame(width: 16)
-            }
-            .buttonStyle(.plain)
-            .disabled(!canSwitchTarget)
-            .accessibilityLabel("Crown Controls")
-            .accessibilityValue(label)
-            .accessibilityHint(
-                canSwitchTarget
-                    ? "Switches the Digital Crown between volume and playback position."
-                    : "Playback position is unavailable for this track."
-            )
-
-            // The track carries the slider semantics as a leaf of its own. The
-            // switch button beside it is a separate element, so an adjustable
-            // action never sits on a node that also exposes children.
-            HStack(spacing: 7) {
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.14))
-                        Capsule()
-                            .fill(Color.appAccent)
-                            .frame(width: max(5, proxy.size.width * fraction))
-                    }
-                }
-                .frame(height: 5)
-
-                if target == .position {
-                    Text(valueText)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(label)
+        Label(valueText, systemImage: target == .volume ? "speaker.wave.2.fill" : "timeline.selection")
+            .font(.system(size: 12, weight: .semibold, design: target == .volume ? .default : .monospaced))
+            .foregroundStyle(target == .position ? Color.appAccent : .primary)
+            .accessibilityLabel(target == .volume ? "Volume" : "Playback Position")
             .accessibilityValue(valueText)
-            .accessibilityHint("Turn the Digital Crown or swipe up and down to adjust.")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment:
-                    onAdjust(fraction + step)
-                case .decrement:
-                    onAdjust(fraction - step)
-                @unknown default:
-                    break
-                }
-            }
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background(Color.secondary.opacity(0.11))
-        .clipShape(Capsule())
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: fraction)
     }
 }

@@ -1,5 +1,21 @@
 import SwiftUI
 
+/// A playlist to push, carried by value.
+///
+/// Both grids push the same screen, and a stack that already routes by value
+/// cannot also host `NavigationLink(destination:)` — the view-based links go
+/// inert. Curated and user playlists share one route so there is one place
+/// where that can drift.
+struct PlaylistRoute: Hashable {
+    let id: String
+    let name: String
+
+    init(playlist: Playlist) {
+        id = playlist.id
+        name = playlist.name
+    }
+}
+
 struct PlaylistsGridView: View {
     @StateObject var viewModel = PlaylistsViewModel()
     @StateObject private var userViewModel = UserPlaylistsViewModel()
@@ -36,6 +52,9 @@ struct PlaylistsGridView: View {
             }
         }
         .navigationTitle("Playlists")
+        .navigationDestination(for: PlaylistRoute.self) { route in
+            PlaylistDetailView(playlistID: route.id, playlistName: route.name)
+        }
         .animation(listAnimation, value: viewModel.playlists.count)
         .animation(listAnimation, value: userViewModel.playlists.count)
         .animation(loadingAnimation, value: viewModel.isLoading)
@@ -77,15 +96,10 @@ struct PlaylistsGridView: View {
 
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(userViewModel.playlists) { playlist in
-                    NavigationLink(
-                        destination: PlaylistDetailView(
-                            playlistID: playlist.id, playlistName: playlist.name
-                        )
-                    ) {
+                    NavigationLink(value: PlaylistRoute(playlist: playlist)) {
                         WatchPlaylistCard(playlist: playlist)
                     }
                     .buttonStyle(.watchPressable)
-                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                     .accessibilityLabel(playlist.name)
                     .accessibilityValue(playlist.songCountText)
                     .accessibilityHint("Opens your playlist.")
@@ -134,15 +148,10 @@ struct PlaylistsGridView: View {
 
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(viewModel.playlists) { playlist in
-                        NavigationLink(
-                            destination: PlaylistDetailView(
-                                playlistID: playlist.id, playlistName: playlist.name
-                            )
-                        ) {
+                        NavigationLink(value: PlaylistRoute(playlist: playlist)) {
                             WatchPlaylistCard(playlist: playlist)
                         }
                         .buttonStyle(.watchPressable)
-                        .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                         .accessibilityLabel(playlist.name)
                         .accessibilityValue(playlist.songCountText)
                         .accessibilityHint("Opens this playlist.")

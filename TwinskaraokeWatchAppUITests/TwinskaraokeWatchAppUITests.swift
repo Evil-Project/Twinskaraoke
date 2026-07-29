@@ -40,11 +40,38 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     }
 
     openVisibleItem("Search", identifier: "WatchHome.search", in: app)
+    // Asserted on the empty state's message, not on "Search": that word is also
+    // the label of the Home row we just tapped, so matching it proved only that
+    // we were still looking at Home. That is how a stack that pushed nothing at
+    // all went green.
     XCTAssertTrue(
-      app.navigationBars["Search"].waitForExistence(timeout: 8)
-        || app.textFields["Search"].waitForExistence(timeout: 8)
-        || app.staticTexts["Search"].waitForExistence(timeout: 8),
+      app.staticTexts["Find songs, artists, and new favorites."].waitForExistence(timeout: 8),
       "Expected Search screen to open from watch Home."
+    )
+    XCTAssertFalse(
+      app.staticTexts["Listen Now"].exists,
+      "Expected to have left Home rather than stayed on it."
+    )
+  }
+
+  /// Account has no network content to assert on, so this checks the only
+  /// thing that actually broke: that tapping the row leaves Home at all.
+  /// A fresh launch per destination avoids depending on the back gesture.
+  func testWatchAccountLinkPushesFromHome() throws {
+    let app = launchApp()
+
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    scrollToVisibleItem("Account", identifier: "WatchHome.account", in: app)
+    openVisibleItem("Account", identifier: "WatchHome.account", in: app)
+
+    XCTAssertTrue(
+      app.staticTexts["Guest Listener"].waitForExistence(timeout: 8)
+        || app.staticTexts["Guest ID"].waitForExistence(timeout: 8),
+      "Expected the Account screen to open from watch Home."
+    )
+    XCTAssertFalse(
+      app.staticTexts["Listen Now"].exists,
+      "Expected to have left Home rather than stayed on it."
     )
   }
 
@@ -90,18 +117,14 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
       "Expected the watch player to open from a trending song."
     )
 
-    scrollToVisibleItem("Playing Next", identifier: "WatchPlayer.queue", in: app)
+    // The player is one fixed screenful now, so the queue button is on screen
+    // without scrolling — and the queue is a page beside it rather than a push.
     openVisibleItem("Playing Next", identifier: "WatchPlayer.queue", in: app)
 
     XCTAssertTrue(
-      app.navigationBars["Queue"].waitForExistence(timeout: 8)
-        || app.staticTexts["Queue"].waitForExistence(timeout: 8),
-      "Expected the watch queue to open from the player."
-    )
-    XCTAssertTrue(
-      app.otherElements["WatchQueue.summary"].waitForExistence(timeout: 8)
+      app.navigationBars["Playing Next"].waitForExistence(timeout: 8)
         || app.staticTexts["Playing Next"].waitForExistence(timeout: 8),
-      "Expected the queue summary or Playing Next section to be visible."
+      "Expected the queue page to show beside the player."
     )
     scrollToVisibleItem("Hero", identifier: "WatchQueue.upNext.0", in: app)
     XCTAssertTrue(

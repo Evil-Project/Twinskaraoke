@@ -33,6 +33,16 @@ struct FavoritesView: View {
                     message: "Sign in on your iPhone and your starred songs appear here."
                 )
                 .listRowBackground(Color.clear)
+            } else if viewModel.needsPhoneSession, viewModel.songs.isEmpty {
+                WatchLoadErrorState(
+                    title: "Waiting for iPhone",
+                    message: "Your session hasn't reached this watch yet. Keep your iPhone nearby.",
+                    retryAction: {
+                        auth.syncNow()
+                        viewModel.fetch(force: true)
+                    }
+                )
+                .listRowBackground(Color.clear)
             } else if viewModel.isLoading, viewModel.songs.isEmpty {
                 HStack {
                     Spacer()
