@@ -73,13 +73,18 @@ struct LyricsBouncingDots: View {
     private func loopOpacity(for i: Int, t: TimeInterval) -> Double {
         guard isActive else { return 0.35 }
         let perDot = loopCycle / 4.0
-        let start = Double(i) * perDot
-        let end = start + perDot
-        if t < start { return 0.25 }
-        if t < end {
-            let local = (t - start) / perDot
+        let riseStart = Double(i) * perDot
+        let riseEnd = riseStart + perDot / 2
+        let fallEnd = riseEnd + perDot / 2
+        if t < riseStart { return 0.25 }
+        if t < riseEnd {
+            let local = (t - riseStart) / (perDot / 2)
             return 0.25 + 0.75 * local
         }
-        return 1.0
+        if t < fallEnd {
+            let local = (t - riseEnd) / (perDot / 2)
+            return 1.0 - 0.75 * local
+        }
+        return 0.25
     }
 }
