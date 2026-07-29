@@ -6,7 +6,7 @@ import SwiftUI
 
 @main
 struct TwinskaraokeApp: App {
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.system.rawValue
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     init() {

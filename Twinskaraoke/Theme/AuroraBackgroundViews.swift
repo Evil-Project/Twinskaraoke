@@ -42,45 +42,149 @@ struct Cloud: View {
 
 struct FloatingClouds: View {
     @Environment(\.colorScheme) var scheme
-    let blur: CGFloat = 60
+    @Environment(\.appReduceMotion) private var reduceMotion
+    let blur: CGFloat = 64
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 Theme.generalBackground
+
                 ZStack {
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesBottomTrailing(forScheme: scheme),
                         rotationStart: 0,
-                        duration: 60,
+                        duration: 58,
                         alignment: .bottomTrailing
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesTopTrailing(forScheme: scheme),
                         rotationStart: 240,
-                        duration: 50,
+                        duration: 46,
                         alignment: .topTrailing
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesBottomLeading(forScheme: scheme),
                         rotationStart: 120,
-                        duration: 80,
+                        duration: 74,
                         alignment: .bottomLeading
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesTopLeading(forScheme: scheme),
                         rotationStart: 180,
-                        duration: 70,
+                        duration: 64,
                         alignment: .topLeading
+                    )
+                    // A fifth, slower-drifting layer through the middle adds
+                    // depth so the wash never reads as four flat corner blobs.
+                    Cloud(
+                        proxy: proxy,
+                        color: Theme.ellipsesTopTrailing(forScheme: scheme).opacity(0.65),
+                        rotationStart: 300,
+                        duration: 95,
+                        alignment: .center
                     )
                 }
                 .blur(radius: blur)
+
+                AuroraShimmerOverlay()
+                    .opacity(reduceMotion ? 0 : 0.55)
+                    .allowsHitTesting(false)
+
+                AuroraSparkleField()
+                    .opacity(reduceMotion ? 0 : 1)
+                    .allowsHitTesting(false)
             }
             .ignoresSafeArea()
+        }
+    }
+}
+
+/// A slow diagonal light sweep layered above the blurred clouds. This is
+/// what pushes the wash from "blurry colored blobs" to something that reads
+/// as an actual aurora — a faint band of light drifting across the sky.
+private struct AuroraShimmerOverlay: View {
+    @State private var animate = false
+
+    var body: some View {
+        LinearGradient(
+            colors: [
+                .white.opacity(0),
+                .white.opacity(0.07),
+                .white.opacity(0),
+            ],
+            startPoint: animate ? .bottomLeading : .topTrailing,
+            endPoint: animate ? .topTrailing : .bottomLeading
+        )
+        .blendMode(.plusLighter)
+        .onAppear {
+            withOptionalAnimation(
+                Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
+            ) {
+                animate = true
+            }
+        }
+    }
+}
+
+/// Faint twinkling points of light scattered across the wash. Cheap (fixed
+/// count, no per-frame layout work beyond the built-in animation) but reads
+/// as genuine ambient magic rather than a static gradient.
+private struct AuroraSparkleField: View {
+    private struct Sparkle: Identifiable {
+        let id = UUID()
+        let x: CGFloat
+        let y: CGFloat
+        let size: CGFloat
+        let delay: Double
+        let duration: Double
+    }
+
+    private let sparkles: [Sparkle] = (0 ..< 22).map { _ in
+        Sparkle(
+            x: CGFloat.random(in: 0 ... 1),
+            y: CGFloat.random(in: 0 ... 1),
+            size: CGFloat.random(in: 1.5 ... 3.5),
+            delay: Double.random(in: 0 ... 4.5),
+            duration: Double.random(in: 2.5 ... 5.5)
+        )
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ForEach(sparkles) { sparkle in
+                SparkleDot(sparkle: sparkle, containerSize: proxy.size)
+            }
+        }
+    }
+
+    private struct SparkleDot: View {
+        let sparkle: Sparkle
+        let containerSize: CGSize
+        @State private var twinkle = false
+
+        var body: some View {
+            Circle()
+                .fill(.white)
+                .frame(width: sparkle.size, height: sparkle.size)
+                .opacity(twinkle ? 0.85 : 0.12)
+                .position(
+                    x: sparkle.x * containerSize.width,
+                    y: sparkle.y * containerSize.height
+                )
+                .onAppear {
+                    withOptionalAnimation(
+                        Animation.easeInOut(duration: sparkle.duration)
+                            .repeatForever(autoreverses: true)
+                            .delay(sparkle.delay)
+                    ) {
+                        twinkle = true
+                    }
+                }
         }
     }
 }

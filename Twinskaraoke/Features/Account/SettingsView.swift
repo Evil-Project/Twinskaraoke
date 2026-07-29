@@ -9,7 +9,7 @@ struct SettingsView: View {
     @AppStorage("nk.syncLibrary") private var syncLibrary: Bool = true
     @AppStorage("nk.streamingQuality") private var streamingQuality: String = "high"
     @AppStorage("nk.downloadOnPlay") private var downloadOnPlay: Bool = false
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.system.rawValue
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var pendingAction: SettingsDestructiveAction?
@@ -66,7 +66,7 @@ struct SettingsView: View {
     private var settingsContent: some View {
         if usesWideOverview {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 settingsList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -96,7 +96,7 @@ struct SettingsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 
     private var librarySection: some View {
@@ -1009,7 +1009,7 @@ struct NotificationsView: View {
         Group {
             if horizontalSizeClass == .regular {
                 ZStack(alignment: .top) {
-                    Color.appGroupedBackground.ignoresSafeArea()
+                    ScreenBackgroundFill(style: .grouped)
                     notificationsList
                         .frame(maxWidth: 640, maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, AM.Spacing.screenMargin)
@@ -1048,7 +1048,7 @@ struct NotificationsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 }
 
