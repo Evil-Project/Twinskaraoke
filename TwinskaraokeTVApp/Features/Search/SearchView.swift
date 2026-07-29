@@ -45,7 +45,10 @@ struct SearchView: View {
         ScrollView {
             // Matches `PlaylistDetailView`: clearance for the focus pill's lift.
             LazyVStack(spacing: 16) {
-                ForEach(Array(viewModel.resolvedResults.enumerated()), id: \.element.id) { index, result in
+                // Keyed by position, not result id — see `PlaylistDetailView`.
+                // Results can repeat an item across sources, and positional
+                // identity also keeps focus put as the query is refined.
+                ForEach(Array(viewModel.resolvedResults.enumerated()), id: \.offset) { index, result in
                     let song = result.song
                     let isCurrent = song.map { audioManager.currentSong?.id == $0.id } ?? false
                     TVSongRow(

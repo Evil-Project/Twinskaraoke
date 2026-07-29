@@ -192,6 +192,109 @@ private struct PlayerLayoutMetrics {
     var lyricsSubtitleSize: CGFloat {
         isCompactHeight ? 12 : 13
     }
+
+    /// A `GeometryReader` reports a zero size before the first layout pass;
+    /// layout decisions that stick (the initial player surface) wait for this.
+    var hasResolvedGeometry: Bool {
+        containerSize.width > 0 && containerSize.height > 0
+    }
+}
+
+private let playerTitleButtonBackground = Color.clear
+
+private var playerTitleButtonBorder: some View {
+    Circle()
+        .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
+}
+
+private func playerTitleIconColor(isActive _: Bool = false) -> Color {
+    Color.primary
+}
+
+private extension View {
+    /// The circular background/border worn by the player's title-surface
+    /// buttons. The iPad control bar sits on its own glass and skips it.
+    @ViewBuilder
+    func playerTitleButtonChrome(_ isVisible: Bool) -> some View {
+        if isVisible {
+            background(playerTitleButtonBackground, in: Circle())
+                .overlay(playerTitleButtonBorder)
+        } else {
+            self
+        }
+    }
+}
+
+/// The favorite toggle shared by the player's three title surfaces: the compact
+/// title row, the compact lyrics header and the iPad landscape control bar.
+/// They differ only in metrics and chrome, so the toggle, haptics, symbol
+/// effect and accessibility live here rather than in triplicate.
+private struct PlayerFavoriteButton: View {
+    let song: Song
+    var font: Font = .title3
+    var size: CGFloat = 44
+    var showsChrome: Bool = true
+
+    @ObservedObject private var favorites = FavoritesManager.shared
+    @Environment(\.appReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let isFavorite = favorites.isFavorite(song.id)
+        Button {
+            let wasFavorite = favorites.isFavorite(song.id)
+            favorites.toggle(songID: song.id)
+            if wasFavorite {
+                AppHaptic.selection.play()
+            } else {
+                AppHaptic.success.play()
+            }
+        } label: {
+            Group {
+                if #available(iOS 17.0, *), !reduceMotion {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.bounce, value: isFavorite)
+                } else {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                }
+            }
+            .font(font)
+            .foregroundStyle(playerTitleIconColor(isActive: isFavorite))
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
+            .playerTitleButtonChrome(showsChrome)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
+        .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+        .accessibilityValue(song.title)
+        .accessibilityHint("Updates favorites for the current song.")
+    }
+}
+
+/// The overflow menu paired with ``PlayerFavoriteButton`` on the same three
+/// surfaces.
+private struct PlayerMoreMenu: View {
+    let song: Song
+    var font: Font = .headline.bold()
+    var size: CGFloat = 44
+    var showsChrome: Bool = true
+    let onAddToPlaylist: () -> Void
+
+    var body: some View {
+        Menu {
+            SongActionsMenuItems(song: song, onAddToPlaylist: onAddToPlaylist)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(font)
+                .foregroundStyle(playerTitleIconColor())
+                .frame(width: size, height: size)
+                .contentShape(Rectangle())
+                .playerTitleButtonChrome(showsChrome)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
+        .accessibilityLabel("More")
+        .accessibilityValue(song.title)
+    }
 }
 
 struct FullScreenPlayerView: View {
@@ -201,7 +304,9 @@ struct FullScreenPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
-    @State private var showLyrics = FullScreenPlayerView.prefersLyricsByDefault
+    @State private var showLyrics = false
+    @State private var didSetInitialSurface = false
+    @State private var usesPadCanvas = false
     @State private var showKaraokeControls = false
     @State private var showTranslatedLyrics = false
     @State private var showCoverArt = false
@@ -214,16 +319,6 @@ struct FullScreenPlayerView: View {
     @State private var coverArtArtistLink: String?
     @StateObject private var lyricsViewModel = LyricsViewModel()
     @StateObject private var upcomingLyricsViewModel = LyricsViewModel()
-
-    /// iPad opens straight into live lyrics — there is room for them alongside
-    /// the artwork, so the artwork-only view isn't the useful default there.
-    private static var prefersLyricsByDefault: Bool {
-        #if canImport(UIKit)
-            return UIDevice.current.userInterfaceIdiom == .pad
-        #else
-            return false
-        #endif
-    }
 
     var body: some View {
         let song = audioManager.currentSong
@@ -355,8 +450,8 @@ struct FullScreenPlayerView: View {
             }
         }
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
-            // Radio has no lyrics; leaving it restores the platform default.
-            showLyrics = isRadio ? false : Self.prefersLyricsByDefault
+            // Radio has no lyrics; leaving it restores the canvas default.
+            showLyrics = isRadio ? false : usesPadCanvas
         }
         .onChange(of: popupPresentation.isExpanded) { _, isShown in
             if !isShown { dismiss() }
@@ -379,15 +474,38 @@ struct FullScreenPlayerView: View {
 
     @ViewBuilder
     private func musicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
-        if metrics.usesPadLayout {
-            if showLyrics {
-                padLyricsLayout(song: song, metrics: metrics)
+        Group {
+            if metrics.usesPadLayout {
+                if showLyrics {
+                    padLyricsLayout(song: song, metrics: metrics)
+                } else {
+                    padArtworkLayout(song: song, metrics: metrics)
+                }
             } else {
-                padArtworkLayout(song: song, metrics: metrics)
+                compactMusicLayout(song: song, metrics: metrics)
             }
-        } else {
-            compactMusicLayout(song: song, metrics: metrics)
         }
+        .onAppear { syncSurfaceToCanvas(metrics: metrics) }
+        .onChange(of: metrics.containerSize) { _, _ in
+            syncSurfaceToCanvas(metrics: metrics)
+        }
+    }
+
+    /// An iPad-class canvas opens straight into live lyrics — there is room for
+    /// them alongside the artwork, so the artwork-only view isn't the useful
+    /// default there. This is a canvas decision, not a device one: a Slide Over
+    /// or half-width Split View window runs the compact layout and should land
+    /// on artwork. Geometry is only known once the player has laid out, so the
+    /// initial surface is applied here rather than seeded from the device idiom.
+    private func syncSurfaceToCanvas(metrics: PlayerLayoutMetrics) {
+        guard metrics.hasResolvedGeometry else { return }
+        // Kept in sync so leaving radio mode can restore the canvas default.
+        if usesPadCanvas != metrics.usesPadLayout {
+            usesPadCanvas = metrics.usesPadLayout
+        }
+        guard !didSetInitialSurface else { return }
+        didSetInitialSurface = true
+        showLyrics = metrics.usesPadLayout
     }
 
     private func compactMusicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
@@ -620,51 +738,16 @@ struct FullScreenPlayerView: View {
         }
     }
 
+    /// The control bar already sits on glass, so its actions drop the circular
+    /// chrome the other two surfaces wear.
     private func padFavoriteButton(song: Song) -> some View {
-        Button {
-            let wasFavorite = favorites.isFavorite(song.id)
-            favorites.toggle(songID: song.id)
-            if wasFavorite {
-                AppHaptic.selection.play()
-            } else {
-                AppHaptic.success.play()
-            }
-        } label: {
-            Group {
-                let isFav = favorites.isFavorite(song.id)
-                if #available(iOS 17.0, *), !reduceMotion {
-                    Image(systemName: isFav ? "star.fill" : "star")
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.bounce, value: isFav)
-                } else {
-                    Image(systemName: isFav ? "star.fill" : "star")
-                }
-            }
-            .font(.title3)
-            .foregroundStyle(playerTitleIconColor(isActive: favorites.isFavorite(song.id)))
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-        .accessibilityLabel(
-            favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites"
-        )
-        .accessibilityValue(song.title)
+        PlayerFavoriteButton(song: song, showsChrome: false)
     }
 
     private func padMoreMenu(song: Song) -> some View {
-        Menu {
-            songActions(song: song)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.title3)
-                .foregroundStyle(playerTitleIconColor())
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+        PlayerMoreMenu(song: song, font: .title3, showsChrome: false) {
+            showAddToPlaylist = true
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-        .accessibilityLabel("More")
-        .accessibilityValue(song.title)
     }
 
     private func padToolbar(song: Song, horizontalPadding: CGFloat) -> some View {
@@ -773,50 +856,11 @@ struct FullScreenPlayerView: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                let wasFavorite = favorites.isFavorite(song.id)
-                favorites.toggle(songID: song.id)
-                if wasFavorite {
-                    AppHaptic.selection.play()
-                } else {
-                    AppHaptic.success.play()
-                }
-            } label: {
-                Group {
-                    let isFav = favorites.isFavorite(song.id)
-                    if #available(iOS 17.0, *), !reduceMotion {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                            .contentTransition(.symbolEffect(.replace))
-                            .symbolEffect(.bounce, value: isFav)
-                    } else {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                    }
-                }
-                .font(.title3)
-                .foregroundStyle(playerTitleIconColor(isActive: favorites.isFavorite(song.id)))
-                .frame(width: 44, height: 44)
-                .background(playerTitleButtonBackground, in: Circle())
-                .overlay(playerTitleButtonBorder)
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel(
-                favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites"
-            )
+            PlayerFavoriteButton(song: song)
 
-            Menu {
-                songActions(song: song)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline.bold())
-                    .foregroundStyle(playerTitleIconColor())
-                    .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-                    .contentShape(Circle())
+            PlayerMoreMenu(song: song) {
+                showAddToPlaylist = true
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-            .accessibilityLabel("More")
-            .accessibilityValue(song.title)
         }
         .padding(.horizontal, metrics.horizontalPadding)
         .padding(.bottom, 10)
@@ -876,59 +920,15 @@ struct FullScreenPlayerView: View {
             .accessibilityLabel("Now playing")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
             Spacer(minLength: 8)
-            Button {
-                let wasFavorite = favorites.isFavorite(song.id)
-                favorites.toggle(songID: song.id)
-                if wasFavorite {
-                    AppHaptic.selection.play()
-                } else {
-                    AppHaptic.success.play()
-                }
-            } label: {
-                Group {
-                    let isFav = favorites.isFavorite(song.id)
-                    if #available(iOS 17.0, *), !reduceMotion {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                            .contentTransition(.symbolEffect(.replace))
-                            .symbolEffect(.bounce, value: isFav)
-                    } else {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                    }
-                }
-                .font(.title2)
-                .foregroundStyle(playerTitleIconColor(isActive: favorites.isFavorite(song.id)))
-                .frame(
-                    width: max(metrics.titleButtonSize, 44),
-                    height: max(metrics.titleButtonSize, 44)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel(
-                favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites"
+            PlayerFavoriteButton(
+                song: song,
+                font: .title2,
+                size: max(metrics.titleButtonSize, 44)
             )
-            .accessibilityValue(song.title)
-            .accessibilityHint("Updates favorites for the current song.")
-            .background(playerTitleButtonBackground, in: Circle())
-            .overlay(playerTitleButtonBorder)
 
-            Menu {
-                songActions(song: song)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline.bold())
-                    .foregroundStyle(playerTitleIconColor())
-                    .frame(
-                        width: max(metrics.titleButtonSize, 44),
-                        height: max(metrics.titleButtonSize, 44)
-                    )
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-                    .contentShape(Circle())
+            PlayerMoreMenu(song: song, size: max(metrics.titleButtonSize, 44)) {
+                showAddToPlaylist = true
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-            .accessibilityLabel("More")
-            .accessibilityValue(song.title)
         }
         .contextMenu {
             songActions(song: song)
@@ -936,19 +936,6 @@ struct FullScreenPlayerView: View {
             SongContextPreview(song: song)
         }
         .padding(.horizontal, horizontalPadding ?? metrics.horizontalPadding)
-    }
-
-    private var playerTitleButtonBackground: Color {
-        Color.clear
-    }
-
-    private var playerTitleButtonBorder: some View {
-        Circle()
-            .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
-    }
-
-    private func playerTitleIconColor(isActive _: Bool = false) -> Color {
-        Color.primary
     }
 
     private func progressSection(song _: Song, metrics: PlayerLayoutMetrics) -> some View {

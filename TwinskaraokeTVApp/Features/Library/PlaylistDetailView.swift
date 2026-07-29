@@ -73,7 +73,10 @@ struct PlaylistDetailView: View {
             // row's own bounds — at a tighter spacing it laps onto the artwork
             // of the rows either side.
             LazyVStack(spacing: 16) {
-                ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { index, song in
+                // Keyed by position, not song id: a playlist may legitimately
+                // list the same song twice, and duplicate SwiftUI identities
+                // drop or mis-animate rows.
+                ForEach(Array(viewModel.songs.enumerated()), id: \.offset) { index, song in
                     let isCurrent = audioManager.currentSong?.id == song.id
                     TVSongRow(
                         index: index + 1,

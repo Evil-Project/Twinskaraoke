@@ -322,8 +322,16 @@ struct AccountView: View {
         }
     }
 
+    private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        // Otherwise an empty cache reads "Zero KB" next to its "1 GB" limit.
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
+
     private static func bytes(_ count: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
+        byteFormatter.string(fromByteCount: count)
     }
 }
 

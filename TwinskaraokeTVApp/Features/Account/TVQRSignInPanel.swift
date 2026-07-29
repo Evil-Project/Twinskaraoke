@@ -43,7 +43,18 @@ struct TVQRSignInPanel: View {
                 auth.startQRSignIn()
             }
         }
-        .onDisappear { auth.cancelQRSignIn() }
+        .onDisappear {
+            // Leave a live code alone: the phone can approve it while the panel
+            // is off-screen, and the `.task` guard above only means anything if
+            // the session survives leaving the tab. Sessions end on their own
+            // via approval or expiry, so nothing leaks by waiting.
+            switch auth.qrPhase {
+            case .waiting, .completing:
+                break
+            case .idle, .creating, .expired:
+                auth.cancelQRSignIn()
+            }
+        }
     }
 
     @ViewBuilder

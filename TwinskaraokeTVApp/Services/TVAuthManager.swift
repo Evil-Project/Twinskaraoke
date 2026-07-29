@@ -478,6 +478,14 @@ final class TVAuthManager: ObservableObject {
     }
 
     private func friendlyMessage(for error: Error) -> String {
+        // `ServiceError` already phrases its own cases for this screen — most
+        // usefully the 429 rate-limit text, which the generic fallback below
+        // would otherwise flatten into a connection problem.
+        if let serviceError = error as? TVQRSignIn.ServiceError,
+           let description = serviceError.errorDescription
+        {
+            return description
+        }
         if let authError = error as? AuthError {
             switch authError {
             case .httpStatus(401):

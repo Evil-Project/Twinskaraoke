@@ -57,9 +57,11 @@ final class AudioManager: ObservableObject {
         setupInterruptionHandler()
     }
 
+    /// Clamped to 0...1: `currentTime` can briefly overshoot `duration` around
+    /// a track boundary, and callers scale view widths by this.
     var progress: Double {
         guard duration > 0 else { return 0 }
-        return currentTime / duration
+        return min(max(currentTime / duration, 0), 1)
     }
 
     // MARK: - Queue

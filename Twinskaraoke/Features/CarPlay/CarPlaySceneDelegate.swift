@@ -25,7 +25,16 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var latestSongs: [Song] = []
     private var randomSongs: [Song] = []
 
-    private var contentTasks: [Task<Void, Never>] = []
+    /// Keyed by loader so a repeated Reload replaces its own in-flight request
+    /// instead of racing it — an appended array let a slow first response land
+    /// after a fast second one and overwrite it with stale data.
+    private enum ContentTask {
+        static let playlists = "playlists"
+        static let latest = "latest"
+        static let random = "random"
+    }
+
+    private var contentTasks: [String: Task<Void, Never>] = [:]
     private var playlistLoadTasks: [String: Task<Void, Never>] = [:]
     private var openPlaylistTemplates: [String: CPListTemplate] = [:]
     private var openPlaylistSongs: [String: [Song]] = [:]
@@ -75,7 +84,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         CPNowPlayingTemplate.shared.remove(self)
         interfaceController.delegate = nil
-        contentTasks.forEach { $0.cancel() }
+        contentTasks.values.forEach { $0.cancel() }
         playlistLoadTasks.values.forEach { $0.cancel() }
         artworkLoader.cancelAll()
         contentTasks.removeAll()
@@ -128,7 +137,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             radio.$lastUpdated.dropFirst().map { _ in }.eraseToAnyPublisher(),
             SavedPlaylistsStore.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
             UserPlaylistsManager.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            FavoritesManager.shared.$favoriteIDs.dropFirst().map { _ in }.eraseToAnyPublisher(),
         ]
 
         Publishers.MergeMany(signals)
@@ -138,10 +146,25 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 self?.refreshVisibleTemplates()
             }
             .store(in: &cancellables)
+
+        // Favourites get their own subscription rather than joining the merge:
+        // the count is only ever shown in the Playlists template, and a live
+        // emission means the local set is authoritative — including when a
+        // removal takes it below whatever the server last reported. Seeding the
+        // count from an unloaded manager would instead read a spurious zero.
+        FavoritesManager.shared.$favoriteIDs
+            .dropFirst()
+            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] favoriteIDs in
+                self?.favoritesSongCount = favoriteIDs.count
+                self?.rebuildPlaylistsTemplate()
+            }
+            .store(in: &cancellables)
     }
 
     private func loadCarPlayContent() {
-        contentTasks.forEach { $0.cancel() }
+        contentTasks.values.forEach { $0.cancel() }
         contentTasks.removeAll()
 
         playlistsTemplate?.updateSections([statusSection("Loading Playlists")])
@@ -157,7 +180,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func loadPlaylists() {
-        let task = Task { [weak self] in
+        contentTasks[ContentTask.playlists]?.cancel()
+        contentTasks[ContentTask.playlists] = Task { [weak self] in
             guard let self else { return }
             do {
                 async let serverResult = KaraokeAPIClient.playlists(
@@ -185,11 +209,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 ])
             }
         }
-        contentTasks.append(task)
     }
 
     private func loadLatestSongs() {
-        let task = Task { [weak self] in
+        contentTasks[ContentTask.latest]?.cancel()
+        contentTasks[ContentTask.latest] = Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.latestReleases(take: maximumBrowseRows)
@@ -205,11 +229,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 ])
             }
         }
-        contentTasks.append(task)
     }
 
     private func loadRandomSongs() {
-        let task = Task { [weak self] in
+        contentTasks[ContentTask.random]?.cancel()
+        contentTasks[ContentTask.random] = Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.randomSongs()
@@ -225,11 +249,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 ])
             }
         }
-        contentTasks.append(task)
     }
 
     private func refreshVisibleTemplates() {
-        favoritesSongCount = max(favoritesSongCount, FavoritesManager.shared.favoriteIDs.count)
         rebuildPlaylistsTemplate()
         rebuildLatestTemplate()
         rebuildRadioTemplate()
@@ -577,7 +599,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             detailText: player.currentSong.map { songDetailText($0) } ?? "No song is currently playing."
         )
         nowPlaying.isEnabled = player.currentSong != nil
-        nowPlaying.isPlaying = player.currentSong != nil
+        nowPlaying.isPlaying = player.currentSong != nil && player.isPlaying
         nowPlaying.handler = { [weak self] _, completion in
             self?.showNowPlaying()
             completion()
@@ -704,7 +726,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             accessoryImage: nil,
             accessoryType: .none
         )
-        item.isPlaying = player.currentSong?.id == song.id
+        item.isPlaying = player.isPlaying && player.currentSong?.id == song.id
         item.handler = { [weak self] _, completion in
             self?.play(song, in: context)
             completion()

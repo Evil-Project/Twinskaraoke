@@ -225,8 +225,11 @@ nonisolated enum TVQRSignIn {
 
 /// The API sends 7 fractional-second digits (`…:13.8019715+00:00`), which
 /// `ISO8601DateFormatter` rejects outright on some OS versions rather than
-/// truncating. Fractional digits are trimmed to three before parsing, and a
-/// second pass drops them entirely in case the server ever stops sending them.
+/// truncating. Its documented format is exactly three digits, so the fraction is
+/// normalised to three — trimmed when longer, zero-padded when shorter. Current
+/// OS versions do parse a short fraction like `…:13.5+00:00`, but that leniency
+/// isn't contractual and this formatter is already known to differ across them.
+/// A second pass drops the fraction entirely in case the server stops sending it.
 private func parseTimestamp(_ raw: String) -> Date? {
     let withFraction = ISO8601DateFormatter()
     withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -238,8 +241,11 @@ private func parseTimestamp(_ raw: String) -> Date? {
        let end = raw[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" })
     {
         let digits = raw[raw.index(after: dot) ..< end]
-        if digits.count > 3 {
-            normalized = raw[..<dot] + "." + digits.prefix(3) + raw[end...]
+        if digits.count != 3 {
+            let padded = digits.count > 3
+                ? String(digits.prefix(3))
+                : String(digits) + String(repeating: "0", count: 3 - digits.count)
+            normalized = raw[..<dot] + "." + padded + raw[end...]
         }
     }
 

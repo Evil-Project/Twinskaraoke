@@ -332,30 +332,32 @@ final class TwinskaraokeUITests: XCTestCase {
       "Expected the selected song title to be visible in the player."
     )
 
-    if isRunningOnPad {
-      // iPad opens straight into lyrics, so the toggle starts in the "on" state.
+    // The lyrics-first default follows the canvas, not the device idiom: an
+    // iPad Slide Over or half-width Split View window runs the compact layout
+    // and opens on artwork, so gate on the dedicated lyrics column actually
+    // being present rather than on the device being an iPad. The column's title
+    // is unique to the wide lyrics layout, and unlike its enclosing
+    // `FullScreenPlayer.layout.wideLyrics` container it is queryable here.
+    if accessibleElementExists(
+      identifier: "FullScreenPlayer.wideLyricsTitle",
+      in: app,
+      timeout: 8
+    ) {
+      // The wide canvas opens straight into lyrics, so the toggle starts "on".
       XCTAssertTrue(
         app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
-        "Expected the iPad player to open with lyrics already showing."
-      )
-      XCTAssertTrue(
-        accessibleElementExists(
-          identifier: "FullScreenPlayer.wideLyricsTitle",
-          in: app,
-          timeout: 8
-        ),
-        "Expected the iPad player to expose a dedicated lyrics column."
+        "Expected the wide player to open with lyrics already showing."
       )
 
       app.buttons["Hide Lyrics"].firstMatch.tap()
       XCTAssertTrue(
         app.buttons["Show Lyrics"].waitForExistence(timeout: 8),
-        "Expected the iPad player to fall back to the artwork layout."
+        "Expected the wide player to fall back to the artwork layout."
       )
       app.buttons["Show Lyrics"].firstMatch.tap()
       XCTAssertTrue(
         app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
-        "Expected the iPad player to return to lyrics mode."
+        "Expected the wide player to return to lyrics mode."
       )
     } else {
       let lyricsButton = app.buttons["Show Lyrics"].firstMatch
