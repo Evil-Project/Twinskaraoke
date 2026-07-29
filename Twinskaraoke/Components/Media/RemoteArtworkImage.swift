@@ -122,6 +122,7 @@ struct RemoteArtworkImage: View {
 
     private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
     guard url == failedURL, !loadFailed else { return }
+
     let safeURL = Self.redactedURLString(failedURL)
     DebugLogger.log(
         "Artwork load failed for \(safeURL): \(error.localizedDescription)",
@@ -129,24 +130,25 @@ struct RemoteArtworkImage: View {
     )
     ArtworkFailureBackoff.shared.recordFailure(failedURL)
     evictFailedImageCache(for: failedURL)
-    
-    Task { @MainActor () -> Void in
-        guard url == failedURL, !loadFailed else { return }
-        withOptionalAnimation(loadAnimation) {
-            loadFailed = true
-        }
+
+    // Fixed: Correct MainActor Task syntax and removed redundant condition checks
+    Task { @MainActor in
+        self.loadFailed = true
+        self.phase = .empty
         
-        // Use standard ContinuousClock sleep (iOS 16+) or explicit non-throwing Task sleep
+        // Handle background auto-retry cooldown safely
         do {
             try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
         } catch {
-            return // Task was cancelled, exit cleanly
+            // Fixed: Reset flag on cancellation so image doesn't freeze indefinitely
+            self.loadFailed = false
+            return 
         }
         
-        guard url == failedURL, loadFailed else { return }
-        ArtworkFailureBackoff.shared.clear(failedURL)
-        withOptionalAnimation(loadAnimation) {
-            loadFailed = false
+        // Clear failure state if still matching the same current URL
+        if self.url == failedURL {
+            self.loadFailed = false
+            self.phase = .empty
         }
     }
 }
