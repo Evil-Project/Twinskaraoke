@@ -24,6 +24,7 @@ struct TwinskaraokeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .auroraBackground()
                 .preferredColorScheme(resolvedColorScheme)
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .injectReduceMotion()
