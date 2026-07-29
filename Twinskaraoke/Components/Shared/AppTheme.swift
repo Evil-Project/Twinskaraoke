@@ -303,7 +303,7 @@ extension View {
     }
 }
 
-@@MainActor
+@MainActor
 @discardableResult
 func withOptionalAnimation<Result>(
     _ animation: Animation?,
