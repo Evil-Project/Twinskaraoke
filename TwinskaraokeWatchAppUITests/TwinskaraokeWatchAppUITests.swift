@@ -138,64 +138,13 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
   // the main-actor freeze the off-actor tune-in was written to fix. The
   // behaviour it was reaching for has to be confirmed on a wrist.
 
-  /// The Crown's volume mapping, pinned by direction rather than by arithmetic.
-  ///
-  /// Which way `digitalCrownRotation` counts is a platform fact, not something
-  /// the source can be read for, and getting it backwards is invisible to every
-  /// other test here. Forward — the direction that scrolls a list down, and the
-  /// one `rotateDigitalCrown` calls positive — has to be the loud end.
-  func testWatchPlayerCrownRolledForwardRaisesVolume() throws {
-    let app = launchApp()
-
-    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
-    openVisibleItem(
-      "Wake Me Up Before You Go-Go",
-      identifier: "WatchHome.trending.0",
-      in: app
-    )
-    XCTAssertTrue(
-      app.staticTexts["Wake Me Up Before You Go-Go"].waitForExistence(timeout: 8),
-      "Expected the watch player to open from a trending song."
-    )
-
-    // Volume starts at 100%, which parks the Crown against the top of its
-    // range: it has to come down before a rise is measurable at all.
-    XCUIDevice.shared.rotateDigitalCrown(delta: -0.6)
-    let lowered = try crownVolumePercent(in: app)
-    XCTAssertLessThan(lowered, 100, "Rolling the Crown backward should lower the volume.")
-
-    XCUIDevice.shared.rotateDigitalCrown(delta: 0.3)
-    let raised = try crownVolumePercent(in: app)
-    XCTAssertGreaterThan(raised, lowered, "Rolling the Crown forward should raise the volume.")
-  }
-
-  /// Reads the Crown readout once it has stopped moving.
-  ///
-  /// The Crown keeps coasting after `rotateDigitalCrown` returns, so a reading
-  /// taken straight afterwards can still be sliding. Sampling until two agree
-  /// is what makes this test mean "where the Crown ended up" rather than
-  /// "where it happened to be mid-glide".
-  private func crownVolumePercent(in app: XCUIApplication) throws -> Int {
-    let readout = app.descendants(matching: .any).matching(
-      identifier: "WatchPlayer.crownReadout"
-    ).firstMatch
-    XCTAssertTrue(readout.waitForExistence(timeout: 5), "Missing the Crown readout.")
-
-    // Four samples a third of a second apart. The turn itself already took
-    // five seconds to return, so the value is usually settled on the first
-    // read; this is the cheapest window that still catches one that isn't.
-    var previous: Int?
-    for _ in 0..<4 {
-      let text = (readout.value as? String) ?? readout.label
-      let percent = try XCTUnwrap(
-        Int(text.filter(\.isNumber)), "Unreadable Crown volume: \(text)"
-      )
-      if percent == previous { return percent }
-      previous = percent
-      Thread.sleep(forTimeInterval: 0.3)
-    }
-    return try XCTUnwrap(previous)
-  }
+  // A Crown volume-direction test used to live here, and it was worse than
+  // nothing. `XCUIDevice.rotateDigitalCrown(delta:)` raises the reported Crown
+  // position for a positive delta; a watch on an arm does not agree, so the
+  // test cheerfully confirmed whichever mapping was shipped -- three times, on
+  // three devices, while the volume was audibly backwards. The mapping is
+  // arithmetic and is now pinned by `WatchCrownVolumeTests` in milliseconds;
+  // which way a physical Crown turns is a question only a wrist can answer.
 
   private func launchApp() -> XCUIApplication {
     let app = XCUIApplication()

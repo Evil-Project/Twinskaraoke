@@ -491,6 +491,11 @@ struct PlayerView: View {
         // The overload that reports rotation as well as value: `onChange` fires
         // on the turn itself, so it still speaks at either end of the range
         // where the value has nowhere left to go.
+        // The bounded overload, deliberately. The unbounded one takes no
+        // `sensitivity` and no `by:` stride, and without a range to spread the
+        // travel over it slams between silence and full volume with nothing in
+        // between. It also does not get rid of the system indicator, which was
+        // the only reason to try it.
         .digitalCrownRotation(
             detent: $crownValue,
             from: 0,
@@ -578,25 +583,19 @@ struct PlayerView: View {
     private var crownValueText: String {
         switch crownTarget {
         case .volume:
-            "\(Int((crownValue * 100).rounded()))%"
+            // The Crown's position, read back as the volume it stands for.
+            "\(Int((volume(forCrownPosition: crownValue) * 100).rounded()))%"
         case .position:
             formatTime(crownValue * audioManager.duration)
         }
     }
 
-    /// The Crown maps straight onto volume: forward is louder, the way it runs
-    /// everywhere else on the watch.
-    ///
-    /// Measured rather than assumed, twice, against a freshly installed app
-    /// sitting at its default 100%: rolling backward drove the stored volume
-    /// to 0, and rolling forward moved it not at all — it was already against
-    /// the stop. Both are the right way round, so the direction is pinned here
-    /// and by `testWatchPlayerCrownRolledForwardRaisesVolume` rather than
-    /// flipped on how it feels. What was missing was any sign of the stop:
-    /// forward at 100% did nothing and said nothing, which reads exactly like
-    /// a Crown wired backwards. The readout now answers there.
     private func crownPosition(forVolume volume: Double) -> Double {
-        volume
+        WatchCrownVolume.position(forVolume: volume)
+    }
+
+    private func volume(forCrownPosition position: Double) -> Double {
+        WatchCrownVolume.volume(forPosition: position)
     }
 
     /// One haptic tick per 5% of a turn, counted in Crown positions so both
@@ -713,7 +712,7 @@ struct PlayerView: View {
 
     private func setVolume(fromCrown position: Double, feedback: Bool) {
         let clamped = min(max(position, 0), 1)
-        audioManager.setVolume(clamped)
+        audioManager.setVolume(volume(forCrownPosition: clamped))
         if abs(clamped - crownValue) > 0.001 {
             seatCrown(clamped)
         }
