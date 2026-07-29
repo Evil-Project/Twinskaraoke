@@ -121,27 +121,36 @@ struct RemoteArtworkImage: View {
     }
 
     private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
+    guard url == failedURL, !loadFailed else { return }
+    let safeURL = Self.redactedURLString(failedURL)
+    DebugLogger.log(
+        "Artwork load failed for \(safeURL): \(error.localizedDescription)",
+        category: .cache
+    )
+    ArtworkFailureBackoff.shared.recordFailure(failedURL)
+    evictFailedImageCache(for: failedURL)
+    
+    Task { @MainActor () -> Void in
         guard url == failedURL, !loadFailed else { return }
-        let safeURL = Self.redactedURLString(failedURL)
-        DebugLogger.log(
-            "Artwork load failed for \(safeURL): \(error.localizedDescription)",
-            category: .cache
-        )
-        ArtworkFailureBackoff.shared.recordFailure(failedURL)
-        evictFailedImageCache(for: failedURL)
-        Task { @MainActor in
-            guard url == failedURL, !loadFailed else { return }
-            withOptionalAnimation(loadAnimation) {
-                loadFailed = true
-            }
-            try? await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
-            guard url == failedURL, loadFailed else { return }
-            ArtworkFailureBackoff.shared.clear(failedURL)
-            withOptionalAnimation(loadAnimation) {
-                loadFailed = false
-            }
+        withOptionalAnimation(loadAnimation) {
+            loadFailed = true
+        }
+        
+        // Use standard ContinuousClock sleep (iOS 16+) or explicit non-throwing Task sleep
+        do {
+            try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
+        } catch {
+            return // Task was cancelled, exit cleanly
+        }
+        
+        guard url == failedURL, loadFailed else { return }
+        ArtworkFailureBackoff.shared.clear(failedURL)
+        withOptionalAnimation(loadAnimation) {
+            loadFailed = false
         }
     }
+}
+
 
     private var shouldAnimateLoad: Bool {
         !scrollState.isScrolling && shouldPreferProgressiveArtwork
