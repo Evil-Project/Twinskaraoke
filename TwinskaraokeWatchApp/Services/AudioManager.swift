@@ -669,9 +669,10 @@ class AudioManager: ObservableObject {
         // Oldest first; both budgets drop the least-recently-played files.
         // Stat each file once up front rather than inside the comparator, which
         // would re-hit the filesystem twice per comparison.
+        let keySet = Set(keys)
         let sorted = files
             .map { url -> (url: URL, date: Date, size: Int) in
-                let values = try? url.resourceValues(forKeys: Set(keys))
+                let values = try? url.resourceValues(forKeys: keySet)
                 return (
                     url: url,
                     date: values?.contentModificationDate ?? .distantPast,
