@@ -31,6 +31,7 @@ struct BrowseSongCollectionView: View {
             .smoothScrolling()
             .collapsedNavigationTitle($showsCollapsedTitle)
         }
+        .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? title : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)

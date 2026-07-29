@@ -41,9 +41,13 @@ struct Cloud: View {
 }
 
 struct FloatingClouds: View {
-    @Environment(\.colorScheme) var scheme
     @Environment(\.appReduceMotion) private var reduceMotion
     let blur: CGFloat = 64
+    // Nwero always renders its dark palette, regardless of the ambient
+    // colorScheme environment value (which can momentarily disagree with
+    // the forced .dark scheme depending on where in the view tree this is
+    // evaluated). Hardcoding this removes that whole class of bug.
+    private let scheme: ColorScheme = .dark
 
     var body: some View {
         GeometryReader { proxy in
@@ -55,28 +59,28 @@ struct FloatingClouds: View {
                         proxy: proxy,
                         color: Theme.ellipsesBottomTrailing(forScheme: scheme),
                         rotationStart: 0,
-                        duration: 58,
+                        duration: 16,
                         alignment: .bottomTrailing
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesTopTrailing(forScheme: scheme),
                         rotationStart: 240,
-                        duration: 46,
+                        duration: 13,
                         alignment: .topTrailing
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesBottomLeading(forScheme: scheme),
                         rotationStart: 120,
-                        duration: 74,
+                        duration: 20,
                         alignment: .bottomLeading
                     )
                     Cloud(
                         proxy: proxy,
                         color: Theme.ellipsesTopLeading(forScheme: scheme),
                         rotationStart: 180,
-                        duration: 64,
+                        duration: 18,
                         alignment: .topLeading
                     )
                     // A fifth, slower-drifting layer through the middle adds
@@ -85,7 +89,7 @@ struct FloatingClouds: View {
                         proxy: proxy,
                         color: Theme.ellipsesTopTrailing(forScheme: scheme).opacity(0.65),
                         rotationStart: 300,
-                        duration: 95,
+                        duration: 26,
                         alignment: .center
                     )
                 }
@@ -93,10 +97,6 @@ struct FloatingClouds: View {
 
                 AuroraShimmerOverlay()
                     .opacity(reduceMotion ? 0 : 0.55)
-                    .allowsHitTesting(false)
-
-                AuroraSparkleField()
-                    .opacity(reduceMotion ? 0 : 1)
                     .allowsHitTesting(false)
             }
             .ignoresSafeArea()
@@ -131,66 +131,9 @@ private struct AuroraShimmerOverlay: View {
     }
 }
 
-/// Faint twinkling points of light scattered across the wash. Cheap (fixed
-/// count, no per-frame layout work beyond the built-in animation) but reads
-/// as genuine ambient magic rather than a static gradient.
-private struct AuroraSparkleField: View {
-    private struct Sparkle: Identifiable {
-        let id = UUID()
-        let x: CGFloat
-        let y: CGFloat
-        let size: CGFloat
-        let delay: Double
-        let duration: Double
-    }
-
-    private let sparkles: [Sparkle] = (0 ..< 22).map { _ in
-        Sparkle(
-            x: CGFloat.random(in: 0 ... 1),
-            y: CGFloat.random(in: 0 ... 1),
-            size: CGFloat.random(in: 1.5 ... 3.5),
-            delay: Double.random(in: 0 ... 4.5),
-            duration: Double.random(in: 2.5 ... 5.5)
-        )
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            ForEach(sparkles) { sparkle in
-                SparkleDot(sparkle: sparkle, containerSize: proxy.size)
-            }
-        }
-    }
-
-    private struct SparkleDot: View {
-        let sparkle: Sparkle
-        let containerSize: CGSize
-        @State private var twinkle = false
-
-        var body: some View {
-            Circle()
-                .fill(.white)
-                .frame(width: sparkle.size, height: sparkle.size)
-                .opacity(twinkle ? 0.85 : 0.12)
-                .position(
-                    x: sparkle.x * containerSize.width,
-                    y: sparkle.y * containerSize.height
-                )
-                .onAppear {
-                    withOptionalAnimation(
-                        Animation.easeInOut(duration: sparkle.duration)
-                            .repeatForever(autoreverses: true)
-                            .delay(sparkle.delay)
-                    ) {
-                        twinkle = true
-                    }
-                }
-        }
-    }
-}
-
 struct LinearNonTransparency: View {
-    @Environment(\.colorScheme) var scheme
+    // Nwero always renders its dark palette; see the note on FloatingClouds.
+    private let scheme: ColorScheme = .dark
 
     var gradient: Gradient {
         Gradient(colors: [
@@ -205,21 +148,52 @@ struct LinearNonTransparency: View {
     }
 }
 
-// Reusable Modifier to apply background anywhere in your app
-struct AuroraBackgroundModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) var reduceTransparency
-    @Environment(\.accessibilityDifferentiateWithoutColor) var differentiateWithoutColor
-    @Environment(\.colorScheme) var scheme
+/// Picks the right Nwero backdrop for the current accessibility settings.
+/// This is real, opaquely-drawn SwiftUI content — never a transparency trick
+/// that tries to reveal something mounted elsewhere in the view hierarchy.
+/// Each screen that uses this owns its own instance, so NavigationStack/
+/// TabView can composite push/pop/tab-switch transitions normally (they rely
+/// on each screen having genuine opaque content to mask the other screen
+/// while animating — punching transparency through their backing views
+/// breaks that masking and causes visible ghosting mid-transition).
+struct NweroAuroraBackdrop: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
-    func body(content: Content) -> some View {
-        ZStack {
+    var body: some View {
+        Group {
             if differentiateWithoutColor {
-                Theme.differentiateWithoutColorBackground(forScheme: scheme)
-                    .ignoresSafeArea()
+                // Nwero is always dark, so use the dark variant explicitly
+                // rather than reading ambient colorScheme.
+                Theme.differentiateWithoutColorBackground(forScheme: .dark)
             } else if reduceTransparency {
                 LinearNonTransparency()
             } else {
                 FloatingClouds()
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+// Reusable Modifier to apply background anywhere in your app
+struct AuroraBackgroundModifier: ViewModifier {
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
+
+    private var isNwero: Bool {
+        (AppearanceMode(rawValue: appearanceMode) ?? .dark).usesAuroraBackground
+    }
+
+    func body(content: Content) -> some View {
+        ZStack {
+            // Only mount the animated Aurora wash when Nwero is active. On
+            // every other theme, screens paint opaque fills over this
+            // background anyway, so rendering it there is pure waste.
+            if isNwero {
+                NweroAuroraBackdrop()
+            } else {
+                Color.appBackground
+                    .ignoresSafeArea()
             }
 
             content

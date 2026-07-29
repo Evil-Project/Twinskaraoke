@@ -34,6 +34,10 @@ struct TwinskaraokeApp: App {
                         "Display refresh rate: \(DisplayRefreshRate.maximumFramesPerSecond) fps max",
                         category: .ui
                     )
+                    DebugLogger.log(
+                        "Appearance debug — stored: \(appearanceMode), resolvedColorScheme: \(String(describing: resolvedColorScheme))",
+                        category: .ui
+                    )
                 }
         }
     }

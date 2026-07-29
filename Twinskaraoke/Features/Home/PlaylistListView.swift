@@ -64,6 +64,7 @@ struct PlaylistListView: View {
             }
         }
         .smoothScrolling()
+        .musicScreenBackground()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(

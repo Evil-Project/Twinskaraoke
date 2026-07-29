@@ -31,6 +31,12 @@ enum AppearanceMode: String, CaseIterable {
     var usesAuroraBackground: Bool {
         self == .nwero
     }
+
+    /// Experimental themes are hidden from the theme picker unless the
+    /// person has turned on Settings > Experiments > Experimental Themes.
+    var isExperimental: Bool {
+        self == .nwero
+    }
 }
 
 /// Drop-in replacement for a flat screen background color. On every theme
@@ -56,7 +62,11 @@ struct ScreenBackgroundFill: View {
     var body: some View {
         Group {
             if isNwero {
-                Color.clear
+                // Each screen gets its own real, opaquely-drawn Aurora
+                // backdrop (not a see-through trick) so NavigationStack/
+                // TabView can composite transitions normally. See the note
+                // on NweroAuroraBackdrop.
+                NweroAuroraBackdrop()
             } else if style == .grouped {
                 Color.appGroupedBackground
             } else {

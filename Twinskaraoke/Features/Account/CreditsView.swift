@@ -13,7 +13,7 @@ struct CreditsView: View {
     private var creditsContent: some View {
         if horizontalSizeClass == .regular {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 creditsList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -105,7 +105,7 @@ struct CreditsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 
     private func creditRow(name: String, detail: String, url: String? = nil) -> some View {

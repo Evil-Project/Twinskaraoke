@@ -27,6 +27,9 @@ struct DeveloperMenuView: View {
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .groupedScreenBackground()
         .navigationTitle("Developer")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Disable developer mode?", isPresented: $showDisableConfirm) {
