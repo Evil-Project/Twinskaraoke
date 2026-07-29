@@ -1,8 +1,8 @@
 import SwiftUI
 
 class CloudProvider: ObservableObject {
-    let offset: CGSize
-    let frameHeightRatio: CGFloat
+    @Published let offset: CGSize
+    @Published let frameHeightRatio: CGFloat
 
     init() {
         frameHeightRatio = CGFloat.random(in: 0.7 ..< 1.4)
@@ -98,18 +98,6 @@ struct LinearNonTransparency: View {
         LinearGradient(gradient: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
             .ignoresSafeArea()
     }
-}
-
-func withOptionalAnimation<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
-    #if canImport(UIKit)
-    if UIAccessibility.isReduceMotionEnabled {
-        return try body()
-    } else {
-        return try withAnimation(animation, body)
-    }
-    #else
-    return try withAnimation(animation, body)
-    #endif
 }
 
 // Reusable Modifier to apply background anywhere in your app
