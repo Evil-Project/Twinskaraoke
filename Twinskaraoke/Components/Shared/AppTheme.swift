@@ -303,16 +303,19 @@ extension View {
     }
 }
 
-@MainActor
+@@MainActor
 @discardableResult
 func withOptionalAnimation<Result>(
     _ animation: Animation?,
     _ body: () throws -> Result
 ) rethrows -> Result {
     if let animation {
-        return try withAnimation(animation, body)
+        return try withAnimation(animation) {
+            try body()
+        }
+    } else {
+        return try body()
     }
-    return try body()
 }
 
 private struct BottomChromeScrollTrackingModifier: ViewModifier {
