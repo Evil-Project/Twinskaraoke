@@ -85,11 +85,9 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
       in: app
     )
 
-    XCTAssertTrue(
-      app.navigationBars["Now Playing"].waitForExistence(timeout: 8)
-        || app.staticTexts["Now Playing"].waitForExistence(timeout: 8),
-      "Expected the watch player to open from a trending song."
-    )
+    // Asserted on the song and its transport rather than on a "Now Playing"
+    // title: the player page no longer carries one, because watchOS drew it
+    // over the artwork instead of above it.
     XCTAssertTrue(
       app.staticTexts["Wake Me Up Before You Go-Go"].waitForExistence(timeout: 8),
       "Expected the selected song title to be visible in the watch player."
@@ -112,8 +110,7 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     )
 
     XCTAssertTrue(
-      app.navigationBars["Now Playing"].waitForExistence(timeout: 8)
-        || app.staticTexts["Now Playing"].waitForExistence(timeout: 8),
+      app.staticTexts["Wake Me Up Before You Go-Go"].waitForExistence(timeout: 8),
       "Expected the watch player to open from a trending song."
     )
 
@@ -133,6 +130,99 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         || app.staticTexts["Hero"].waitForExistence(timeout: 8),
       "Expected the next queued fixture song to be visible."
     )
+  }
+
+  /// Tuning in, end to end.
+  ///
+  /// The stream is now built, activated and started off the main actor, which
+  /// means the player is adopted a beat after the tap rather than during it.
+  /// A station that fails to open calls `stopRadio`, which puts the button back
+  /// to "Listen Live" — so a control still reading "Stop" well after the tap is
+  /// the evidence that the hand-off actually landed.
+  func testWatchRadioListenLiveStartsAndStaysTunedIn() throws {
+    let app = launchApp()
+
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    XCTAssertTrue(
+      app.staticTexts["Listen Now"].waitForExistence(timeout: 10)
+        || app.otherElements["WatchHome.listenNow"].waitForExistence(timeout: 10),
+      "Expected Home to finish loading before browsing."
+    )
+    // Walked in order, the way the browse test does: each lookup starts from
+    // where the last one left the list.
+    scrollToVisibleItem("Playlists", identifier: "WatchHome.playlists", in: app)
+    scrollToVisibleItem("Radio", identifier: "WatchHome.radio", in: app)
+    openVisibleItem("Radio", identifier: "WatchHome.radio", in: app)
+
+    let listen = app.buttons["WatchRadio.listen"]
+    XCTAssertTrue(listen.waitForExistence(timeout: 15), "Expected the radio screen to open.")
+    listen.tap()
+
+    XCTAssertTrue(
+      app.buttons["Stop"].waitForExistence(timeout: 15),
+      "Expected the station to tune in."
+    )
+    Thread.sleep(forTimeInterval: 10)
+    XCTAssertTrue(
+      app.buttons["Stop"].exists,
+      "Expected to still be tuned in — the stream dropped back out after starting."
+    )
+  }
+
+  /// The Crown's volume mapping, pinned by direction rather than by arithmetic.
+  ///
+  /// Which way `digitalCrownRotation` counts is a platform fact, not something
+  /// the source can be read for, and getting it backwards is invisible to every
+  /// other test here. Forward — the direction that scrolls a list down, and the
+  /// one `rotateDigitalCrown` calls positive — has to be the loud end.
+  func testWatchPlayerCrownRolledForwardRaisesVolume() throws {
+    let app = launchApp()
+
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "WatchHome.trending.0",
+      in: app
+    )
+    XCTAssertTrue(
+      app.staticTexts["Wake Me Up Before You Go-Go"].waitForExistence(timeout: 8),
+      "Expected the watch player to open from a trending song."
+    )
+
+    // Volume starts at 100%, which parks the Crown against the top of its
+    // range: it has to come down before a rise is measurable at all.
+    XCUIDevice.shared.rotateDigitalCrown(delta: -0.6)
+    let lowered = try crownVolumePercent(in: app)
+    XCTAssertLessThan(lowered, 100, "Rolling the Crown backward should lower the volume.")
+
+    XCUIDevice.shared.rotateDigitalCrown(delta: 0.3)
+    let raised = try crownVolumePercent(in: app)
+    XCTAssertGreaterThan(raised, lowered, "Rolling the Crown forward should raise the volume.")
+  }
+
+  /// Reads the Crown readout once it has stopped moving.
+  ///
+  /// The Crown keeps coasting after `rotateDigitalCrown` returns, so a reading
+  /// taken straight afterwards can still be sliding. Sampling until two agree
+  /// is what makes this test mean "where the Crown ended up" rather than
+  /// "where it happened to be mid-glide".
+  private func crownVolumePercent(in app: XCUIApplication) throws -> Int {
+    let readout = app.descendants(matching: .any).matching(
+      identifier: "WatchPlayer.crownReadout"
+    ).firstMatch
+    XCTAssertTrue(readout.waitForExistence(timeout: 5), "Missing the Crown readout.")
+
+    var previous: Int?
+    for _ in 0..<10 {
+      let text = (readout.value as? String) ?? readout.label
+      let percent = try XCTUnwrap(
+        Int(text.filter(\.isNumber)), "Unreadable Crown volume: \(text)"
+      )
+      if percent == previous { return percent }
+      previous = percent
+      Thread.sleep(forTimeInterval: 0.5)
+    }
+    return try XCTUnwrap(previous)
   }
 
   private func launchApp() -> XCUIApplication {
@@ -183,18 +273,18 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     // Scan downwards first: callers walk a screen top to bottom, so the target
     // is almost always below where the last lookup stopped.
     for _ in 0..<12 {
-      XCUIDevice.shared.rotateDigitalCrown(delta: 0.4)
+      XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
       if isVisible(title, identifier: identifier, in: app) {
         return
       }
     }
     // Not below: rewind to the top and sweep the whole list once.
-    XCUIDevice.shared.rotateDigitalCrown(delta: -12)
+    XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
     for _ in 0..<24 {
       if isVisible(title, identifier: identifier, in: app) {
         return
       }
-      XCUIDevice.shared.rotateDigitalCrown(delta: 0.4)
+      XCUIDevice.shared.rotateDigitalCrown(delta: -0.2)
     }
     XCTAssertTrue(
       isVisible(title, identifier: identifier, in: app),

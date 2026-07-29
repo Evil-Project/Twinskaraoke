@@ -60,6 +60,13 @@ class AudioManager: ObservableObject {
     private var volumePersistWorkItem: DispatchWorkItem?
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
+    /// Identifies the tune-in a stream is being built for, so a station the
+    /// listener has already left behind can't adopt itself when it finishes
+    /// coming up on its own queue.
+    private var radioStreamToken: UUID?
+    /// Whether the playback session is up. A player told to play against an
+    /// inactive session just sits there, so every `play()` waits on this.
+    private var isSessionActive = false
     private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
@@ -204,20 +211,85 @@ class AudioManager: ObservableObject {
         updateNowPlayingInfo()
     }
 
-    private func startRadioStream(url: URL) {
+    /// Brings the playback session up away from the main actor, then runs
+    /// `start` back on it.
+    ///
+    /// AVFoundation documents activation as "a synchronous (blocking)
+    /// operation" and warns against running it anywhere a long block is a
+    /// problem. On a watch the main actor is exactly that place: tuning the
+    /// radio stalled the whole app for a beat, right when it had the most
+    /// drawing to do. Once the session is up the hop is skipped, so play/pause
+    /// stays immediate.
+    private func activatePlaybackSession(then start: @escaping @MainActor () -> Void) {
+        if isSessionActive {
+            start()
+            return
+        }
+        Task.detached(priority: .userInitiated) {
+            let activated = Self.bringUpPlaybackSession()
+            await MainActor.run { [weak self] in
+                self?.isSessionActive = activated
+                start()
+            }
+        }
+    }
+
+    /// Starts a player away from the main actor.
+    ///
+    /// `play` is `NS_SWIFT_NONISOLATED` like the rest of AVPlayer's transport:
+    /// it is the call that actually opens the route, and the one worth keeping
+    /// off the actor that has to keep drawing while it happens.
+    private nonisolated static func startOffMainActor(_ player: AVPlayer) {
+        Task.detached(priority: .userInitiated) {
+            player.play()
+        }
+    }
+
+    private nonisolated static func bringUpPlaybackSession() -> Bool {
+        let session = AVAudioSession.sharedInstance()
         do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback, mode: .default, policy: .longFormAudio
-            )
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
-        let playerItem = AVPlayerItem(url: url)
-        let player = AVPlayer(playerItem: playerItem)
-        player.volume = Float(volume)
-        // A live stream is better served by waiting out a stall than by
-        // dropping back to the start of the buffer.
-        player.automaticallyWaitsToMinimizeStalling = true
-        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
+            try session.setActive(true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Opens the live stream without holding onto the main actor.
+    ///
+    /// AVFoundation marks every call in here `NS_SWIFT_NONISOLATED` — building
+    /// the item, building the player, starting it — so none of it belongs on
+    /// the main actor, and on a watch that is not a nicety. Opening a stream
+    /// goes out to the media daemon and back, and doing that from the main
+    /// actor is what froze the whole app for a beat the moment Listen Live was
+    /// tapped. The buffering spinner the radio screen already draws is free to
+    /// animate while this runs.
+    private func startRadioStream(url: URL) {
+        let token = UUID()
+        radioStreamToken = token
+        let startingVolume = Float(volume)
+        Task.detached(priority: .userInitiated) {
+            let playerItem = AVPlayerItem(url: url)
+            let player = AVPlayer(playerItem: playerItem)
+            player.volume = startingVolume
+            // A live stream is better served by waiting out a stall than by
+            // dropping back to the start of the buffer.
+            player.automaticallyWaitsToMinimizeStalling = true
+            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            let activated = Self.bringUpPlaybackSession()
+            let shouldStart = await MainActor.run { [weak self] () -> Bool in
+                guard let self, self.radioStreamToken == token else { return false }
+                self.isSessionActive = activated
+                self.adoptRadioPlayer(player, item: playerItem)
+                return self.playbackRequested
+            }
+            guard shouldStart else { return }
+            player.playImmediately(atRate: 1.0)
+        }
+    }
+
+    private func adoptRadioPlayer(_ player: AVPlayer, item playerItem: AVPlayerItem) {
         self.player = player
 
         playerItem.publisher(for: \.status)
@@ -225,8 +297,10 @@ class AudioManager: ObservableObject {
             .sink { [weak self] status in
                 guard let self else { return }
                 if status == .readyToPlay {
-                    if playbackRequested {
-                        player.play()
+                    // The session may still be coming up on its own queue; it
+                    // starts playback itself when it lands.
+                    if playbackRequested, isSessionActive {
+                        Self.startOffMainActor(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -243,7 +317,6 @@ class AudioManager: ObservableObject {
                 self?.refreshPlaybackState()
             }
             .store(in: &playerCancellables)
-        player.playImmediately(atRate: 1.0)
     }
 
     private func prepareAndPlay() {
@@ -289,27 +362,38 @@ class AudioManager: ObservableObject {
     private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
         let token = UUID()
         downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) {
-            [weak self] tempURL, response, error in
-            let responseAccepted = Self.acceptsAudioResponse(response)
-            DispatchQueue.main.async {
+        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { tempURL, response, error in
+            // URLSession deletes the downloaded file the moment this handler
+            // returns, so the header check and the move have to happen here
+            // rather than after a hop to the main queue. Doing them over there
+            // is what silenced every non-radio song on device: the file was
+            // already gone, so the header read failed and playback was dropped
+            // without a spinner, an error, or a sound.
+            let stored: Bool
+            if let tempURL, error == nil, Self.acceptsAudioResponse(response) {
+                stored = Self.storeDownloadedAudio(tempURL: tempURL, destinationURL: destinationURL)
+            } else {
+                if let tempURL {
+                    try? FileManager.default.removeItem(at: tempURL)
+                }
+                stored = false
+            }
+            DispatchQueue.main.async { [weak self] in
                 guard let self,
                       self.downloadToken == token,
                       self.currentSong?.id == song.id
                 else { return }
                 self.downloadToken = nil
                 self.downloadTask = nil
-                self.isLoading = false
-                guard let tempURL, error == nil else {
+                guard stored else {
+                    self.isLoading = false
                     self.playbackRequested = false
                     return
                 }
-                self.finishDownloadedPlayback(
-                    tempURL: tempURL,
-                    responseAccepted: responseAccepted,
-                    destinationURL: destinationURL,
-                    song: song
-                )
+                // `isLoading` stays set until the player takes over: validation
+                // is another async hop, and dropping the spinner here would
+                // flash the idle controls in between.
+                self.finishDownloadedPlayback(destinationURL: destinationURL, song: song)
             }
         }
         downloadTask?.resume()
@@ -320,12 +404,6 @@ class AudioManager: ObservableObject {
         // tear down any existing player and its observers so two players
         // never run at once and no orphaned observer keeps firing.
         cleanupPlayer()
-        do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback, mode: .default, policy: .longFormAudio
-            )
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
         let playerItem = AVPlayerItem(url: localURL)
         let player = AVPlayer(playerItem: playerItem)
         player.volume = Float(volume)
@@ -345,8 +423,10 @@ class AudioManager: ObservableObject {
             .sink { [weak self] status in
                 guard let self else { return }
                 if status == .readyToPlay {
-                    if playbackRequested {
-                        player.play()
+                    // The session may still be coming up on its own queue; it
+                    // starts playback itself when it lands.
+                    if playbackRequested, isSessionActive {
+                        Self.startOffMainActor(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -386,6 +466,18 @@ class AudioManager: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.playEnded()
             }
+        }
+        // Whichever of these lands second starts playback: the item may go
+        // ready before the session is up, or the other way round.
+        activatePlaybackSession { [weak self] in
+            guard let self,
+                  self.player === player,
+                  self.playbackRequested,
+                  playerItem.status == .readyToPlay
+            else { return }
+            Self.startOffMainActor(player)
+            self.refreshPlaybackState()
+            self.updateNowPlayingInfo()
         }
     }
 
@@ -455,11 +547,13 @@ class AudioManager: ObservableObject {
             updateNowPlayingInfo()
             return false
         }
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
         playbackRequested = true
-        player.play()
+        activatePlaybackSession { [weak self] in
+            guard let self, self.player === player, self.playbackRequested else { return }
+            Self.startOffMainActor(player)
+            self.refreshPlaybackState()
+            self.updateNowPlayingInfo()
+        }
         refreshPlaybackState()
         updateNowPlayingInfo()
         return true
@@ -582,6 +676,8 @@ class AudioManager: ObservableObject {
         // would otherwise leave the old player's status callbacks firing
         // against the replacement.
         playerCancellables.removeAll()
+        // Any stream still being built is for a station we have now left.
+        radioStreamToken = nil
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
             timeObserver = nil
@@ -590,8 +686,15 @@ class AudioManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             endTimeObserver = nil
         }
-        player?.pause()
-        player = nil
+        // Retiring a player reaches the media daemon the same way starting one
+        // does, and it happens on the way *into* the next track — so it is off
+        // the main actor too, holding the last reference until it is done.
+        if let retired = player {
+            player = nil
+            Task.detached(priority: .userInitiated) {
+                retired.pause()
+            }
+        }
     }
 
     private func localCacheURL(for songID: String) -> URL {
@@ -599,26 +702,12 @@ class AudioManager: ObservableObject {
         return AudioManager.audioCacheDir.appendingPathComponent("\(storageKey).mp3")
     }
 
-    private func finishDownloadedPlayback(
-        tempURL: URL,
-        responseAccepted: Bool,
-        destinationURL: URL,
-        song: Song
-    ) {
-        guard storeDownloadedAudio(
-            tempURL: tempURL,
-            responseAccepted: responseAccepted,
-            destinationURL: destinationURL
-        )
-        else {
-            playbackRequested = false
-            return
-        }
-        guard currentSong?.id == song.id else { return }
+    private func finishDownloadedPlayback(destinationURL: URL, song: Song) {
         validateCachedFile(at: destinationURL, expectedDuration: song.duration) { [weak self] valid in
             guard let self, currentSong?.id == song.id else { return }
             guard valid else {
                 try? FileManager.default.removeItem(at: destinationURL)
+                isLoading = false
                 playbackRequested = false
                 return
             }
@@ -627,12 +716,14 @@ class AudioManager: ObservableObject {
         }
     }
 
-    private func storeDownloadedAudio(
+    /// Validates and files a finished download. Runs on URLSession's queue,
+    /// inside the completion handler, because that is the only window in which
+    /// `tempURL` still exists.
+    nonisolated static func storeDownloadedAudio(
         tempURL: URL,
-        responseAccepted: Bool,
         destinationURL: URL
     ) -> Bool {
-        guard responseAccepted, Self.hasValidAudioHeader(at: tempURL) else {
+        guard hasValidAudioHeader(at: tempURL) else {
             try? FileManager.default.removeItem(at: tempURL)
             return false
         }
@@ -903,6 +994,9 @@ class AudioManager: ObservableObject {
         else { return }
         switch type {
         case .began:
+            // The system takes the session away with the interruption, so the
+            // next resume has to bring it back up rather than assume it is there.
+            isSessionActive = false
             shouldResumeAfterInterruption = playbackRequested
             if playbackRequested {
                 pausePlayback(cancelDownload: false)
