@@ -638,6 +638,7 @@
       }
     },
     "%lld percent" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2264,6 +2265,9 @@
         }
       }
     },
+    "Adds %@ to your favorites." : {
+
+    },
     "AI Audio" : {
       "localizations" : {
         "de" : {
@@ -2945,6 +2949,9 @@
           }
         }
       }
+    },
+    "Asks your iPhone for the session again." : {
+
     },
     "Audio" : {
       "localizations" : {
@@ -3888,6 +3895,9 @@
         }
       }
     },
+    "Changes the language used on this watch." : {
+
+    },
     "Check this code matches the one on your phone before approving." : {
 
     },
@@ -4046,6 +4056,12 @@
           }
         }
       }
+    },
+    "Clear Cache" : {
+
+    },
+    "Clear cached audio?" : {
+
     },
     "Clear queue" : {
       "localizations" : {
@@ -5194,6 +5210,9 @@
         }
       }
     },
+    "Deletes songs saved on this watch. They download again when played." : {
+
+    },
     "Developer" : {
       "localizations" : {
         "de" : {
@@ -5818,6 +5837,9 @@
         }
       }
     },
+    "Double tap to play this song again." : {
+
+    },
     "Double tap to play this song now." : {
       "localizations" : {
         "de" : {
@@ -5921,6 +5943,9 @@
           }
         }
       }
+    },
+    "Double tap to point the Digital Crown here. Swipe up or down to seek by 15 seconds." : {
+
     },
     "Double tap to restart the song." : {
       "localizations" : {
@@ -7388,6 +7413,7 @@
       }
     },
     "Guest Listener" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8118,6 +8144,9 @@
         }
       }
     },
+    "iPhone" : {
+
+    },
     "Issues and pull requests are welcome on GitHub. The repository contains build instructions and the project's coding conventions." : {
       "localizations" : {
         "de" : {
@@ -8221,6 +8250,9 @@
           }
         }
       }
+    },
+    "Just Played" : {
+
     },
     "Karaoke" : {
       "extractionState" : "stale",
@@ -8856,6 +8888,9 @@
         }
       }
     },
+    "Listen Live" : {
+
+    },
     "Listen Now" : {
       "localizations" : {
         "de" : {
@@ -9273,7 +9308,6 @@
       }
     },
     "Live Radio" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10024,6 +10058,9 @@
       }
     },
     "Loads a new random set." : {
+
+    },
+    "Loads your playlists again." : {
 
     },
     "Locked" : {
@@ -10913,6 +10950,9 @@
         }
       }
     },
+    "Next Track" : {
+
+    },
     "No Downloads" : {
       "localizations" : {
         "de" : {
@@ -11330,6 +11370,7 @@
       }
     },
     "Not signed in" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -12440,6 +12481,9 @@
     "Opens search." : {
 
     },
+    "Opens songs you starred." : {
+
+    },
     "Opens the full song catalog." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12492,6 +12536,9 @@
           }
         }
       }
+    },
+    "Opens the live station." : {
+
     },
     "Opens the Top 100 songs collection" : {
       "localizations" : {
@@ -12598,6 +12645,9 @@
       }
     },
     "Opens trending songs." : {
+
+    },
+    "Opens your playlist." : {
 
     },
     "OR" : {
@@ -13328,6 +13378,12 @@
         }
       }
     },
+    "Play Next Track" : {
+
+    },
+    "Play or Pause" : {
+
+    },
     "Play playlist" : {
       "localizations" : {
         "de" : {
@@ -13379,6 +13435,9 @@
           }
         }
       }
+    },
+    "Play Radio" : {
+
     },
     "Play random songs" : {
 
@@ -13489,6 +13548,9 @@
           }
         }
       }
+    },
+    "Playing live" : {
+
     },
     "Playing next" : {
       "localizations" : {
@@ -13697,6 +13759,9 @@
           }
         }
       }
+    },
+    "Plays or pauses whatever is loaded on this watch." : {
+
     },
     "Plays this release." : {
       "localizations" : {
@@ -15192,6 +15257,9 @@
         }
       }
     },
+    "Recently Played" : {
+
+    },
     "Refresh Library" : {
       "localizations" : {
         "de" : {
@@ -16036,6 +16104,9 @@
         }
       }
     },
+    "Removes %@ from your favorites." : {
+
+    },
     "Removes all songs from Playing Next." : {
       "localizations" : {
         "de" : {
@@ -16503,6 +16574,9 @@
           }
         }
       }
+    },
+    "Resume Playback" : {
+
     },
     "Retry" : {
       "localizations" : {
@@ -18284,6 +18358,9 @@
         }
       }
     },
+    "Shows what is playing on Twinskaraoke Radio." : {
+
+    },
     "Shuffle" : {
       "localizations" : {
         "de" : {
@@ -19180,6 +19257,9 @@
         }
       }
     },
+    "Skips to the next song in the queue on this watch." : {
+
+    },
     "Skips to the next song." : {
       "localizations" : {
         "de" : {
@@ -19393,6 +19473,9 @@
       }
     },
     "Songs per Playlist" : {
+
+    },
+    "Songs saved on this watch are deleted. They download again the next time you play them." : {
 
     },
     "Songs will be analyzed in the background so audio effects can switch instantly during playback.\n\nThis uses more battery and processing power. Separated stems count toward the 4 GB music cache limit." : {
@@ -19769,6 +19852,15 @@
         }
       }
     },
+    "Starts playing the live station." : {
+
+    },
+    "Starts the live Twinskaraoke station on this watch." : {
+
+    },
+    "Stop" : {
+
+    },
     "Stop live radio" : {
       "localizations" : {
         "de" : {
@@ -19872,6 +19964,9 @@
           }
         }
       }
+    },
+    "Stops the live station." : {
+
     },
     "Storage" : {
       "localizations" : {
@@ -20452,6 +20547,9 @@
         }
       }
     },
+    "The live station isn't reachable right now." : {
+
+    },
     "The scanner will open as soon as access is ready." : {
       "localizations" : {
         "de" : {
@@ -20555,6 +20653,9 @@
           }
         }
       }
+    },
+    "There's nothing loaded to play on this watch." : {
+
     },
     "This result cannot be played on Apple Watch." : {
       "localizations" : {
@@ -20886,6 +20987,7 @@
       }
     },
     "Turn the Digital Crown or swipe up and down to adjust." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -21321,6 +21423,9 @@
           }
         }
       }
+    },
+    "Unstar" : {
+
     },
     "Up Next" : {
       "localizations" : {
@@ -22592,6 +22697,9 @@
       }
     },
     "Your karaoke profile,\nright on Apple TV." : {
+
+    },
+    "Yours" : {
 
     }
   },

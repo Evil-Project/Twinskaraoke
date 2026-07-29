@@ -11,6 +11,9 @@ struct TwinskaraokeApp: App {
 
     init() {
         ImageCacheConfig.applyLimits()
+        // Mirrors the signed-in session to the paired watch, which has no way
+        // to sign in on its own. No-op on devices that can't pair one.
+        WatchSessionPublisher.shared.activate()
         #if canImport(UIKit)
             let accent = UIColor(red: 0.99, green: 0.19, blue: 0.35, alpha: 1)
             UIView.appearance().tintColor = accent

@@ -23,9 +23,14 @@ struct PlaylistDetailView: View {
         reduceMotion ? nil : .easeInOut(duration: 0.18)
     }
 
-    init(playlistID: String, playlistName: String) {
+    init(playlistID: String, playlistName: String, fallbackSongs: [Song] = []) {
         self.playlistName = playlistName
-        _viewModel = StateObject(wrappedValue: PlaylistDetailViewModel(playlistID: playlistID))
+        _viewModel = StateObject(
+            wrappedValue: PlaylistDetailViewModel(
+                playlistID: playlistID,
+                fallbackSongs: fallbackSongs
+            )
+        )
     }
 
     var body: some View {

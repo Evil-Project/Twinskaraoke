@@ -1,5 +1,15 @@
 import Foundation
 
+/// The one station the app streams. Lives here because the watch app and its
+/// complication both need it and cannot see each other's code.
+nonisolated enum RadioStation {
+    static let id = "neuro_21"
+
+    static let metadataURL = URL(
+        string: "https://radio.twinskaraoke.com/api/nowplaying_static/\(id).json"
+    )!
+}
+
 struct RadioNowPlaying: Decodable {
     let station: Station
     let listeners: Listeners?

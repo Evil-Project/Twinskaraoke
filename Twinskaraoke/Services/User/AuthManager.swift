@@ -137,6 +137,7 @@ final class AuthManager: NSObject, ObservableObject {
         isLoggedIn = true
         isLoading = false
         errorMessage = nil
+        NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
     }
 
     func login(username: String, password: String) async {
@@ -422,6 +423,33 @@ final class AuthManager: NSObject, ObservableObject {
         currentUsername = nil
         currentAvatar = nil
         isLoggedIn = false
+        NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
+    }
+
+    /// The persisted session as the watch bridge sees it.
+    ///
+    /// Reads storage rather than instance state because the bridge outlives any
+    /// one `AuthManager` — `AccountView` mints a fresh one per visit — and
+    /// because the Keychain is the only trustworthy record of being signed in.
+    /// `generation` is filled in by the publisher.
+    nonisolated static func persistedDescriptor() -> WatchSessionLink.Descriptor {
+        let defaults = UserDefaults.standard
+        let token = CredentialStore.token
+        let username = defaults.string(forKey: K.username)
+        guard persistedSessionIsComplete(
+            token: token,
+            username: username,
+            commitMarker: defaults.object(forKey: K.sessionCommitted) as? Bool
+        ) else {
+            return .signedOut
+        }
+        return WatchSessionLink.Descriptor(
+            isSignedIn: true,
+            userID: defaults.string(forKey: K.userId),
+            username: username,
+            avatar: defaults.string(forKey: K.avatar),
+            generation: 0
+        )
     }
 
     nonisolated static func persistedSessionIsComplete(

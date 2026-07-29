@@ -1,6 +1,13 @@
 import SwiftUI
 
 struct QueueView: View {
+    /// Whether to repeat the current song at the top.
+    ///
+    /// False when the queue sits one swipe away from the player, where the
+    /// summary card and the "Now Playing" section would say what the page
+    /// beside it already shows.
+    var showsCurrentSong = true
+
     @EnvironmentObject var audioManager: AudioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
@@ -19,7 +26,7 @@ struct QueueView: View {
     var body: some View {
         List {
             let upNext = upNextSongs
-            if let current = audioManager.currentSong {
+            if let current = audioManager.currentSong, showsCurrentSong {
                 WatchQueueSummaryCard(
                     song: current,
                     isPlaying: audioManager.isPlaying,
@@ -99,7 +106,8 @@ struct QueueView: View {
                 }
             }
         }
-        .navigationTitle("Queue")
+        // Embedded as a page beside the player, the title belongs to the pager.
+        .navigationTitle(showsCurrentSong ? "Queue" : "")
         .animation(queueAnimation, value: audioManager.currentSong?.id)
         .onAppear {
             prefetchArtwork()
