@@ -10060,6 +10060,9 @@
     "Loads a new random set." : {
 
     },
+    "Loads your playlists again." : {
+
+    },
     "Locked" : {
       "localizations" : {
         "de" : {
@@ -20544,6 +20547,9 @@
         }
       }
     },
+    "The live station isn't reachable right now." : {
+
+    },
     "The scanner will open as soon as access is ready." : {
       "localizations" : {
         "de" : {
@@ -20647,6 +20653,9 @@
           }
         }
       }
+    },
+    "There's nothing loaded to play on this watch." : {
+
     },
     "This result cannot be played on Apple Watch." : {
       "localizations" : {
