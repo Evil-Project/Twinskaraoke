@@ -30,7 +30,14 @@ struct TVQRSignInPanel: View {
                     .tint(.appAccent)
                 }
 
-                TVTextButton(title: "Sign in with password instead", action: onUsePassword)
+                TVTextButton(title: "Sign in with password instead") {
+                    // Choosing password sign-in retires the code. `.onDisappear`
+                    // below deliberately lets a live session outlive the panel,
+                    // so without this an already-scanned code could complete
+                    // authentication behind a user who opted out of pairing.
+                    auth.cancelQRSignIn()
+                    onUsePassword()
+                }
             }
         }
         .frame(width: 610)
@@ -44,10 +51,11 @@ struct TVQRSignInPanel: View {
             }
         }
         .onDisappear {
-            // Leave a live code alone: the phone can approve it while the panel
-            // is off-screen, and the `.task` guard above only means anything if
-            // the session survives leaving the tab. Sessions end on their own
-            // via approval or expiry, so nothing leaks by waiting.
+            // Ordinary navigation away leaves a live code alone: the phone can
+            // approve it while the panel is off-screen, and the `.task` guard
+            // above only means anything if the session survives leaving the tab.
+            // Sessions end on their own via approval or expiry, so nothing leaks
+            // by waiting. Opting out of pairing cancels at the button instead.
             switch auth.qrPhase {
             case .waiting, .completing:
                 break
