@@ -572,6 +572,10 @@ final class CacheManager: ObservableObject {
         }
     }
 
+    // Deliberately per-call: ByteCountFormatter is not Sendable and not
+    // thread-safe, and this is called from both the maintenance queue and the
+    // main actor. Caching one instance would be a data race, and this is a
+    // cold path (one maintenance pass, eviction logs, Settings size labels).
     private nonisolated func formatBytes(_ bytes: UInt64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB]

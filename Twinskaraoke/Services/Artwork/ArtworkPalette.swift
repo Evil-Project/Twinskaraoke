@@ -26,9 +26,19 @@ nonisolated struct ArtworkPalette: Equatable {
     #if canImport(UIKit)
         init(image: UIImage) {
             let samples = ArtworkPalette.dominantColors(image: image, count: 4)
+            // Non-empty by construction: the placeholder supplies four colors.
             let safe = samples.isEmpty ? Self.placeholder.allColors() : samples
-            let padded = (safe + safe + safe).prefix(4)
-            let arr = Array(padded)
+            // Cycle rather than concatenating a fixed number of copies.
+            // `safe + safe + safe` only reaches four entries when `safe` holds
+            // at least two colors, and a near-monochrome cover (or one whose
+            // top buckets all collapse under the dedup filter in
+            // dominantColors) can yield exactly one — leaving the fourth
+            // subscript out of range.
+            var arr: [UIColor] = []
+            arr.reserveCapacity(4)
+            while arr.count < 4 {
+                arr.append(safe[arr.count % safe.count])
+            }
             primary = Color(arr[0])
             secondary = Color(arr[1])
             tertiary = Color(arr[2])
@@ -52,10 +62,15 @@ nonisolated struct ArtworkPalette: Equatable {
             else { return [] }
             let bpp = max(cg.bitsPerPixel / 8, 4)
             let rowBytes = cg.bytesPerRow
+            // bpp is floored at 4 regardless of the real pixel size, so a
+            // non-RGBA context would make these offsets outrun the buffer.
+            // An overread is worse than a crash, so bound it explicitly.
+            let byteCount = CFDataGetLength(data)
             var buckets: [UInt32: (count: Int, saturation: CGFloat, brightness: CGFloat)] = [:]
             for y in stride(from: 0, to: Int(size.height), by: 2) {
                 for x in stride(from: 0, to: Int(size.width), by: 2) {
                     let offset = y * rowBytes + x * bpp
+                    guard offset >= 0, offset + 2 < byteCount else { continue }
                     let r = bytes[offset]
                     let g = bytes[offset + 1]
                     let b = bytes[offset + 2]
