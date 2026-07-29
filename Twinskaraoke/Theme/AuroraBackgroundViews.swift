@@ -1,8 +1,8 @@
 import SwiftUI
 
 class CloudProvider: ObservableObject {
-    @Published let offset: CGSize
-    @Published let frameHeightRatio: CGFloat
+    @Published var offset: CGSize
+    @Published var frameHeightRatio: CGFloat
 
     init() {
         frameHeightRatio = CGFloat.random(in: 0.7 ..< 1.4)
