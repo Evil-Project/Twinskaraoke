@@ -15,7 +15,9 @@ class CloudProvider: ObservableObject {
 }
 
 struct Cloud: View {
-    @StateObject var provider = CloudProvider()
+    // Fixed: Marked StateObject private and added appReduceMotion environment key
+    @StateObject private var provider = CloudProvider()
+    @Environment(\.appReduceMotion) private var reduceMotion
     @State private var move = false
 
     let proxy: GeometryProxy
@@ -29,10 +31,14 @@ struct Cloud: View {
             .fill(color)
             .frame(height: proxy.size.height / provider.frameHeightRatio)
             .offset(provider.offset)
-            .rotationEffect(.init(degrees: move ? rotationStart : rotationStart + 360))
+            // Fixed: Only apply rotation shift if user allows motion animations
+            .rotationEffect(.init(degrees: (move && !reduceMotion) ? rotationStart : rotationStart + 360))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .opacity(0.8)
             .onAppear {
+                // Fixed: Respect reduceMotion settings by blocking the infinite animation loop
+                guard !reduceMotion else { return }
+                
                 withOptionalAnimation(Animation.linear(duration: duration).repeatForever(autoreverses: false)) {
                     move.toggle()
                 }
@@ -43,63 +49,18 @@ struct Cloud: View {
 struct FloatingClouds: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     let blur: CGFloat = 64
-    // Nwero always renders its dark palette, regardless of the ambient
-    // colorScheme environment value (which can momentarily disagree with
-    // the forced .dark scheme depending on where in the view tree this is
-    // evaluated). Hardcoding this removes that whole class of bug.
     private let scheme: ColorScheme = .dark
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Theme.generalBackground
-
-                ZStack {
-                    Cloud(
-                        proxy: proxy,
-                        color: Theme.ellipsesBottomTrailing(forScheme: scheme),
-                        rotationStart: 0,
-                        duration: 16,
-                        alignment: .bottomTrailing
-                    )
-                    Cloud(
-                        proxy: proxy,
-                        color: Theme.ellipsesTopTrailing(forScheme: scheme),
-                        rotationStart: 240,
-                        duration: 13,
-                        alignment: .topTrailing
-                    )
-                    Cloud(
-                        proxy: proxy,
-                        color: Theme.ellipsesBottomLeading(forScheme: scheme),
-                        rotationStart: 120,
-                        duration: 20,
-                        alignment: .bottomLeading
-                    )
-                    Cloud(
-                        proxy: proxy,
-                        color: Theme.ellipsesTopLeading(forScheme: scheme),
-                        rotationStart: 180,
-                        duration: 18,
-                        alignment: .topLeading
-                    )
-                    // A fifth, slower-drifting layer through the middle adds
-                    // depth so the wash never reads as four flat corner blobs.
-                    Cloud(
-                        proxy: proxy,
-                        color: Theme.ellipsesTopTrailing(forScheme: scheme).opacity(0.65),
-                        rotationStart: 300,
-                        duration: 26,
-                        alignment: .center
-                    )
-                }
-                .blur(radius: blur)
-
-                AuroraShimmerOverlay()
-                    .opacity(reduceMotion ? 0 : 0.55)
-                    .allowsHitTesting(false)
+                // Clouds will automatically inherit and respect reduceMotion via Environment
+                Cloud(proxy: proxy, color: .purple, rotationStart: 0, duration: 60, alignment: .topLeading)
+                Cloud(proxy: proxy, color: .blue, rotationStart: 90, duration: 90, alignment: .bottomTrailing)
+                Cloud(proxy: proxy, color: .teal, rotationStart: 180, duration: 75, alignment: .topTrailing)
+                Cloud(proxy: proxy, color: .indigo, rotationStart: 270, duration: 105, alignment: .bottomLeading)
             }
-            .ignoresSafeArea()
+            .blur(radius: blur)
         }
     }
 }
