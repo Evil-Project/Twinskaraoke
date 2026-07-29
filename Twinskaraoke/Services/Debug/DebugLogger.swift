@@ -9,9 +9,26 @@ nonisolated enum LogCategory: String {
     case network = "Network"
     case ui = "UI"
 
+    // Cached per category: this is read on every log call, and constructing an
+    // OSLog handle each time throws away the one the system already made.
     var osLog: OSLog {
-        OSLog(subsystem: "com.xiaoyuan151.Twinskaraoke", category: rawValue)
+        switch self {
+        case .cache: Self.cacheLog
+        case .ai: Self.aiLog
+        case .playback: Self.playbackLog
+        case .separation: Self.separationLog
+        case .network: Self.networkLog
+        case .ui: Self.uiLog
+        }
     }
+
+    private static let subsystem = "com.xiaoyuan151.Twinskaraoke"
+    private static let cacheLog = OSLog(subsystem: subsystem, category: LogCategory.cache.rawValue)
+    private static let aiLog = OSLog(subsystem: subsystem, category: LogCategory.ai.rawValue)
+    private static let playbackLog = OSLog(subsystem: subsystem, category: LogCategory.playback.rawValue)
+    private static let separationLog = OSLog(subsystem: subsystem, category: LogCategory.separation.rawValue)
+    private static let networkLog = OSLog(subsystem: subsystem, category: LogCategory.network.rawValue)
+    private static let uiLog = OSLog(subsystem: subsystem, category: LogCategory.ui.rawValue)
 }
 
 nonisolated enum DebugLogger {

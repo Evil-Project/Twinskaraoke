@@ -81,6 +81,10 @@ final class PublicPlaylistsViewModel: ObservableObject {
         let token = requestToken
         Task { [weak self] in
             guard let self else { return }
+            // defer, not a trailing statement: the token guards below return
+            // from the whole closure, which would otherwise strand
+            // isLoadingMore at true and permanently block pagination.
+            defer { isLoadingMore = false }
             do {
                 let items = try await KaraokeAPIClient.publicPlaylists(
                     startIndex: startIndex,
@@ -100,7 +104,6 @@ final class PublicPlaylistsViewModel: ObservableObject {
                 // can retry instead of landing on a dead-end empty state.
                 canLoadMore = false
             }
-            isLoadingMore = false
         }
     }
 
@@ -539,6 +542,10 @@ final class SearchViewModel: ObservableObject {
 
     init() {
         $searchText
+            // Trim before removeDuplicates so edits that only change
+            // surrounding whitespace ("abc" -> "abc ") don't refire an
+            // identical search request.
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .removeDuplicates()
             .sink { [weak self] query in
