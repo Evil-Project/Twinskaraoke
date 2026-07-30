@@ -14,6 +14,9 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
     static let shared = ShimejiResourceManager()
 
     static let packURL = URL(string: "https://sb.sillyprootsoda.com/shimeji_nwero.zip")!
+    // TODO: Replace with project-controlled distribution URL and add SHA-256 verification
+    // Expected checksum would be validated after download before extraction
+    static let expectedSHA256: String? = nil
 
     enum State: Equatable {
         case notDownloaded
@@ -67,10 +70,12 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         guard case .notDownloaded = state else { return }
         state = .downloading(progress: 0)
 
-        let session = URLSession(configuration: .default)
-        let task = session.downloadTask(with: ShimejiResourceManager.packURL) { [weak self] tempURL, _, error in
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForResource = 300 // 5 minutes for large pack download
+        let session = URLSession(configuration: config)
+        let task = session.downloadTask(with: ShimejiResourceManager.packURL) { [weak self] tempURL, response, error in
             Task { @MainActor in
-                self?.handleDownloadCompletion(tempURL: tempURL, error: error)
+                self?.handleDownloadCompletion(tempURL: tempURL, response: response, error: error)
             }
         }
         progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
@@ -87,12 +92,34 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         download()
     }
 
-    private func handleDownloadCompletion(tempURL: URL?, error: Error?) {
+    func cancelDownload() {
+        progressObservation = nil
+        downloadTask?.cancel()
+        downloadTask = nil
+        if case .downloading = state {
+            state = .notDownloaded
+        }
+    }
+
+    private func handleDownloadCompletion(tempURL: URL?, response: URLResponse?, error: Error?) {
         progressObservation = nil
         downloadTask = nil
 
+        if let error {
+            state = .failed(error.localizedDescription)
+            return
+        }
+
+        // Validate HTTP status before processing
+        if let httpResponse = response as? HTTPURLResponse {
+            guard (200...299).contains(httpResponse.statusCode) else {
+                state = .failed("Download failed with HTTP \(httpResponse.statusCode)")
+                return
+            }
+        }
+
         guard let tempURL else {
-            state = .failed(error?.localizedDescription ?? "Download failed.")
+            state = .failed("Download failed.")
             return
         }
 
@@ -159,6 +186,13 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         }
         try fm.moveItem(at: stagingDirectory, to: packDirectory)
 
+        // Invalidate cached sprite images after successful extraction
+        await MainActor.run {
+            #if canImport(UIKit)
+            ShimejiSpriteView.invalidateImageCache()
+            #endif
+        }
+
         return manifest
     }
 
@@ -169,5 +203,8 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         try? FileManager.default.removeItem(at: packDirectory)
         manifest = nil
         state = .notDownloaded
+        #if canImport(UIKit)
+        ShimejiSpriteView.invalidateImageCache()
+        #endif
     }
 }

@@ -7,7 +7,13 @@ import SwiftUI
     /// re-read the same handful of small PNGs from disk every cycle.
     private final class ShimejiImageCache {
         static let shared = ShimejiImageCache()
-        private let cache = NSCache<NSString, UIImage>()
+        private let cache: NSCache<NSString, UIImage>
+
+        init() {
+            cache = NSCache<NSString, UIImage>()
+            cache.countLimit = 200
+            cache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
+        }
 
         func image(at url: URL) -> UIImage? {
             let key = url.path as NSString
@@ -16,6 +22,10 @@ import SwiftUI
             cache.setObject(image, forKey: key)
             return image
         }
+
+        func removeAll() {
+            cache.removeAllObjects()
+        }
     }
 
     struct ShimejiSpriteView: View {
@@ -23,20 +33,22 @@ import SwiftUI
         @ObservedObject private var resources = ShimejiResourceManager.shared
         @GestureState private var dragTranslation: CGSize = .zero
 
-        private let displaySize: CGFloat = 84
+        static func invalidateImageCache() {
+            ShimejiImageCache.shared.removeAll()
+        }
 
         var body: some View {
             currentImage
                 .resizable()
                 .interpolation(.none)
                 .scaledToFit()
-                .frame(width: displaySize, height: displaySize)
+                .frame(width: ShimejiEngine.displaySize, height: ShimejiEngine.displaySize)
                 .scaleEffect(x: instance.facingRight ? -1 : 1, y: 1)
                 // instance.position tracks the sprite's feet (what the physics
                 // sim rests on the floor), but .position() centers a view at
                 // the given point — offset up by half the frame so the feet,
                 // not the center, land on the floor surface.
-                .position(x: instance.position.x, y: instance.position.y - displaySize / 2)
+                .position(x: instance.position.x, y: instance.position.y - ShimejiEngine.displaySize / 2)
                 .accessibilityHidden(true)
                 .gesture(dragGesture)
         }

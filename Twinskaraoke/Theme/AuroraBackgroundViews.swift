@@ -48,17 +48,17 @@ struct Cloud: View {
 
 struct FloatingClouds: View {
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     let blur: CGFloat = 64
-    private let scheme: ColorScheme = .dark
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 // Clouds will automatically inherit and respect reduceMotion via Environment
-                Cloud(proxy: proxy, color: Theme.ellipsesTopLeading(forScheme: scheme), rotationStart: 0, duration: 60, alignment: .topLeading)
-                Cloud(proxy: proxy, color: Theme.ellipsesBottomTrailing(forScheme: scheme), rotationStart: 90, duration: 90, alignment: .bottomTrailing)
-                Cloud(proxy: proxy, color: Theme.ellipsesTopTrailing(forScheme: scheme), rotationStart: 180, duration: 75, alignment: .topTrailing)
-                Cloud(proxy: proxy, color: Theme.ellipsesBottomLeading(forScheme: scheme), rotationStart: 270, duration: 105, alignment: .bottomLeading)
+                Cloud(proxy: proxy, color: Theme.ellipsesTopLeading(forScheme: colorScheme), rotationStart: 0, duration: 60, alignment: .topLeading)
+                Cloud(proxy: proxy, color: Theme.ellipsesBottomTrailing(forScheme: colorScheme), rotationStart: 90, duration: 90, alignment: .bottomTrailing)
+                Cloud(proxy: proxy, color: Theme.ellipsesTopTrailing(forScheme: colorScheme), rotationStart: 180, duration: 75, alignment: .topTrailing)
+                Cloud(proxy: proxy, color: Theme.ellipsesBottomLeading(forScheme: colorScheme), rotationStart: 270, duration: 105, alignment: .bottomLeading)
             }
             .blur(radius: blur)
         }
