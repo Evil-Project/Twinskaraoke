@@ -90,6 +90,7 @@ struct ArtGalleryView: View {
             }
         }
         .smoothScrolling()
+        .musicScreenBackground()
         .navigationTitle("Art Gallery")
         .navigationBarTitleDisplayMode(.large)
         .refreshable {

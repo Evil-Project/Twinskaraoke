@@ -50,7 +50,7 @@ struct AccountView: View {
     private var accountContent: some View {
         if usesWideOverview {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 accountList
                     .frame(maxWidth: 640, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -69,7 +69,7 @@ struct AccountView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
         .refreshable {
             if auth.isLoggedIn {
                 AppHaptic.selection.play()

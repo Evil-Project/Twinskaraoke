@@ -24,7 +24,7 @@ struct AboutView: View {
     private var aboutContent: some View {
         if horizontalSizeClass == .regular {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 aboutList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -187,7 +187,7 @@ struct AboutView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 
     @ViewBuilder

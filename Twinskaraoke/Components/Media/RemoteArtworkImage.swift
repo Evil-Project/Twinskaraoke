@@ -121,27 +121,38 @@ struct RemoteArtworkImage: View {
     }
 
     private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
-        guard url == failedURL, !loadFailed else { return }
-        let safeURL = Self.redactedURLString(failedURL)
-        DebugLogger.log(
-            "Artwork load failed for \(safeURL): \(error.localizedDescription)",
-            category: .cache
-        )
-        ArtworkFailureBackoff.shared.recordFailure(failedURL)
-        evictFailedImageCache(for: failedURL)
-        Task { @MainActor in
-            guard url == failedURL, !loadFailed else { return }
-            withOptionalAnimation(loadAnimation) {
-                loadFailed = true
-            }
-            try? await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
-            guard url == failedURL, loadFailed else { return }
-            ArtworkFailureBackoff.shared.clear(failedURL)
-            withOptionalAnimation(loadAnimation) {
-                loadFailed = false
-            }
+    // 1. Guard check handles condition gating consistently up front
+    guard url == failedURL, !loadFailed else { return }
+
+    let safeURL = Self.redactedURLString(failedURL)
+    DebugLogger.log(
+        "Artwork load failed for \(safeURL): \(error.localizedDescription)",
+        category: .cache
+    )
+    ArtworkFailureBackoff.shared.recordFailure(failedURL)
+    evictFailedImageCache(for: failedURL)
+
+    // 2. Task block cleanly isolated using standard MainActor syntax
+    Task { @MainActor in
+        self.loadFailed = true
+        
+        // 3. CodeRabbit Fix: Safe sleep wrapper to catch cancellation
+        do {
+            try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
+        } catch {
+            // Reset flag on cancellation so the image doesn't stay frozen
+            self.loadFailed = false
+            return 
+        }
+        
+        // 4. Reset failure flag if the user hasn't scrolled to a new URL
+        if self.url == failedURL {
+            self.loadFailed = false
         }
     }
+}
+
+
 
     private var shouldAnimateLoad: Bool {
         !scrollState.isScrolling && shouldPreferProgressiveArtwork

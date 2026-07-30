@@ -37,7 +37,7 @@ struct AcknowledgementsView: View {
     private var acknowledgementsContent: some View {
         if horizontalSizeClass == .regular {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 acknowledgementsList
                     .frame(maxWidth: 640, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -66,6 +66,6 @@ struct AcknowledgementsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 }

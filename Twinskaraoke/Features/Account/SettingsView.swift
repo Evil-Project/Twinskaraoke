@@ -9,11 +9,14 @@ struct SettingsView: View {
     @AppStorage("nk.syncLibrary") private var syncLibrary: Bool = true
     @AppStorage("nk.streamingQuality") private var streamingQuality: String = "high"
     @AppStorage("nk.downloadOnPlay") private var downloadOnPlay: Bool = false
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.system.rawValue
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
+    @AppStorage("nk.experimentsEnabled") private var experimentsEnabled: Bool = false
+    @AppStorage("nk.experimentalThemesEnabled") private var experimentalThemesEnabled: Bool = false
     @State private var pendingAction: SettingsDestructiveAction?
     @State private var showAutoAnalyzeAlert = false
+    @State private var showExperimentsAlert = false
     private var visibleEQPresets: [EQPreset] {
         EQPreset.allCases.filter { preset in
             preset != .custom || audioManager.eqPreset == .custom
@@ -60,13 +63,29 @@ struct SettingsView: View {
                     "Songs will be analyzed in the background so audio effects can switch instantly during playback.\n\nThis uses more battery and processing power. Separated stems count toward the 4 GB music cache limit."
                 )
             }
+            .alert(
+                "Turn On Experiments?",
+                isPresented: $showExperimentsAlert
+            ) {
+                Button("Enable", role: .destructive) {
+                    AppHaptic.success.play()
+                    experimentsEnabled = true
+                }
+                Button("Cancel", role: .cancel) {
+                    AppHaptic.selection.play()
+                }
+            } message: {
+                Text(
+                    "Experiments are early, unfinished features. They may be unstable, change without notice, or be removed in a future update."
+                )
+            }
     }
 
     @ViewBuilder
     private var settingsContent: some View {
         if usesWideOverview {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 settingsList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -93,10 +112,11 @@ struct SettingsView: View {
             appearanceSection
             storageSection
             developerSection
+            experimentsSection
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 
     private var librarySection: some View {
@@ -184,10 +204,16 @@ struct SettingsView: View {
         }
     }
 
+    private var visibleAppearanceModes: [AppearanceMode] {
+        AppearanceMode.allCases.filter { mode in
+            !mode.isExperimental || experimentalThemesEnabled
+        }
+    }
+
     private var appearanceSection: some View {
         Section("Appearance") {
             Picker("Theme", selection: $appearanceMode) {
-                ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                ForEach(visibleAppearanceModes, id: \.rawValue) { mode in
                     Text(mode.label).tag(mode.rawValue)
                 }
             }
@@ -195,6 +221,62 @@ struct SettingsView: View {
                 ForEach(AppLanguage.allCases) { language in
                     Text(language.displayName).tag(language.rawValue)
                 }
+            }
+        }
+    }
+
+    private var experimentsToggleBinding: Binding<Bool> {
+        Binding(
+            get: { experimentsEnabled },
+            set: { newValue in
+                if newValue {
+                    showExperimentsAlert = true
+                } else {
+                    AppHaptic.light.play()
+                    experimentsEnabled = false
+                    experimentalThemesEnabled = false
+                    resetThemeIfHiddenByExperiments()
+                }
+            }
+        )
+    }
+
+    private var experimentalThemesToggleBinding: Binding<Bool> {
+        Binding(
+            get: { experimentalThemesEnabled },
+            set: { newValue in
+                experimentalThemesEnabled = newValue
+                newValue ? AppHaptic.success.play() : AppHaptic.light.play()
+                if !newValue {
+                    resetThemeIfHiddenByExperiments()
+                }
+            }
+        )
+    }
+
+    /// If Experimental Themes gets turned off while an experimental theme is
+    /// active, fall back to Dark so the picker never holds a hidden value.
+    private func resetThemeIfHiddenByExperiments() {
+        if AppearanceMode(rawValue: appearanceMode)?.isExperimental == true {
+            appearanceMode = AppearanceMode.dark.rawValue
+        }
+    }
+
+    private var experimentsSection: some View {
+        Section {
+            Toggle("Enable Experiments", isOn: experimentsToggleBinding)
+                .tint(.appAccent)
+            if experimentsEnabled {
+                Toggle("Experimental Themes", isOn: experimentalThemesToggleBinding)
+                    .tint(.appAccent)
+            }
+        } header: {
+            Text("Experiments")
+        } footer: {
+            if experimentsEnabled {
+                Text("Experimental Themes adds early, in-progress themes to the theme picker above.")
+            } else {
+                Text("Turn on Experiments to access early, in-progress features before they're finished.")
             }
         }
     }
@@ -1009,7 +1091,7 @@ struct NotificationsView: View {
         Group {
             if horizontalSizeClass == .regular {
                 ZStack(alignment: .top) {
-                    Color.appGroupedBackground.ignoresSafeArea()
+                    ScreenBackgroundFill(style: .grouped)
                     notificationsList
                         .frame(maxWidth: 640, maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, AM.Spacing.screenMargin)
@@ -1048,7 +1130,7 @@ struct NotificationsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 }
 

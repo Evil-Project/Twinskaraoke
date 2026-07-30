@@ -7,12 +7,13 @@ import SwiftUI
 #endif
 
 enum AppearanceMode: String, CaseIterable {
-    case system, light, dark
+    case system, light, dark, nwero
     var label: String {
         switch self {
         case .system: "System"
         case .light: "Light"
         case .dark: "Dark"
+        case .nwero: "Nwero"
         }
     }
 
@@ -21,7 +22,58 @@ enum AppearanceMode: String, CaseIterable {
         case .system: nil
         case .light: .light
         case .dark: .dark
+        // Nwero keeps Dark's exact palette; it only swaps opaque screen
+        // fills for the animated Aurora backdrop underneath every page.
+        case .nwero: .dark
         }
+    }
+
+    var usesAuroraBackground: Bool {
+        self == .nwero
+    }
+
+    /// Experimental themes are hidden from the theme picker unless the
+    /// person has turned on Settings > Experiments > Experimental Themes.
+    var isExperimental: Bool {
+        self == .nwero
+    }
+}
+
+/// Drop-in replacement for a flat screen background color. On every theme
+/// except Nwero it renders the normal opaque background; on Nwero it goes
+/// fully clear so the animated Aurora backdrop (mounted once at the app
+/// root) shows through on every screen. Because this reads `nk.appearance`
+/// via `@AppStorage`, any mounted instance re-renders the moment the theme
+/// picker changes, so every tab picks up the new look without a relaunch.
+struct ScreenBackgroundFill: View {
+    enum Style {
+        case standard
+        case grouped
+    }
+
+    var style: Style = .standard
+
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
+
+    private var isNwero: Bool {
+        (AppearanceMode(rawValue: appearanceMode) ?? .dark).usesAuroraBackground
+    }
+
+    var body: some View {
+        Group {
+            if isNwero {
+                // Each screen gets its own real, opaquely-drawn Aurora
+                // backdrop (not a see-through trick) so NavigationStack/
+                // TabView can composite transitions normally. See the note
+                // on NweroAuroraBackdrop.
+                NweroAuroraBackdrop()
+            } else if style == .grouped {
+                Color.appGroupedBackground
+            } else {
+                Color.appBackground
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -287,7 +339,14 @@ extension View {
     }
 
     func musicScreenBackground() -> some View {
-        background(Color.appBackground.ignoresSafeArea())
+        background(ScreenBackgroundFill(style: .standard))
+    }
+
+    /// Same as `musicScreenBackground()` but matches `.insetGrouped` List
+    /// screens (Settings, Account, Notifications) that otherwise paint
+    /// `Color.appGroupedBackground` directly.
+    func groupedScreenBackground() -> some View {
+        background(ScreenBackgroundFill(style: .grouped))
     }
 
     func bottomChromeScrollTracking() -> some View {
@@ -310,9 +369,12 @@ func withOptionalAnimation<Result>(
     _ body: () throws -> Result
 ) rethrows -> Result {
     if let animation {
-        return try withAnimation(animation, body)
+        return try withAnimation(animation) {
+            try body()
+        }
+    } else {
+        return try body()
     }
-    return try body()
 }
 
 private struct BottomChromeScrollTrackingModifier: ViewModifier {

@@ -14,7 +14,7 @@ struct iOSAppDevelopmentView: View {
     private var developmentContent: some View {
         if horizontalSizeClass == .regular {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 developmentList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -82,7 +82,7 @@ struct iOSAppDevelopmentView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 
     private func techRow(_ name: String, detail: String) -> some View {

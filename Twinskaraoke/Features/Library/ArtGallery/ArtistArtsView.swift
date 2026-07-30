@@ -71,6 +71,7 @@ struct ArtistArtsView: View {
             .padding(.bottom, 16)
         }
         .smoothScrolling()
+        .musicScreenBackground()
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayMode(.inline)
     }

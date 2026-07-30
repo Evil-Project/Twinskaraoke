@@ -6,7 +6,7 @@ import SwiftUI
 
 @main
 struct TwinskaraokeApp: App {
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.system.rawValue
+    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     init() {
@@ -27,6 +27,7 @@ struct TwinskaraokeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .auroraBackground()
                 .preferredColorScheme(resolvedColorScheme)
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .injectReduceMotion()
@@ -34,6 +35,10 @@ struct TwinskaraokeApp: App {
                 .onAppear {
                     DebugLogger.log(
                         "Display refresh rate: \(DisplayRefreshRate.maximumFramesPerSecond) fps max",
+                        category: .ui
+                    )
+                    DebugLogger.log(
+                        "Appearance debug — stored: \(appearanceMode), resolvedColorScheme: \(String(describing: resolvedColorScheme))",
                         category: .ui
                     )
                 }

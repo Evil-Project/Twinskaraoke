@@ -40,7 +40,7 @@ struct AboutDetailList<Content: View>: View {
     var body: some View {
         if horizontalSizeClass == .regular {
             ZStack(alignment: .top) {
-                Color.appGroupedBackground.ignoresSafeArea()
+                ScreenBackgroundFill(style: .grouped)
                 detailList
                     .frame(maxWidth: 700, maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, AM.Spacing.screenMargin)
@@ -57,7 +57,7 @@ struct AboutDetailList<Content: View>: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.appGroupedBackground.ignoresSafeArea())
+        .groupedScreenBackground()
     }
 }
 
