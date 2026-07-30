@@ -55,7 +55,7 @@ final class PlaybackClock: ObservableObject {
 }
 
 @MainActor
-class AudioPlayerManager: ObservableObject {
+final class AudioPlayerManager: ObservableObject {
     static let shared = AudioPlayerManager()
     @Published var currentSong: Song?
     @Published var isPlaying = false
@@ -492,7 +492,9 @@ class AudioPlayerManager: ObservableObject {
         }
     }
 
-    init() {
+    // Private so `shared` stays the only instance: the audio session and the
+    // remote-command centre it configures are process-wide singletons.
+    private init() {
         configureAudioSessionCategory()
         activateAudioSession()
         let cacheCleanupCutoff = Date()
@@ -628,10 +630,17 @@ class AudioPlayerManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        // AVAudioSession posts these off the main thread (route changes are
+        // documented as arriving on a secondary thread). Under Swift 6 these
+        // sink closures are main-actor-isolated, so delivering them on the
+        // posting thread traps. Hop to main first, as the watch and TV
+        // AudioManagers already do for the same handlers.
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleInterruption(note) }
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: .vocalSeparatorDidCacheStems)
@@ -648,7 +657,10 @@ class AudioPlayerManager: ObservableObject {
                 self?.syncSystemVolume(sysVol)
             }
             .store(in: &cancellables)
+        // Posted by the audio daemon when the media server restarts; the
+        // delivery thread is undocumented, so don't assume it is main.
         NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.handleMediaServicesReset() }
             .store(in: &cancellables)
         #if canImport(UIKit)
@@ -658,39 +670,40 @@ class AudioPlayerManager: ObservableObject {
         #endif
     }
 
-    deinit {
-        // AudioPlayerManager is a main-actor singleton; if it is ever torn
-        // down, the last reference is released on the main thread.
-        MainActor.assumeIsolated {
-            pollTimer?.invalidate()
-            quickCutTimer?.cancel()
-            streamFadeTimer?.cancel()
-            transitionStartTask?.cancel()
-            instrumentalTask?.cancel()
-            preparedStemTask?.cancel()
-            backgroundAnalysisRetryTask?.cancel()
-            remotePlaybackCacheTask?.cancel()
-            easterEggLyricsTask?.cancel()
-            easterEggSongTask?.cancel()
-            if let existing = radioTimeObserver {
-                existing.player.removeTimeObserver(existing.token)
-            }
-            artworkTask?.cancel()
-            artworkProcessingTask?.cancel()
-            playerArtworkWarmupTasks.values.forEach { $0.cancel() }
-            playerArtworkWarmupTasks.removeAll()
-            cacheCompressionTask?.cancel()
-            radioPlayer?.pause()
-            #if canImport(UIKit)
-                let transitionTaskID = trackTransitionTaskID
-                trackTransitionTaskID = .invalid
-                if transitionTaskID != .invalid {
-                    Task { @MainActor in
-                        UIApplication.shared.endBackgroundTask(transitionTaskID)
-                    }
-                }
-            #endif
+    isolated deinit {
+        // Teardown touches main-actor-bound state: the RunLoop.main poll timer,
+        // the radio time observer, and the AVPlayer. `isolated deinit` runs the
+        // body on the main actor rather than asserting that the last release
+        // happened there, which `MainActor.assumeIsolated` would trap on.
+        pollTimer?.invalidate()
+        quickCutTimer?.cancel()
+        streamFadeTimer?.cancel()
+        transitionStartTask?.cancel()
+        instrumentalTask?.cancel()
+        preparedStemTask?.cancel()
+        backgroundAnalysisRetryTask?.cancel()
+        remotePlaybackCacheTask?.cancel()
+        easterEggLyricsTask?.cancel()
+        easterEggSongTask?.cancel()
+        if let existing = radioTimeObserver {
+            existing.player.removeTimeObserver(existing.token)
         }
+        artworkTask?.cancel()
+        artworkProcessingTask?.cancel()
+        playerArtworkWarmupTasks.values.forEach { $0.cancel() }
+        playerArtworkWarmupTasks.removeAll()
+        cacheCompressionTask?.cancel()
+        radioPlayer?.pause()
+        #if canImport(UIKit)
+            let transitionTaskID = trackTransitionTaskID
+            trackTransitionTaskID = .invalid
+            if transitionTaskID != .invalid {
+                // Already on the main actor, so end the background task
+                // directly instead of deferring it to a Task that could
+                // outlive the deinit.
+                UIApplication.shared.endBackgroundTask(transitionTaskID)
+            }
+        #endif
     }
 
     private func cancelBackgroundAnalysisRetry() {
