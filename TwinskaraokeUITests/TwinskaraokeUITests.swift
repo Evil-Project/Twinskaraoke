@@ -181,6 +181,10 @@ final class TwinskaraokeUITests: XCTestCase {
   }
 
   func testAdaptiveMusicShellShowsSidebarOrTabs() throws {
+    // In portrait the balanced split view collapses the sidebar out of the
+    // hierarchy, so an iPad would fall through to the compact tab assertions
+    // and fail. Landscape is what makes the sidebar branch deterministic.
+    XCUIDevice.shared.orientation = .landscapeLeft
     let app = launchApp()
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
 
@@ -195,9 +199,11 @@ final class TwinskaraokeUITests: XCTestCase {
         )
       }
       openRootSection("Search", in: app)
+      // Only the detail column proves the sidebar row actually drove selection:
+      // the sidebar itself always carries a "Search" static text, so matching on
+      // that alone passes even when no row is selectable at all.
       XCTAssertTrue(
-        app.navigationBars["Search"].waitForExistence(timeout: 8)
-          || app.staticTexts["Search"].waitForExistence(timeout: 8),
+        app.navigationBars["Search"].waitForExistence(timeout: 8),
         "Expected Search to open from the Discover sidebar group."
       )
       return
