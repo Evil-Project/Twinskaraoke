@@ -216,7 +216,10 @@ private struct PopupHostView: View {
                     Section(group.title) {
                         ForEach(group.sections) { section in
                             SidebarSectionRow(section: section, isSelected: currentSection == section)
-                                .tag(Optional(section))
+                                // `List(selection: Binding<RootSection?>)` matches rows by a tag
+                                // whose type is RootSection — a `RootSection?` tag never matches,
+                                // leaving every row unselectable (taps highlight, nothing happens).
+                                .tag(section)
                                 .accessibilityIdentifier(section.sidebarAccessibilityIdentifier)
                         }
                     }
