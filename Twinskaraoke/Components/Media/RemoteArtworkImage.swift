@@ -131,16 +131,15 @@ struct RemoteArtworkImage: View {
     ArtworkFailureBackoff.shared.recordFailure(failedURL)
     evictFailedImageCache(for: failedURL)
 
-    // Fixed: Correct MainActor Task syntax and removed redundant condition checks
+    // Task closure correctly isolated to @MainActor
     Task { @MainActor in
         self.loadFailed = true
-        self.phase = .empty
         
         // Handle background auto-retry cooldown safely
         do {
             try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
         } catch {
-            // Fixed: Reset flag on cancellation so image doesn't freeze indefinitely
+            // Reset flag on cancellation so image doesn't freeze indefinitely
             self.loadFailed = false
             return 
         }
@@ -148,10 +147,10 @@ struct RemoteArtworkImage: View {
         // Clear failure state if still matching the same current URL
         if self.url == failedURL {
             self.loadFailed = false
-            self.phase = .empty
         }
     }
 }
+
 
 
     private var shouldAnimateLoad: Bool {
