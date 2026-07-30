@@ -91,8 +91,8 @@ struct AVEnginePlaybackRegressionTests {
         engine.stop()
     }
 
-    @Test("Crossfade ramp stays on the audio engine actor")
-    func crossfadeRampUsesMainActor() async throws {
+    @Test("Crossfade promotes the incoming track and clears transition state")
+    func crossfadeCompletesHandoff() async throws {
         let sourceURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
         let incomingURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
         defer {
@@ -116,6 +116,8 @@ struct AVEnginePlaybackRegressionTests {
         }
 
         #expect(!engine.isCrossfading)
+        #expect(engine.currentURL == incomingURL)
+        #expect(!engine.isCrossfadePending)
         engine.stop()
     }
 

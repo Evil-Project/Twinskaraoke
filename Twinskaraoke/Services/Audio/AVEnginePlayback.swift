@@ -1015,6 +1015,11 @@ final class AVEnginePlayback {
                 )
                 var completionDispatched = false
                 timer.setEventHandler { [weak self] in
+                    guard let self,
+                          self.crossfadeRampGeneration == rampGeneration,
+                          self.isCrossfading
+                    else { return }
+
                     let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startUptime)
                     let t = Float(min(1, elapsed / fadeDuration))
                     let outVolume: Float
@@ -1035,10 +1040,6 @@ final class AVEnginePlayback {
                     incomingNode.volume = max(0, inVolume)
                     guard t >= 1, !completionDispatched else { return }
                     completionDispatched = true
-                    guard let self,
-                          self.crossfadeRampGeneration == rampGeneration,
-                          self.isCrossfading
-                    else { return }
                     self.finalizeCrossfade()
                 }
                 self.crossfadeTimer = timer
