@@ -628,10 +628,17 @@ class AudioPlayerManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        // AVAudioSession posts these off the main thread (route changes are
+        // documented as arriving on a secondary thread). Under Swift 6 these
+        // sink closures are main-actor-isolated, so delivering them on the
+        // posting thread traps. Hop to main first, as the watch and TV
+        // AudioManagers already do for the same handlers.
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleInterruption(note) }
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: .vocalSeparatorDidCacheStems)
@@ -648,7 +655,10 @@ class AudioPlayerManager: ObservableObject {
                 self?.syncSystemVolume(sysVol)
             }
             .store(in: &cancellables)
+        // Posted by the audio daemon when the media server restarts; the
+        // delivery thread is undocumented, so don't assume it is main.
         NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.handleMediaServicesReset() }
             .store(in: &cancellables)
         #if canImport(UIKit)
