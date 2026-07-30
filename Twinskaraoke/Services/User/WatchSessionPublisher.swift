@@ -7,6 +7,7 @@ import WatchConnectivity
 /// context, and answers the watch's transient request for the bearer token.
 /// Activated once at launch and lives for the process: `AuthManager` instances
 /// come and go with `AccountView`, so session changes arrive by notification.
+@MainActor
 final class WatchSessionPublisher: NSObject {
     static let shared = WatchSessionPublisher()
 
@@ -28,7 +29,9 @@ final class WatchSessionPublisher: NSObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.publish(bumpingGeneration: true)
+            Task { @MainActor [weak self] in
+                self?.publish(bumpingGeneration: true)
+            }
         }
 
         let session = WCSession.default
@@ -77,33 +80,33 @@ final class WatchSessionPublisher: NSObject {
 }
 
 extension WatchSessionPublisher: WCSessionDelegate {
-    func session(
+    nonisolated func session(
         _: WCSession,
         activationDidCompleteWith _: WCSessionActivationState,
         error _: Error?
     ) {
         // The watch may have missed changes while unpaired or the app was gone;
         // resend the current state without claiming it is new.
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             self?.publish(bumpingGeneration: false)
         }
     }
 
-    func sessionWatchStateDidChange(_: WCSession) {
-        DispatchQueue.main.async { [weak self] in
+    nonisolated func sessionWatchStateDidChange(_: WCSession) {
+        Task { @MainActor [weak self] in
             self?.publish(bumpingGeneration: false)
         }
     }
 
-    func sessionDidBecomeInactive(_: WCSession) {}
+    nonisolated func sessionDidBecomeInactive(_: WCSession) {}
 
-    func sessionDidDeactivate(_: WCSession) {
+    nonisolated func sessionDidDeactivate(_: WCSession) {
         // Switching to a different paired watch: reactivate so the new one
         // receives the session too.
         WCSession.default.activate()
     }
 
-    func session(
+    nonisolated func session(
         _: WCSession,
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void

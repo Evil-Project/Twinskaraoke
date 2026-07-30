@@ -31,6 +31,8 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
 
     private var downloadTask: URLSessionDownloadTask?
     private var progressObservation: NSKeyValueObservation?
+    private var installationTask: Task<Void, Never>?
+    private var operationGeneration: UInt = 0
 
     private lazy var packDirectory: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -69,39 +71,42 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
     func download() {
         guard case .notDownloaded = state else { return }
         state = .downloading(progress: 0)
+        let generation = operationGeneration
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForResource = 300 // 5 minutes for large pack download
         let session = URLSession(configuration: config)
         let task = session.downloadTask(with: ShimejiResourceManager.packURL) { [weak self] tempURL, response, error in
-            Task { @MainActor in
-                self?.handleDownloadCompletion(tempURL: tempURL, response: response, error: error)
-            }
+            Self.deliverDownloadCompletion(
+                to: self,
+                tempURL: tempURL,
+                response: response,
+                error: error,
+                generation: generation
+            )
         }
         progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
-            Task { @MainActor in
-                self?.state = .downloading(progress: progress.fractionCompleted)
-            }
+            Self.deliverProgress(progress.fractionCompleted, to: self, generation: generation)
         }
         downloadTask = task
         task.resume()
     }
 
     func retry() {
+        invalidateCurrentOperation()
         state = .notDownloaded
         download()
     }
 
     func cancelDownload() {
-        progressObservation = nil
-        downloadTask?.cancel()
-        downloadTask = nil
+        invalidateCurrentOperation()
         if case .downloading = state {
             state = .notDownloaded
         }
     }
 
-    private func handleDownloadCompletion(tempURL: URL?, response: URLResponse?, error: Error?) {
+    private func handleDownloadCompletion(tempURL: URL?, response: URLResponse?, error: Error?, generation: UInt) {
+        guard generation == operationGeneration else { return }
         progressObservation = nil
         downloadTask = nil
 
@@ -136,45 +141,117 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
             return
         }
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            do {
-                let manifest = try await self.extractAndLoad(zipURL: stagedZip)
-                await MainActor.run {
-                    self.manifest = manifest
-                    self.state = .ready
-                }
-            } catch {
-                await MainActor.run {
-                    self.state = .failed("Couldn't set up the pack: \(error.localizedDescription)")
-                }
+        installationTask = Task { @MainActor [weak self] in
+            defer {
+                try? FileManager.default.removeItem(at: stagedZip)
             }
-            try? FileManager.default.removeItem(at: stagedZip)
+
+            do {
+                let preparedPack = try await Task.detached(priority: .userInitiated) {
+                    try Self.extractPack(zipURL: stagedZip)
+                }.value
+
+                guard let self else {
+                    Self.discardPreparedPack(preparedPack)
+                    return
+                }
+                guard !Task.isCancelled, generation == self.operationGeneration else {
+                    Self.discardPreparedPack(preparedPack)
+                    return
+                }
+
+                // This synchronous swap runs on the main actor so delete/retry
+                // cannot invalidate the generation between the check and move.
+                try Self.installPreparedPack(preparedPack, at: self.packDirectory)
+
+                guard !Task.isCancelled, generation == self.operationGeneration else {
+                    return
+                }
+                
+                #if canImport(UIKit)
+                ShimejiSpriteView.invalidateImageCache()
+                #endif
+
+                self.manifest = preparedPack.manifest
+                self.state = .ready
+                self.installationTask = nil
+            } catch {
+                guard let self,
+                      !Task.isCancelled,
+                      generation == self.operationGeneration
+                else { return }
+                self.installationTask = nil
+                self.state = .failed("Couldn't set up the pack: \(error.localizedDescription)")
+            }
         }
     }
 
-    private nonisolated func extractAndLoad(zipURL: URL) async throws -> ShimejiManifest {
-        let fm = FileManager.default
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let packDirectory = base.appendingPathComponent("ShimejiPack", isDirectory: true)
-
-        // Extract into a fresh temp location first, then swap it in — avoids
-        // ever leaving a half-extracted pack behind if this fails partway.
-        let stagingDirectory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try fm.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
-        try ShimejiZipReader.extract(zipURL: zipURL, to: stagingDirectory)
-
-        let stagedManifestURL = stagingDirectory.appendingPathComponent("manifest.json")
-        let manifestData = try Data(contentsOf: stagedManifestURL)
-        let manifest = try JSONDecoder().decode(ShimejiManifest.self, from: manifestData)
-        guard manifest.formatVersion == 1 else {
-            throw NSError(
-                domain: "Shimeji",
-                code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "This pack needs a newer version of the app."]
+    private nonisolated static func deliverDownloadCompletion(
+        to manager: ShimejiResourceManager?,
+        tempURL: URL?,
+        response: URLResponse?,
+        error: Error?,
+        generation: UInt
+    ) {
+        Task { @MainActor in
+            manager?.handleDownloadCompletion(
+                tempURL: tempURL,
+                response: response,
+                error: error,
+                generation: generation
             )
         }
+    }
 
+    private nonisolated static func deliverProgress(
+        _ progress: Double,
+        to manager: ShimejiResourceManager?,
+        generation: UInt
+    ) {
+        Task { @MainActor in
+            guard let manager,
+                  generation == manager.operationGeneration,
+                  case .downloading = manager.state
+            else { return }
+            manager.state = .downloading(progress: progress)
+        }
+    }
+
+    private nonisolated struct PreparedPack: Sendable {
+        let manifest: ShimejiManifest
+        let stagingDirectory: URL
+    }
+
+    private nonisolated static func extractPack(zipURL: URL) throws -> PreparedPack {
+        let fm = FileManager.default
+
+        // Extraction only touches a unique temporary location. The actor-
+        // isolated caller decides whether this generation may install it.
+        let stagingDirectory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try fm.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
+            try ShimejiZipReader.extract(zipURL: zipURL, to: stagingDirectory)
+
+            let stagedManifestURL = stagingDirectory.appendingPathComponent("manifest.json")
+            let manifestData = try Data(contentsOf: stagedManifestURL)
+            let manifest = try JSONDecoder().decode(ShimejiManifest.self, from: manifestData)
+            guard manifest.formatVersion == 1 else {
+                throw NSError(
+                    domain: "Shimeji",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "This pack needs a newer version of the app."]
+                )
+            }
+            return PreparedPack(manifest: manifest, stagingDirectory: stagingDirectory)
+        } catch {
+            try? fm.removeItem(at: stagingDirectory)
+            throw error
+        }
+    }
+
+    private nonisolated static func installPreparedPack(_ preparedPack: PreparedPack, at packDirectory: URL) throws {
+        let fm = FileManager.default
+        let base = packDirectory.deletingLastPathComponent()
         // Application Support isn't guaranteed to exist on disk yet on a
         // fresh install — FileManager just hands back the URL it *would*
         // use, without creating it. Moving into a directory whose parent
@@ -184,22 +261,24 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         if fm.fileExists(atPath: packDirectory.path) {
             try fm.removeItem(at: packDirectory)
         }
-        try fm.moveItem(at: stagingDirectory, to: packDirectory)
-
-        // Invalidate cached sprite images after successful extraction
-        await MainActor.run {
-            #if canImport(UIKit)
-            ShimejiSpriteView.invalidateImageCache()
-            #endif
-        }
-
-        return manifest
+        try fm.moveItem(at: preparedPack.stagingDirectory, to: packDirectory)
     }
 
-    func deleteDownloadedPack() {
+    private nonisolated static func discardPreparedPack(_ preparedPack: PreparedPack) {
+        try? FileManager.default.removeItem(at: preparedPack.stagingDirectory)
+    }
+
+    private func invalidateCurrentOperation() {
+        operationGeneration &+= 1
         downloadTask?.cancel()
         downloadTask = nil
         progressObservation = nil
+        installationTask?.cancel()
+        installationTask = nil
+    }
+
+    func deleteDownloadedPack() {
+        invalidateCurrentOperation()
         try? FileManager.default.removeItem(at: packDirectory)
         manifest = nil
         state = .notDownloaded

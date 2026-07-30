@@ -32,14 +32,14 @@ final class RadioController: ObservableObject {
             return
         }
         guard pollTask == nil else { return }
-        pollTask = Task { [weak self] in
+        pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
                 guard let interval = self?.pollInterval else { return }
                 try? await Task.sleep(for: interval)
-                guard let self, await self.shouldKeepPolling else { break }
+                guard let self, self.shouldKeepPolling else { break }
             }
-            await self?.clearPollTask()
+            self?.clearPollTask()
         }
     }
 

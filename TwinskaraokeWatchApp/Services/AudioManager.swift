@@ -1086,7 +1086,7 @@ class AudioManager: ObservableObject {
         return nil
     }
 
-    deinit {
+    isolated deinit {
         downloadTask?.cancel()
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)

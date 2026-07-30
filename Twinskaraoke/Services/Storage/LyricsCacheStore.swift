@@ -1,16 +1,15 @@
 import Foundation
 
-enum LyricsCacheVariant: String {
+nonisolated enum LyricsCacheVariant: String, Sendable {
     case original
     case translated
 }
 
-enum LyricsCacheStore {
-    private static let fm = FileManager.default
+nonisolated enum LyricsCacheStore {
     // Entries are KB-sized JSON documents, so I/O stays synchronous on the
     // caller; the lock serializes clear() with loads/saves so a save can't
     // write into a directory clear() just deleted.
-    private static let ioLock = NSLock()
+    private nonisolated static let ioLock = NSLock()
 
     nonisolated static let cacheDirectory: URL = {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -20,6 +19,7 @@ enum LyricsCacheStore {
     }()
 
     static func load(songID: String, variant: LyricsCacheVariant) -> [LyricLine]? {
+        let fm = FileManager.default
         let url = cacheFileURL(for: songID, variant: variant)
         ioLock.lock()
         let cached = (try? Data(contentsOf: url))
@@ -31,11 +31,14 @@ enum LyricsCacheStore {
         guard let cached, !cached.lines.isEmpty else {
             return nil
         }
-        CacheManager.shared.recordAccess(for: url)
+        Task { @MainActor in
+            CacheManager.shared.recordAccess(for: url)
+        }
         return cached.lines.map { $0.asLyricLine() }
     }
 
     static func save(_ lyrics: [LyricLine], songID: String, variant: LyricsCacheVariant) {
+        let fm = FileManager.default
         let url = cacheFileURL(for: songID, variant: variant)
         guard !lyrics.isEmpty else {
             ioLock.lock()
@@ -51,11 +54,14 @@ enum LyricsCacheStore {
         ioLock.lock()
         try? data.write(to: url, options: .atomic)
         ioLock.unlock()
-        CacheManager.shared.recordAccess(for: url)
-        CacheManager.shared.enforceLyricsCacheLimits()
+        Task { @MainActor in
+            CacheManager.shared.recordAccess(for: url)
+            CacheManager.shared.enforceLyricsCacheLimits()
+        }
     }
 
     static func clear() {
+        let fm = FileManager.default
         ioLock.lock()
         try? fm.removeItem(at: cacheDirectory)
         try? fm.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
