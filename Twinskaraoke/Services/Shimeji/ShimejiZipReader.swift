@@ -14,6 +14,7 @@ enum ShimejiZipReader {
         case corruptArchive
         case unsupportedCompressionMethod(UInt16)
         case decompressionFailed
+        case unsafePath
     }
 
     /// Extracts every file entry in `zipURL` into `destinationDirectory`,
@@ -23,14 +24,42 @@ enum ShimejiZipReader {
         let entries = try readCentralDirectory(data)
 
         let fm = FileManager.default
+        let canonicalDestination = destinationDirectory.standardized.path
+
         for entry in entries where !entry.isDirectory {
+            // Zip-slip protection: validate path is safe before extraction
+            try validatePath(entry.path)
+
             let destination = destinationDirectory.appendingPathComponent(entry.path)
+            let canonicalFile = destination.standardized.path
+
+            // Ensure resolved path remains under destination directory
+            guard canonicalFile.hasPrefix(canonicalDestination + "/") || canonicalFile == canonicalDestination else {
+                throw ZipError.unsafePath
+            }
+
             try fm.createDirectory(
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             let fileData = try extractFileData(data, entry: entry)
             try fileData.write(to: destination, options: .atomic)
+        }
+    }
+
+    /// Validates that a path from a zip archive is safe to extract
+    private static func validatePath(_ path: String) throws {
+        // Reject absolute paths
+        guard !path.hasPrefix("/") else {
+            throw ZipError.unsafePath
+        }
+
+        // Reject paths containing ".." components
+        let components = path.split(separator: "/")
+        for component in components {
+            if component == ".." {
+                throw ZipError.unsafePath
+            }
         }
     }
 

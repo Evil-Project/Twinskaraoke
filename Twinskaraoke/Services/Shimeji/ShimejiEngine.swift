@@ -74,12 +74,33 @@ final class ShimejiEngine: NSObject, ObservableObject {
     static let displaySize: CGFloat = 84
 
     @Published private(set) var instances: [ShimejiInstance] = []
-    @Published var bounds: CGRect = .zero
+    private var deferredManifest: ShimejiManifest?
+    @Published var bounds: CGRect = .zero {
+        didSet {
+            guard bounds != oldValue else { return }
+            handleFloorTargetChange()
+            // If bounds became non-zero and we had a deferred manifest, spawn now
+            if bounds.width > 0, bounds.height > 0, let manifest = deferredManifest {
+                deferredManifest = nil
+                respawn(manifest: manifest)
+                if displayLink == nil {
+                    let link = CADisplayLink(target: self, selector: #selector(tick))
+                    link.add(to: .main, forMode: .common)
+                    displayLink = link
+                }
+            }
+        }
+    }
 
     /// The app's actual tab bar top edge, in the same coordinate space as
     /// `bounds`, kept fresh by `ShimejiOverlayController`'s periodic poll of
     /// the live `UITabBar`. Nil when there's no tab bar to find.
-    var navBarY: CGFloat?
+    var navBarY: CGFloat? {
+        didSet {
+            guard navBarY != oldValue else { return }
+            handleFloorTargetChange()
+        }
+    }
 
     private var displayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval?
@@ -150,6 +171,11 @@ final class ShimejiEngine: NSObject, ObservableObject {
 
     func start(manifest: ShimejiManifest) {
         guard displayLink == nil else { return }
+        // Defer spawning if bounds are zero; the bounds didSet will handle it
+        if bounds.width <= 0 || bounds.height <= 0 {
+            deferredManifest = manifest
+            return
+        }
         respawn(manifest: manifest)
         let link = CADisplayLink(target: self, selector: #selector(tick))
         link.add(to: .main, forMode: .common)
@@ -171,7 +197,7 @@ final class ShimejiEngine: NSObject, ObservableObject {
             instances = []
             return
         }
-        let count = min(settings.maxCount, 12)
+        let count = min(max(0, settings.maxCount), 12)
         instances = (0 ..< count).map { _ in
             let character = pool.randomElement()!
             let x = CGFloat.random(in: bounds.minX + spriteHalfWidth ... max(bounds.minX + spriteHalfWidth, bounds.maxX - spriteHalfWidth))
@@ -232,8 +258,16 @@ final class ShimejiEngine: NSObject, ObservableObject {
     private func advanceFrame(_ instance: ShimejiInstance, dt: Double) {
         let frames = instance.currentFrames
         guard frames.count > 1 else {
-            if instance.frameIndex != 0 { instance.frameIndex = 0 }
+            if instance.frameIndex != 0 {
+                instance.frameIndex = 0
+                instance.frameTimer = 0
+            }
             return
+        }
+        // Normalize frameIndex if it's out of bounds (action changed to shorter sequence)
+        if instance.frameIndex >= frames.count {
+            instance.frameIndex = 0
+            instance.frameTimer = 0
         }
         instance.frameTimer += dt
         if instance.frameTimer >= instance.currentFrameDuration {

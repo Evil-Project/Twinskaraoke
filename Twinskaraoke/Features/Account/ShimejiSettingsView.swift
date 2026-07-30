@@ -21,11 +21,6 @@ struct ShimejiSettingsView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .groupedScreenBackground()
-        .onAppear {
-            if case .notDownloaded = resources.state {
-                resources.download()
-            }
-        }
     }
 
     @ViewBuilder
@@ -33,11 +28,11 @@ struct ShimejiSettingsView: View {
         Section {
             switch resources.state {
             case .notDownloaded:
-                HStack {
-                    Text("Waiting to download…")
-                    Spacer()
-                    ProgressView()
+                Button("Download") {
+                    AppHaptic.selection.play()
+                    resources.download()
                 }
+                .foregroundStyle(Color.appAccent)
             case let .downloading(progress):
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Downloading Shimeji pack…")

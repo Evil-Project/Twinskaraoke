@@ -298,8 +298,12 @@ struct SettingsView: View {
             set: { newValue in
                 shimejiEnabled = newValue
                 newValue ? AppHaptic.success.play() : AppHaptic.light.play()
-                if newValue, case .notDownloaded = ShimejiResourceManager.shared.state {
-                    ShimejiResourceManager.shared.download()
+                if newValue {
+                    if case .notDownloaded = ShimejiResourceManager.shared.state {
+                        ShimejiResourceManager.shared.download()
+                    }
+                } else {
+                    ShimejiResourceManager.shared.cancelDownload()
                 }
             }
         )
