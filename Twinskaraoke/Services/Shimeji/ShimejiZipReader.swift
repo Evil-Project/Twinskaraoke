@@ -8,8 +8,8 @@ import Foundation
 /// DEFLATE (8) compressed entries. It does not handle encryption, zip64, or
 /// multi-part archives — the resource pack is built with plain `zip`, which
 /// doesn't need any of those.
-enum ShimejiZipReader {
-    enum ZipError: Error {
+nonisolated enum ShimejiZipReader {
+    nonisolated enum ZipError: Error {
         case notAZip
         case corruptArchive
         case unsupportedCompressionMethod(UInt16)
@@ -36,7 +36,7 @@ enum ShimejiZipReader {
 
     // MARK: - Central directory parsing
 
-    private struct Entry {
+    private nonisolated struct Entry {
         let path: String
         let compressionMethod: UInt16
         let compressedSize: Int

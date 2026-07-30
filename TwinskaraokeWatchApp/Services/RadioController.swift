@@ -37,9 +37,9 @@ final class RadioController: ObservableObject {
                 await self?.refresh()
                 guard let interval = self?.pollInterval else { return }
                 try? await Task.sleep(for: interval)
-                guard let self, await self.shouldKeepPolling else { break }
+                guard let self, self.shouldKeepPolling else { break }
             }
-            await self?.clearPollTask()
+            self?.clearPollTask()
         }
     }
 

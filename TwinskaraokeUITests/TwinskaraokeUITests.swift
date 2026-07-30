@@ -3,6 +3,7 @@ import XCTest
   import UIKit
 #endif
 
+@MainActor
 final class TwinskaraokeUITests: XCTestCase {
   override func setUpWithError() throws {
     continueAfterFailure = false

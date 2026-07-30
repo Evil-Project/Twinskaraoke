@@ -48,6 +48,7 @@ import SwiftUI
 
         private var window: ShimejiOverlayWindow?
         private var boundsTrackingTimer: Timer?
+        private weak var trackedScene: UIWindowScene?
 
         private init() {}
 
@@ -69,6 +70,7 @@ import SwiftUI
         func hide() {
             boundsTrackingTimer?.invalidate()
             boundsTrackingTimer = nil
+            trackedScene = nil
             window?.isHidden = true
             window = nil
         }
@@ -85,17 +87,22 @@ import SwiftUI
         /// change notification for it.
         private func startTrackingBounds(in scene: UIWindowScene) {
             boundsTrackingTimer?.invalidate()
-            let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self, weak scene] _ in
-                guard let scene else { return }
-                Task { @MainActor in
-                    ShimejiEngine.shared.bounds = scene.coordinateSpace.bounds
-                    ShimejiEngine.shared.miniPlayerY = ShimejiMiniPlayerTracker.shared.topEdgeY
-                    ShimejiEngine.shared.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: self?.window)
-                }
-            }
+            trackedScene = scene
+            let timer = Timer(
+                timeInterval: 0.5,
+                target: self,
+                selector: #selector(refreshTrackedBounds),
+                userInfo: nil,
+                repeats: true
+            )
             RunLoop.main.add(timer, forMode: .common)
             boundsTrackingTimer = timer
-            ShimejiEngine.shared.bounds = scene.coordinateSpace.bounds
+            refreshTrackedBounds()
+        }
+
+        @objc private func refreshTrackedBounds() {
+            guard let scene = trackedScene else { return }
+            ShimejiEngine.shared.bounds = scene.effectiveGeometry.coordinateSpace.bounds
             ShimejiEngine.shared.miniPlayerY = ShimejiMiniPlayerTracker.shared.topEdgeY
             ShimejiEngine.shared.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: window)
         }

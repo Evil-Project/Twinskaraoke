@@ -34,10 +34,10 @@ final class AuthManager: NSObject, ObservableObject {
     private var sessionExpiredObserver: NSObjectProtocol?
 
     private enum K {
-        static let userId = "nk.userId"
-        static let username = "nk.username"
-        static let avatar = "nk.avatar"
-        static let sessionCommitted = "nk.sessionCommitted"
+        nonisolated static let userId = "nk.userId"
+        nonisolated static let username = "nk.username"
+        nonisolated static let avatar = "nk.avatar"
+        nonisolated static let sessionCommitted = "nk.sessionCommitted"
     }
 
     private enum Endpoint {
@@ -70,7 +70,7 @@ final class AuthManager: NSObject, ObservableObject {
         }
     }
 
-    deinit {
+    isolated deinit {
         // AccountView mints a fresh AuthManager per visit; without removal
         // the block-based observer would accumulate for the app's lifetime.
         if let sessionExpiredObserver {

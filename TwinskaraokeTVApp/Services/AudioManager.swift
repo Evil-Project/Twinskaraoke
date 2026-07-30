@@ -498,7 +498,7 @@ final class AudioManager: ObservableObject {
         player = nil
     }
 
-    deinit {
+    isolated deinit {
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
         }

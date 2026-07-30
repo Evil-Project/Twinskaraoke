@@ -7,13 +7,13 @@ import Foundation
 /// same fixed set of action names our engine understands. Adding a new
 /// character or a richer per-character asset set never requires an app
 /// update, only a new zip.
-struct ShimejiManifest: Codable, Equatable {
+nonisolated struct ShimejiManifest: Codable, Equatable, Sendable {
     let formatVersion: Int
     let packName: String
     let characters: [ShimejiCharacterDefinition]
 }
 
-struct ShimejiCharacterDefinition: Codable, Identifiable, Hashable {
+nonisolated struct ShimejiCharacterDefinition: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let displayName: String
     let folder: String
@@ -26,14 +26,14 @@ struct ShimejiCharacterDefinition: Codable, Identifiable, Hashable {
     }
 }
 
-struct ShimejiAnchor: Codable, Hashable {
+nonisolated struct ShimejiAnchor: Codable, Hashable, Sendable {
     let x: Int
     let y: Int
 
     var point: CGPoint { CGPoint(x: x, y: y) }
 }
 
-struct ShimejiActionDefinition: Codable, Hashable {
+nonisolated struct ShimejiActionDefinition: Codable, Hashable, Sendable {
     let frames: [String]
     let frameDuration: Double
     let loop: Bool
@@ -43,7 +43,7 @@ struct ShimejiActionDefinition: Codable, Hashable {
 /// each character's `actions` dictionary in manifest.json. A character that
 /// is missing an optional action (e.g. no dedicated "sit" pose) simply falls
 /// back to "stand" at runtime — see ShimejiInstance.frames(for:).
-enum ShimejiActionKind: String, CaseIterable, Codable {
+nonisolated enum ShimejiActionKind: String, CaseIterable, Codable, Sendable {
     case stand
     case walk
     case fall

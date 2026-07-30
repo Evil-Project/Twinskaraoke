@@ -35,7 +35,7 @@ struct CaptchaWebView: UIViewRepresentable {
         }
 
         func webViewDidClose(_: WKWebView) {
-            DispatchQueue.main.async { self.onClose() }
+            onClose()
         }
 
         // The full-screen web view may only navigate within the captcha host;
@@ -43,7 +43,7 @@ struct CaptchaWebView: UIViewRepresentable {
         func webView(
             _: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
         ) {
             guard navigationAction.targetFrame?.isMainFrame ?? true,
                   let target = navigationAction.request.url,

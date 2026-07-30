@@ -69,14 +69,10 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
 
         let session = URLSession(configuration: .default)
         let task = session.downloadTask(with: ShimejiResourceManager.packURL) { [weak self] tempURL, _, error in
-            Task { @MainActor in
-                self?.handleDownloadCompletion(tempURL: tempURL, error: error)
-            }
+            Self.deliverDownloadCompletion(to: self, tempURL: tempURL, error: error)
         }
         progressObservation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] progress, _ in
-            Task { @MainActor in
-                self?.state = .downloading(progress: progress.fractionCompleted)
-            }
+            Self.deliverProgress(progress.fractionCompleted, to: self)
         }
         downloadTask = task
         task.resume()
@@ -109,24 +105,40 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
             return
         }
 
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
+        Task { [weak self] in
             do {
-                let manifest = try await self.extractAndLoad(zipURL: stagedZip)
-                await MainActor.run {
-                    self.manifest = manifest
-                    self.state = .ready
-                }
+                let manifest = try await Task.detached(priority: .userInitiated) {
+                    try Self.extractAndLoad(zipURL: stagedZip)
+                }.value
+                self?.manifest = manifest
+                self?.state = .ready
             } catch {
-                await MainActor.run {
-                    self.state = .failed("Couldn't set up the pack: \(error.localizedDescription)")
-                }
+                self?.state = .failed("Couldn't set up the pack: \(error.localizedDescription)")
             }
             try? FileManager.default.removeItem(at: stagedZip)
         }
     }
 
-    private nonisolated func extractAndLoad(zipURL: URL) async throws -> ShimejiManifest {
+    private nonisolated static func deliverDownloadCompletion(
+        to manager: ShimejiResourceManager?,
+        tempURL: URL?,
+        error: Error?
+    ) {
+        Task { @MainActor in
+            manager?.handleDownloadCompletion(tempURL: tempURL, error: error)
+        }
+    }
+
+    private nonisolated static func deliverProgress(
+        _ progress: Double,
+        to manager: ShimejiResourceManager?
+    ) {
+        Task { @MainActor in
+            manager?.state = .downloading(progress: progress)
+        }
+    }
+
+    private nonisolated static func extractAndLoad(zipURL: URL) throws -> ShimejiManifest {
         let fm = FileManager.default
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let packDirectory = base.appendingPathComponent("ShimejiPack", isDirectory: true)
