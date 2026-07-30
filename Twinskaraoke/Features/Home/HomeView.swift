@@ -71,6 +71,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 18) {
             topPicksShelf()
                 .shelfEntrance(index: 0)
+                
 
             if !recentlyPlayed.playlists.isEmpty {
                 PlaylistCarousel(title: "Recently Played", playlists: recentlyPlayed.playlists)
@@ -84,7 +85,7 @@ struct HomeView: View {
 
             latestSingleSection()
                 .shelfEntrance(index: 3)
-
+            
             if !viewModel.newReleases.isEmpty {
                 HomeSongSection(title: "New Releases", songs: viewModel.newReleases)
                     .shelfEntrance(index: 4)

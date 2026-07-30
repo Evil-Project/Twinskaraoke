@@ -32,6 +32,7 @@ struct TwinskaraokeApp: App {
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .injectReduceMotion()
                 .tint(.appAccent)
+                .shimejiSession()
                 .onAppear {
                     DebugLogger.log(
                         "Display refresh rate: \(DisplayRefreshRate.maximumFramesPerSecond) fps max",
