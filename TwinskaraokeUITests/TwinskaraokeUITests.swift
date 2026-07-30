@@ -184,7 +184,14 @@ final class TwinskaraokeUITests: XCTestCase {
     // In portrait the balanced split view collapses the sidebar out of the
     // hierarchy, so an iPad would fall through to the compact tab assertions
     // and fail. Landscape is what makes the sidebar branch deterministic.
-    XCUIDevice.shared.orientation = .landscapeLeft
+    // Orientation is process-wide, so restore it rather than leaking landscape
+    // into whichever test runs next.
+    let originalOrientation = XCUIDevice.shared.orientation
+    defer { XCUIDevice.shared.orientation = originalOrientation }
+    if isRunningOnPad {
+      XCUIDevice.shared.orientation = .landscapeLeft
+    }
+
     let app = launchApp()
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
 
