@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @AppStorage("nk.experimentsEnabled") private var experimentsEnabled: Bool = false
     @AppStorage("nk.experimentalThemesEnabled") private var experimentalThemesEnabled: Bool = false
+    @AppStorage("nk.experimentalShimejiEnabled") private var shimejiEnabled: Bool = false
     @State private var pendingAction: SettingsDestructiveAction?
     @State private var showAutoAnalyzeAlert = false
     @State private var showExperimentsAlert = false
@@ -235,6 +236,7 @@ struct SettingsView: View {
                     AppHaptic.light.play()
                     experimentsEnabled = false
                     experimentalThemesEnabled = false
+                    shimejiEnabled = false
                     resetThemeIfHiddenByExperiments()
                 }
             }
@@ -269,16 +271,38 @@ struct SettingsView: View {
             if experimentsEnabled {
                 Toggle("Experimental Themes", isOn: experimentalThemesToggleBinding)
                     .tint(.appAccent)
+                Toggle("Shimeji", isOn: shimejiToggleBinding)
+                    .tint(.appAccent)
+                if shimejiEnabled {
+                    NavigationLink {
+                        ShimejiSettingsView()
+                    } label: {
+                        Text("Shimeji Characters")
+                    }
+                }
             }
         } header: {
             Text("Experiments")
         } footer: {
             if experimentsEnabled {
-                Text("Experimental Themes adds early, in-progress themes to the theme picker above.")
+                Text("Experimental Themes adds early, in-progress themes to the theme picker above. Shimeji adds tiny animated characters that wander around on top of the app.")
             } else {
                 Text("Turn on Experiments to access early, in-progress features before they're finished.")
             }
         }
+    }
+
+    private var shimejiToggleBinding: Binding<Bool> {
+        Binding(
+            get: { shimejiEnabled },
+            set: { newValue in
+                shimejiEnabled = newValue
+                newValue ? AppHaptic.success.play() : AppHaptic.light.play()
+                if newValue, case .notDownloaded = ShimejiResourceManager.shared.state {
+                    ShimejiResourceManager.shared.download()
+                }
+            }
+        )
     }
 
     @ViewBuilder

@@ -55,10 +55,10 @@ struct FloatingClouds: View {
         GeometryReader { proxy in
             ZStack {
                 // Clouds will automatically inherit and respect reduceMotion via Environment
-                Cloud(proxy: proxy, color: .purple, rotationStart: 0, duration: 60, alignment: .topLeading)
-                Cloud(proxy: proxy, color: .blue, rotationStart: 90, duration: 90, alignment: .bottomTrailing)
-                Cloud(proxy: proxy, color: .teal, rotationStart: 180, duration: 75, alignment: .topTrailing)
-                Cloud(proxy: proxy, color: .indigo, rotationStart: 270, duration: 105, alignment: .bottomLeading)
+                Cloud(proxy: proxy, color: Theme.ellipsesTopLeading(forScheme: scheme), rotationStart: 0, duration: 60, alignment: .topLeading)
+                Cloud(proxy: proxy, color: Theme.ellipsesBottomTrailing(forScheme: scheme), rotationStart: 90, duration: 90, alignment: .bottomTrailing)
+                Cloud(proxy: proxy, color: Theme.ellipsesTopTrailing(forScheme: scheme), rotationStart: 180, duration: 75, alignment: .topTrailing)
+                Cloud(proxy: proxy, color: Theme.ellipsesBottomLeading(forScheme: scheme), rotationStart: 270, duration: 105, alignment: .bottomLeading)
             }
             .blur(radius: blur)
         }

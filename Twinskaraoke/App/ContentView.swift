@@ -513,6 +513,9 @@ private struct PopupModifier: ViewModifier {
                 popupBar.accessibilityHint = "Opens the full-screen player."
 
                 PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
+                #if canImport(UIKit)
+                    ShimejiMiniPlayerTracker.shared.register(popupBar)
+                #endif
             }
     }
 }
