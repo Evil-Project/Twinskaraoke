@@ -54,21 +54,28 @@ enum ShimejiZipReader {
             throw ZipError.notAZip
         }
 
-        func u16(_ offset: Int) -> UInt16 {
-            UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+        // Standard EOCD record is at least 22 bytes long
+        guard eocdOffset + 22 <= data.count else {
+            throw ZipError.corruptArchive
         }
-        func u32(_ offset: Int) -> UInt32 {
-            UInt32(data[offset])
+
+        func u16(_ offset: Int) throws -> UInt16 {
+            guard offset + 2 <= data.count else { throw ZipError.corruptArchive }
+            return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+        }
+        func u32(_ offset: Int) throws -> UInt32 {
+            guard offset + 4 <= data.count else { throw ZipError.corruptArchive }
+            return UInt32(data[offset])
                 | (UInt32(data[offset + 1]) << 8)
                 | (UInt32(data[offset + 2]) << 16)
                 | (UInt32(data[offset + 3]) << 24)
         }
 
-        let totalEntries = Int(u16(eocdOffset + 10))
-        let centralDirSize = Int(u32(eocdOffset + 12))
-        let centralDirOffset = Int(u32(eocdOffset + 16))
+        let totalEntries = Int(try u16(eocdOffset + 10))
+        let centralDirSize = Int(try u32(eocdOffset + 12))
+        let centralDirOffset = Int(try u32(eocdOffset + 16))
 
-        guard centralDirOffset + centralDirSize <= data.count else {
+        guard centralDirOffset >= 0, centralDirOffset + centralDirSize <= data.count else {
             throw ZipError.corruptArchive
         }
 
@@ -77,16 +84,24 @@ enum ShimejiZipReader {
         var cursor = centralDirOffset
 
         for _ in 0 ..< totalEntries {
-            guard u32(cursor) == 0x02014B50 else { throw ZipError.corruptArchive }
-            let method = u16(cursor + 10)
-            let compressedSize = Int(u32(cursor + 20))
-            let uncompressedSize = Int(u32(cursor + 24))
-            let nameLength = Int(u16(cursor + 28))
-            let extraLength = Int(u16(cursor + 30))
-            let commentLength = Int(u16(cursor + 32))
-            let localHeaderOffset = Int(u32(cursor + 42))
+            // Minimum Central Directory Header size is 46 bytes
+            guard cursor + 46 <= data.count else { throw ZipError.corruptArchive }
+            guard try u32(cursor) == 0x02014B50 else { throw ZipError.corruptArchive }
+
+            let method = try u16(cursor + 10)
+            let compressedSize = Int(try u32(cursor + 20))
+            let uncompressedSize = Int(try u32(cursor + 24))
+            let nameLength = Int(try u16(cursor + 28))
+            let extraLength = Int(try u16(cursor + 30))
+            let commentLength = Int(try u16(cursor + 32))
+            let localHeaderOffset = Int(try u32(cursor + 42))
 
             let nameStart = cursor + 46
+            let totalEntryLength = 46 + nameLength + extraLength + commentLength
+            guard cursor + totalEntryLength <= data.count else {
+                throw ZipError.corruptArchive
+            }
+
             guard let name = String(
                 data: data.subdata(in: nameStart ..< nameStart + nameLength),
                 encoding: .utf8
@@ -102,30 +117,35 @@ enum ShimejiZipReader {
                 localHeaderOffset: localHeaderOffset
             ))
 
-            cursor = nameStart + nameLength + extraLength + commentLength
+            cursor += totalEntryLength
         }
 
         return entries
     }
 
     private static func extractFileData(_ data: Data, entry: Entry) throws -> Data {
-        func u16(_ offset: Int) -> UInt16 {
-            UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+        func u16(_ offset: Int) throws -> UInt16 {
+            guard offset + 2 <= data.count else { throw ZipError.corruptArchive }
+            return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
         }
-        func u32(_ offset: Int) -> UInt32 {
-            UInt32(data[offset])
+        func u32(_ offset: Int) throws -> UInt32 {
+            guard offset + 4 <= data.count else { throw ZipError.corruptArchive }
+            return UInt32(data[offset])
                 | (UInt32(data[offset + 1]) << 8)
                 | (UInt32(data[offset + 2]) << 16)
                 | (UInt32(data[offset + 3]) << 24)
         }
 
         let localOffset = entry.localHeaderOffset
-        guard u32(localOffset) == 0x04034B50 else { throw ZipError.corruptArchive }
-        let nameLength = Int(u16(localOffset + 26))
-        let extraLength = Int(u16(localOffset + 28))
+        guard localOffset >= 0, localOffset + 30 <= data.count else { throw ZipError.corruptArchive }
+        guard try u32(localOffset) == 0x04034B50 else { throw ZipError.corruptArchive }
+
+        let nameLength = Int(try u16(localOffset + 26))
+        let extraLength = Int(try u16(localOffset + 28))
         let dataStart = localOffset + 30 + nameLength + extraLength
         let dataEnd = dataStart + entry.compressedSize
-        guard dataEnd <= data.count else { throw ZipError.corruptArchive }
+
+        guard dataStart <= dataEnd, dataEnd <= data.count else { throw ZipError.corruptArchive }
         let compressed = data.subdata(in: dataStart ..< dataEnd)
 
         switch entry.compressionMethod {
