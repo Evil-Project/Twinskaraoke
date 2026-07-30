@@ -236,10 +236,6 @@ final class AVEnginePlayback {
     private nonisolated static let constrainedMemoryThreshold: UInt64 = 4 * 1024 * 1024 * 1024
     private nonisolated static let constrainedTransitionTicksPerSecond: Double = 18
     private nonisolated static let defaultTransitionTicksPerSecond: Double = 24
-    private nonisolated static let crossfadeRampQueue = DispatchQueue(
-        label: "com.Mag1cByt3s.Twinskaraoke.crossfade-ramp",
-        qos: .userInteractive
-    )
 
     init() {
         let outputSampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
@@ -1009,7 +1005,9 @@ final class AVEnginePlayback {
                 let startMainVolume = self.crossfadeStartMainVol
                 let startVocalsVolume = self.crossfadeStartVocalsVol
                 let startInstrumentalVolume = self.crossfadeStartInstrumentalVol
-                let timer = DispatchSource.makeTimerSource(queue: Self.crossfadeRampQueue)
+                // AVEnginePlayback and its player nodes are main-actor
+                // isolated. Keep the ramp handler on that executor too.
+                let timer = DispatchSource.makeTimerSource(queue: .main)
                 timer.schedule(
                     deadline: .now() + playbackLeadTime,
                     repeating: Self.transitionTimerInterval,
@@ -1037,15 +1035,11 @@ final class AVEnginePlayback {
                     incomingNode.volume = max(0, inVolume)
                     guard t >= 1, !completionDispatched else { return }
                     completionDispatched = true
-                    DispatchQueue.main.async {
-                        MainActor.assumeIsolated {
-                            guard let self,
-                                  self.crossfadeRampGeneration == rampGeneration,
-                                  self.isCrossfading
-                            else { return }
-                            self.finalizeCrossfade()
-                        }
-                    }
+                    guard let self,
+                          self.crossfadeRampGeneration == rampGeneration,
+                          self.isCrossfading
+                    else { return }
+                    self.finalizeCrossfade()
                 }
                 self.crossfadeTimer = timer
                 timer.resume()

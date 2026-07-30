@@ -91,6 +91,34 @@ struct AVEnginePlaybackRegressionTests {
         engine.stop()
     }
 
+    @Test("Crossfade ramp stays on the audio engine actor")
+    func crossfadeRampUsesMainActor() async throws {
+        let sourceURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        let incomingURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: incomingURL)
+        }
+
+        let engine = AVEnginePlayback()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            engine.play(url: sourceURL, onReady: { continuation.resume() })
+        }
+
+        await confirmation("crossfade completes", expectedCount: 1) { completion in
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                engine.onCrossfadeCompleted = {
+                    completion()
+                    continuation.resume()
+                }
+                engine.beginCrossfade(url: incomingURL, duration: 0.5, ramp: .linear)
+            }
+        }
+
+        #expect(!engine.isCrossfading)
+        engine.stop()
+    }
+
     private func makeSilentWaveFile(duration: TimeInterval, sampleRate: Double) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("playback-regression-\(UUID().uuidString).wav")
