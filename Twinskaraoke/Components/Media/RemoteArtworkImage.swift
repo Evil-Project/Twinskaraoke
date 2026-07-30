@@ -121,6 +121,7 @@ struct RemoteArtworkImage: View {
     }
 
     private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
+    // 1. Guard check handles condition gating consistently up front
     guard url == failedURL, !loadFailed else { return }
 
     let safeURL = Self.redactedURLString(failedURL)
@@ -131,20 +132,20 @@ struct RemoteArtworkImage: View {
     ArtworkFailureBackoff.shared.recordFailure(failedURL)
     evictFailedImageCache(for: failedURL)
 
-    // Task closure correctly isolated to @MainActor
+    // 2. Task block cleanly isolated using standard MainActor syntax
     Task { @MainActor in
         self.loadFailed = true
         
-        // Handle background auto-retry cooldown safely
+        // 3. CodeRabbit Fix: Safe sleep wrapper to catch cancellation
         do {
             try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
         } catch {
-            // Reset flag on cancellation so image doesn't freeze indefinitely
+            // Reset flag on cancellation so the image doesn't stay frozen
             self.loadFailed = false
             return 
         }
         
-        // Clear failure state if still matching the same current URL
+        // 4. Reset failure flag if the user hasn't scrolled to a new URL
         if self.url == failedURL {
             self.loadFailed = false
         }
