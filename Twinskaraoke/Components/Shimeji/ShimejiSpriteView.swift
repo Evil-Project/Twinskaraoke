@@ -19,8 +19,17 @@ import SwiftUI
             let key = url.path as NSString
             if let cached = cache.object(forKey: key) { return cached }
             guard let image = UIImage(contentsOfFile: url.path) else { return nil }
-            cache.setObject(image, forKey: key)
+            cache.setObject(image, forKey: key, cost: cost(for: image))
             return image
+        }
+
+        /// Approximate in-memory footprint (bytes) of a decoded RGBA8 bitmap,
+        /// used so `totalCostLimit` reflects actual memory pressure.
+        private func cost(for image: UIImage) -> Int {
+            let pixelsWide = image.size.width * image.scale
+            let pixelsHigh = image.size.height * image.scale
+            let bytesPerPixel: CGFloat = 4
+            return Int(pixelsWide * pixelsHigh * bytesPerPixel)
         }
 
         func removeAll() {
