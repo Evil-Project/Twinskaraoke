@@ -306,22 +306,33 @@ final class TransitionCoordinator {
     }
 
     private func predownload(song: Song, from remoteURL: URL) async {
+        let session = PredownloadSession(
+            songID: song.id,
+            expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil,
+            remoteURL: remoteURL
+        )
+        // Register before starting so a concurrent reset()/beginPreparing() can
+        // always find this session to cancel it.
+        predownloadSession = session
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let session = PredownloadSession(
-                songID: song.id,
-                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil,
-                remoteURL: remoteURL
-            )
-            self.predownloadSession = session
             session.onCompletion = { [weak self] in
                 DebugLogger.log(
                     "Predownload finished for next transition track \(song.id)",
                     category: .playback
                 )
-                self?.predownloadSession = nil
+                // Identity check: a newer preparation may already have installed
+                // its own session, which this late completion must not clear.
+                if self?.predownloadSession === session {
+                    self?.predownloadSession = nil
+                }
                 continuation.resume()
             }
-            session.start(from: remoteURL)
+            // start() calls AudioCacheStore.playableMainURL, which can
+            // synchronously decompress a whole .nkz into a .wav — blocking file
+            // I/O that must never run on this @MainActor class's executor.
+            Task.detached(priority: .utility) {
+                session.start(from: remoteURL)
+            }
             if Task.isCancelled {
                 session.cancel()
             }
@@ -431,7 +442,18 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     }
 
     func start(from remoteURL: URL) {
-        self.remoteURL = remoteURL
+        // start() is dispatched off the main actor, so cancel() can win the
+        // race. Bail out rather than kicking off a download nobody awaits —
+        // cancel() has already resumed the continuation via finish().
+        stateLock.lock()
+        let alreadyCancelled = isCancelled
+        if !alreadyCancelled { self.remoteURL = remoteURL }
+        stateLock.unlock()
+        guard !alreadyCancelled else { return }
+
+        // The cache probe below can synchronously decompress a whole file, so
+        // it must run without the lock held — cancel() runs on the main actor
+        // and would block behind it.
         if AudioCacheStore.playableMainURL(for: songID, expectedRemoteURL: remoteURL, expectedDuration: expectedDuration) != nil {
             DebugLogger.log("Predownload cache hit for \(songID)", category: .playback)
             finish()
@@ -440,8 +462,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         DebugLogger.log("Predownload start for \(songID) from \(remoteURL.lastPathComponent)", category: .playback)
         try? FileManager.default.removeItem(at: partialURL)
         FileManager.default.createFile(atPath: partialURL.path, contents: nil)
-        fileHandle = try? FileHandle(forWritingTo: partialURL)
-        guard fileHandle != nil else {
+        guard let handle = try? FileHandle(forWritingTo: partialURL) else {
             try? FileManager.default.removeItem(at: partialURL)
             finish()
             return
@@ -452,9 +473,31 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 180
-        session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        task = session?.dataTask(with: remoteURL)
-        task?.resume()
+        let newSession = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        let newTask = newSession.dataTask(with: remoteURL)
+
+        // Re-check and publish atomically. cancel() may have run during the
+        // cache probe and file setup above, when session/task were still nil
+        // and it therefore had nothing to tear down — without this the
+        // download would start untracked and run to completion unobserved.
+        stateLock.lock()
+        if isCancelled {
+            stateLock.unlock()
+            newTask.cancel()
+            newSession.invalidateAndCancel()
+            handle.closeFile()
+            try? FileManager.default.removeItem(at: partialURL)
+            // cancel() already resumed the continuation via finish().
+            return
+        }
+        fileHandle = handle
+        session = newSession
+        task = newTask
+        stateLock.unlock()
+
+        // Safe outside the lock: a cancel() landing here sees the published
+        // task and cancels it, making this resume a no-op.
+        newTask.resume()
     }
 
     func cancel() {

@@ -38,13 +38,13 @@ struct SearchView: View {
                             .transition(.opacity)
                     } else if let errorMessage = viewModel.searchErrorMessage,
                               viewModel.results.isEmpty,
-                              !viewModel.searchText.isEmpty
+                              viewModel.hasActiveQuery
                     {
                         SearchErrorStateView(message: errorMessage) {
                             viewModel.retrySearch()
                         }
                         .transition(subtleStateTransition)
-                    } else if viewModel.results.isEmpty, !viewModel.searchText.isEmpty {
+                    } else if viewModel.results.isEmpty, viewModel.hasActiveQuery {
                         SearchNoResultsStateView(query: viewModel.searchText)
                             .transition(resultsEmptyTransition)
                     } else if viewModel.results.isEmpty {

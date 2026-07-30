@@ -38,6 +38,22 @@ class AudioManager: ObservableObject {
     @Published var playbackMode: PlaybackMode = .listLoop
     @Published var isShuffleOn = false
     @Published var volume: Double = AudioManager.storedVolume()
+    /// Live radio plays a stream straight from the network instead of going
+    /// through the download-then-play cache pipeline, and has no queue,
+    /// duration, or seekable position. Everything that assumes those is gated
+    /// on this.
+    @Published private(set) var isRadioMode = false
+    /// Bumped whenever the downloaded-audio cache gains or loses a file.
+    ///
+    /// The size itself is not published, because working it out means walking
+    /// the directory and almost nobody is looking. This is the cheap signal a
+    /// screen that *is* looking can watch, so a download finishing behind the
+    /// Account screen updates the figure on it instead of leaving it stale
+    /// until the listener navigates away and back.
+    @Published private(set) var cacheRevision = 0
+    /// Radio artwork comes from the station metadata, not from `Song`, which
+    /// carries only a synthetic ID for the current track.
+    private var radioArtworkURL: URL?
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
@@ -52,6 +68,13 @@ class AudioManager: ObservableObject {
     private var volumePersistWorkItem: DispatchWorkItem?
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
+    /// Identifies the tune-in a stream is being built for, so a station the
+    /// listener has already left behind can't adopt itself when it finishes
+    /// coming up on its own queue.
+    private var radioStreamToken: UUID?
+    /// Whether the playback session is up. A player told to play against an
+    /// inactive session just sits there, so every `play()` waits on this.
+    private var isSessionActive = false
     private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
@@ -143,7 +166,172 @@ class AudioManager: ObservableObject {
         prepareAndPlay()
     }
 
+    // MARK: - Live radio
+
+    func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        // Already tuned in: the track changed under us, not the station.
+        if isRadioMode, player != nil, currentSong?.id == song.id {
+            radioArtworkURL = artworkURL
+            currentSong = song
+            updateNowPlayingInfo()
+            return
+        }
+        cleanupPlayer()
+        downloadTask?.cancel()
+        downloadToken = nil
+        downloadTask = nil
+        cancellables.removeAll()
+        setupInterruptionHandler()
+
+        isRadioMode = true
+        radioArtworkURL = artworkURL
+        // A stream has no queue to advance through and no position to scrub.
+        queue = []
+        currentIndex = 0
+        currentTime = 0
+        duration = 0
+        currentSong = song
+        playbackRequested = true
+        isLoading = true
+        startRadioStream(url: streamURL)
+    }
+
+    /// Applies a metadata poll to the track already playing, without touching
+    /// the stream itself.
+    func updateRadioMetadata(song: Song, artworkURL: URL?) {
+        guard isRadioMode else { return }
+        radioArtworkURL = artworkURL
+        currentSong = song
+        updateNowPlayingInfo()
+    }
+
+    func stopRadio() {
+        guard isRadioMode else { return }
+        cleanupPlayer()
+        isRadioMode = false
+        radioArtworkURL = nil
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        currentSong = nil
+        currentTime = 0
+        duration = 0
+        updateNowPlayingInfo()
+    }
+
+    /// Brings the playback session up away from the main actor, then runs
+    /// `start` back on it.
+    ///
+    /// AVFoundation documents activation as "a synchronous (blocking)
+    /// operation" and warns against running it anywhere a long block is a
+    /// problem. On a watch the main actor is exactly that place: tuning the
+    /// radio stalled the whole app for a beat, right when it had the most
+    /// drawing to do. Once the session is up the hop is skipped, so play/pause
+    /// stays immediate.
+    private func activatePlaybackSession(then start: @escaping @MainActor () -> Void) {
+        if isSessionActive {
+            start()
+            return
+        }
+        Task.detached(priority: .userInitiated) {
+            let activated = Self.bringUpPlaybackSession()
+            await MainActor.run { [weak self] in
+                self?.isSessionActive = activated
+                start()
+            }
+        }
+    }
+
+    /// Starts a player away from the main actor.
+    ///
+    /// `play` is `NS_SWIFT_NONISOLATED` like the rest of AVPlayer's transport:
+    /// it is the call that actually opens the route, and the one worth keeping
+    /// off the actor that has to keep drawing while it happens.
+    private nonisolated static func startOffMainActor(_ player: AVPlayer) {
+        Task.detached(priority: .userInitiated) {
+            player.play()
+        }
+    }
+
+    private nonisolated static func bringUpPlaybackSession() -> Bool {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
+            try session.setActive(true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Opens the live stream without holding onto the main actor.
+    ///
+    /// AVFoundation marks every call in here `NS_SWIFT_NONISOLATED` — building
+    /// the item, building the player, starting it — so none of it belongs on
+    /// the main actor, and on a watch that is not a nicety. Opening a stream
+    /// goes out to the media daemon and back, and doing that from the main
+    /// actor is what froze the whole app for a beat the moment Listen Live was
+    /// tapped. The buffering spinner the radio screen already draws is free to
+    /// animate while this runs.
+    private func startRadioStream(url: URL) {
+        let token = UUID()
+        radioStreamToken = token
+        let startingVolume = Float(volume)
+        Task.detached(priority: .userInitiated) {
+            let playerItem = AVPlayerItem(url: url)
+            let player = AVPlayer(playerItem: playerItem)
+            player.volume = startingVolume
+            // A live stream is better served by waiting out a stall than by
+            // dropping back to the start of the buffer.
+            player.automaticallyWaitsToMinimizeStalling = true
+            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            let activated = Self.bringUpPlaybackSession()
+            let shouldStart = await MainActor.run { [weak self] () -> Bool in
+                guard let self, self.radioStreamToken == token else { return false }
+                self.isSessionActive = activated
+                self.adoptRadioPlayer(player, item: playerItem)
+                return self.playbackRequested
+            }
+            guard shouldStart else { return }
+            player.playImmediately(atRate: 1.0)
+        }
+    }
+
+    private func adoptRadioPlayer(_ player: AVPlayer, item playerItem: AVPlayerItem) {
+        self.player = player
+
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self else { return }
+                if status == .readyToPlay {
+                    // The session may still be coming up on its own queue; it
+                    // starts playback itself when it lands.
+                    if playbackRequested, isSessionActive {
+                        Self.startOffMainActor(player)
+                    }
+                    refreshPlaybackState()
+                    updateNowPlayingInfo()
+                } else if status == .failed {
+                    // No cache to fall back on and no next track to skip to:
+                    // surface it as stopped and let the listener retry.
+                    stopRadio()
+                }
+            }
+            .store(in: &playerCancellables)
+        player.publisher(for: \.timeControlStatus, options: [.initial, .new])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshPlaybackState()
+            }
+            .store(in: &playerCancellables)
+    }
+
     private func prepareAndPlay() {
+        // Any ordinary song leaves the station behind; this is the single
+        // funnel every play path goes through.
+        isRadioMode = false
+        radioArtworkURL = nil
         cleanupPlayer()
         currentTime = 0
         duration = 0
@@ -158,6 +346,9 @@ class AudioManager: ObservableObject {
             isLoading = false
             return
         }
+        // Every play path funnels through here, so recents are recorded once
+        // rather than at each of the four call sites that set `currentSong`.
+        RecentlyPlayedStore.shared.record(song)
         let localURL = localCacheURL(for: song.id)
         if FileManager.default.fileExists(atPath: localURL.path) {
             isLoading = true
@@ -179,27 +370,38 @@ class AudioManager: ObservableObject {
     private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
         let token = UUID()
         downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) {
-            [weak self] tempURL, response, error in
-            let responseAccepted = Self.acceptsAudioResponse(response)
-            DispatchQueue.main.async {
+        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { tempURL, response, error in
+            // URLSession deletes the downloaded file the moment this handler
+            // returns, so the header check and the move have to happen here
+            // rather than after a hop to the main queue. Doing them over there
+            // is what silenced every non-radio song on device: the file was
+            // already gone, so the header read failed and playback was dropped
+            // without a spinner, an error, or a sound.
+            let stored: Bool
+            if let tempURL, error == nil, Self.acceptsAudioResponse(response) {
+                stored = Self.storeDownloadedAudio(tempURL: tempURL, destinationURL: destinationURL)
+            } else {
+                if let tempURL {
+                    try? FileManager.default.removeItem(at: tempURL)
+                }
+                stored = false
+            }
+            DispatchQueue.main.async { [weak self] in
                 guard let self,
                       self.downloadToken == token,
                       self.currentSong?.id == song.id
                 else { return }
                 self.downloadToken = nil
                 self.downloadTask = nil
-                self.isLoading = false
-                guard let tempURL, error == nil else {
+                guard stored else {
+                    self.isLoading = false
                     self.playbackRequested = false
                     return
                 }
-                self.finishDownloadedPlayback(
-                    tempURL: tempURL,
-                    responseAccepted: responseAccepted,
-                    destinationURL: destinationURL,
-                    song: song
-                )
+                // `isLoading` stays set until the player takes over: validation
+                // is another async hop, and dropping the spinner here would
+                // flash the idle controls in between.
+                self.finishDownloadedPlayback(destinationURL: destinationURL, song: song)
             }
         }
         downloadTask?.resume()
@@ -210,12 +412,6 @@ class AudioManager: ObservableObject {
         // tear down any existing player and its observers so two players
         // never run at once and no orphaned observer keeps firing.
         cleanupPlayer()
-        do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback, mode: .default, policy: .longFormAudio
-            )
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
         let playerItem = AVPlayerItem(url: localURL)
         let player = AVPlayer(playerItem: playerItem)
         player.volume = Float(volume)
@@ -235,8 +431,10 @@ class AudioManager: ObservableObject {
             .sink { [weak self] status in
                 guard let self else { return }
                 if status == .readyToPlay {
-                    if playbackRequested {
-                        player.play()
+                    // The session may still be coming up on its own queue; it
+                    // starts playback itself when it lands.
+                    if playbackRequested, isSessionActive {
+                        Self.startOffMainActor(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -276,6 +474,18 @@ class AudioManager: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.playEnded()
             }
+        }
+        // Whichever of these lands second starts playback: the item may go
+        // ready before the session is up, or the other way round.
+        activatePlaybackSession { [weak self] in
+            guard let self,
+                  self.player === player,
+                  self.playbackRequested,
+                  playerItem.status == .readyToPlay
+            else { return }
+            Self.startOffMainActor(player)
+            self.refreshPlaybackState()
+            self.updateNowPlayingInfo()
         }
     }
 
@@ -325,6 +535,14 @@ class AudioManager: ObservableObject {
                 updateNowPlayingInfo()
                 return true
             }
+            // A dead radio player has nothing to restart from: there is no
+            // downloadable URL behind it, and `prepareAndPlay` would file the
+            // station's synthetic song into recently played.
+            if isRadioMode {
+                isPlaying = false
+                playbackRequested = false
+                return false
+            }
             // Pausing during the initial download cancelled it with nothing
             // in flight; restart the prepare/download pipeline instead of
             // dead-ending.
@@ -337,11 +555,13 @@ class AudioManager: ObservableObject {
             updateNowPlayingInfo()
             return false
         }
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
         playbackRequested = true
-        player.play()
+        activatePlaybackSession { [weak self] in
+            guard let self, self.player === player, self.playbackRequested else { return }
+            Self.startOffMainActor(player)
+            self.refreshPlaybackState()
+            self.updateNowPlayingInfo()
+        }
         refreshPlaybackState()
         updateNowPlayingInfo()
         return true
@@ -356,6 +576,7 @@ class AudioManager: ObservableObject {
     }
 
     func playNext() {
+        guard !isRadioMode else { return }
         guard !queue.isEmpty else { return }
         currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
         if isShuffleOn, queue.count > 1 {
@@ -372,6 +593,9 @@ class AudioManager: ObservableObject {
     }
 
     func playPrevious() {
+        // Seeking a live stream would drop back into the buffer rather than
+        // restart anything, and there is no queue behind it.
+        guard !isRadioMode else { return }
         if currentTime > 3.0 {
             player?.seek(to: .zero)
             return
@@ -423,6 +647,8 @@ class AudioManager: ObservableObject {
     }
 
     func seek(to time: Double) {
+        // A live stream has no meaningful position to seek to.
+        guard !isRadioMode else { return }
         player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
         updateNowPlayingInfo()
     }
@@ -458,6 +684,8 @@ class AudioManager: ObservableObject {
         // would otherwise leave the old player's status callbacks firing
         // against the replacement.
         playerCancellables.removeAll()
+        // Any stream still being built is for a station we have now left.
+        radioStreamToken = nil
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
             timeObserver = nil
@@ -466,8 +694,15 @@ class AudioManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             endTimeObserver = nil
         }
-        player?.pause()
-        player = nil
+        // Retiring a player reaches the media daemon the same way starting one
+        // does, and it happens on the way *into* the next track — so it is off
+        // the main actor too, holding the last reference until it is done.
+        if let retired = player {
+            player = nil
+            Task.detached(priority: .userInitiated) {
+                retired.pause()
+            }
+        }
     }
 
     private func localCacheURL(for songID: String) -> URL {
@@ -475,40 +710,30 @@ class AudioManager: ObservableObject {
         return AudioManager.audioCacheDir.appendingPathComponent("\(storageKey).mp3")
     }
 
-    private func finishDownloadedPlayback(
-        tempURL: URL,
-        responseAccepted: Bool,
-        destinationURL: URL,
-        song: Song
-    ) {
-        guard storeDownloadedAudio(
-            tempURL: tempURL,
-            responseAccepted: responseAccepted,
-            destinationURL: destinationURL
-        )
-        else {
-            playbackRequested = false
-            return
-        }
-        guard currentSong?.id == song.id else { return }
+    private func finishDownloadedPlayback(destinationURL: URL, song: Song) {
         validateCachedFile(at: destinationURL, expectedDuration: song.duration) { [weak self] valid in
             guard let self, currentSong?.id == song.id else { return }
             guard valid else {
                 try? FileManager.default.removeItem(at: destinationURL)
+                noteCacheChanged()
+                isLoading = false
                 playbackRequested = false
                 return
             }
             evictOldCacheFiles()
+            noteCacheChanged()
             setupPlayer(with: destinationURL)
         }
     }
 
-    private func storeDownloadedAudio(
+    /// Validates and files a finished download. Runs on URLSession's queue,
+    /// inside the completion handler, because that is the only window in which
+    /// `tempURL` still exists.
+    nonisolated static func storeDownloadedAudio(
         tempURL: URL,
-        responseAccepted: Bool,
         destinationURL: URL
     ) -> Bool {
-        guard responseAccepted, Self.hasValidAudioHeader(at: tempURL) else {
+        guard hasValidAudioHeader(at: tempURL) else {
             try? FileManager.default.removeItem(at: tempURL)
             return false
         }
@@ -573,6 +798,28 @@ class AudioManager: ObservableObject {
                 try? fm.removeItem(at: url)
             }
         }
+        noteCacheChanged()
+    }
+
+    /// Tells anyone displaying the cache that the figure they have is old.
+    private func noteCacheChanged() {
+        cacheRevision &+= 1
+    }
+
+    /// Bytes currently held by the downloaded-audio cache.
+    ///
+    /// Walks the directory on each call rather than tracking a running total:
+    /// eviction, playback and manual clearing all mutate it, and the only
+    /// caller is a settings screen the listener has to deliberately open.
+    nonisolated static func cacheSizeBytes(in directory: URL = audioCacheDir) -> Int64 {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return entries.reduce(into: Int64(0)) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            total += Int64(size)
+        }
     }
 
     private func validateCachedFile(
@@ -617,6 +864,7 @@ class AudioManager: ObservableObject {
                 return
             }
             try? FileManager.default.removeItem(at: cacheURL)
+            noteCacheChanged()
             guard let remoteURL = song.audioURL else {
                 isLoading = false
                 playbackRequested = false
@@ -636,6 +884,7 @@ class AudioManager: ObservableObject {
         let songID = song.id
         recoveringFromBrokenCache.insert(songID)
         try? FileManager.default.removeItem(at: playbackURL)
+        noteCacheChanged()
         cleanupPlayer()
         // As in prepareAndPlay, drop the dead player's Combine sinks; this
         // also drops the session handlers, so re-register them.
@@ -667,19 +916,24 @@ class AudioManager: ObservableObject {
             )
         else { return }
         // Oldest first; both budgets drop the least-recently-played files.
-        let sorted = files.sorted {
-            let d1 =
-                (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? .distantPast
-            let d2 =
-                (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                    ?? .distantPast
-            return d1 < d2
-        }
+        // Stat each file once up front rather than inside the comparator, which
+        // would re-hit the filesystem twice per comparison.
+        let keySet = Set(keys)
+        let sorted = files
+            .map { url -> (url: URL, date: Date, size: Int) in
+                let values = try? url.resourceValues(forKeys: keySet)
+                return (
+                    url: url,
+                    date: values?.contentModificationDate ?? .distantPast,
+                    size: values?.fileSize ?? 0
+                )
+            }
+            .sorted { $0.date < $1.date }
         var keptCount = 0
         var keptBytes = 0
-        for (index, file) in sorted.reversed().enumerated() {
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        for (index, entry) in sorted.reversed().enumerated() {
+            let file = entry.url
+            let size = entry.size
             if index == 0 || (keptCount < maxCount && keptBytes + size <= maxBytes) {
                 keptCount += 1
                 keptBytes += size
@@ -763,6 +1017,9 @@ class AudioManager: ObservableObject {
         else { return }
         switch type {
         case .began:
+            // The system takes the session away with the interruption, so the
+            // next resume has to bring it back up rather than assume it is there.
+            isSessionActive = false
             shouldResumeAfterInterruption = playbackRequested
             if playbackRequested {
                 pausePlayback(cancelDownload: false)
@@ -811,7 +1068,9 @@ class AudioManager: ObservableObject {
     /// Now Playing artwork served from the image cache the player view
     /// already warms; falls back to no artwork until the thumbnail arrives.
     private func nowPlayingArtwork(for song: Song) -> MPMediaItemArtwork? {
-        guard let url = song.thumbnailURL else { return nil }
+        // A radio track's `Song` is synthesised from station metadata and has
+        // no artwork path of its own.
+        guard let url = isRadioMode ? radioArtworkURL : song.thumbnailURL else { return nil }
         if let image = WatchImageCache.shared.cachedImage(for: url) {
             return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
         }

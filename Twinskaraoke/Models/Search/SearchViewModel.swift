@@ -81,6 +81,18 @@ final class PublicPlaylistsViewModel: ObservableObject {
         let token = requestToken
         Task { [weak self] in
             guard let self else { return }
+            // defer, not a trailing statement: the token guards below return
+            // from the whole closure, which would otherwise strand
+            // isLoadingMore at true and permanently block pagination.
+            //
+            // Only the request that still owns the token clears the flag. A
+            // superseded load-more clearing it would let pagination restart
+            // from stale playlists while the replacing fetch is still in
+            // flight. Whichever request is newest always matches, so the flag
+            // still cannot be stranded.
+            defer {
+                if token == requestToken { isLoadingMore = false }
+            }
             do {
                 let items = try await KaraokeAPIClient.publicPlaylists(
                     startIndex: startIndex,
@@ -100,7 +112,6 @@ final class PublicPlaylistsViewModel: ObservableObject {
                 // can retry instead of landing on a dead-end empty state.
                 canLoadMore = false
             }
-            isLoadingMore = false
         }
     }
 
@@ -533,12 +544,30 @@ final class SearchViewModel: ObservableObject {
     @Published var searchText = ""
     @Published var isSearching = false
     @Published var searchErrorMessage: String?
+
+    /// Whether the field holds a query the search pipeline would actually run.
+    /// Views must branch on this rather than `!searchText.isEmpty`: the
+    /// pipeline trims before searching, so whitespace-only input clears the
+    /// results, and a raw emptiness check would then show a "no results" state
+    /// for a query that was never issued instead of the browse categories.
+    ///
+    /// Deliberately a derived value: `searchText` is two-way bound to the
+    /// search field, so trimming it at publish time would swallow spaces as
+    /// the user types them.
+    var hasActiveQuery: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private var queryToken: Int = 0
     private var searchTask: Task<Void, Never>?
 
     init() {
         $searchText
+            // Trim before removeDuplicates so edits that only change
+            // surrounding whitespace ("abc" -> "abc ") don't refire an
+            // identical search request.
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .removeDuplicates()
             .sink { [weak self] query in

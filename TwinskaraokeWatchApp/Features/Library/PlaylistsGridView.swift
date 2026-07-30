@@ -1,7 +1,45 @@
 import SwiftUI
 
+/// A playlist to push, carried by value.
+///
+/// Both grids push the same screen, and a stack that already routes by value
+/// cannot also host `NavigationLink(destination:)` — the view-based links go
+/// inert. Curated and user playlists share one route so there is one place
+/// where that can drift.
+struct PlaylistRoute: Hashable {
+    let id: String
+    let name: String
+    /// The songs the list endpoint already handed over, for personal playlists.
+    ///
+    /// `/api/user/playlists` returns each playlist with its songs inline, and
+    /// the curated detail endpoint the watch would otherwise ask has never
+    /// heard of a personal playlist ID. Dropping them here is what made your
+    /// own playlists open onto an empty state.
+    let fallbackSongs: [Song]
+
+    init(playlist: Playlist) {
+        id = playlist.id
+        name = playlist.name
+        fallbackSongs = playlist.isPersonal ? playlist.songListDTOs ?? [] : []
+    }
+
+    // A route is the playlist it points at, not the snapshot of songs it
+    // happened to be built with: two pushes of the same playlist must land on
+    // the same destination even if one was built before a refresh.
+    static func == (lhs: PlaylistRoute, rhs: PlaylistRoute) -> Bool {
+        lhs.id == rhs.id && lhs.name == rhs.name
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+    }
+}
+
 struct PlaylistsGridView: View {
     @StateObject var viewModel = PlaylistsViewModel()
+    @StateObject private var userViewModel = UserPlaylistsViewModel()
+    @ObservedObject private var auth = WatchAuthManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     let columns = [
@@ -26,78 +64,187 @@ struct PlaylistsGridView: View {
 
     var body: some View {
         ScrollView {
-            if viewModel.isLoading, viewModel.playlists.isEmpty {
-                VStack(spacing: 10) {
-                    ProgressView()
-                    Text("Loading Playlists")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 14) {
+                if showsUserPlaylists {
+                    userPlaylistsSection
+                } else if showsUserPlaylistsError {
+                    userPlaylistsErrorSection
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 24)
-            } else if let loadError = viewModel.loadError, viewModel.playlists.isEmpty {
-                WatchLoadErrorState(
-                    title: "Couldn't Load Playlists",
-                    message: loadError,
-                    retryAction: { viewModel.fetchMusic() }
-                )
-                .padding(.horizontal, 10)
-                .padding(.top, 16)
-            } else if viewModel.playlists.isEmpty {
-                WatchEmptyState(
-                    systemImage: "music.note.list",
-                    title: "No Playlists",
-                    message: "Curated playlists will appear here."
-                )
-                .padding(.horizontal, 10)
-                .padding(.top, 16)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    WatchPlaylistsHeader(
-                        playlistCount: viewModel.playlists.count,
-                        songCount: totalSongCount,
-                        isLoading: viewModel.isLoading
-                    )
-
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(viewModel.playlists) { playlist in
-                            NavigationLink(
-                                destination: PlaylistDetailView(
-                                    playlistID: playlist.id, playlistName: playlist.name
-                                )
-                            ) {
-                                WatchPlaylistCard(playlist: playlist)
-                            }
-                            .buttonStyle(.watchPressable)
-                            .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
-                            .accessibilityLabel(playlist.name)
-                            .accessibilityValue(playlist.songCountText)
-                            .accessibilityHint("Opens this playlist.")
-                        }
-                    }
-                    .animation(listAnimation, value: viewModel.playlists.map(\.id))
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+                curatedContent
             }
         }
         .navigationTitle("Playlists")
+        .navigationDestination(for: PlaylistRoute.self) { route in
+            PlaylistDetailView(
+                playlistID: route.id,
+                playlistName: route.name,
+                fallbackSongs: route.fallbackSongs
+            )
+        }
         .animation(listAnimation, value: viewModel.playlists.count)
+        .animation(listAnimation, value: userViewModel.playlists.count)
         .animation(loadingAnimation, value: viewModel.isLoading)
         .onAppear {
             viewModel.fetchMusic()
+            userViewModel.fetch()
             prefetchArtwork()
         }
         .compatibleOnChange(of: viewModel.playlists.map(\.id)) { _ in
             prefetchArtwork()
+        }
+        .compatibleOnChange(of: userViewModel.playlists.map(\.id)) { _ in
+            prefetchArtwork()
+        }
+        .compatibleOnChange(of: auth.linkState) { state in
+            // Follow the phone in and out of a session so another account's
+            // playlists never linger on screen.
+            if state == .signedIn {
+                userViewModel.fetch(force: true)
+            } else {
+                userViewModel.reset()
+            }
         }
         .onDisappear {
             WatchArtworkPrefetcher.shared.cancel(reason: "playlistsGrid")
         }
     }
 
+    private var showsUserPlaylists: Bool {
+        auth.linkState == .signedIn && !userViewModel.playlists.isEmpty
+    }
+
+    /// A signed-in listener whose own playlists failed to load used to get the
+    /// curated grid and nothing else — indistinguishable from having no
+    /// playlists, and with no way to ask again.
+    private var showsUserPlaylistsError: Bool {
+        auth.linkState == .signedIn
+            && userViewModel.playlists.isEmpty
+            && userViewModel.loadError != nil
+    }
+
+    /// One row rather than `WatchLoadErrorState`: the curated playlists below
+    /// did load, and this is a note about the missing section, not the screen.
+    private var userPlaylistsErrorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Yours")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.leading, 4)
+
+            HStack(spacing: 9) {
+                Image(systemName: "exclamationmark.icloud")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+
+                Text(userViewModel.loadError ?? "Check your connection and try again.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 4)
+            }
+
+            Button("Retry") {
+                userViewModel.fetch(force: true)
+                WatchHaptic.play(.click)
+            }
+            .buttonStyle(.watchPressable)
+            .font(.system(size: 12, weight: .semibold))
+            .disabled(userViewModel.isLoading)
+            .accessibilityHint("Loads your playlists again.")
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.secondary.opacity(0.1))
+        )
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var userPlaylistsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Yours")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.leading, 4)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(userViewModel.playlists) { playlist in
+                    NavigationLink(value: PlaylistRoute(playlist: playlist)) {
+                        WatchPlaylistCard(playlist: playlist)
+                    }
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel(playlist.name)
+                    .accessibilityValue(playlist.songCountText)
+                    .accessibilityHint("Opens your playlist.")
+                }
+            }
+            .animation(listAnimation, value: userViewModel.playlists.map(\.id))
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var curatedContent: some View {
+        if viewModel.isLoading, viewModel.playlists.isEmpty {
+            VStack(spacing: 10) {
+                ProgressView()
+                Text("Loading Playlists")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 24)
+        } else if let loadError = viewModel.loadError, viewModel.playlists.isEmpty {
+            WatchLoadErrorState(
+                title: "Couldn't Load Playlists",
+                message: loadError,
+                retryAction: { viewModel.fetchMusic() }
+            )
+            .padding(.horizontal, 10)
+            .padding(.top, 16)
+        } else if viewModel.playlists.isEmpty {
+            WatchEmptyState(
+                systemImage: "music.note.list",
+                title: "No Playlists",
+                message: "Curated playlists will appear here."
+            )
+            .padding(.horizontal, 10)
+            .padding(.top, 16)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                WatchPlaylistsHeader(
+                    playlistCount: viewModel.playlists.count,
+                    songCount: totalSongCount,
+                    isLoading: viewModel.isLoading
+                )
+
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(viewModel.playlists) { playlist in
+                        NavigationLink(value: PlaylistRoute(playlist: playlist)) {
+                            WatchPlaylistCard(playlist: playlist)
+                        }
+                        .buttonStyle(.watchPressable)
+                        .accessibilityLabel(playlist.name)
+                        .accessibilityValue(playlist.songCountText)
+                        .accessibilityHint("Opens this playlist.")
+                    }
+                }
+                .animation(listAnimation, value: viewModel.playlists.map(\.id))
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+        }
+    }
+
     private func prefetchArtwork() {
-        let urls = viewModel.playlists.compactMap { $0.thumbnailURL ?? $0.imageURL }
+        let playlists = userViewModel.playlists + viewModel.playlists
+        let urls = playlists.compactMap { $0.thumbnailURL ?? $0.imageURL }
         WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "playlistsGrid")
     }
 
@@ -154,7 +301,9 @@ private struct WatchPlaylistsHeader: View {
     }
 }
 
-private struct WatchPlaylistCard: View {
+/// Internal rather than file-private so the signed-in listener's own playlists
+/// render identically to the curated ones.
+struct WatchPlaylistCard: View {
     let playlist: Playlist
 
     var body: some View {

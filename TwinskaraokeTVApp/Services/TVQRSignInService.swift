@@ -230,7 +230,12 @@ nonisolated enum TVQRSignIn {
 /// OS versions do parse a short fraction like `…:13.5+00:00`, but that leniency
 /// isn't contractual and this formatter is already known to differ across them.
 /// A second pass drops the fraction entirely in case the server stops sending it.
-private func parseTimestamp(_ raw: String) -> Date? {
+/// `nonisolated` is required, not cosmetic: the target builds with
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so this would otherwise be
+/// implicitly `@MainActor` while being called from `Decodable.init(from:)` —
+/// which `JSONDecoder` runs off the main thread. The body is pure (its
+/// formatters are local), so there is nothing to isolate.
+private nonisolated func parseTimestamp(_ raw: String) -> Date? {
     let withFraction = ISO8601DateFormatter()
     withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let plain = ISO8601DateFormatter()
