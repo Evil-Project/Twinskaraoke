@@ -11,6 +11,10 @@ struct PlayerAmbientBackground: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var palette: ArtworkPalette = .placeholder
     @State private var paletteSourceURL: URL?
+    /// Breath time already run before the current stretch of playback.
+    @State private var breathElapsed: TimeInterval = 0
+    /// When the current stretch of playback began.
+    @State private var breathResumedAt = Date()
 
     private var shouldAnimateAmbient: Bool {
         isPlaying && !reduceMotion
@@ -24,7 +28,13 @@ struct PlayerAmbientBackground: View {
     /// it *by the current insets*, so anything that moves those insets moves this
     /// backdrop's edges with them. Overscanning keeps the painted area past every
     /// edge whatever the insets do; the host clips the overflow.
-    private static let safeAreaOverscan: CGFloat = 160
+    ///
+    /// Sized against the insets themselves rather than the screen: the largest
+    /// this has to clear is one safe-area inset, ~67pt at the extreme on device,
+    /// so this leaves comfortable headroom for taller hardware. Scaling it to the
+    /// display would overscan an iPad far past anything the insets can reach and
+    /// pay for it in blurred area on every frame.
+    private static let safeAreaOverscan: CGFloat = 96
 
     var body: some View {
         ZStack {
@@ -47,6 +57,22 @@ struct PlayerAmbientBackground: View {
         .transaction { $0.animation = nil }
         .onAppear(perform: loadPalette)
         .onChange(of: artworkURL) { loadPalette() }
+        .onChange(of: shouldAnimateAmbient) { _, animating in
+            // Bank the time already breathed when stopping, and restart the
+            // clock when resuming, so the breath picks up where it left off
+            // rather than jumping to wherever wall-clock time has reached.
+            if animating {
+                breathResumedAt = Date()
+            } else {
+                breathElapsed += Date().timeIntervalSince(breathResumedAt)
+            }
+        }
+    }
+
+    /// How far the breath has run, in seconds, across every stretch of playback.
+    private func breathDuration(at date: Date) -> TimeInterval {
+        guard shouldAnimateAmbient else { return breathElapsed }
+        return breathElapsed + max(0, date.timeIntervalSince(breathResumedAt))
     }
 
     /// Progress through the breath, 0...1 and back, eased at the turns.
@@ -58,11 +84,12 @@ struct PlayerAmbientBackground: View {
     /// backdrop's top edge and oscillated it between the real inset and zero for
     /// as long as the view lived, sliding the artwork off screen and exposing the
     /// layer beneath. Scoping it with `.animation(_:value:)` was not enough:
-    /// that modifier still animates everything in its subtree. A clock produces
-    /// the same motion with no transaction to leak, and `paused:` stops it
-    /// without leaving anything running.
-    private static func breathingPhase(at date: Date) -> Double {
-        let cycle = date.timeIntervalSinceReferenceDate
+    /// that modifier still animates everything in its subtree, so keying one on
+    /// the play/pause flag would re-arm the same leak on the same trigger. A
+    /// clock produces the same motion with no transaction to leak, and `paused:`
+    /// stops it without leaving anything running.
+    private static func breathingPhase(elapsed: TimeInterval) -> Double {
+        let cycle = elapsed
             .truncatingRemainder(dividingBy: breathingPeriod) / breathingPeriod
         return (1 - cos(2 * .pi * cycle)) / 2
     }
@@ -97,9 +124,9 @@ struct PlayerAmbientBackground: View {
                                 paused: !shouldAnimateAmbient
                             )
                         ) { context in
-                            let phase = shouldAnimateAmbient
-                                ? Self.breathingPhase(at: context.date)
-                                : 0
+                            let phase = Self.breathingPhase(
+                                elapsed: breathDuration(at: context.date)
+                            )
                             image
                                 .resizable()
                                 .interpolation(.low)
