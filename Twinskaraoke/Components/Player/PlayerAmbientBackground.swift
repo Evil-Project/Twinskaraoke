@@ -11,11 +11,20 @@ struct PlayerAmbientBackground: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var palette: ArtworkPalette = .placeholder
     @State private var paletteSourceURL: URL?
-    @State private var animationPhase: Bool = false
 
     private var shouldAnimateAmbient: Bool {
-        animationPhase && isPlaying && !reduceMotion
+        isPlaying && !reduceMotion
     }
+
+    /// Seconds for one full out-and-back breath.
+    private static let breathingPeriod: TimeInterval = 12
+
+    /// Defence in depth against the backdrop's extent depending on safe-area
+    /// insets. `.ignoresSafeArea()` does not pin a view to the screen, it expands
+    /// it *by the current insets*, so anything that moves those insets moves this
+    /// backdrop's edges with them. Overscanning keeps the painted area past every
+    /// edge whatever the insets do; the host clips the overflow.
+    private static let safeAreaOverscan: CGFloat = 160
 
     var body: some View {
         ZStack {
@@ -24,50 +33,38 @@ struct PlayerAmbientBackground: View {
             colorWashLayer
             vignetteLayer
         }
+        .padding(-Self.safeAreaOverscan)
         .ignoresSafeArea()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: artworkURL)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: palette)
-        .onAppear {
-            loadPalette()
-            if isPlaying { startBreathing() }
-        }
-        .onDisappear(perform: stopBreathing)
+        // A `withAnimation` transaction applies to every animatable change in
+        // the update, not just the state it wraps, so a `repeatForever` started
+        // anywhere in the app could latch onto this backdrop's geometry and
+        // oscillate it forever. This is a decorative full-bleed layer that
+        // should never inherit motion from elsewhere: drop any ambient
+        // animation at the boundary. The `.animation(_:value:)` modifiers above
+        // sit inside it and still drive the backdrop's own transitions.
+        .transaction { $0.animation = nil }
+        .onAppear(perform: loadPalette)
         .onChange(of: artworkURL) { loadPalette() }
-        .onChange(of: isPlaying) { _, playing in
-            if playing {
-                startBreathing()
-            } else {
-                stopBreathing()
-            }
-        }
-        .onChange(of: reduceMotion) { _, reduceMotion in
-            if reduceMotion {
-                withAnimation(nil) {
-                    animationPhase = false
-                }
-            } else if isPlaying {
-                startBreathing()
-            }
-        }
     }
 
-    private func startBreathing() {
-        guard !reduceMotion else {
-            animationPhase = false
-            return
-        }
-        withAnimation(
-            .easeInOut(duration: 6.0)
-                .repeatForever(autoreverses: true)
-        ) {
-            animationPhase = true
-        }
-    }
-
-    private func stopBreathing() {
-        withAnimation(nil) {
-            animationPhase = false
-        }
+    /// Progress through the breath, 0...1 and back, eased at the turns.
+    ///
+    /// Driven off the clock rather than a `repeatForever` animation. An endless
+    /// SwiftUI animation is a transaction, and a transaction applies to every
+    /// animatable change in its subtree — including the safe-area expansion that
+    /// sizes this backdrop. Started that way, the breath latched onto the
+    /// backdrop's top edge and oscillated it between the real inset and zero for
+    /// as long as the view lived, sliding the artwork off screen and exposing the
+    /// layer beneath. Scoping it with `.animation(_:value:)` was not enough:
+    /// that modifier still animates everything in its subtree. A clock produces
+    /// the same motion with no transaction to leak, and `paused:` stops it
+    /// without leaving anything running.
+    private static func breathingPhase(at date: Date) -> Double {
+        let cycle = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: breathingPeriod) / breathingPeriod
+        return (1 - cos(2 * .pi * cycle)) / 2
     }
 
     @ViewBuilder
@@ -77,32 +74,59 @@ struct PlayerAmbientBackground: View {
             // 32px server-blurred variant instead of the full card image:
             // far less decode, memory and GPU work for the same visual result.
             let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
-            GeometryReader { geo in
-                WebImage(
-                    url: backdropURL,
-                    options: ImageCacheConfig.defaultOptions,
-                    context: ImageCacheConfig.visibleImageContext
-                ) { image in
-                    image
-                        .resizable()
-                        .interpolation(.low)
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .blur(radius: runtimeBlurRadius)
-                        .saturation(1.05)
-                        .drawingGroup()
-                        .scaleEffect(shouldAnimateAmbient ? 1.28 : 1.22)
-                        .offset(
-                            x: shouldAnimateAmbient ? 8 : -8,
-                            y: shouldAnimateAmbient ? -6 : 6
-                        )
-                        .clipped()
+            // The image goes in an `overlay` so it cannot influence the size of
+            // anything above it. `.aspectRatio(.fill)` always resolves to a size
+            // that *covers* the proposal, and `.frame(maxWidth:maxHeight:)` does
+            // not clamp a child that came back larger — it adopts the child's
+            // size. That let the image inflate the frame, the frame inflate the
+            // ZStack, and the backdrop end up laid out at the artwork's aspect
+            // ratio instead of the screen's, so it no longer covered the display.
+            // Overlay content never feeds size back to its parent, which keeps the
+            // clamp without an explicit numeric frame for an animation to
+            // interpolate.
+            Color.clear
+                .overlay {
+                    WebImage(
+                        url: backdropURL,
+                        options: ImageCacheConfig.defaultOptions,
+                        context: ImageCacheConfig.visibleImageContext
+                    ) { image in
+                        TimelineView(
+                            .animation(
+                                minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                                paused: !shouldAnimateAmbient
+                            )
+                        ) { context in
+                            let phase = shouldAnimateAmbient
+                                ? Self.breathingPhase(at: context.date)
+                                : 0
+                            image
+                                .resizable()
+                                .interpolation(.low)
+                                .aspectRatio(contentMode: .fill)
+                                .blur(radius: runtimeBlurRadius)
+                                .saturation(1.05)
+                                // Deliberately no `.drawingGroup()`. It bought
+                                // nothing here — the source is the 32px
+                                // server-blurred variant above, so there is no
+                                // costly rasterization worth caching — while
+                                // forcing a full-screen offscreen pass on every
+                                // re-render, and this view re-renders constantly
+                                // because `audioManager` republishes during
+                                // playback. `.blur` on its own is a hardware
+                                // filter and needs no offscreen buffer.
+                                .scaleEffect(1.22 + 0.06 * phase)
+                                .offset(
+                                    x: -8 + 16 * phase,
+                                    y: 6 - 12 * phase
+                                )
+                        }
                         .transition(.opacity)
-                } placeholder: {
-                    fallbackGradient
-                        .frame(width: geo.size.width, height: geo.size.height)
+                    } placeholder: {
+                        fallbackGradient
+                    }
                 }
-            }
+                .clipped()
         } else {
             fallbackGradient
         }
