@@ -10,6 +10,10 @@ struct TwinskaraokeTVApp: App {
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .tint(.appAccent)
                 .preferredColorScheme(.dark)
+                // Same Experiments-gated system as iOS; on tvOS they just
+                // walk/climb/sit since there's no remote-friendly way to
+                // drag one around (see ShimejiSpriteView).
+                .shimejiSession()
         }
     }
 

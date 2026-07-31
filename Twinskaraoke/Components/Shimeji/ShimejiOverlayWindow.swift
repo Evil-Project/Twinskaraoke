@@ -102,7 +102,15 @@ import SwiftUI
 
         @objc private func refreshTrackedBounds() {
             guard let scene = trackedScene else { return }
-            ShimejiEngine.shared.bounds = scene.effectiveGeometry.coordinateSpace.bounds
+            #if os(iOS)
+                // `effectiveGeometry` accounts for Stage Manager/multi-window
+                // resizing on iPadOS; it's iOS-only API, and tvOS has no
+                // equivalent concept (the screen is just the screen), so it
+                // falls back to the scene's own coordinate space there.
+                ShimejiEngine.shared.bounds = scene.effectiveGeometry.coordinateSpace.bounds
+            #else
+                ShimejiEngine.shared.bounds = scene.coordinateSpace.bounds
+            #endif
             ShimejiEngine.shared.miniPlayerY = ShimejiMiniPlayerTracker.shared.topEdgeY
             ShimejiEngine.shared.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: window)
         }

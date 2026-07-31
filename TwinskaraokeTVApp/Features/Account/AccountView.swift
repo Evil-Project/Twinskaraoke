@@ -10,6 +10,15 @@ struct AccountView: View {
     @State private var usePasswordSignIn = false
     @FocusState private var focusedField: LoginField?
 
+    // Same UserDefaults keys as the iOS app's Settings → Experiments, so
+    // turning it on there and here stay in sync if the two ever share a
+    // device profile— not that they can today, but there's no reason for
+    // the keys to diverge.
+    @AppStorage("nk.experimentsEnabled") private var experimentsEnabled: Bool = false
+    @AppStorage("nk.experimentalShimejiEnabled") private var shimejiEnabled: Bool = false
+    @ObservedObject private var shimejiResources = ShimejiResourceManager.shared
+    @State private var showExperimentsAlert = false
+
     private enum LoginField: Hashable {
         case username
         case password
@@ -39,6 +48,14 @@ struct AccountView: View {
             }
         } message: {
             Text("You’ll need to sign in again to access your account.")
+        }
+        .alert("Turn On Experiments?", isPresented: $showExperimentsAlert) {
+            Button("Enable", role: .destructive) {
+                experimentsEnabled = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Experiments are early, unfinished features. They may be unstable, change without notice, or be removed in a future update.")
         }
     }
 
@@ -186,9 +203,86 @@ struct AccountView: View {
                     }
                 }
                 .focusSection()
+
+                experimentalSection
             }
             .padding(.horizontal, 90)
             .padding(.vertical, 52)
+        }
+    }
+
+    private var experimentalSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            TVSectionHeader(
+                title: "Experimental",
+                subtitle: "Early, in-progress features"
+            )
+
+            VStack(spacing: 2) {
+                TVToggleRow(
+                    title: "Enable Experiments",
+                    subtitle: "Turn on to access early, in-progress features before they're finished.",
+                    isOn: experimentsToggleBinding
+                )
+
+                if experimentsEnabled {
+                    TVToggleRow(
+                        title: "Shimeji",
+                        subtitle: shimejiSubtitle,
+                        isOn: shimejiToggleBinding
+                    )
+                }
+            }
+            .focusSection()
+        }
+    }
+
+    private var experimentsToggleBinding: Binding<Bool> {
+        Binding(
+            get: { experimentsEnabled },
+            set: { newValue in
+                if newValue {
+                    showExperimentsAlert = true
+                } else {
+                    experimentsEnabled = false
+                    shimejiEnabled = false
+                }
+            }
+        )
+    }
+
+    private var shimejiToggleBinding: Binding<Bool> {
+        Binding(
+            get: { shimejiEnabled },
+            set: { newValue in
+                shimejiEnabled = newValue
+                if newValue {
+                    if case .notDownloaded = shimejiResources.state {
+                        shimejiResources.download()
+                    }
+                } else {
+                    shimejiResources.cancelDownload()
+                }
+            }
+        )
+    }
+
+    /// Same download/extract lifecycle as iOS's `ShimejiSettingsView`, just
+    /// summarized inline here instead of pushing to its own screen — tvOS
+    /// has nothing else to configure for it (no drag-to-throw to fine-tune,
+    /// no character list worth a dedicated remote-navigable screen yet).
+    private var shimejiSubtitle: String {
+        switch shimejiResources.state {
+        case .notDownloaded:
+            "Tiny animated characters that wander the screen. Downloads a resource pack the first time you turn this on."
+        case let .downloading(progress):
+            "Downloading… \(Int(progress * 100))%"
+        case .extracting:
+            "Setting up…"
+        case .ready:
+            "They walk, climb, and sit around — tap to turn them off."
+        case let .failed(message):
+            "Couldn't download: \(message)"
         }
     }
 
@@ -332,6 +426,47 @@ struct AccountView: View {
 
     private static func bytes(_ count: Int64) -> String {
         byteFormatter.string(fromByteCount: count)
+    }
+}
+
+/// Full-width settings row for a single boolean, styled like `TVSongRow`
+/// since a stock SwiftUI `Toggle` doesn't get the same click-to-flip remote
+/// interaction tvOS users expect from a focusable row — selecting anywhere
+/// on the row flips it, same as tapping a list row elsewhere in this app.
+private struct TVToggleRow: View {
+    let title: String
+    var subtitle: String?
+    @Binding var isOn: Bool
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.primary.opacity(0.6))
+                    }
+                }
+                Spacer(minLength: 12)
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(isOn ? Color.appAccent : Color.primary.opacity(0.35))
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focused($isFocused)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
     }
 }
 

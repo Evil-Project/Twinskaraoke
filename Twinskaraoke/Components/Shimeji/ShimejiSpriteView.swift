@@ -31,7 +31,9 @@ import SwiftUI
     struct ShimejiSpriteView: View {
         @ObservedObject var instance: ShimejiInstance
         @ObservedObject private var resources = ShimejiResourceManager.shared
-        @GestureState private var dragTranslation: CGSize = .zero
+        #if os(iOS)
+            @GestureState private var dragTranslation: CGSize = .zero
+        #endif
 
         static func invalidateImageCache() {
             ShimejiImageCache.shared.removeAll()
@@ -50,7 +52,14 @@ import SwiftUI
                 // not the center, land on the floor surface.
                 .position(x: instance.position.x, y: instance.position.y - ShimejiEngine.displaySize / 2)
                 .accessibilityHidden(true)
-                .gesture(dragGesture)
+                #if os(iOS)
+                    // No drag-to-throw on tvOS: the Siri Remote's focus/click
+                    // model has no equivalent of dragging a fingertip across
+                    // the screen, and SwiftUI's DragGesture isn't meant for
+                    // that surface. They still walk, climb, and sit there —
+                    // just as something to watch rather than play with.
+                    .gesture(dragGesture)
+                #endif
         }
 
         private var currentImage: Image {
@@ -64,17 +73,19 @@ import SwiftUI
             return Image(systemName: "circle.fill")
         }
 
-        private var dragGesture: some Gesture {
-            DragGesture(coordinateSpace: .global)
-                .onChanged { value in
-                    if !instance.isDragHeld {
-                        ShimejiEngine.shared.beginDrag(instance)
+        #if os(iOS)
+            private var dragGesture: some Gesture {
+                DragGesture(coordinateSpace: .global)
+                    .onChanged { value in
+                        if !instance.isDragHeld {
+                            ShimejiEngine.shared.beginDrag(instance)
+                        }
+                        ShimejiEngine.shared.updateDrag(instance, to: value.location)
                     }
-                    ShimejiEngine.shared.updateDrag(instance, to: value.location)
-                }
-                .onEnded { _ in
-                    ShimejiEngine.shared.endDrag(instance)
-                }
-        }
+                    .onEnded { _ in
+                        ShimejiEngine.shared.endDrag(instance)
+                    }
+            }
+        #endif
     }
 #endif

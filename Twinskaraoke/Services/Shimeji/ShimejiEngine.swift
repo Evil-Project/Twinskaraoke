@@ -145,27 +145,39 @@ final class ShimejiEngine: NSObject, ObservableObject {
 
     override private init() {
         super.init()
-        observePlaybackState()
+        #if os(iOS)
+            observePlaybackState()
+        #endif
     }
 
-    private func observePlaybackState() {
-        AudioPlayerManager.shared.$currentSong
-            .map { $0 != nil }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] hasSong in
-                self?.hasMiniPlayer = hasSong
-            }
-            .store(in: &cancellables)
+    // `AudioPlayerManager` and `PopupPresentationState` are iOS-only (the mini
+    // player bar they describe doesn't exist on tvOS, which has its own
+    // separate `AudioManager` and a dedicated Now Playing tab instead of a
+    // popup). `hasMiniPlayer`/`isNowPlayingOpen` above stay declared for every
+    // platform so the rest of the engine (`currentFloorY`, etc.) doesn't need
+    // its own `#if os(iOS)` branches — they just never flip true on tvOS,
+    // which is exactly the right behavior there (ground is always the tab bar
+    // or screen bottom).
+    #if os(iOS)
+        private func observePlaybackState() {
+            AudioPlayerManager.shared.$currentSong
+                .map { $0 != nil }
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] hasSong in
+                    self?.hasMiniPlayer = hasSong
+                }
+                .store(in: &cancellables)
 
-        PopupPresentationState.shared.$isExpanded
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isExpanded in
-                self?.isNowPlayingOpen = isExpanded
-            }
-            .store(in: &cancellables)
-    }
+            PopupPresentationState.shared.$isExpanded
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] isExpanded in
+                    self?.isNowPlayingOpen = isExpanded
+                }
+                .store(in: &cancellables)
+        }
+    #endif
 
     // MARK: - Lifecycle
 
