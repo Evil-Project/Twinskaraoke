@@ -1,36 +1,46 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class LibrarySongsViewModel: ObservableObject {
-    @Published var songs: [Song] = [] {
+@Observable
+final class LibrarySongsViewModel {
+    var songs: [Song] = [] {
         didSet { songsGeneration &+= 1 }
     }
-    @Published var isLoading = false
-    @Published var isLoadingMore = false
-    @Published var sort: LibrarySongSort = .recentlyAdded {
+    var isLoading = false
+    var isLoadingMore = false
+    var sort: LibrarySongSort = .recentlyAdded {
         didSet { rebuildDisplayedSongs() }
     }
-    @Published var searchText = ""
-    @Published private(set) var displayedSongs: [Song] = []
-    @Published private(set) var loadFailed = false
+    var searchText = "" {
+        didSet { scheduleDisplayedSongsRebuild() }
+    }
+    private(set) var displayedSongs: [Song] = []
+    private(set) var loadFailed = false
     private var hasLoaded = false
     private var canLoadMore = true
     private var page = 1
     private var requestToken = 0
     private var isReplacing = false
-    private var activeTask: Task<Void, Never>?
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var lastRebuiltSearchText = ""
     private var songsGeneration: UInt64 = 0
     private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
     private let pageSize = 40
 
-    init() {
-        $searchText
-            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.rebuildDisplayedSongs() }
-            .store(in: &cancellables)
+    /// Replaces `$searchText.debounce(200ms).removeDuplicates()`. Filtering a
+    /// large library runs localized comparisons per song, so keystrokes must
+    /// still coalesce.
+    private func scheduleDisplayedSongsRebuild() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, let self else { return }
+            guard searchText != lastRebuiltSearchText else { return }
+            lastRebuiltSearchText = searchText
+            rebuildDisplayedSongs()
+        }
     }
 
     // Sorting is the expensive half of a rebuild; cache it per (sort, songs)

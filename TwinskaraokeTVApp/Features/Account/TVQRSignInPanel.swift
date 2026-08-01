@@ -5,7 +5,7 @@ import SwiftUI
 /// The pairing half of the TV sign-in screen: renders the current pairing code
 /// and reflects `TVAuthManager.qrPhase` while a phone approves it.
 struct TVQRSignInPanel: View {
-    @ObservedObject var auth: TVAuthManager
+    let auth: TVAuthManager
     let onUsePassword: () -> Void
 
     private let codeSize: CGFloat = 320

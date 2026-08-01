@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// The signed-in listener's favorite songs.
 ///
@@ -7,16 +7,17 @@ import Foundation
 /// `FavoritesManager` loads from, so the star state on a row and the contents
 /// of this list can't disagree.
 @MainActor
-final class FavoritesViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var isLoading = false
+@Observable
+final class FavoritesViewModel {
+    var songs: [Song] = []
+    var isLoading = false
     /// Set when the initial load fails so the view can offer a retry instead
     /// of showing a misleading empty state.
-    @Published var loadError: String?
+    var loadError: String?
     /// Set when the phone says we are signed in but the token it holds has not
     /// reached this watch yet. Without it an empty list reads as "no favorites"
     /// when the truth is "could not ask".
-    @Published var needsPhoneSession = false
+    var needsPhoneSession = false
 
     func fetch(force: Bool = false) {
         guard !isLoading else { return }

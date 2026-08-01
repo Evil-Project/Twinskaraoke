@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
-    @StateObject private var auth = AuthManager()
+    @State private var auth = AuthManager()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showLoginSheet = false
     @State private var showQRApprove = false

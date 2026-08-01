@@ -1,11 +1,12 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class RecentlyAddedTracker: ObservableObject {
+@Observable
+final class RecentlyAddedTracker {
     static let shared = RecentlyAddedTracker()
     private static let storageKey = "nk.recentlyAddedDates.v1"
-    @Published private(set) var dates: [String: Date] = [:]
+    private(set) var dates: [String: Date] = [:]
     private init() {
         load()
     }

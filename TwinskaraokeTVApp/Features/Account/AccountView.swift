@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
-    @StateObject private var auth = TVAuthManager()
+    @State private var auth = TVAuthManager()
     @State private var username = ""
     @State private var password = ""
     @State private var showSignOutConfirmation = false

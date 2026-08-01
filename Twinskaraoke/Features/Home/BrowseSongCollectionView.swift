@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 
 struct BrowseSongCollectionView: View {
     let title: String
@@ -132,7 +131,7 @@ struct BrowseSongCollectionView: View {
             .onAppear {
                 pickFallbackHeroURLIfNeeded()
             }
-            .onReceive(FallbackArtProvider.shared.objectWillChange) { _ in
+            .onChange(of: FallbackArtRevision.shared.revision) { _, _ in
                 fallbackHeroURL = nil
                 pickFallbackHeroURLIfNeeded()
             }

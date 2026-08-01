@@ -789,11 +789,15 @@ nonisolated enum KaraokeAPIClient {
 
   static func data(
     for request: URLRequest,
-    retriesNonIdempotentRequest: Bool = false
+    retriesNonIdempotentRequest: Bool = false,
+    allowsRetry: Bool = true
   ) async throws -> Data {
     let maxRetries = 3
     let baseDelay: UInt64 = 500_000_000
-    let canRetry = retriesNonIdempotentRequest || isIdempotent(request)
+    // `allowsRetry: false` is for fire-and-forget writes whose failure is
+    // cosmetic (play counts). Retrying those triples their cost for no user
+    // benefit, and they burst when someone skips through a queue.
+    let canRetry = allowsRetry && (retriesNonIdempotentRequest || isIdempotent(request))
 
     for attempt in 0..<maxRetries {
       do {

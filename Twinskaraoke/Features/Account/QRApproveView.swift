@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 
 struct QRApproveView: View {
-    @ObservedObject var auth: AuthManager
+    let auth: AuthManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var phase: Phase = .scanning

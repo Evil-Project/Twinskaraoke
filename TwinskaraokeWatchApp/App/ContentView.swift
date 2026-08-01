@@ -2,10 +2,10 @@ import SwiftUI
 import WatchKit
 
 struct ContentView: View {
-    @StateObject var audioManager = AudioManager.shared
+    let audioManager = AudioManager.shared
     var body: some View {
         HomeView()
-            .environmentObject(audioManager)
+            .environment(audioManager)
     }
 }
 

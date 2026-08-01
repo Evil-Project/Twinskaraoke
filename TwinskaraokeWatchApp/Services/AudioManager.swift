@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import MediaPlayer
 import SwiftUI
+import Observation
 
 enum PlaybackMode {
     case listLoop
@@ -16,33 +17,34 @@ enum PlaybackMode {
 }
 
 @MainActor
-class AudioManager: ObservableObject {
+@Observable
+class AudioManager {
     static let shared = AudioManager()
-    @Published var currentSong: Song? {
+    var currentSong: Song? {
         didSet { refreshUpNext() }
     }
-    @Published var isPlaying = false
-    @Published var isLoading = false
-    @Published var currentTime: Double = 0
-    @Published var duration: Double = 0
-    @Published var queue: [Song] = [] {
+    var isPlaying = false
+    var isLoading = false
+    var currentTime: Double = 0
+    var duration: Double = 0
+    var queue: [Song] = [] {
         didSet { refreshUpNext() }
     }
-    @Published var currentIndex: Int = 0 {
+    var currentIndex: Int = 0 {
         didSet { refreshUpNext() }
     }
     /// Up-next slice of the queue plus its summary string, recomputed only when
     /// the queue or current track changes (views re-evaluate on every 0.5s tick).
-    @Published private(set) var upNextSongs: [Song] = []
-    @Published private(set) var queueSummaryText = "End of queue"
-    @Published var playbackMode: PlaybackMode = .listLoop
-    @Published var isShuffleOn = false
-    @Published var volume: Double = AudioManager.storedVolume()
+    private(set) var upNextSongs: [Song] = []
+    private(set) var queueSummaryText = "End of queue"
+    var playbackMode: PlaybackMode = .listLoop
+    var isShuffleOn = false
+    var volume: Double = AudioManager.storedVolume()
     /// Live radio plays a stream straight from the network instead of going
     /// through the download-then-play cache pipeline, and has no queue,
     /// duration, or seekable position. Everything that assumes those is gated
     /// on this.
-    @Published private(set) var isRadioMode = false
+    private(set) var isRadioMode = false
     /// Bumped whenever the downloaded-audio cache gains or loses a file.
     ///
     /// The size itself is not published, because working it out means walking
@@ -50,7 +52,7 @@ class AudioManager: ObservableObject {
     /// screen that *is* looking can watch, so a download finishing behind the
     /// Account screen updates the figure on it instead of leaving it stale
     /// until the listener navigates away and back.
-    @Published private(set) var cacheRevision = 0
+    private(set) var cacheRevision = 0
     /// Radio artwork comes from the station metadata, not from `Song`, which
     /// carries only a synthetic ID for the current track.
     private var radioArtworkURL: URL?

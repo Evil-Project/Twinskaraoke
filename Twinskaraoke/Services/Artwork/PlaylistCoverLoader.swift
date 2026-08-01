@@ -1,14 +1,15 @@
-import Combine
 import Foundation
 import SwiftUI
+import Observation
 
 @MainActor
-final class PlaylistCoverLoader: ObservableObject {
-    @Published var artworkURLs: [URL] = []
+@Observable
+final class PlaylistCoverLoader {
+    var artworkURLs: [URL] = []
     private var loadedID: String?
     private var fallbackSongs: [Song] = []
     private var loadedPlaylist: Playlist?
-    private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
 
     func load(playlistID: String, fallback: [Song]? = nil) {
         if loadedID == playlistID {

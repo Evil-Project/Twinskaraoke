@@ -39,7 +39,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var openPlaylistTemplates: [String: CPListTemplate] = [:]
     private var openPlaylistSongs: [String: [Song]] = [:]
     private var openPlaylists: [String: Playlist] = [:]
-    private var cancellables = Set<AnyCancellable>()
+    private var contentObservation: ObservationToken?
+    private var favoritesObservation: ObservationToken?
+    private var templateRefreshTask: Task<Void, Never>?
+    private var favoritesRefreshTask: Task<Void, Never>?
 
     func templateApplicationScene(
         _ templateApplicationScene: CPTemplateApplicationScene,
@@ -92,7 +95,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         openPlaylistTemplates.removeAll()
         openPlaylistSongs.removeAll()
         openPlaylists.removeAll()
-        cancellables.removeAll()
+        contentObservation?.cancel()
+        contentObservation = nil
+        favoritesObservation?.cancel()
+        favoritesObservation = nil
+        templateRefreshTask?.cancel()
+        favoritesRefreshTask?.cancel()
         self.interfaceController = nil
         if !player.isRadioMode {
             radio.stop()
@@ -125,42 +133,57 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func observeContentChanges() {
-        cancellables.removeAll()
+        contentObservation?.cancel()
+        favoritesObservation?.cancel()
 
-        let signals: [AnyPublisher<Void, Never>] = [
-            player.$currentSong.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            player.$isPlaying.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            player.$queue.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            radio.$nowPlaying.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            radio.$isRefreshing.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            radio.$refreshErrorMessage.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            radio.$lastUpdated.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            SavedPlaylistsStore.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
-            UserPlaylistsManager.shared.$playlists.dropFirst().map { _ in }.eraseToAnyPublisher(),
-        ]
+        // Replaces `Publishers.MergeMany(...).debounce(150ms)`. `observeContinuously`
+        // only fires on change, which is what the `dropFirst()` on each signal
+        // was for.
+        contentObservation = observeContinuously({
+            _ = self.player.currentSong
+            _ = self.player.isPlaying
+            _ = self.player.queue
+            _ = self.radio.nowPlaying
+            _ = self.radio.isRefreshing
+            _ = self.radio.refreshErrorMessage
+            _ = self.radio.lastUpdated
+            _ = SavedPlaylistsStore.shared.playlists
+            _ = UserPlaylistsManager.shared.playlists
+        }, onChange: { [weak self] in
+            self?.scheduleTemplateRefresh()
+        })
 
-        Publishers.MergeMany(signals)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                self?.refreshVisibleTemplates()
-            }
-            .store(in: &cancellables)
-
-        // Favourites get their own subscription rather than joining the merge:
+        // Favourites get their own observation rather than joining the merge:
         // the count is only ever shown in the Playlists template, and a live
         // emission means the local set is authoritative — including when a
         // removal takes it below whatever the server last reported. Seeding the
         // count from an unloaded manager would instead read a spurious zero.
-        FavoritesManager.shared.$favoriteIDs
-            .dropFirst()
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] favoriteIDs in
-                self?.favoritesSongCount = favoriteIDs.count
-                self?.rebuildPlaylistsTemplate()
-            }
-            .store(in: &cancellables)
+        favoritesObservation = observeContinuously({
+            _ = FavoritesManager.shared.favoriteIDs
+        }, onChange: { [weak self] in
+            self?.scheduleFavoritesRefresh()
+        })
+    }
+
+    /// Stands in for the former `.debounce(for: .milliseconds(150))`: template
+    /// rebuilds are expensive and a queue edit churns several properties at once.
+    private func scheduleTemplateRefresh() {
+        templateRefreshTask?.cancel()
+        templateRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let self else { return }
+            refreshVisibleTemplates()
+        }
+    }
+
+    private func scheduleFavoritesRefresh() {
+        favoritesRefreshTask?.cancel()
+        favoritesRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let self else { return }
+            favoritesSongCount = FavoritesManager.shared.favoriteIDs.count
+            rebuildPlaylistsTemplate()
+        }
     }
 
     private func loadCarPlayContent() {

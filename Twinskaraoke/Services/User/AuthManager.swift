@@ -1,8 +1,8 @@
 import AuthenticationServices
-import Combine
 import CryptoKit
 import Foundation
 import Security
+import Observation
 
 @MainActor
 private final class WebAuthenticationPresentationContextProvider:
@@ -20,13 +20,14 @@ private final class WebAuthenticationPresentationContextProvider:
 }
 
 @MainActor
-final class AuthManager: NSObject, ObservableObject {
-    @Published private(set) var isLoggedIn = false
-    @Published private(set) var currentUsername: String?
-    @Published private(set) var currentUserId: String?
-    @Published private(set) var currentAvatar: String?
-    @Published private(set) var isLoading = false
-    @Published private(set) var errorMessage: String?
+@Observable
+final class AuthManager: NSObject {
+    private(set) var isLoggedIn = false
+    private(set) var currentUsername: String?
+    private(set) var currentUserId: String?
+    private(set) var currentAvatar: String?
+    private(set) var isLoading = false
+    private(set) var errorMessage: String?
     private(set) var authToken: String?
     private let defaults = UserDefaults.standard
     private var webAuthenticationSession: ASWebAuthenticationSession?

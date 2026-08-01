@@ -1,13 +1,14 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class SongsViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var isLoading = false
+@Observable
+final class SongsViewModel {
+    var songs: [Song] = []
+    var isLoading = false
     /// Set when the initial load fails so the view can offer a retry instead
     /// of showing a misleading empty state.
-    @Published var loadError: String?
+    var loadError: String?
 
     func fetchSongs() {
         guard !isLoading, songs.isEmpty else { return }

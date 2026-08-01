@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct UploadedSongsView: View {
-    @StateObject private var viewModel = UploadedSongsViewModel()
+    @State private var viewModel = UploadedSongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var prefetchedIDs: [String] = []
 

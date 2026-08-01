@@ -1,19 +1,27 @@
-import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-private final class SongDownloadRowState: ObservableObject {
-    @Published private(set) var status: SongDownloadStatus
-    private var cancellable: AnyCancellable?
+@Observable
+private final class SongDownloadRowState {
+    private(set) var status: SongDownloadStatus
+    @ObservationIgnored private var observation: ObservationToken?
 
     init(songID: String) {
         let manager = DownloadManager.shared
         status = manager.status(for: songID)
-        cancellable = manager.statusPublisher(for: songID)
-            .dropFirst()
-            .sink { [weak self] status in
-                self?.status = status
-            }
+        // Replaces `statusPublisher(for:).dropFirst().removeDuplicates()`:
+        // observation only fires on change (the `dropFirst`), and the guarded
+        // assignment below is the `removeDuplicates` — without it every row in
+        // a list would re-render on any other song's download progress.
+        observation = observeContinuously({
+            _ = DownloadManager.shared.downloadedIDs
+            _ = DownloadManager.shared.inProgress
+        }, onChange: { [weak self] in
+            guard let self else { return }
+            let next = DownloadManager.shared.status(for: songID)
+            if status != next { status = next }
+        })
     }
 }
 
@@ -58,8 +66,8 @@ struct SongRow: View {
 
     var showsArtwork: Bool = true
     var trailing: AnyView?
-    @ObservedObject private var playback = PlaybackRowState.shared
-    @StateObject private var downloadState: SongDownloadRowState
+    private let playback = PlaybackRowState.shared
+    @State private var downloadState: SongDownloadRowState
     @State private var showAddToPlaylist = false
     @Environment(\.appReduceMotion) private var reduceMotion
 
@@ -73,7 +81,7 @@ struct SongRow: View {
         self.size = size
         self.showsArtwork = showsArtwork
         self.trailing = trailing
-        _downloadState = StateObject(wrappedValue: SongDownloadRowState(songID: song.id))
+        _downloadState = State(initialValue: SongDownloadRowState(songID: song.id))
     }
 
     private var isCurrentSong: Bool {
@@ -220,7 +228,7 @@ struct MusicGridCard: View {
     var size: MusicGridCardSize = .regular
     var width: CGFloat?
     var accessibilityIdentifier: String?
-    @ObservedObject private var playback = PlaybackRowState.shared
+    private let playback = PlaybackRowState.shared
     @State private var showAddToPlaylist = false
 
     init(
@@ -312,7 +320,7 @@ struct SongActionsMenuItems: View {
     let onAddToPlaylist: () -> Void
     private let isDownloaded: Bool
     private let isDownloading: Bool
-    @ObservedObject private var favorites = FavoritesManager.shared
+    private let favorites = FavoritesManager.shared
 
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {
         self.song = song
@@ -414,15 +422,15 @@ private struct SongRowAccessibilityModifier: ViewModifier {
     let song: Song
     var isPending = false
     let onPlay: () -> Void
-    @ObservedObject private var playback = PlaybackRowState.shared
-    @StateObject private var downloadState: SongDownloadRowState
-    @ObservedObject private var favorites = FavoritesManager.shared
+    private let playback = PlaybackRowState.shared
+    @State private var downloadState: SongDownloadRowState
+    private let favorites = FavoritesManager.shared
 
     init(song: Song, isPending: Bool, onPlay: @escaping () -> Void) {
         self.song = song
         self.isPending = isPending
         self.onPlay = onPlay
-        _downloadState = StateObject(wrappedValue: SongDownloadRowState(songID: song.id))
+        _downloadState = State(initialValue: SongDownloadRowState(songID: song.id))
     }
 
     func body(content: Content) -> some View {

@@ -1,13 +1,14 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class PlaylistDetailViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var isLoading = false
+@Observable
+final class PlaylistDetailViewModel {
+    var songs: [Song] = []
+    var isLoading = false
     /// Set when the initial load fails so the view can offer a retry instead
     /// of showing a misleading empty state.
-    @Published var loadError: String?
+    var loadError: String?
     let playlistID: String
     /// Songs the caller already had — personal playlists arrive from
     /// `/api/user/playlists` with their contents inline. Shown immediately so

@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 struct PlaylistDetailView: View {
@@ -7,9 +6,11 @@ struct PlaylistDetailView: View {
     let playlist: Playlist
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @StateObject private var loader = PlaylistDetailViewModel()
-    @ObservedObject private var favorites = FavoritesManager.shared
-    @ObservedObject private var fallbackArt = FallbackArtProvider.shared
+    @State private var loader = PlaylistDetailViewModel()
+    private let favorites = FavoritesManager.shared
+    // Rows derive artwork URLs through `Song`, which consults the fallback
+    // pool; reading the revision in `body` re-renders them when it changes.
+    private let fallbackArt = FallbackArtRevision.shared
     @State private var showsCollapsedTitle = false
     @State private var searchText = ""
     @State private var filteredSongs: [Song]
@@ -41,6 +42,7 @@ struct PlaylistDetailView: View {
 
 
     var body: some View {
+        let _ = fallbackArt.revision
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
         let displayedSongs = filteredSongs
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -67,6 +69,13 @@ struct PlaylistDetailView: View {
                 // logs "tried to update multiple times per frame" and drops
                 // the intermediate scroll events. main.async is enough here:
                 // lighter than a Task per scroll event and strictly FIFO.
+                //
+                // Coalescing these to one update per runloop turn *does* silence
+                // that log (and the `<width>x0` offscreen-buffer errors from the
+                // search field animating through zero height), but it visibly
+                // hurt fast-scroll feel: the pull/parallax logic needs the
+                // intermediate offsets, not just the newest one. The log noise
+                // is cosmetic; the scroll feel is not. Left as-is deliberately.
                 DispatchQueue.main.async {
                     updateSearchInteraction(scrollOffset: scrollOffset)
                 }
@@ -151,7 +160,7 @@ struct PlaylistDetailView: View {
                 filteredSongs = PlaylistSongSearch.filter(currentSongs, matching: newValue)
             }
         }
-        .onReceive(loader.$songs) { newSongs in
+        .onChange(of: loader.songs) { _, newSongs in
             let next = PlaylistSongSearch.filter(
                 newSongs ?? playlist.songListDTOs ?? [],
                 matching: searchText
@@ -354,9 +363,16 @@ struct PlaylistDetailView: View {
             variant: .thumbnail
         )
         ArtworkPrefetcher.shared.prefetchSongs(
-            Array(songs.prefix(18)),
-            limit: 18,
+            Array(songs.prefix(ArtworkPrefetcher.songWindow)),
             reason: "playlist songs \(playlist.id)",
+            variant: .row
+        )
+        // The windowed prefetch above only stays just ahead of the visible
+        // rows, which a fast flick outruns. Warm the *whole* playlist onto disk
+        // as well, so a second visit scrolls with no placeholders at all.
+        ArtworkPrefetcher.shared.warmCollection(
+            songs: songs,
+            reason: "playlist warm \(playlist.id)",
             variant: .row
         )
     }

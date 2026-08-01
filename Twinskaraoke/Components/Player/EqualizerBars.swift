@@ -3,7 +3,7 @@ import SwiftUI
 struct EqualizerBars: View {
     let isAnimating: Bool
     @Environment(\.appReduceMotion) private var reduceMotion
-    @ObservedObject private var scrollState = ScrollPerformanceState.shared
+    private let scrollState = ScrollPerformanceState.shared
     @State private var startDate = Date()
     @State private var isVisible: Bool = false
 

@@ -1,11 +1,12 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class PlaylistDetailViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var isLoading = false
-    @Published var loadError: String?
+@Observable
+final class PlaylistDetailViewModel {
+    var songs: [Song] = []
+    var isLoading = false
+    var loadError: String?
     let playlistID: String
 
     init(playlistID: String) {

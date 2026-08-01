@@ -1,11 +1,12 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class PlaylistsViewModel: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var isLoading = false
-    @Published var loadError: String?
+@Observable
+final class PlaylistsViewModel {
+    var playlists: [Playlist] = []
+    var isLoading = false
+    var loadError: String?
 
     func fetch() {
         guard !isLoading, playlists.isEmpty else { return }

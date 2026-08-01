@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Loads timed lyrics for the tvOS player.
 ///
@@ -10,11 +10,12 @@ import Foundation
 /// streams instead of downloading — so an in-memory cache keyed by song is
 /// enough to make returning to a song in the same session instant.
 @MainActor
-final class TVLyricsViewModel: ObservableObject {
-    @Published private(set) var lyrics: [LyricLine] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var didFail = false
-    @Published private(set) var hasNoLyrics = false
+@Observable
+final class TVLyricsViewModel {
+    private(set) var lyrics: [LyricLine] = []
+    private(set) var isLoading = false
+    private(set) var didFail = false
+    private(set) var hasNoLyrics = false
 
     /// The song a load is currently satisfied for. Cleared on failure so that
     /// coming back to the player retries instead of showing a stale error.
@@ -23,7 +24,7 @@ final class TVLyricsViewModel: ObservableObject {
     /// what to re-request.
     private var requestedSongID: String?
 
-    private var task: Task<Void, Never>?
+    @ObservationIgnored private var task: Task<Void, Never>?
     private var cache: [String: [LyricLine]] = [:]
     /// Songs the API answered 404 for, so switching back and forth doesn't
     /// re-ask for something the catalog has already said it lacks.

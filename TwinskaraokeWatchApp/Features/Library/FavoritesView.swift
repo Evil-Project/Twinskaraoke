@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct FavoritesView: View {
-    @StateObject private var viewModel = FavoritesViewModel()
-    @ObservedObject private var favorites = FavoritesManager.shared
-    @ObservedObject private var auth = WatchAuthManager.shared
-    @EnvironmentObject var audioManager: AudioManager
+    @State private var viewModel = FavoritesViewModel()
+    private let favorites = FavoritesManager.shared
+    private let auth = WatchAuthManager.shared
+    @Environment(AudioManager.self) var audioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var showPlayer = false
@@ -98,7 +98,7 @@ struct FavoritesView: View {
         .animation(listAnimation, value: viewModel.songs.count)
         .navigationDestination(isPresented: $showPlayer) {
             PlayerView()
-                .environmentObject(audioManager)
+                .environment(audioManager)
         }
         .onAppear {
             favorites.loadIfNeeded()

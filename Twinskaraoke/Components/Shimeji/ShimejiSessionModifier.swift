@@ -10,7 +10,7 @@ import SwiftUI
 struct ShimejiSessionModifier: ViewModifier {
     @AppStorage("nk.experimentsEnabled") private var experimentsEnabled: Bool = false
     @AppStorage("nk.experimentalShimejiEnabled") private var shimejiEnabled: Bool = false
-    @ObservedObject private var resources = ShimejiResourceManager.shared
+    private let resources = ShimejiResourceManager.shared
 
     private var isActive: Bool {
         experimentsEnabled && shimejiEnabled && resources.state == .ready

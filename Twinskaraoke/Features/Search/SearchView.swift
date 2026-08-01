@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct SearchView: View {
-    @StateObject var viewModel = SearchViewModel()
+    @State var viewModel = SearchViewModel()
 
-    @ObservedObject private var playback = PlaybackRowState.shared
+    private let playback = PlaybackRowState.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var pendingSongID: String?
@@ -175,9 +175,9 @@ private struct SearchResultsSummaryHeader: View {
 
 private struct BrowseCategoriesView: View {
     let availableWidth: CGFloat
-    @StateObject private var genresVM = GenresViewModel()
-    @StateObject private var topChartVM = TopChartViewModel()
-    @StateObject private var publicPlaylistsVM = PublicPlaylistsViewModel()
+    @State private var genresVM = GenresViewModel()
+    @State private var topChartVM = TopChartViewModel()
+    @State private var publicPlaylistsVM = PublicPlaylistsViewModel()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let genres: [(String, [Color])] = [
         (
@@ -466,7 +466,7 @@ private struct BrowseCategoriesView: View {
 }
 
 private struct TopChartCollectionView: View {
-    @ObservedObject var viewModel: TopChartViewModel
+    let viewModel: TopChartViewModel
 
     var body: some View {
         BrowseSongCollectionView(
@@ -480,7 +480,7 @@ private struct TopChartCollectionView: View {
 }
 
 private struct PublicPlaylistsCollectionView: View {
-    @ObservedObject var viewModel: PublicPlaylistsViewModel
+    let viewModel: PublicPlaylistsViewModel
 
     var body: some View {
         PlaylistListView(
@@ -498,7 +498,7 @@ private struct PublicPlaylistsCollectionView: View {
 
 struct GenreDetailView: View {
     let genre: GenreSummary
-    @ObservedObject var viewModel: GenresViewModel
+    let viewModel: GenresViewModel
     let palette: [Color]
 
     var body: some View {
@@ -558,7 +558,7 @@ private struct GenreDetailLoadingView: View {
 struct SearchCategorySongCollectionView: View {
     let title: String
     let query: String
-    @StateObject private var loader: SearchCategorySongsViewModel
+    @State private var loader: SearchCategorySongsViewModel
     @Environment(\.appReduceMotion) private var reduceMotion
 
     private var categoryStateAnimation: Animation? {
@@ -569,7 +569,7 @@ struct SearchCategorySongCollectionView: View {
     init(title: String, query: String) {
         self.title = title
         self.query = query
-        _loader = StateObject(wrappedValue: SearchCategorySongsViewModel(query: query))
+        _loader = State(initialValue: SearchCategorySongsViewModel(query: query))
     }
 
     var body: some View {

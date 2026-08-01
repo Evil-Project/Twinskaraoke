@@ -1,17 +1,18 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class RandomSongsViewModel: ObservableObject {
+@Observable
+final class RandomSongsViewModel {
     static let playlistID = "__random_songs__"
 
-    @Published private(set) var songs: [Song] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var errorMessage: String?
+    private(set) var songs: [Song] = []
+    private(set) var isLoading = false
+    private(set) var errorMessage: String?
 
     private var hasLoaded = false
     private var requestToken = 0
-    private var loadTask: Task<[Song], Error>?
+    @ObservationIgnored private var loadTask: Task<[Song], Error>?
 
     var playlist: Playlist {
         Playlist(

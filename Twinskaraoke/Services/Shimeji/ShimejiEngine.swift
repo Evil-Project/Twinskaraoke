@@ -1,7 +1,7 @@
-import Combine
 import CoreGraphics
 import Foundation
 import QuartzCore
+import Observation
 
 #if canImport(UIKit)
     import UIKit
@@ -10,7 +10,8 @@ import QuartzCore
 /// One on-screen creature. Position/animation state live here; the engine
 /// owns the shared physics tick, `ShimejiSpriteView` just renders whatever
 /// this currently says.
-final class ShimejiInstance: Identifiable, ObservableObject {
+@Observable
+final class ShimejiInstance: Identifiable {
     enum Motion {
         case falling
         case idle
@@ -23,10 +24,10 @@ final class ShimejiInstance: Identifiable, ObservableObject {
     let id = UUID()
     let character: ShimejiCharacterDefinition
 
-    @Published var position: CGPoint
-    @Published var action: ShimejiActionKind = .fall
-    @Published var frameIndex: Int = 0
-    @Published var facingRight: Bool = true
+    var position: CGPoint
+    var action: ShimejiActionKind = .fall
+    var frameIndex: Int = 0
+    var facingRight: Bool = true
 
     var motion: Motion = .falling
     var velocityX: CGFloat = 0
@@ -66,15 +67,16 @@ final class ShimejiInstance: Identifiable, ObservableObject {
 /// Drives every on-screen Shimeji: spawn/despawn, the shared physics/AI tick,
 /// and drag interaction. One instance lives for the app's lifetime.
 @MainActor
-final class ShimejiEngine: NSObject, ObservableObject {
+@Observable
+final class ShimejiEngine: NSObject {
     static let shared = ShimejiEngine()
     /// Rendered sprite size in points; shared with ShimejiSpriteView (visual
     /// size) and the overlay window's hitTest (touch target) so both agree
     /// on where a sprite actually is on screen.
     static let displaySize: CGFloat = 84
 
-    @Published private(set) var instances: [ShimejiInstance] = []
-    @Published var bounds: CGRect = .zero
+    private(set) var instances: [ShimejiInstance] = []
+    var bounds: CGRect = .zero
 
     /// The app's actual tab bar top edge, in the same coordinate space as
     /// `bounds`, kept fresh by `ShimejiOverlayController`'s periodic poll of
@@ -99,14 +101,14 @@ final class ShimejiEngine: NSObject, ObservableObject {
 
     // MARK: - Mini player floor
 
-    @Published private(set) var hasMiniPlayer: Bool = false {
+    private(set) var hasMiniPlayer: Bool = false {
         didSet {
             guard hasMiniPlayer != oldValue else { return }
             handleFloorTargetChange()
         }
     }
 
-    @Published var isNowPlayingOpen: Bool = false {
+    var isNowPlayingOpen: Bool = false {
         didSet {
             guard isNowPlayingOpen != oldValue else { return }
             handleFloorTargetChange()
@@ -120,7 +122,7 @@ final class ShimejiEngine: NSObject, ObservableObject {
         }
     }
 
-    private var cancellables = Set<AnyCancellable>()
+    private var playbackObservation: ObservationToken?
 
     override private init() {
         super.init()
@@ -128,22 +130,23 @@ final class ShimejiEngine: NSObject, ObservableObject {
     }
 
     private func observePlaybackState() {
-        AudioPlayerManager.shared.$currentSong
-            .map { $0 != nil }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] hasSong in
-                self?.hasMiniPlayer = hasSong
-            }
-            .store(in: &cancellables)
+        // The guarded assignments below replace `removeDuplicates`: only the
+        // presence of a song matters here, so most `currentSong` changes are
+        // no-ops for the overlay and must not restart its animation.
+        playbackObservation = observeContinuously({
+            _ = AudioPlayerManager.shared.currentSong
+            _ = PopupPresentationState.shared.isExpanded
+        }, onChange: { [weak self] in
+            self?.syncPlaybackState()
+        })
+        syncPlaybackState()
+    }
 
-        PopupPresentationState.shared.$isExpanded
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isExpanded in
-                self?.isNowPlayingOpen = isExpanded
-            }
-            .store(in: &cancellables)
+    private func syncPlaybackState() {
+        let hasSong = AudioPlayerManager.shared.currentSong != nil
+        if hasMiniPlayer != hasSong { hasMiniPlayer = hasSong }
+        let isExpanded = PopupPresentationState.shared.isExpanded
+        if isNowPlayingOpen != isExpanded { isNowPlayingOpen = isExpanded }
     }
 
     // MARK: - Lifecycle

@@ -2,7 +2,7 @@ import SDWebImageSwiftUI
 import SwiftUI
 
 struct LoginSheet: View {
-    @ObservedObject var auth: AuthManager
+    let auth: AuthManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var username = ""

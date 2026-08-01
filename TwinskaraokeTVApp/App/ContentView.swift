@@ -9,7 +9,7 @@ enum TVTab: Hashable {
 }
 
 struct ContentView: View {
-    @StateObject private var audioManager = AudioManager.shared
+    private let audioManager = AudioManager.shared
     @State private var selectedTab: TVTab = .home
 
     var body: some View {
@@ -34,7 +34,7 @@ struct ContentView: View {
                 .tabItem { Label("Now Playing", systemImage: "play.circle.fill") }
                 .tag(TVTab.nowPlaying)
         }
-        .environmentObject(audioManager)
+        .environment(audioManager)
         .tint(.appAccent)
         // The lyrics panel reads `\.appReduceMotion` for its scroll and
         // depth-of-field animations, same as iOS; without this it would always

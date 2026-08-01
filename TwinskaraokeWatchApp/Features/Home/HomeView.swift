@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject var audioManager: AudioManager
-    @StateObject var homeViewModel = HomeViewModel()
-    @ObservedObject private var auth = WatchAuthManager.shared
-    @ObservedObject private var recents = RecentlyPlayedStore.shared
+    @Environment(AudioManager.self) var audioManager
+    @State var homeViewModel = HomeViewModel()
+    private let auth = WatchAuthManager.shared
+    private var recents = RecentlyPlayedStore.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var path = NavigationPath()
@@ -221,17 +221,17 @@ struct HomeView: View {
     private func view(for destination: Destination) -> some View {
         switch destination {
         case .player:
-            PlayerView().environmentObject(audioManager)
+            PlayerView().environment(audioManager)
         case .playlists:
             PlaylistsGridView()
         case .favorites:
-            FavoritesView().environmentObject(audioManager)
+            FavoritesView().environment(audioManager)
         case .songs:
-            SongsView().environmentObject(audioManager)
+            SongsView().environment(audioManager)
         case .radio:
-            RadioView().environmentObject(audioManager)
+            RadioView().environment(audioManager)
         case .search:
-            SearchView().environmentObject(audioManager)
+            SearchView().environment(audioManager)
         case .account:
             AccountView()
         }

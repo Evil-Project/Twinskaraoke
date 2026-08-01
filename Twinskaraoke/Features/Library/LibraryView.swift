@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import SwiftUI
 
@@ -7,7 +6,7 @@ struct PlaylistSongCountLabel: View {
     var fallbackText: String?
     var prefersDetailCount = true
 
-    @ObservedObject private var countStore = PlaylistSongCountStore.shared
+    private let countStore = PlaylistSongCountStore.shared
 
     private var labelText: String? {
         if let count = countStore.displayedCount(
@@ -42,10 +41,10 @@ struct PlaylistSongCountLabel: View {
 }
 
 struct LibraryView: View {
-    @StateObject var viewModel = PlaylistsViewModel()
-    @StateObject private var recentSongsViewModel = LibrarySongsViewModel()
-    @ObservedObject private var savedStore = SavedPlaylistsStore.shared
-    @ObservedObject private var favorites = FavoritesManager.shared
+    @State var viewModel = PlaylistsViewModel()
+    @State private var recentSongsViewModel = LibrarySongsViewModel()
+    private let savedStore = SavedPlaylistsStore.shared
+    private let favorites = FavoritesManager.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
@@ -375,7 +374,7 @@ private struct WideLibraryHero: View {
 }
 
 struct LibrarySongsView: View {
-    @StateObject private var viewModel = LibrarySongsViewModel()
+    @State private var viewModel = LibrarySongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var prefetchedIDs: [String] = []
 
@@ -619,9 +618,9 @@ struct PlaylistListRow: View {
 }
 
 struct PlaylistsGridScreen: View {
-    @ObservedObject var viewModel: PlaylistsViewModel
-    @ObservedObject private var userManager = UserPlaylistsManager.shared
-    @ObservedObject private var favorites = FavoritesManager.shared
+    let viewModel: PlaylistsViewModel
+    private let userManager = UserPlaylistsManager.shared
+    private let favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""

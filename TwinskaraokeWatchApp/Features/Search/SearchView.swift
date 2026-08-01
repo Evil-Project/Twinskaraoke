@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct SearchView: View {
-    @StateObject var viewModel = SearchViewModel()
-    @EnvironmentObject var audioManager: AudioManager
+    @State var viewModel = SearchViewModel()
+    @Environment(AudioManager.self) var audioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var showPlayer = false
@@ -19,7 +19,10 @@ struct SearchView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // @Observable models expose bindings through @Bindable rather than the
+        // old $viewModel projection.
+        @Bindable var viewModel = viewModel
+        return VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .semibold))
@@ -145,7 +148,7 @@ struct SearchView: View {
         .animation(stateAnimation, value: viewModel.isLoading)
         .navigationDestination(isPresented: $showPlayer) {
             PlayerView()
-                .environmentObject(audioManager)
+                .environment(audioManager)
         }
         .onAppear {
             prefetchArtwork()

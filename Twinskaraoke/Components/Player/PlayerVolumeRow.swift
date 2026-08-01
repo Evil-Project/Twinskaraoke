@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlayerVolumeRow: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
+    @Environment(AudioPlayerManager.self) var audioManager
     @Environment(\.scenePhase) private var scenePhase
     @State private var volumeBridgeGeneration = 0
     // In-drag volume lives here so the 60-120Hz drag updates don't publish
@@ -27,6 +27,7 @@ struct PlayerVolumeRow: View {
     }
 
     var body: some View {
+        @Bindable var audioManager = audioManager
         HStack(spacing: 12) {
             Image(systemName: "speaker.fill")
                 .font(.caption)

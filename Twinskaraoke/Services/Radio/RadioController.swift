@@ -1,19 +1,20 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class RadioController: ObservableObject {
+@Observable
+final class RadioController {
     static let shared = RadioController()
     static let metadataURL = URL(
         string: "https://radio.twinskaraoke.com/api/nowplaying_static/neuro_21.json"
     )!
     static let stationID = "neuro_21"
-    @Published var nowPlaying: RadioNowPlaying?
-    @Published var isRefreshing = false
-    @Published var refreshErrorMessage: String?
-    @Published var lastUpdated: Date?
+    var nowPlaying: RadioNowPlaying?
+    var isRefreshing = false
+    var refreshErrorMessage: String?
+    var lastUpdated: Date?
     private var pollTimer: Timer?
-    private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
     private var lastMetadataSignature: String?
     private init() {}
     func start() {

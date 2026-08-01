@@ -8,7 +8,7 @@ struct QueueView: View {
     /// beside it already shows.
     var showsCurrentSong = true
 
-    @EnvironmentObject var audioManager: AudioManager
+    @Environment(AudioManager.self) var audioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
 

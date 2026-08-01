@@ -1,9 +1,10 @@
 import SwiftUI
-import Combine
+import Observation
 
-class CloudProvider: ObservableObject {
-    @Published var offset: CGSize
-    @Published var frameHeightRatio: CGFloat
+@Observable
+class CloudProvider {
+    var offset: CGSize
+    var frameHeightRatio: CGFloat
 
     init() {
         frameHeightRatio = CGFloat.random(in: 0.7 ..< 1.4)
@@ -16,7 +17,7 @@ class CloudProvider: ObservableObject {
 
 struct Cloud: View {
     // Fixed: Marked StateObject private and added appReduceMotion environment key
-    @StateObject private var provider = CloudProvider()
+    @State private var provider = CloudProvider()
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var move = false
 

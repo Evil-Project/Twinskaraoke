@@ -3,7 +3,7 @@ import SwiftUI
 struct CreatePlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
-    @ObservedObject private var manager = UserPlaylistsManager.shared
+    private let manager = UserPlaylistsManager.shared
 
     @State private var name = ""
     @State private var playlistDescription = ""

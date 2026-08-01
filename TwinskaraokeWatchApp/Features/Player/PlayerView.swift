@@ -97,9 +97,9 @@ private struct WatchPlayerLayoutMetrics {
 }
 
 struct PlayerView: View {
-    @EnvironmentObject var audioManager: AudioManager
-    @ObservedObject private var favorites = FavoritesManager.shared
-    @ObservedObject private var auth = WatchAuthManager.shared
+    @Environment(AudioManager.self) var audioManager
+    private let favorites = FavoritesManager.shared
+    private let auth = WatchAuthManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
@@ -159,7 +159,7 @@ struct PlayerView: View {
                 // swipe to while the radio is on.
                 if !audioManager.isRadioMode {
                     QueueView(showsCurrentSong: false)
-                        .environmentObject(audioManager)
+                        .environment(audioManager)
                         .tag(Page.queue)
                 }
             }

@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 struct TVProfileResponse: Decodable, Sendable {
     let profile: TVProfile
@@ -64,22 +64,23 @@ struct TVUploadLimits: Decodable, Sendable {
 }
 
 @MainActor
-final class TVAuthManager: ObservableObject {
-    @Published private(set) var isLoggedIn = false
-    @Published private(set) var currentUsername: String?
-    @Published private(set) var currentUserId: String?
-    @Published private(set) var currentAvatar: String?
-    @Published private(set) var profile: TVProfile?
-    @Published private(set) var badges: [TVBadge] = []
-    @Published private(set) var uploadLimits: TVUploadLimits?
-    @Published private(set) var isAuthenticating = false
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var authError: String?
-    @Published private(set) var profileError: String?
+@Observable
+final class TVAuthManager {
+    private(set) var isLoggedIn = false
+    private(set) var currentUsername: String?
+    private(set) var currentUserId: String?
+    private(set) var currentAvatar: String?
+    private(set) var profile: TVProfile?
+    private(set) var badges: [TVBadge] = []
+    private(set) var uploadLimits: TVUploadLimits?
+    private(set) var isAuthenticating = false
+    private(set) var isRefreshing = false
+    private(set) var authError: String?
+    private(set) var profileError: String?
 
-    @Published private(set) var qrSession: TVQRSignIn.Session?
-    @Published private(set) var qrPhase: QRPhase = .idle
-    @Published private(set) var qrError: String?
+    private(set) var qrSession: TVQRSignIn.Session?
+    private(set) var qrPhase: QRPhase = .idle
+    private(set) var qrError: String?
 
     enum QRPhase: Equatable {
         case idle
@@ -91,7 +92,7 @@ final class TVAuthManager: ObservableObject {
         case expired
     }
 
-    private var qrTask: Task<Void, Never>?
+    @ObservationIgnored private var qrTask: Task<Void, Never>?
 
     private let defaults = UserDefaults.standard
 

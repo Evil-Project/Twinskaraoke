@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 struct GalleryArtist: Codable, Identifiable, Equatable {
     let id: String
@@ -43,10 +43,11 @@ struct GalleryArt: Codable, Identifiable, Equatable {
 }
 
 @MainActor
-final class ArtGalleryViewModel: ObservableObject {
-    @Published var artists: [GalleryArtist] = []
-    @Published var isLoading = false
-    @Published var loadFailed = false
+@Observable
+final class ArtGalleryViewModel {
+    var artists: [GalleryArtist] = []
+    var isLoading = false
+    var loadFailed = false
     private var hasLoaded = false
 
     func fetch(force: Bool = false) {

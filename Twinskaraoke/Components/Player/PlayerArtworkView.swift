@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlayerArtworkView: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
+    @Environment(AudioPlayerManager.self) var audioManager
     @Environment(\.appReduceMotion) private var reduceMotion
     let song: Song
     let size: CGFloat

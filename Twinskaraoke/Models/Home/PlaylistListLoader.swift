@@ -1,9 +1,10 @@
-import Combine
 import Foundation
+import Observation
 
-final class PlaylistListLoader: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var isLoadingMore = false
+@Observable
+final class PlaylistListLoader {
+    var playlists: [Playlist] = []
+    var isLoadingMore = false
     private var canLoadMore = true
     private let pageSize = 25
     private var urlBuilder: ((Int, Int) -> String)?

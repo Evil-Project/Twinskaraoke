@@ -1,32 +1,37 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class HomeViewModel: ObservableObject {
+@Observable
+final class HomeViewModel {
     private enum TopPicksSource {
         case publicPlaylists
         case setlists
     }
 
-    @Published var trending: [Song] = []
-    @Published var suggestions: [Song] = []
-    @Published var recentPlaylists: [Playlist] = []
-    @Published var newReleases: [Song] = []
-    @Published var isLoading = false
-    @Published var isLoadingMoreTopPicks = false
-    @Published var canLoadMoreTopPicks = true
-    @Published var latestSingle: Song?
-    @Published var latestSingleContext: [Song] = []
-    private var hasLoaded = false
-    private var topPicksPage = 0
-    private let topPicksPageSize = 12
-    private var topPicksSource: TopPicksSource = .setlists
-    private var dataGeneration = 0
-    private var homeLoadTask: Task<Void, Never>?
+    var trending: [Song] = []
+    var suggestions: [Song] = []
+    var recentPlaylists: [Playlist] = []
+    var newReleases: [Song] = []
+    var isLoading = false
+    var isLoadingMoreTopPicks = false
+    var canLoadMoreTopPicks = true
+    var latestSingle: Song?
+    var latestSingleContext: [Song] = []
+    // Bookkeeping the views never read; keep it out of the observation graph.
+    @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var topPicksPage = 0
+    @ObservationIgnored private let topPicksPageSize = 12
+    @ObservationIgnored private var topPicksSource: TopPicksSource = .setlists
+    @ObservationIgnored private var dataGeneration = 0
+    @ObservationIgnored private var homeLoadTask: Task<Void, Never>?
 
-    init() {
-        fetchHomeData()
-    }
+    // No work in init. This type is held in `@State`, whose initial-value
+    // expression is re-evaluated on every re-initialization of the owning view
+    // struct (only the first instance is kept). `@StateObject` took an
+    // @autoclosure and evaluated it once, so an init-time fetch was safe there
+    // and is a request flood here. The fetch is driven from the view's .task
+    // instead, and `hasLoaded` keeps it to one round trip.
 
     func fetchHomeData(force: Bool = false) {
         if AppRuntime.isUITestMode {

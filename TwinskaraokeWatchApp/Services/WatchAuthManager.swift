@@ -1,6 +1,6 @@
-import Combine
 import Foundation
 import WatchConnectivity
+import Observation
 
 /// Watch half of the session bridge (see `WatchSessionLink`).
 ///
@@ -9,7 +9,8 @@ import WatchConnectivity
 /// token is pulled separately and kept only in this device's Keychain, where
 /// `KaraokeAPIClient` picks it up for every request.
 @MainActor
-final class WatchAuthManager: NSObject, ObservableObject {
+@Observable
+final class WatchAuthManager: NSObject {
     static let shared = WatchAuthManager()
 
     /// How the watch describes its own link to the phone, so the account
@@ -21,11 +22,11 @@ final class WatchAuthManager: NSObject, ObservableObject {
         case awaitingPhone
     }
 
-    @Published private(set) var linkState: LinkState = .signedOut
-    @Published private(set) var username: String?
-    @Published private(set) var userID: String?
-    @Published private(set) var avatarURL: URL?
-    @Published private(set) var isSyncing = false
+    private(set) var linkState: LinkState = .signedOut
+    private(set) var username: String?
+    private(set) var userID: String?
+    private(set) var avatarURL: URL?
+    private(set) var isSyncing = false
 
     private enum Key {
         static let username = "nk.watch.username"

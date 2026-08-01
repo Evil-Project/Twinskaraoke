@@ -1,12 +1,13 @@
-import Combine
 import Foundation
 import SwiftUI
+import Observation
 
 @MainActor
-final class SavedPlaylistsStore: ObservableObject {
+@Observable
+final class SavedPlaylistsStore {
     static let shared = SavedPlaylistsStore()
     private static let storageKey = "nk.savedPlaylists.v1"
-    @Published private(set) var playlists: [Playlist] = []
+    private(set) var playlists: [Playlist] = []
     // O(1) membership cache for isSaved, which is called per visible
     // playlist count label on every publish.
     private var savedIDs: Set<String> = []

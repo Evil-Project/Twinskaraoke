@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 enum LyricsTranslationState: Equatable {
     case idle
@@ -9,17 +9,20 @@ enum LyricsTranslationState: Equatable {
     case failed
 }
 
-final class LyricsViewModel: ObservableObject {
-    @Published private(set) var lyrics: [LyricLine] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var didFail = false
-    @Published private(set) var hasNoLyrics = false
-    @Published private(set) var translationState: LyricsTranslationState = .idle
+@Observable
+final class LyricsViewModel {
+    private(set) var lyrics: [LyricLine] = []
+    private(set) var isLoading = false
+    private(set) var didFail = false
+    private(set) var hasNoLyrics = false
+    private(set) var translationState: LyricsTranslationState = .idle
 
+    // Read by the player view to match the prefetched model against the
+    // incoming song; under @Published it was untracked and could read stale.
     private(set) var loadedSongID: String?
-    private var inFlightSongID: String?
-    private var currentTask: URLSessionDataTask?
-    private var translationTask: Task<Void, Never>?
+    @ObservationIgnored private var inFlightSongID: String?
+    @ObservationIgnored private var currentTask: URLSessionDataTask?
+    @ObservationIgnored private var translationTask: Task<Void, Never>?
 
     var hasTranslatedLyrics: Bool {
         lyrics.contains { ($0.translatedText?.isEmpty == false) && $0.translatedText != $0.text }

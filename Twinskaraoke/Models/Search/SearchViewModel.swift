@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import Observation
 
 #if canImport(UIKit)
     import UIKit
@@ -36,9 +37,10 @@ struct GenreDetail: Decodable {
 }
 
 @MainActor
-final class PublicPlaylistsViewModel: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var isLoadingMore = false
+@Observable
+final class PublicPlaylistsViewModel {
+    var playlists: [Playlist] = []
+    var isLoadingMore = false
     private var canLoadMore = true
     private var hasLoaded = false
     private var requestToken = 0
@@ -157,9 +159,10 @@ final class PublicPlaylistsViewModel: ObservableObject {
 }
 
 @MainActor
-final class TopChartViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var weeklyTrending: [Song] = []
+@Observable
+final class TopChartViewModel {
+    var songs: [Song] = []
+    var weeklyTrending: [Song] = []
     private var hasLoaded = false
     private var requestToken = 0
 
@@ -209,34 +212,35 @@ final class TopChartViewModel: ObservableObject {
 }
 
 @MainActor
-final class GenresViewModel: ObservableObject {
-    @Published var genres: [GenreSummary] = []
-    @Published var artworkURLs: [String: URL] = [:]
-    @Published var firstSongs: [String: Song] = [:]
-    @Published var allSongs: [String: [Song]] = [:]
-    @Published var isLoading = false
-    @Published var isLoadingMore = false
-    @Published var canLoadMore = true
-    @Published private(set) var failedDetailIDs = Set<String>()
-    private var page = 0
-    private let pageSize = 50
-    private var hasLoaded = false
-    private var genreDetailOrder: [String] = []
-    private let maxCachedGenreDetails = 30
-    private var detailRequestsInFlight = Set<String>()
-    private var pendingDetailOrder: [String] = []
-    private var pendingDetails: [String: GenreSummary] = [:]
-    private var detailTasks: [String: Task<Void, Never>] = [:]
-    // Published so views can key work on it: a purge cancels in-flight detail
+@Observable
+final class GenresViewModel {
+    var genres: [GenreSummary] = []
+    var artworkURLs: [String: URL] = [:]
+    var firstSongs: [String: Song] = [:]
+    var allSongs: [String: [Song]] = [:]
+    var isLoading = false
+    var isLoadingMore = false
+    var canLoadMore = true
+    private(set) var failedDetailIDs = Set<String>()
+    @ObservationIgnored private var page = 0
+    @ObservationIgnored private let pageSize = 50
+    @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var genreDetailOrder: [String] = []
+    @ObservationIgnored private let maxCachedGenreDetails = 30
+    @ObservationIgnored private var detailRequestsInFlight = Set<String>()
+    @ObservationIgnored private var pendingDetailOrder: [String] = []
+    @ObservationIgnored private var pendingDetails: [String: GenreSummary] = [:]
+    @ObservationIgnored private var detailTasks: [String: Task<Void, Never>] = [:]
+    // Observed so views can key work on it: a purge cancels in-flight detail
     // tasks, and without a generation-keyed restart those views would spin
     // forever on their loading branch.
-    @Published private(set) var detailGeneration: UInt64 = 0
-    private var pageGeneration: UInt64 = 0
-    private var detailFailureDates: [String: Date] = [:]
-    private let maxConcurrentDetailRequests = 4
-    private var genresNeedingFallback = Set<String>()
-    private var fallbackCancellable: AnyCancellable?
-    private var memoryWarningCancellable: AnyCancellable?
+    private(set) var detailGeneration: UInt64 = 0
+    @ObservationIgnored private var pageGeneration: UInt64 = 0
+    @ObservationIgnored private var detailFailureDates: [String: Date] = [:]
+    @ObservationIgnored private let maxConcurrentDetailRequests = 4
+    @ObservationIgnored private var genresNeedingFallback = Set<String>()
+    @ObservationIgnored private var memoryWarningCancellable: AnyCancellable?
+    @ObservationIgnored private var fallbackObservation: ObservationToken?
 
     init() {
         #if canImport(UIKit)
@@ -248,11 +252,11 @@ final class GenresViewModel: ObservableObject {
                 Task { @MainActor [weak self] in self?.clearCachedGenreDetails() }
             }
         #endif
-        fallbackCancellable = FallbackArtProvider.shared.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                Task { @MainActor [weak self] in self?.assignPendingFallbackArtwork() }
-            }
+        fallbackObservation = observeContinuously({
+            _ = FallbackArtRevision.shared.revision
+        }, onChange: { [weak self] in
+            self?.assignPendingFallbackArtwork()
+        })
     }
 
     private func assignPendingFallbackArtwork() {
@@ -477,11 +481,12 @@ final class GenresViewModel: ObservableObject {
 }
 
 @MainActor
-final class SearchCategorySongsViewModel: ObservableObject {
-    @Published var songs: [Song] = []
-    @Published var isLoading = false
-    @Published private var loadFailed = false
-    @Published private(set) var hasLoaded = false
+@Observable
+final class SearchCategorySongsViewModel {
+    var songs: [Song] = []
+    var isLoading = false
+    private var loadFailed = false
+    private(set) var hasLoaded = false
     private let query: String
     private var requestToken = 0
 
@@ -539,11 +544,14 @@ final class SearchCategorySongsViewModel: ObservableObject {
 }
 
 @MainActor
-final class SearchViewModel: ObservableObject {
-    @Published var results: [Song] = []
-    @Published var searchText = ""
-    @Published var isSearching = false
-    @Published var searchErrorMessage: String?
+@Observable
+final class SearchViewModel {
+    var results: [Song] = []
+    var searchText = "" {
+        didSet { scheduleSearch() }
+    }
+    var isSearching = false
+    var searchErrorMessage: String?
 
     /// Whether the field holds a query the search pipeline would actually run.
     /// Views must branch on this rather than `!searchText.isEmpty`: the
@@ -558,22 +566,27 @@ final class SearchViewModel: ObservableObject {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var cancellables = Set<AnyCancellable>()
-    private var queryToken: Int = 0
-    private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var queryToken: Int = 0
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var lastDispatchedQuery = ""
 
-    init() {
-        $searchText
-            // Trim before removeDuplicates so edits that only change
-            // surrounding whitespace ("abc" -> "abc ") don't refire an
-            // identical search request.
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] query in
-                if !query.isEmpty { self?.search(query) } else { self?.clearSearch() }
-            }
-            .store(in: &cancellables)
+    /// Replaces the former `$searchText.debounce().removeDuplicates()` pipeline:
+    /// `@Observable` has no publisher projection, so the 500ms coalescing and
+    /// the duplicate-query suppression are done here instead. Trimming still
+    /// happens before the duplicate check, so edits that only change
+    /// surrounding whitespace ("abc" -> "abc ") don't refire an identical
+    /// search request.
+    private func scheduleSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, let self else { return }
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard query != lastDispatchedQuery else { return }
+            lastDispatchedQuery = query
+            if query.isEmpty { clearSearch() } else { search(query) }
+        }
     }
 
     func retrySearch() {

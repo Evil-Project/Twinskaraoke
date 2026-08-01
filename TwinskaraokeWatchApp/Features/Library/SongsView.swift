@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct SongsView: View {
-    @StateObject var viewModel = SongsViewModel()
-    @EnvironmentObject var audioManager: AudioManager
+    @State var viewModel = SongsViewModel()
+    @Environment(AudioManager.self) var audioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var showPlayer = false
@@ -83,7 +83,7 @@ struct SongsView: View {
         .animation(playbackAnimation, value: viewModel.isLoading)
         .navigationDestination(isPresented: $showPlayer) {
             PlayerView()
-                .environmentObject(audioManager)
+                .environment(audioManager)
         }
         .onAppear {
             viewModel.fetchSongs()

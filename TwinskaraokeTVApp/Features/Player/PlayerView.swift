@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct PlayerView: View {
-    @EnvironmentObject private var audioManager: AudioManager
-    @StateObject private var lyrics = TVLyricsViewModel()
+    @Environment(AudioManager.self) private var audioManager
+    @State private var lyrics = TVLyricsViewModel()
     @FocusState private var focusedTransportControl: TVTransportControl?
 
     var body: some View {

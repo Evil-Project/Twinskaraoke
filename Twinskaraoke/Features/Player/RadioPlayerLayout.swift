@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct RadioPlayerLayout: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
-    @ObservedObject var favorites: FavoritesManager
-    @ObservedObject private var radio = RadioController.shared
+    @Environment(AudioPlayerManager.self) var audioManager
+    let favorites: FavoritesManager
+    private let radio = RadioController.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showingQueue: Bool
     let song: Song

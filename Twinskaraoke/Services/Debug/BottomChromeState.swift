@@ -1,11 +1,12 @@
-import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-final class BottomChromeState: ObservableObject {
+@Observable
+final class BottomChromeState {
     static let shared = BottomChromeState()
 
-    @Published private(set) var isCollapsed = false
+    private(set) var isCollapsed = false
 
     private let collapseThreshold: CGFloat = 36
     private let expandThreshold: CGFloat = 4

@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryView: View {
     let onPlay: (Song, [Song]) -> Void
 
-    @StateObject private var viewModel = PlaylistsViewModel()
+    @State private var viewModel = PlaylistsViewModel()
 
     private let cardWidth: CGFloat = 260
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 60)]
