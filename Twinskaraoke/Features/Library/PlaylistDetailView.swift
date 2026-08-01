@@ -44,8 +44,14 @@ struct PlaylistDetailView: View {
     var body: some View {
         let _ = fallbackArt.revision
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
-        let displayedSongs = filteredSongs
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // Derive the unfiltered list rather than mirroring it into @State.
+        //
+        // `filteredSongs` is only meaningful while a search is active. Using it
+        // as the sole source made the whole screen depend on a sync that had no
+        // way to self-correct: if it was ever missed, the list stayed empty and
+        // stayed empty. See the `onChange(of: loader.songs)` note below.
+        let displayedSongs = isSearching ? filteredSongs : songs
         GeometryReader { geo in
             ScrollView {
                 playlistScrollContent(
@@ -55,6 +61,17 @@ struct PlaylistDetailView: View {
                     width: geo.size.width
                 )
                     .padding(.bottom, 16)
+                    // Row changes (e.g. unfavouriting) used to animate via the
+                    // `filteredSongs` swap; now that the list is derived, the
+                    // animation attaches to the value instead. Same 300-row
+                    // guard: animating a large structural swap stalls the main
+                    // thread.
+                    .animation(
+                        reduceMotion || displayedSongs.count >= 300
+                            ? nil
+                            : AppMotion.quick,
+                        value: displayedSongs
+                    )
             }
             .smoothScrolling()
             .scrollDismissesKeyboard(.interactively)
@@ -160,6 +177,17 @@ struct PlaylistDetailView: View {
                 filteredSongs = PlaylistSongSearch.filter(currentSongs, matching: newValue)
             }
         }
+        // Keeps the *search* results fresh when the playlist reloads underneath
+        // an active query. It deliberately no longer feeds the unfiltered list.
+        //
+        // This was `.onReceive(loader.$songs)`, and the two are not equivalent.
+        // A `@Published` projected publisher replays its current value to every
+        // new subscriber, so that fired on each appear and re-seeded the list
+        // unconditionally. `onChange` fires neither on install nor when the new
+        // value compares equal to the old. Both gaps bit: a playlist already
+        // loaded when the view appeared never seeded, and Refresh re-fetched an
+        // *equal* array, so nothing fired and the empty list could not recover
+        // until the view was destroyed by popping back to Library.
         .onChange(of: loader.songs) { _, newSongs in
             let next = PlaylistSongSearch.filter(
                 newSongs ?? playlist.songListDTOs ?? [],
