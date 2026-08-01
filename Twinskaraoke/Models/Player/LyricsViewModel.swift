@@ -50,6 +50,7 @@ final class LyricsViewModel: ObservableObject {
         inFlightSongID = songID
 
         if let cachedTranslated = LyricsCacheStore.load(songID: songID, variant: .translated) {
+            inFlightSongID = nil
             loadedSongID = songID
             lyrics = cachedTranslated
             isLoading = false
@@ -60,6 +61,7 @@ final class LyricsViewModel: ObservableObject {
         }
 
         if let cachedOriginal = LyricsCacheStore.load(songID: songID, variant: .original) {
+            inFlightSongID = nil
             loadedSongID = songID
             lyrics = cachedOriginal
             isLoading = false

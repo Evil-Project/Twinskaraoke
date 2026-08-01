@@ -21,9 +21,9 @@ struct ArtGalleryView: View {
             } else {
                 VStack(alignment: .leading, spacing: 28) {
                     if let featured = featuredArt {
-                        NavigationLink {
-                            ArtDetailView(art: featured.art, artist: featured.artist)
-                        } label: {
+                        NavigationLink(
+                            value: LibraryDestination.artwork(featured.art, artist: featured.artist)
+                        ) {
                             FeaturedArtCard(art: featured.art, artist: featured.artist)
                         }
                         .buttonStyle(PressableButtonStyle())
@@ -54,9 +54,7 @@ struct ArtGalleryView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: 14) {
                                     ForEach(topArtists) { artist in
-                                        NavigationLink {
-                                            ArtistArtsView(artist: artist)
-                                        } label: {
+                                        NavigationLink(value: LibraryDestination.galleryArtist(artist)) {
                                             ArtistCircleCard(artist: artist)
                                         }
                                         .buttonStyle(PressableButtonStyle())
@@ -71,9 +69,7 @@ struct ArtGalleryView: View {
                         GallerySectionHeader(title: "All Artists")
                         LazyVStack(spacing: 0) {
                             ForEach(Array(viewModel.artists.enumerated()), id: \.element.id) { idx, artist in
-                                NavigationLink {
-                                    ArtistArtsView(artist: artist)
-                                } label: {
+                                NavigationLink(value: LibraryDestination.galleryArtist(artist)) {
                                     ArtistListRow(artist: artist)
                                 }
                                 .buttonStyle(.plain)

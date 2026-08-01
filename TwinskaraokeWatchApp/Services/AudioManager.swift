@@ -4,7 +4,7 @@ import Foundation
 import MediaPlayer
 import SwiftUI
 
-enum PlaybackMode {
+nonisolated enum PlaybackMode {
     case listLoop
     case singleLoop
     var iconName: String {
@@ -15,79 +15,97 @@ enum PlaybackMode {
     }
 }
 
+struct PlayerItemFailureSequence {
+    enum Resolution: Equatable {
+        case recoverCurrent
+        case advance(to: Int)
+        case stop
+    }
+
+    private var cacheRecoveryAttempts: Set<Int> = []
+    private var unrecoverableFailureCount = 0
+
+    mutating func resolve(
+        queueCount: Int,
+        currentIndex: Int,
+        playbackRequested: Bool,
+        cacheRecoveryAvailable: Bool
+    ) -> Resolution {
+        guard playbackRequested, queueCount > 0 else {
+            reset()
+            return .stop
+        }
+
+        let normalizedIndex = min(max(currentIndex, 0), queueCount - 1)
+        if cacheRecoveryAvailable,
+           cacheRecoveryAttempts.insert(normalizedIndex).inserted
+        {
+            return .recoverCurrent
+        }
+
+        unrecoverableFailureCount += 1
+        guard unrecoverableFailureCount < queueCount else { return .stop }
+        return .advance(to: (normalizedIndex + 1) % queueCount)
+    }
+
+    mutating func reset() {
+        cacheRecoveryAttempts.removeAll()
+        unrecoverableFailureCount = 0
+    }
+}
+
 @MainActor
 class AudioManager: ObservableObject {
+    typealias AudioDownloadLoader = @Sendable (URL) async throws -> (
+        temporaryURL: URL,
+        responseAccepted: Bool
+    )
+    typealias AudioValidator = @Sendable (URL, Int) async -> Bool
+
     static let shared = AudioManager()
-    @Published var currentSong: Song? {
-        didSet { refreshUpNext() }
-    }
+    @Published var currentSong: Song?
     @Published var isPlaying = false
     @Published var isLoading = false
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
-    @Published var queue: [Song] = [] {
-        didSet { refreshUpNext() }
-    }
-    @Published var currentIndex: Int = 0 {
-        didSet { refreshUpNext() }
-    }
-    /// Up-next slice of the queue plus its summary string, recomputed only when
-    /// the queue or current track changes (views re-evaluate on every 0.5s tick).
-    @Published private(set) var upNextSongs: [Song] = []
-    @Published private(set) var queueSummaryText = "End of queue"
+    @Published var queue: [Song] = []
+    @Published var currentIndex: Int = 0
+    @Published var isRadioMode = false
     @Published var playbackMode: PlaybackMode = .listLoop
     @Published var isShuffleOn = false
     @Published var volume: Double = AudioManager.storedVolume()
-    /// Live radio plays a stream straight from the network instead of going
-    /// through the download-then-play cache pipeline, and has no queue,
-    /// duration, or seekable position. Everything that assumes those is gated
-    /// on this.
-    @Published private(set) var isRadioMode = false
-    /// Bumped whenever the downloaded-audio cache gains or loses a file.
-    ///
-    /// The size itself is not published, because working it out means walking
-    /// the directory and almost nobody is looking. This is the cheap signal a
-    /// screen that *is* looking can watch, so a download finishing behind the
-    /// Account screen updates the figure on it instead of leaving it stale
-    /// until the listener navigates away and back.
-    @Published private(set) var cacheRevision = 0
-    /// Radio artwork comes from the station metadata, not from `Song`, which
-    /// carries only a synthetic ID for the current track.
-    private var radioArtworkURL: URL?
+    private var originalQueue: [Song] = []
+    // Song equality is ID-only, so parallel occurrence tokens preserve the
+    // exact duplicate selected while the public queue remains `[Song]`.
+    private var queueOccurrenceIDs: [UUID] = []
+    private var originalQueueOccurrenceIDs: [UUID] = []
+    private var currentQueueOccurrenceID: UUID?
     private var player: AVPlayer?
-    private var timeObserver: Any?
-    private var endTimeObserver: NSObjectProtocol?
-    private var cancellables = Set<AnyCancellable>()
-    // Player-item/player publishers live here so cleanupPlayer can drop them
-    // without touching the audio-session handlers in `cancellables`.
-    private var playerCancellables = Set<AnyCancellable>()
-    private var downloadTask: URLSessionDownloadTask?
-    private var downloadToken: UUID?
-    private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
+    private let playerObservationLifetime = PlayerObservationLifetime()
+    private var lifecycleCancellables = Set<AnyCancellable>()
+    private let downloadLoader: AudioDownloadLoader
+    private let audioValidator: AudioValidator
+    private var downloadTask: Task<Void, Never>?
+    private var playbackLoadGeneration: UInt64 = 0
     private var recoveringFromBrokenCache: Set<String> = []
-    private var volumePersistWorkItem: DispatchWorkItem?
-    private var playbackRequested = false
+    private var playerItemFailureSequence = PlayerItemFailureSequence()
+    private(set) var playbackRequested = false
     private var shouldResumeAfterInterruption = false
-    /// Identifies the tune-in a stream is being built for, so a station the
-    /// listener has already left behind can't adopt itself when it finishes
-    /// coming up on its own queue.
-    private var radioStreamToken: UUID?
-    /// Whether the playback session is up. A player told to play against an
-    /// inactive session just sits there, so every `play()` waits on this.
-    private var isSessionActive = false
-    private nonisolated static let audioCacheDir: URL = {
+    private static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
 
-    private nonisolated static let maxCachedFiles = 10
-    /// Total on-disk budget for the audio cache: once past it, the oldest
-    /// files are evicted even when the count limit has not been reached.
-    private nonisolated static let maxCacheBytes = 128 * 1024 * 1024
+    private static let maxCachedFiles = 10
     private static let volumeDefaultsKey = "nk.watchVolume"
-    init() {
+    init(
+        downloadLoader: @escaping AudioDownloadLoader = AudioManager.loadRemoteAudio,
+        audioValidator: @escaping AudioValidator = AudioManager.validateAudioFile
+    ) {
+        self.downloadLoader = downloadLoader
+        self.audioValidator = audioValidator
         setupRemoteCommands()
         setupInterruptionHandler()
     }
@@ -97,365 +115,201 @@ class AudioManager: ObservableObject {
         return currentTime / duration
     }
 
-    private func refreshUpNext() {
-        guard let index = resolvedCurrentQueueIndex else {
-            upNextSongs = []
-            queueSummaryText = "End of queue"
-            return
-        }
-        let nextIndex = index + 1
-        guard nextIndex < queue.endIndex else {
-            upNextSongs = []
-            queueSummaryText = "End of queue"
-            return
-        }
-        let songs = Array(queue[nextIndex...])
-        upNextSongs = songs
-        let countText = songs.count == 1 ? "1 song next" : "\(songs.count) songs next"
-        queueSummaryText = "\(countText) - \(Self.queueDurationText(for: songs))"
+    var upNextSongs: [Song] {
+        upNextQueueEntries.map(\.song)
     }
 
-    private static func queueDurationText(for songs: [Song]) -> String {
-        let totalSeconds = songs.reduce(0) { $0 + max(0, $1.duration) }
-        guard totalSeconds > 0 else { return "0:00" }
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-        let seconds = totalSeconds % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
+    var upNextQueueEntries: [WatchQueueEntry] {
+        guard let index = resolvedCurrentQueueIndex else { return [] }
+        let nextIndex = index + 1
+        guard nextIndex < queue.endIndex else { return [] }
+        return queue.indices[nextIndex...].map {
+            WatchQueueEntry(queueIndex: $0, song: queue[$0])
         }
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
     }
 
     func play(song: Song, context: [Song] = []) {
+        isRadioMode = false
+        playerItemFailureSequence.reset()
         var playbackQueue = context.isEmpty ? [song] : context
-        if let index = playbackQueue.firstIndex(of: song) {
-            currentIndex = index
+        var selectedIndex = Self.occurrenceIndex(of: song, in: playbackQueue)
+        if let selectedIndex {
+            playbackQueue[selectedIndex] = song
         } else {
             playbackQueue.insert(song, at: 0)
-            currentIndex = 0
+            selectedIndex = 0
+        }
+
+        if isShuffleOn {
+            // Picking a song from the current queue keeps the existing
+            // shuffled order; a new context is shuffled once with the picked
+            // song first, so previous/next walk real play history.
+            if Self.queuesMatchByOccurrence(playbackQueue, queue) {
+                playbackQueue = queue
+                selectedIndex = Self.occurrenceIndex(of: song, in: playbackQueue)
+            } else {
+                originalQueue = playbackQueue
+                originalQueueOccurrenceIDs = playbackQueue.map { _ in UUID() }
+                let selection = selectedIndex ?? 0
+                var remaining = Array(zip(playbackQueue, originalQueueOccurrenceIDs))
+                let selected = remaining.remove(at: selection)
+                remaining.shuffle()
+                playbackQueue = [selected.0] + remaining.map(\.0)
+                queueOccurrenceIDs = [selected.1] + remaining.map(\.1)
+                selectedIndex = 0
+            }
+        } else {
+            originalQueue = []
+            originalQueueOccurrenceIDs = []
+            queueOccurrenceIDs = playbackQueue.map { _ in UUID() }
+        }
+
+        if queueOccurrenceIDs.count != playbackQueue.count {
+            queueOccurrenceIDs = playbackQueue.map { _ in UUID() }
         }
         queue = playbackQueue
-        currentSong = song
+        selectQueueItem(at: selectedIndex ?? 0)
         prepareAndPlay()
     }
 
-    /// Plays the song at `index` in `context`. The position is picked by
-    /// index rather than by song lookup so tapping a repeated song targets
-    /// that occurrence instead of the first match in the context.
-    func playSong(at index: Int, context: [Song]) {
-        guard context.indices.contains(index) else { return }
-        queue = context
-        currentIndex = index
-        currentSong = context[index]
-        prepareAndPlay()
-    }
-
-    /// Plays the up-next row at `offset`. The queue position is picked by
-    /// offset rather than by song lookup so tapping a repeated song targets
-    /// that occurrence instead of the first match in the queue.
-    func playUpNext(at offset: Int) {
-        guard let baseIndex = resolvedCurrentQueueIndex else { return }
-        let index = baseIndex + 1 + offset
-        guard queue.indices.contains(index) else { return }
-        currentIndex = index
-        currentSong = queue[index]
-        prepareAndPlay()
-    }
-
-    // MARK: - Live radio
-
-    func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
-        // Already tuned in: the track changed under us, not the station.
-        if isRadioMode, player != nil, currentSong?.id == song.id {
-            radioArtworkURL = artworkURL
-            currentSong = song
-            updateNowPlayingInfo()
-            return
-        }
+    func playRadio(streamURL: URL, song: Song, artworkURL _: URL? = nil) {
+        playerItemFailureSequence.reset()
+        invalidatePendingLoad()
         cleanupPlayer()
-        downloadTask?.cancel()
-        downloadToken = nil
-        downloadTask = nil
-        cancellables.removeAll()
-        setupInterruptionHandler()
-
         isRadioMode = true
-        radioArtworkURL = artworkURL
-        // A stream has no queue to advance through and no position to scrub.
-        queue = []
+        currentSong = song
+        queue = [song]
+        queueOccurrenceIDs = [UUID()]
+        currentQueueOccurrenceID = queueOccurrenceIDs.first
         currentIndex = 0
+        originalQueue = []
+        originalQueueOccurrenceIDs = []
         currentTime = 0
         duration = 0
-        currentSong = song
         playbackRequested = true
         isLoading = true
-        startRadioStream(url: streamURL)
+        isPlaying = false
+        setupStreamPlayer(with: streamURL)
     }
 
-    /// Applies a metadata poll to the track already playing, without touching
-    /// the stream itself.
-    func updateRadioMetadata(song: Song, artworkURL: URL?) {
+    func updateRadioMetadata(song: Song, artworkURL _: URL? = nil) {
         guard isRadioMode else { return }
-        radioArtworkURL = artworkURL
         currentSong = song
+        if queue.isEmpty {
+            queue = [song]
+            queueOccurrenceIDs = [UUID()]
+            currentQueueOccurrenceID = queueOccurrenceIDs.first
+            currentIndex = 0
+        } else {
+            queue[currentIndex] = song
+        }
         updateNowPlayingInfo()
     }
 
-    func stopRadio() {
-        guard isRadioMode else { return }
-        cleanupPlayer()
-        isRadioMode = false
-        radioArtworkURL = nil
+    @discardableResult
+    func stopRadio() -> Bool {
+        guard isRadioMode else { return false }
+        invalidatePendingLoad()
         playbackRequested = false
         isPlaying = false
         isLoading = false
-        currentSong = nil
-        currentTime = 0
-        duration = 0
+        isRadioMode = false
+        cleanupPlayer()
         updateNowPlayingInfo()
-    }
-
-    /// Brings the playback session up away from the main actor, then runs
-    /// `start` back on it.
-    ///
-    /// AVFoundation documents activation as "a synchronous (blocking)
-    /// operation" and warns against running it anywhere a long block is a
-    /// problem. On a watch the main actor is exactly that place: tuning the
-    /// radio stalled the whole app for a beat, right when it had the most
-    /// drawing to do. Once the session is up the hop is skipped, so play/pause
-    /// stays immediate.
-    private func activatePlaybackSession(then start: @escaping @MainActor () -> Void) {
-        if isSessionActive {
-            start()
-            return
-        }
-        Task.detached(priority: .userInitiated) {
-            let activated = Self.bringUpPlaybackSession()
-            await MainActor.run { [weak self] in
-                self?.isSessionActive = activated
-                start()
-            }
-        }
-    }
-
-    /// Starts a player away from the main actor.
-    ///
-    /// `play` is `NS_SWIFT_NONISOLATED` like the rest of AVPlayer's transport:
-    /// it is the call that actually opens the route, and the one worth keeping
-    /// off the actor that has to keep drawing while it happens.
-    private nonisolated static func startOffMainActor(_ player: AVPlayer) {
-        Task.detached(priority: .userInitiated) {
-            player.play()
-        }
-    }
-
-    private nonisolated static func bringUpPlaybackSession() -> Bool {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
-            try session.setActive(true)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    /// Opens the live stream without holding onto the main actor.
-    ///
-    /// AVFoundation marks every call in here `NS_SWIFT_NONISOLATED` — building
-    /// the item, building the player, starting it — so none of it belongs on
-    /// the main actor, and on a watch that is not a nicety. Opening a stream
-    /// goes out to the media daemon and back, and doing that from the main
-    /// actor is what froze the whole app for a beat the moment Listen Live was
-    /// tapped. The buffering spinner the radio screen already draws is free to
-    /// animate while this runs.
-    private func startRadioStream(url: URL) {
-        let token = UUID()
-        radioStreamToken = token
-        let startingVolume = Float(volume)
-        Task.detached(priority: .userInitiated) {
-            let playerItem = AVPlayerItem(url: url)
-            let player = AVPlayer(playerItem: playerItem)
-            player.volume = startingVolume
-            // A live stream is better served by waiting out a stall than by
-            // dropping back to the start of the buffer.
-            player.automaticallyWaitsToMinimizeStalling = true
-            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-            let activated = Self.bringUpPlaybackSession()
-            let shouldStart = await MainActor.run { [weak self] () -> Bool in
-                guard let self, self.radioStreamToken == token else { return false }
-                self.isSessionActive = activated
-                self.adoptRadioPlayer(player, item: playerItem)
-                return self.playbackRequested
-            }
-            guard shouldStart else { return }
-            player.playImmediately(atRate: 1.0)
-        }
-    }
-
-    private func adoptRadioPlayer(_ player: AVPlayer, item playerItem: AVPlayerItem) {
-        self.player = player
-
-        playerItem.publisher(for: \.status)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] status in
-                guard let self else { return }
-                if status == .readyToPlay {
-                    // The session may still be coming up on its own queue; it
-                    // starts playback itself when it lands.
-                    if playbackRequested, isSessionActive {
-                        Self.startOffMainActor(player)
-                    }
-                    refreshPlaybackState()
-                    updateNowPlayingInfo()
-                } else if status == .failed {
-                    // No cache to fall back on and no next track to skip to:
-                    // surface it as stopped and let the listener retry.
-                    stopRadio()
-                }
-            }
-            .store(in: &playerCancellables)
-        player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshPlaybackState()
-            }
-            .store(in: &playerCancellables)
+        return true
     }
 
     private func prepareAndPlay() {
-        // Any ordinary song leaves the station behind; this is the single
-        // funnel every play path goes through.
-        isRadioMode = false
-        radioArtworkURL = nil
         cleanupPlayer()
         currentTime = 0
         duration = 0
         isPlaying = false
         playbackRequested = true
-        cancellables.removeAll()
-        setupInterruptionHandler()
-        downloadTask?.cancel()
-        downloadToken = nil
+        let loadGeneration = invalidatePendingLoad()
         guard let song = currentSong else {
-            playbackRequested = false
-            isLoading = false
+            settleAfterPlayerItemFailure()
             return
         }
-        // Every play path funnels through here, so recents are recorded once
-        // rather than at each of the four call sites that set `currentSong`.
-        RecentlyPlayedStore.shared.record(song)
+        if AppRuntime.isUITestMode {
+            duration = Double(max(0, song.duration))
+            isLoading = false
+            isPlaying = true
+            updateNowPlayingInfo()
+            return
+        }
         let localURL = localCacheURL(for: song.id)
         if FileManager.default.fileExists(atPath: localURL.path) {
             isLoading = true
-            validateCacheAndPlay(song: song, cacheURL: localURL)
+            validateCacheAndPlay(
+                song: song,
+                cacheURL: localURL,
+                loadGeneration: loadGeneration
+            )
             return
         }
         guard let remoteURL = song.audioURL else {
-            playbackRequested = false
-            isLoading = false
+            handlePlaybackFailure()
             return
         }
         isLoading = true
-        startDownload(song: song, remoteURL: remoteURL, destinationURL: localURL)
-    }
-
-    /// Single download/validate/play pipeline: every path that fetches remote
-    /// audio (fresh play, cache re-download, broken-cache recovery) goes
-    /// through here so fixes apply in one place.
-    private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
-        let token = UUID()
-        downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { tempURL, response, error in
-            // URLSession deletes the downloaded file the moment this handler
-            // returns, so the header check and the move have to happen here
-            // rather than after a hop to the main queue. Doing them over there
-            // is what silenced every non-radio song on device: the file was
-            // already gone, so the header read failed and playback was dropped
-            // without a spinner, an error, or a sound.
-            let stored: Bool
-            if let tempURL, error == nil, Self.acceptsAudioResponse(response) {
-                stored = Self.storeDownloadedAudio(tempURL: tempURL, destinationURL: destinationURL)
-            } else {
-                if let tempURL {
-                    try? FileManager.default.removeItem(at: tempURL)
-                }
-                stored = false
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      self.downloadToken == token,
-                      self.currentSong?.id == song.id
-                else { return }
-                self.downloadToken = nil
-                self.downloadTask = nil
-                guard stored else {
-                    self.isLoading = false
-                    self.playbackRequested = false
-                    return
-                }
-                // `isLoading` stays set until the player takes over: validation
-                // is another async hop, and dropping the spinner here would
-                // flash the idle controls in between.
-                self.finishDownloadedPlayback(destinationURL: destinationURL, song: song)
-            }
-        }
-        downloadTask?.resume()
+        startDownload(
+            from: remoteURL,
+            destinationURL: localURL,
+            song: song,
+            loadGeneration: loadGeneration
+        )
     }
 
     private func setupPlayer(with localURL: URL) {
-        // Raced async cache validations can both reach here for one song;
-        // tear down any existing player and its observers so two players
-        // never run at once and no orphaned observer keeps firing.
-        cleanupPlayer()
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, policy: .longFormAudio
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
         let playerItem = AVPlayerItem(url: localURL)
         let player = AVPlayer(playerItem: playerItem)
         player.volume = Float(volume)
         self.player = player
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-        playerItem.publisher(for: \.duration)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] dur in
-                let seconds = CMTimeGetSeconds(dur)
-                if !seconds.isNaN, seconds > 0 {
-                    self?.duration = seconds
-                }
-            }
-            .store(in: &playerCancellables)
-        playerItem.publisher(for: \.status)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] status in
-                guard let self else { return }
-                if status == .readyToPlay {
-                    // The session may still be coming up on its own queue; it
-                    // starts playback itself when it lands.
-                    if playbackRequested, isSessionActive {
-                        Self.startOffMainActor(player)
+        playerObservationLifetime.store(
+            playerItem.publisher(for: \.duration)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak player] dur in
+                    guard let self, let player, self.player === player else { return }
+                    let seconds = CMTimeGetSeconds(dur)
+                    if !seconds.isNaN, seconds > 0 {
+                        duration = seconds
                     }
+                }
+        )
+        playerObservationLifetime.store(
+            playerItem.publisher(for: \.status)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak player] status in
+                    guard let self, let player, self.player === player else { return }
+                    if status == .readyToPlay {
+                        playerItemFailureSequence.reset()
+                        if playbackRequested {
+                            player.play()
+                        }
+                        refreshPlaybackState()
+                        updateNowPlayingInfo()
+                    } else if status == .failed {
+                        handlePlaybackFailure(playbackURL: localURL, failedPlayer: player)
+                    }
+                }
+        )
+        playerObservationLifetime.store(
+            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak player] _ in
+                    guard let self, let player, self.player === player else { return }
                     refreshPlaybackState()
-                    updateNowPlayingInfo()
-                } else if status == .failed {
-                    isLoading = false
-                    isPlaying = false
-                    if !recoverFromBrokenCache(playbackURL: localURL) {
-                        playbackRequested = false
-                        playNext()
-                    }
                 }
-            }
-            .store(in: &playerCancellables)
-        player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refreshPlaybackState()
-            }
-            .store(in: &playerCancellables)
+        )
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
+        let timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -465,28 +319,110 @@ class AudioManager: ObservableObject {
                 }
             }
         }
-        if let oldObserver = endTimeObserver {
-            NotificationCenter.default.removeObserver(oldObserver)
-        }
-        endTimeObserver = NotificationCenter.default.addObserver(
+        playerObservationLifetime.replacePeriodicTimeObserver(timeObserver, on: player)
+        let endTimeObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.playEnded()
             }
         }
-        // Whichever of these lands second starts playback: the item may go
-        // ready before the session is up, or the other way round.
-        activatePlaybackSession { [weak self] in
-            guard let self,
-                  self.player === player,
-                  self.playbackRequested,
-                  playerItem.status == .readyToPlay
-            else { return }
-            Self.startOffMainActor(player)
-            self.refreshPlaybackState()
-            self.updateNowPlayingInfo()
+        playerObservationLifetime.replacePlaybackEndedObserver(endTimeObserver)
+    }
+
+    private func setupStreamPlayer(with streamURL: URL) {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, policy: .longFormAudio
+            )
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
+        let playerItem = AVPlayerItem(url: streamURL)
+        let player = AVPlayer(playerItem: playerItem)
+        player.volume = Float(volume)
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        self.player = player
+        playerObservationLifetime.store(
+            playerItem.publisher(for: \.status)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak player] status in
+                    guard let self, let player, self.player === player else { return }
+                    if status == .readyToPlay {
+                        if playbackRequested {
+                            player.play()
+                        }
+                        refreshPlaybackState()
+                        updateNowPlayingInfo()
+                    } else if status == .failed {
+                        handlePlaybackFailure(failedPlayer: player)
+                    }
+                }
+        )
+        playerObservationLifetime.store(
+            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak player] _ in
+                    guard let self, let player, self.player === player else { return }
+                    refreshPlaybackState()
+                }
+        )
+        updateNowPlayingInfo()
+        player.play()
+    }
+
+    private func handlePlaybackFailure(
+        playbackURL: URL? = nil,
+        failedPlayer: AVPlayer? = nil
+    ) {
+        if let failedPlayer, player !== failedPlayer { return }
+        isLoading = false
+        isPlaying = false
+
+        let queueIndex = resolvedCurrentQueueIndex ?? currentIndex
+        var resolution = playerItemFailureSequence.resolve(
+            queueCount: queue.count,
+            currentIndex: queueIndex,
+            playbackRequested: playbackRequested,
+            cacheRecoveryAvailable: playbackURL.map {
+                canRecoverFromBrokenCache(playbackURL: $0)
+            } ?? false
+        )
+
+        if resolution == .recoverCurrent, let playbackURL {
+            if recoverFromBrokenCache(playbackURL: playbackURL) {
+                return
+            }
+            resolution = playerItemFailureSequence.resolve(
+                queueCount: queue.count,
+                currentIndex: queueIndex,
+                playbackRequested: playbackRequested,
+                cacheRecoveryAvailable: false
+            )
         }
+
+        switch resolution {
+        case .recoverCurrent:
+            settleAfterPlayerItemFailure()
+        case let .advance(nextIndex):
+            guard queue.indices.contains(nextIndex) else {
+                settleAfterPlayerItemFailure()
+                return
+            }
+            selectQueueItem(at: nextIndex)
+            prepareAndPlay()
+        case .stop:
+            settleAfterPlayerItemFailure()
+        }
+    }
+
+    private func settleAfterPlayerItemFailure() {
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        isRadioMode = false
+        playerItemFailureSequence.reset()
+        cleanupPlayer()
+        updateNowPlayingInfo()
     }
 
     private func refreshPlaybackState() {
@@ -512,14 +448,16 @@ class AudioManager: ObservableObject {
     private func pausePlayback(cancelDownload: Bool = true) -> Bool {
         let hasPendingDownload = player == nil && (playbackRequested || isLoading)
         if hasPendingDownload && cancelDownload {
-            downloadTask?.cancel()
-            downloadToken = nil
-            downloadTask = nil
+            invalidatePendingLoad()
         }
         guard player != nil || playbackRequested || isLoading else { return false }
+        playerItemFailureSequence.reset()
         playbackRequested = false
         player?.pause()
         isPlaying = false
+        if isRadioMode {
+            return stopRadio()
+        }
         if cancelDownload || player != nil {
             isLoading = false
         }
@@ -529,25 +467,19 @@ class AudioManager: ObservableObject {
 
     @discardableResult
     private func resumePlayback() -> Bool {
+        playerItemFailureSequence.reset()
         guard let player else {
             if isLoading {
                 playbackRequested = true
                 updateNowPlayingInfo()
                 return true
             }
-            // A dead radio player has nothing to restart from: there is no
-            // downloadable URL behind it, and `prepareAndPlay` would file the
-            // station's synthetic song into recently played.
-            if isRadioMode {
-                isPlaying = false
-                playbackRequested = false
-                return false
-            }
-            // Pausing during the initial download cancelled it with nothing
-            // in flight; restart the prepare/download pipeline instead of
-            // dead-ending.
+            // No player and no download in flight (e.g. paused mid-download,
+            // which cancels it, or the download failed) — restart from the
+            // current song instead of leaving the play button dead.
             if currentSong != nil {
                 prepareAndPlay()
+                updateNowPlayingInfo()
                 return true
             }
             isPlaying = false
@@ -555,13 +487,11 @@ class AudioManager: ObservableObject {
             updateNowPlayingInfo()
             return false
         }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
         playbackRequested = true
-        activatePlaybackSession { [weak self] in
-            guard let self, self.player === player, self.playbackRequested else { return }
-            Self.startOffMainActor(player)
-            self.refreshPlaybackState()
-            self.updateNowPlayingInfo()
-        }
+        player.play()
         refreshPlaybackState()
         updateNowPlayingInfo()
         return true
@@ -569,7 +499,11 @@ class AudioManager: ObservableObject {
 
     @discardableResult
     func togglePlayPause() -> Bool {
-        if playbackRequested || isPlaying {
+        // A direct user/remote action supersedes any automatic resume saved
+        // for an interruption. Loading is also an active state: the UI shows
+        // a stop control, so tapping it must cancel rather than re-arm playback.
+        shouldResumeAfterInterruption = false
+        if playbackRequested || isPlaying || isLoading {
             return pausePlayback()
         }
         return resumePlayback()
@@ -577,25 +511,16 @@ class AudioManager: ObservableObject {
 
     func playNext() {
         guard !isRadioMode else { return }
+        playerItemFailureSequence.reset()
         guard !queue.isEmpty else { return }
-        currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
-        if isShuffleOn, queue.count > 1 {
-            var nextIndex = currentIndex
-            while nextIndex == currentIndex {
-                nextIndex = Int.random(in: 0 ..< queue.count)
-            }
-            currentIndex = nextIndex
-        } else {
-            currentIndex = (currentIndex + 1) % queue.count
-        }
-        currentSong = queue[currentIndex]
+        let index = resolvedCurrentQueueIndex ?? queue.startIndex
+        selectQueueItem(at: (index + 1) % queue.count)
         prepareAndPlay()
     }
 
     func playPrevious() {
-        // Seeking a live stream would drop back into the buffer rather than
-        // restart anything, and there is no queue behind it.
         guard !isRadioMode else { return }
+        playerItemFailureSequence.reset()
         if currentTime > 3.0 {
             player?.seek(to: .zero)
             return
@@ -604,30 +529,30 @@ class AudioManager: ObservableObject {
             player?.seek(to: .zero)
             return
         }
-        if let index = resolvedCurrentQueueIndex {
-            currentIndex = index
-        }
-        if currentIndex > 0 {
-            currentIndex -= 1
-            currentSong = queue[currentIndex]
+        let index = resolvedCurrentQueueIndex ?? currentIndex
+        if index > 0 {
+            selectQueueItem(at: index - 1)
             prepareAndPlay()
         } else {
             player?.seek(to: .zero)
         }
     }
 
+    @discardableResult
+    func playQueueItem(at index: Int) -> Bool {
+        guard queue.indices.contains(index) else { return false }
+        playerItemFailureSequence.reset()
+        selectQueueItem(at: index)
+        prepareAndPlay()
+        return true
+    }
+
     func playEnded() {
+        playerItemFailureSequence.reset()
         if playbackMode == .singleLoop {
-            // The seek completes asynchronously; only resume if this is still
-            // the active player and the user has not paused/skipped meanwhile.
-            let loopingPlayer = player
-            loopingPlayer?.seek(to: .zero) { [weak self] _ in
+            player?.seek(to: .zero) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    guard let self,
-                          self.player === loopingPlayer,
-                          self.playbackRequested
-                    else { return }
-                    loopingPlayer?.play()
+                    self?.player?.play()
                 }
             }
         } else {
@@ -643,12 +568,37 @@ class AudioManager: ObservableObject {
     }
 
     func toggleShuffle() {
+        playerItemFailureSequence.reset()
         isShuffleOn.toggle()
+        if isShuffleOn {
+            originalQueue = queue
+            if queueOccurrenceIDs.count != queue.count {
+                queueOccurrenceIDs = queue.map { _ in UUID() }
+            }
+            originalQueueOccurrenceIDs = queueOccurrenceIDs
+            guard let selectedIndex = resolvedCurrentQueueIndex else { return }
+            var remaining = Array(zip(queue, queueOccurrenceIDs))
+            let selected = remaining.remove(at: selectedIndex)
+            remaining.shuffle()
+            queue = [selected.0] + remaining.map(\.0)
+            queueOccurrenceIDs = [selected.1] + remaining.map(\.1)
+            selectQueueItem(at: 0)
+        } else if !originalQueue.isEmpty {
+            let selectedOccurrenceID = currentQueueOccurrenceID
+            queue = originalQueue
+            queueOccurrenceIDs = originalQueueOccurrenceIDs
+            originalQueue = []
+            originalQueueOccurrenceIDs = []
+            let restoredIndex = selectedOccurrenceID.flatMap {
+                queueOccurrenceIDs.firstIndex(of: $0)
+            }
+                ?? Self.occurrenceIndex(of: currentSong, in: queue)
+                ?? 0
+            selectQueueItem(at: restoredIndex)
+        }
     }
 
     func seek(to time: Double) {
-        // A live stream has no meaningful position to seek to.
-        guard !isRadioMode else { return }
         player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
         updateNowPlayingInfo()
     }
@@ -656,14 +606,8 @@ class AudioManager: ObservableObject {
     func setVolume(_ value: Double) {
         let clamped = min(max(value, 0), 1)
         volume = clamped
+        UserDefaults.standard.set(clamped, forKey: AudioManager.volumeDefaultsKey)
         player?.volume = Float(clamped)
-        // Crown rotation streams values continuously; persist only the settled value.
-        volumePersistWorkItem?.cancel()
-        let item = DispatchWorkItem {
-            UserDefaults.standard.set(clamped, forKey: AudioManager.volumeDefaultsKey)
-        }
-        volumePersistWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
     }
 
     private static func storedVolume() -> Double {
@@ -673,67 +617,110 @@ class AudioManager: ObservableObject {
 
     private var resolvedCurrentQueueIndex: Int? {
         guard !queue.isEmpty, let currentSong else { return nil }
-        if queue.indices.contains(currentIndex), queue[currentIndex] == currentSong {
+        if queueOccurrenceIDs.count == queue.count,
+           let currentQueueOccurrenceID,
+           let occurrenceIndex = queueOccurrenceIDs.firstIndex(of: currentQueueOccurrenceID)
+        {
+            return occurrenceIndex
+        }
+        if queue.indices.contains(currentIndex),
+           Self.matchesOccurrence(queue[currentIndex], currentSong)
+        {
             return currentIndex
         }
-        return queue.firstIndex(of: currentSong)
+        return Self.occurrenceIndex(of: currentSong, in: queue)
     }
 
     private func cleanupPlayer() {
-        // Drop the player's Combine sinks first: a raced second setupPlayer
-        // would otherwise leave the old player's status callbacks firing
-        // against the replacement.
-        playerCancellables.removeAll()
-        // Any stream still being built is for a station we have now left.
-        radioStreamToken = nil
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
+        playerObservationLifetime.removeAll()
+        player?.pause()
+        player = nil
+    }
+
+    private func selectQueueItem(at index: Int) {
+        guard queue.indices.contains(index) else {
+            currentIndex = 0
+            currentSong = nil
+            currentQueueOccurrenceID = nil
+            return
         }
-        if let observer = endTimeObserver {
-            NotificationCenter.default.removeObserver(observer)
-            endTimeObserver = nil
+        currentIndex = index
+        currentSong = queue[index]
+        currentQueueOccurrenceID = queueOccurrenceIDs.indices.contains(index)
+            ? queueOccurrenceIDs[index]
+            : nil
+    }
+
+    private nonisolated static func occurrenceIndex(of song: Song?, in queue: [Song]) -> Int? {
+        guard let song else { return nil }
+        return queue.firstIndex { matchesOccurrence($0, song) }
+            ?? queue.firstIndex { $0.id == song.id }
+    }
+
+    private nonisolated static func queuesMatchByOccurrence(_ lhs: [Song], _ rhs: [Song]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy {
+            matchesOccurrence($0.0, $0.1)
         }
-        // Retiring a player reaches the media daemon the same way starting one
-        // does, and it happens on the way *into* the next track — so it is off
-        // the main actor too, holding the last reference until it is done.
-        if let retired = player {
-            player = nil
-            Task.detached(priority: .userInitiated) {
-                retired.pause()
-            }
-        }
+    }
+
+    private nonisolated static func matchesOccurrence(_ lhs: Song, _ rhs: Song) -> Bool {
+        lhs.id == rhs.id
+            && lhs.title == rhs.title
+            && lhs.duration == rhs.duration
+            && lhs.absolutePath == rhs.absolutePath
+            && lhs.cloudflareID == rhs.cloudflareID
+            && lhs.coverArt?.absolutePath == rhs.coverArt?.absolutePath
+            && lhs.coverArt?.cloudflareId == rhs.coverArt?.cloudflareId
+            && lhs.originalArtists == rhs.originalArtists
+            && lhs.coverArtists == rhs.coverArtists
+            && lhs.userUploaded == rhs.userUploaded
+            && lhs.oss == rhs.oss
     }
 
     private func localCacheURL(for songID: String) -> URL {
-        let storageKey = SongStorageKey.component(for: songID)
-        return AudioManager.audioCacheDir.appendingPathComponent("\(storageKey).mp3")
+        AudioManager.audioCacheDir.appendingPathComponent("\(songID).mp3")
     }
 
-    private func finishDownloadedPlayback(destinationURL: URL, song: Song) {
+    private func finishDownloadedPlayback(
+        tempURL: URL,
+        responseAccepted: Bool,
+        destinationURL: URL,
+        song: Song,
+        loadGeneration: UInt64
+    ) {
+        guard playbackLoadGeneration == loadGeneration,
+              currentSong?.id == song.id
+        else { return }
+        guard storeDownloadedAudio(
+            tempURL: tempURL,
+            responseAccepted: responseAccepted,
+            destinationURL: destinationURL
+        )
+        else {
+            handlePlaybackFailure()
+            return
+        }
         validateCachedFile(at: destinationURL, expectedDuration: song.duration) { [weak self] valid in
-            guard let self, currentSong?.id == song.id else { return }
+            guard let self,
+                  playbackLoadGeneration == loadGeneration,
+                  currentSong?.id == song.id
+            else { return }
             guard valid else {
                 try? FileManager.default.removeItem(at: destinationURL)
-                noteCacheChanged()
-                isLoading = false
-                playbackRequested = false
+                handlePlaybackFailure()
                 return
             }
             evictOldCacheFiles()
-            noteCacheChanged()
             setupPlayer(with: destinationURL)
         }
     }
 
-    /// Validates and files a finished download. Runs on URLSession's queue,
-    /// inside the completion handler, because that is the only window in which
-    /// `tempURL` still exists.
-    nonisolated static func storeDownloadedAudio(
+    private func storeDownloadedAudio(
         tempURL: URL,
+        responseAccepted: Bool,
         destinationURL: URL
     ) -> Bool {
-        guard hasValidAudioHeader(at: tempURL) else {
+        guard responseAccepted, Self.hasValidAudioHeader(at: tempURL) else {
             try? FileManager.default.removeItem(at: tempURL)
             return false
         }
@@ -758,6 +745,14 @@ class AudioManager: ObservableObject {
         return !mimeType.hasPrefix("text/")
             && mimeType != "application/json"
             && !mimeType.hasSuffix("+json")
+    }
+
+    nonisolated static func loadRemoteAudio(from url: URL) async throws -> (
+        temporaryURL: URL,
+        responseAccepted: Bool
+    ) {
+        let (temporaryURL, response) = try await URLSession.shared.download(from: url)
+        return (temporaryURL, acceptsAudioResponse(response))
     }
 
     private nonisolated static func hasValidAudioHeader(at url: URL) -> Bool {
@@ -787,9 +782,11 @@ class AudioManager: ObservableObject {
     }
 
     func clearCache() {
-        downloadTask?.cancel()
-        downloadToken = nil
-        downloadTask = nil
+        invalidatePendingLoad()
+        if player == nil {
+            playbackRequested = false
+            isLoading = false
+        }
         let fm = FileManager.default
         if let entries = try? fm.contentsOfDirectory(
             at: AudioManager.audioCacheDir, includingPropertiesForKeys: nil
@@ -798,216 +795,201 @@ class AudioManager: ObservableObject {
                 try? fm.removeItem(at: url)
             }
         }
-        noteCacheChanged()
-    }
-
-    /// Tells anyone displaying the cache that the figure they have is old.
-    private func noteCacheChanged() {
-        cacheRevision &+= 1
-    }
-
-    /// Bytes currently held by the downloaded-audio cache.
-    ///
-    /// Walks the directory on each call rather than tracking a running total:
-    /// eviction, playback and manual clearing all mutate it, and the only
-    /// caller is a settings screen the listener has to deliberately open.
-    nonisolated static func cacheSizeBytes(in directory: URL = audioCacheDir) -> Int64 {
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.fileSizeKey]
-        ) else { return 0 }
-        return entries.reduce(into: Int64(0)) { total, url in
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            total += Int64(size)
-        }
     }
 
     private func validateCachedFile(
         at url: URL, expectedDuration: Int, completion: @escaping (Bool) -> Void
     ) {
-        Task {
-            let asset = AVURLAsset(url: url)
-            let expected = Double(expectedDuration)
-            do {
-                let loadedDuration = try await asset.load(.duration)
-                let isPlayable = try await asset.load(.isPlayable)
-                let actual = loadedDuration.seconds
-                let durationOK: Bool = if expected > 5 {
-                    actual.isFinite && actual >= expected * 0.9
-                } else {
-                    actual.isFinite && actual > 0
-                }
-                await MainActor.run {
-                    completion(isPlayable && durationOK)
-                }
-            } catch {
-                await MainActor.run {
-                    completion(false)
-                }
-            }
+        let audioValidator = audioValidator
+        Task { @MainActor in
+            completion(await audioValidator(url, expectedDuration))
         }
     }
 
-    private func validateCacheAndPlay(song: Song, cacheURL: URL) {
+    private nonisolated static func validateAudioFile(
+        at url: URL,
+        expectedDuration: Int
+    ) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        let expected = Double(expectedDuration)
+        do {
+            let loadedDuration = try await asset.load(.duration)
+            let isPlayable = try await asset.load(.isPlayable)
+            let actual = loadedDuration.seconds
+            let durationOK: Bool = if expected > 5 {
+                actual.isFinite && actual >= expected * 0.9
+            } else {
+                actual.isFinite && actual > 0
+            }
+            return isPlayable && durationOK
+        } catch {
+            return false
+        }
+    }
+
+    private func validateCacheAndPlay(
+        song: Song,
+        cacheURL: URL,
+        loadGeneration: UInt64
+    ) {
         let songID = song.id
         validateCachedFile(at: cacheURL, expectedDuration: song.duration) { [weak self] valid in
             guard let self,
-                  currentSong?.id == songID,
-                  playbackRequested || isLoading
+                  playbackLoadGeneration == loadGeneration,
+                  currentSong?.id == songID
             else { return }
             if valid {
-                try? FileManager.default.setAttributes(
-                    [.modificationDate: Date()],
-                    ofItemAtPath: cacheURL.path
-                )
                 setupPlayer(with: cacheURL)
                 return
             }
             try? FileManager.default.removeItem(at: cacheURL)
-            noteCacheChanged()
             guard let remoteURL = song.audioURL else {
-                isLoading = false
-                playbackRequested = false
+                handlePlaybackFailure()
                 return
             }
-            startDownload(song: song, remoteURL: remoteURL, destinationURL: cacheURL)
+            startDownload(
+                from: remoteURL,
+                destinationURL: cacheURL,
+                song: song,
+                loadGeneration: loadGeneration
+            )
         }
+    }
+
+    private func canRecoverFromBrokenCache(playbackURL: URL) -> Bool {
+        guard playbackURL.path.hasPrefix(AudioManager.audioCacheDir.path),
+              let song = currentSong
+        else { return false }
+        return !recoveringFromBrokenCache.contains(song.id) && song.audioURL != nil
     }
 
     @discardableResult
     private func recoverFromBrokenCache(playbackURL: URL) -> Bool {
-        guard playbackURL.path.hasPrefix(AudioManager.audioCacheDir.path),
+        guard canRecoverFromBrokenCache(playbackURL: playbackURL),
               let song = currentSong,
-              !recoveringFromBrokenCache.contains(song.id),
               let remoteURL = song.audioURL
         else { return false }
         let songID = song.id
         recoveringFromBrokenCache.insert(songID)
         try? FileManager.default.removeItem(at: playbackURL)
-        noteCacheChanged()
         cleanupPlayer()
-        // As in prepareAndPlay, drop the dead player's Combine sinks; this
-        // also drops the session handlers, so re-register them.
-        cancellables.removeAll()
-        setupInterruptionHandler()
         isLoading = true
-        downloadTask?.cancel()
-        downloadToken = nil
-        startDownload(song: song, remoteURL: remoteURL, destinationURL: playbackURL)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+        let loadGeneration = invalidatePendingLoad()
+        startDownload(
+            from: remoteURL,
+            destinationURL: playbackURL,
+            song: song,
+            loadGeneration: loadGeneration
+        )
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
             self?.recoveringFromBrokenCache.remove(songID)
         }
         return true
     }
 
-    /// Evicts least-recently-played cache files once either the file-count
-    /// limit or the total byte budget is exceeded. The newest file (usually
-    /// the one just downloaded) is always kept.
-    func evictOldCacheFiles(
-        in directory: URL = AudioManager.audioCacheDir,
-        maxCount: Int = AudioManager.maxCachedFiles,
-        maxBytes: Int = AudioManager.maxCacheBytes
+    @discardableResult
+    private func invalidatePendingLoad() -> UInt64 {
+        playbackLoadGeneration &+= 1
+        downloadTask?.cancel()
+        downloadTask = nil
+        return playbackLoadGeneration
+    }
+
+    private func startDownload(
+        from remoteURL: URL,
+        destinationURL: URL,
+        song: Song,
+        loadGeneration: UInt64
     ) {
+        guard playbackLoadGeneration == loadGeneration else { return }
+        let loader = downloadLoader
+        let task = Task { @MainActor [weak self] in
+            do {
+                let result = try await loader(remoteURL)
+                guard !Task.isCancelled, let self else {
+                    try? FileManager.default.removeItem(at: result.temporaryURL)
+                    return
+                }
+                guard playbackLoadGeneration == loadGeneration,
+                      currentSong?.id == song.id
+                else {
+                    try? FileManager.default.removeItem(at: result.temporaryURL)
+                    return
+                }
+                downloadTask = nil
+                finishDownloadedPlayback(
+                    tempURL: result.temporaryURL,
+                    responseAccepted: result.responseAccepted,
+                    destinationURL: destinationURL,
+                    song: song,
+                    loadGeneration: loadGeneration
+                )
+            } catch {
+                guard !Task.isCancelled,
+                      let self,
+                      playbackLoadGeneration == loadGeneration,
+                      currentSong?.id == song.id
+                else { return }
+                downloadTask = nil
+                handlePlaybackFailure()
+            }
+        }
+        downloadTask = task
+    }
+
+    private func evictOldCacheFiles() {
         let fm = FileManager.default
-        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        let dir = AudioManager.audioCacheDir
         guard
             let files = try? fm.contentsOfDirectory(
-                at: directory, includingPropertiesForKeys: keys
+                at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
             )
         else { return }
-        // Oldest first; both budgets drop the least-recently-played files.
-        // Stat each file once up front rather than inside the comparator, which
-        // would re-hit the filesystem twice per comparison.
-        let keySet = Set(keys)
-        let sorted = files
-            .map { url -> (url: URL, date: Date, size: Int) in
-                let values = try? url.resourceValues(forKeys: keySet)
-                return (
-                    url: url,
-                    date: values?.contentModificationDate ?? .distantPast,
-                    size: values?.fileSize ?? 0
-                )
-            }
-            .sorted { $0.date < $1.date }
-        var keptCount = 0
-        var keptBytes = 0
-        for (index, entry) in sorted.reversed().enumerated() {
-            let file = entry.url
-            let size = entry.size
-            if index == 0 || (keptCount < maxCount && keptBytes + size <= maxBytes) {
-                keptCount += 1
-                keptBytes += size
-            } else {
-                try? fm.removeItem(at: file)
-            }
+        guard files.count > AudioManager.maxCachedFiles else { return }
+        let sorted = files.sorted {
+            let d1 =
+                (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                    ?? .distantPast
+            let d2 =
+                (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                    ?? .distantPast
+            return d1 < d2
+        }
+        let toRemove = sorted.prefix(files.count - AudioManager.maxCachedFiles)
+        for file in toRemove {
+            try? fm.removeItem(at: file)
         }
     }
 
     private func setupRemoteCommands() {
         let cc = MPRemoteCommandCenter.shared()
-        func performOnMain(
-            _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus
-        ) -> MPRemoteCommandHandlerStatus {
-            if Thread.isMainThread {
-                return MainActor.assumeIsolated { action() }
-            }
-            var status: MPRemoteCommandHandlerStatus = .commandFailed
-            DispatchQueue.main.sync {
-                status = MainActor.assumeIsolated { action() }
-            }
-            return status
+        cc.playCommand.addTarget { [weak self] _ in
+            guard let self, !self.playbackRequested else { return .commandFailed }
+            return resumePlayback() ? .success : .commandFailed
         }
-
-        let playTarget = cc.playCommand.addTarget { [weak self] _ in
+        cc.pauseCommand.addTarget { [weak self] _ in
+            guard let self, playbackRequested else { return .commandFailed }
+            return pausePlayback() ? .success : .commandFailed
+        }
+        cc.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                guard !self.playbackRequested else { return .commandFailed }
-                return self.resumePlayback() ? .success : .commandFailed
-            }
+            return togglePlayPause() ? .success : .commandFailed
         }
-        remoteCommandTargets.append((cc.playCommand, playTarget))
-        let pauseTarget = cc.pauseCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            return performOnMain {
-                guard self.playbackRequested else { return .commandFailed }
-                return self.pausePlayback() ? .success : .commandFailed
-            }
+        cc.nextTrackCommand.addTarget { [weak self] _ in
+            self?.playNext()
+            return .success
         }
-        remoteCommandTargets.append((cc.pauseCommand, pauseTarget))
-        let toggleTarget = cc.togglePlayPauseCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            return performOnMain {
-                self.togglePlayPause() ? .success : .commandFailed
-            }
+        cc.previousTrackCommand.addTarget { [weak self] _ in
+            self?.playPrevious()
+            return .success
         }
-        remoteCommandTargets.append((cc.togglePlayPauseCommand, toggleTarget))
-        let nextTarget = cc.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            return performOnMain {
-                self.playNext()
-                return .success
-            }
-        }
-        remoteCommandTargets.append((cc.nextTrackCommand, nextTarget))
-        let previousTarget = cc.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            return performOnMain {
-                self.playPrevious()
-                return .success
-            }
-        }
-        remoteCommandTargets.append((cc.previousTrackCommand, previousTarget))
     }
 
     private func setupInterruptionHandler() {
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleInterruption(note) }
-            .store(in: &cancellables)
-        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleRouteChange(note) }
-            .store(in: &cancellables)
+            .store(in: &lifecycleCancellables)
     }
 
     private func handleInterruption(_ note: Notification) {
@@ -1017,35 +999,24 @@ class AudioManager: ObservableObject {
         else { return }
         switch type {
         case .began:
-            // The system takes the session away with the interruption, so the
-            // next resume has to bring it back up rather than assume it is there.
-            isSessionActive = false
             shouldResumeAfterInterruption = playbackRequested
             if playbackRequested {
                 pausePlayback(cancelDownload: false)
             }
         case .ended:
+            let shouldResume = shouldResumeAfterInterruption
+            // Consume the intent for every ended notification, including
+            // malformed ones without an options payload. Otherwise a later,
+            // unrelated notification can resume playback unexpectedly.
+            shouldResumeAfterInterruption = false
             guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
             let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
-            if opts.contains(.shouldResume), shouldResumeAfterInterruption {
+            if opts.contains(.shouldResume), shouldResume {
                 resumePlayback()
             }
+        @unknown default:
             shouldResumeAfterInterruption = false
-        @unknown default: break
         }
-    }
-
-    /// Mirrors the iOS route-change handling: when the current output device
-    /// goes away (headphones disconnected), pause instead of continuing on
-    /// the watch speaker.
-    private func handleRouteChange(_ note: Notification) {
-        guard let info = note.userInfo,
-              let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
-              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue),
-              reason == .oldDeviceUnavailable,
-              playbackRequested
-        else { return }
-        pausePlayback(cancelDownload: false)
     }
 
     private func updateNowPlayingInfo() {
@@ -1059,44 +1030,13 @@ class AudioManager: ObservableObject {
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-        if let artwork = nowPlayingArtwork(for: song) {
-            info[MPMediaItemPropertyArtwork] = artwork
-        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-
-    /// Now Playing artwork served from the image cache the player view
-    /// already warms; falls back to no artwork until the thumbnail arrives.
-    private func nowPlayingArtwork(for song: Song) -> MPMediaItemArtwork? {
-        // A radio track's `Song` is synthesised from station metadata and has
-        // no artwork path of its own.
-        guard let url = isRadioMode ? radioArtworkURL : song.thumbnailURL else { return nil }
-        if let image = WatchImageCache.shared.cachedImage(for: url) {
-            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-        }
-        // Not cached yet: fetch, then re-apply so the artwork appears without
-        // waiting for the next playback event.
-        Task { [weak self] in
-            guard let self,
-                  await WatchImageCache.shared.image(for: url) != nil,
-                  self.currentSong?.id == song.id
-            else { return }
-            self.updateNowPlayingInfo()
-        }
-        return nil
     }
 
     isolated deinit {
         downloadTask?.cancel()
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-        }
-        if let observer = endTimeObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        for target in remoteCommandTargets {
-            target.command.removeTarget(target.target)
-        }
+        lifecycleCancellables.removeAll()
+        playerObservationLifetime.removeAll()
         player?.pause()
     }
 }

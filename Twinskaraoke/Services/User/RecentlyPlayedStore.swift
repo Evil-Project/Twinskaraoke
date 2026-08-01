@@ -8,11 +8,15 @@ final class RecentlyPlayedStore: ObservableObject {
     private static let storageKey = "nk.recentlyPlayed.playlists.v1"
     private static let limit = 20
     @Published private(set) var playlists: [Playlist] = []
-    private init() {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         load()
     }
 
     func record(_ playlist: Playlist) {
+        guard !playlist.isSessionOwned else { return }
         var next = playlists.filter { $0.id != playlist.id }
         next.insert(playlist, at: 0)
         if next.count > Self.limit { next = Array(next.prefix(Self.limit)) }
@@ -22,33 +26,22 @@ final class RecentlyPlayedStore: ObservableObject {
 
     func reset() {
         playlists = []
-        UserDefaults.standard.removeObject(forKey: Self.storageKey)
+        defaults.removeObject(forKey: Self.storageKey)
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: Self.storageKey) else { return }
+        guard let data = defaults.data(forKey: Self.storageKey) else { return }
         if let decoded = try? JSONDecoder().decode([Playlist].self, from: data) {
-            playlists = decoded
+            playlists = decoded.filter { !$0.isSessionOwned }
+            if playlists.count != decoded.count {
+                save()
+            }
         }
     }
 
     private func save() {
-        // Persist lightweight metadata only: songListDTOs embeds full song
-        // arrays (~1MB for a 900-song playlist) and stays in memory. load()
-        // still decodes older blobs that include the songs.
-        let stripped = playlists.map {
-            Playlist(
-                id: $0.id,
-                name: $0.name,
-                songCount: $0.songCount,
-                media: $0.media,
-                mosaicMedia: $0.mosaicMedia,
-                songListDTOs: nil,
-                isPersonal: $0.isPersonal
-            )
-        }
-        if let data = try? JSONEncoder().encode(stripped) {
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
+        if let data = try? JSONEncoder().encode(playlists) {
+            defaults.set(data, forKey: Self.storageKey)
         }
     }
 }

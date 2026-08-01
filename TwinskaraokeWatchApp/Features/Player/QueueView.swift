@@ -1,13 +1,6 @@
 import SwiftUI
 
 struct QueueView: View {
-    /// Whether to repeat the current song at the top.
-    ///
-    /// False when the queue sits one swipe away from the player, where the
-    /// summary card and the "Now Playing" section would say what the page
-    /// beside it already shows.
-    var showsCurrentSong = true
-
     @EnvironmentObject var audioManager: AudioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
@@ -25,14 +18,19 @@ struct QueueView: View {
 
     var body: some View {
         List {
-            let upNext = upNextSongs
-            if let current = audioManager.currentSong, showsCurrentSong {
+            let upNext = audioManager.upNextQueueEntries
+            let upNextSongs = upNext.map(\.song)
+            if let current = audioManager.currentSong {
                 WatchQueueSummaryCard(
                     song: current,
                     isPlaying: audioManager.isPlaying,
                     isLoading: audioManager.isLoading,
                     progress: audioManager.progress,
-                    queueSummary: audioManager.queueSummaryText,
+                    queueSummary: WatchQueuePresentation.summary(
+                        upNextSongs: upNextSongs,
+                        queueCount: audioManager.queue.count,
+                        playbackMode: audioManager.playbackMode
+                    ),
                     playPauseAction: toggleCurrentPlayback,
                     previousAction: {
                         audioManager.playPrevious()
@@ -55,32 +53,31 @@ struct QueueView: View {
                             song: current,
                             isCurrent: true,
                             isPlaying: audioManager.isPlaying,
-                            trailingSystemImage: audioManager.isPlaying ? "pause.fill" : "play.fill",
+                            trailingSystemImage: playbackControlSystemName,
                             artworkSize: 34
                         )
+                        .frame(minHeight: 44)
                     }
                     .buttonStyle(.watchPressable)
-                    .accessibilityLabel(audioManager.isPlaying ? "Pause \(current.title)" : "Play \(current.title)")
-                    .accessibilityValue("\(current.artistName), \(audioManager.isPlaying ? "Playing" : "Paused")")
+                    .accessibilityLabel(playbackControlLabel(for: current))
+                    .accessibilityValue("\(current.artistName), \(playbackStateLabel)")
                     .accessibilityHint("Controls the current song.")
                     .accessibilityIdentifier("WatchQueue.nowPlaying")
                 }
             }
             if !upNext.isEmpty {
                 Section("Playing Next") {
-                    ForEach(indexedUpNext) { item in
-                        let offset = item.offset
-                        let song = item.song
+                    ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, entry in
                         Button {
-                            audioManager.playUpNext(at: offset)
-                            WatchHaptic.play(.start)
+                            let didStart = audioManager.playQueueItem(at: entry.queueIndex)
+                            WatchHaptic.play(didStart ? .start : .failure)
                         } label: {
-                            WatchQueuedSongRow(song: song, offset: offset, total: upNext.count)
+                            WatchQueuedSongRow(song: entry.song, offset: offset, total: upNext.count)
                         }
                         .buttonStyle(.watchPressable)
-                        .accessibilityLabel(song.title)
+                        .accessibilityLabel(entry.song.title)
                         .accessibilityValue(
-                            "\(song.artistName), \(queuePositionText(offset: offset, total: upNext.count)), \(song.durationText)"
+                            "\(entry.song.artistName), \(queuePositionText(offset: offset, total: upNext.count)), \(entry.song.durationText)"
                         )
                         .accessibilityHint("Double tap to play this song now.")
                         .accessibilityIdentifier("WatchQueue.upNext.\(offset)")
@@ -95,55 +92,52 @@ struct QueueView: View {
                     )
                     .listRowBackground(Color.clear)
                 } else {
+                    let emptyState = WatchQueuePresentation.emptyState(
+                        queueCount: audioManager.queue.count,
+                        playbackMode: audioManager.playbackMode
+                    )
                     Section("Playing Next") {
                         WatchEmptyState(
                             systemImage: "text.line.first.and.arrowtriangle.forward",
-                            title: "End of Queue",
-                            message: "Choose more songs to keep singing."
+                            title: emptyState.title,
+                            message: emptyState.message
                         )
                         .listRowBackground(Color.clear)
                     }
                 }
             }
         }
-        // Embedded as a page beside the player, the title belongs to the pager.
-        .navigationTitle(showsCurrentSong ? "Queue" : "")
+        .navigationTitle("Queue")
         .animation(queueAnimation, value: audioManager.currentSong?.id)
-        .onAppear {
-            prefetchArtwork()
-        }
-        .compatibleOnChange(of: audioManager.upNextSongs.map(\.id)) { _ in
-            prefetchArtwork()
-        }
-        .onDisappear {
-            WatchArtworkPrefetcher.shared.cancel(reason: "queue")
-        }
-    }
-
-    private func prefetchArtwork() {
-        let urls = audioManager.upNextSongs.compactMap(\.rowImageURL)
-        WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "queue")
-    }
-
-    private var upNextSongs: [Song] {
-        audioManager.upNextSongs
-    }
-
-    // Karaoke setlists legitimately repeat a song and Song identity is the id
-    // alone, so rows use a composite id to keep ForEach identifiers unique.
-    private var indexedUpNext: [QueuedSongRowItem] {
-        upNextSongs.enumerated().map { offset, song in
-            QueuedSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
-        }
+        .animation(queueAnimation, value: audioManager.queue.map(\.id))
     }
 
     private func toggleCurrentPlayback() {
-        let wasPlaying = audioManager.isPlaying
+        let wasActive = audioManager.isPlaying || audioManager.isLoading
         if audioManager.togglePlayPause() {
-            WatchHaptic.play(wasPlaying ? .stop : .start)
+            WatchHaptic.play(wasActive ? .stop : .start)
         } else {
             WatchHaptic.play(.failure)
         }
+    }
+
+    private var playbackControlSystemName: String {
+        if audioManager.isLoading { "stop.fill" } else if audioManager.isPlaying { "pause.fill" } else { "play.fill" }
+    }
+
+    private var playbackStateLabel: String {
+        WatchPlaybackControlPresentation.stateLabel(
+            isLoading: audioManager.isLoading,
+            isPlaying: audioManager.isPlaying
+        )
+    }
+
+    private func playbackControlLabel(for song: Song) -> String {
+        WatchPlaybackControlPresentation.actionLabel(
+            songTitle: song.title,
+            isLoading: audioManager.isLoading,
+            isPlaying: audioManager.isPlaying
+        )
     }
 
     private func queuePositionText(offset: Int, total: Int) -> String {
@@ -152,6 +146,7 @@ struct QueueView: View {
         }
         return "Up next \(offset + 1) of \(total)"
     }
+
 }
 
 private struct WatchQueuedSongRow: View {
@@ -220,6 +215,7 @@ private struct WatchQueuedSongRow: View {
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 3)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(song.title)
@@ -265,8 +261,10 @@ private struct WatchQueueSummaryCard: View {
                         ProgressView()
                             .controlSize(.small)
                             .tint(.white)
+                            .accessibilityHidden(true)
                     }
                 }
+                .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Queue")
@@ -289,25 +287,24 @@ private struct WatchQueueSummaryCard: View {
                     .accessibilityHidden(true)
             }
 
-            HStack(spacing: 13) {
+            HStack(spacing: 4) {
                 WatchQueueTransportButton(
                     systemName: "backward.fill",
                     diameter: 30,
                     iconSize: 13,
                     tint: .primary,
                     fill: Color.secondary.opacity(0.13),
-                    isDisabled: isLoading,
                     accessibilityLabel: "Previous Track",
                     action: previousAction
                 )
 
                 WatchQueueTransportButton(
-                    systemName: isPlaying ? "pause.fill" : "play.fill",
+                    systemName: isLoading ? "stop.fill" : (isPlaying ? "pause.fill" : "play.fill"),
                     diameter: 40,
                     iconSize: 20,
                     tint: .white,
                     fill: Color.appAccent,
-                    accessibilityLabel: isPlaying ? "Pause" : "Play",
+                    accessibilityLabel: isLoading ? "Cancel Loading" : (isPlaying ? "Pause" : "Play"),
                     action: playPauseAction
                 )
 
@@ -317,7 +314,6 @@ private struct WatchQueueSummaryCard: View {
                     iconSize: 13,
                     tint: .primary,
                     fill: Color.secondary.opacity(0.13),
-                    isDisabled: isLoading,
                     accessibilityLabel: "Next Track",
                     action: nextAction
                 )
@@ -335,7 +331,16 @@ private struct WatchQueueSummaryCard: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Queue")
-        .accessibilityValue("\(song.title), \(song.artistName), \(queueSummary)")
+        .accessibilityValue(
+            "\(song.title), \(song.artistName), \(playbackStateLabel), \(queueSummary)"
+        )
+    }
+
+    private var playbackStateLabel: String {
+        WatchPlaybackControlPresentation.stateLabel(
+            isLoading: isLoading,
+            isPlaying: isPlaying
+        )
     }
 }
 
@@ -356,6 +361,8 @@ private struct WatchQueueTransportButton: View {
                 .foregroundColor(tint)
                 .frame(width: diameter, height: diameter)
                 .background(Circle().fill(fill))
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.watchPressable)
         .disabled(isDisabled)
@@ -392,11 +399,4 @@ private struct WatchQueueProgressRing: View {
         }
         .frame(width: 28, height: 28)
     }
-}
-
-
-private struct QueuedSongRowItem: Identifiable {
-    let id: String
-    let offset: Int
-    let song: Song
 }

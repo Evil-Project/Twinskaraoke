@@ -1,23 +1,13 @@
 import Foundation
 
-/// The one station the app streams. Lives here because the watch app and its
-/// complication both need it and cannot see each other's code.
-nonisolated enum RadioStation {
-    static let id = "neuro_21"
-
-    static let metadataURL = URL(
-        string: "https://radio.twinskaraoke.com/api/nowplaying_static/\(id).json"
-    )!
-}
-
-struct RadioNowPlaying: Decodable {
+nonisolated struct RadioNowPlaying: Decodable, Sendable {
     let station: Station
     let listeners: Listeners?
     let nowPlaying: NowPlayingItem?
     let playingNext: NowPlayingItem?
     let songHistory: [HistoryItem]?
 
-    struct Station: Decodable {
+    struct Station: Decodable, Sendable {
         let name: String
         let description: String?
         let listenUrl: String
@@ -28,20 +18,20 @@ struct RadioNowPlaying: Decodable {
         }
     }
 
-    struct Listeners: Decodable {
+    struct Listeners: Decodable, Sendable {
         let total: Int
         let unique: Int
     }
 
-    struct NowPlayingItem: Decodable {
+    struct NowPlayingItem: Decodable, Sendable {
         let song: SongInfo
     }
 
-    struct HistoryItem: Decodable {
+    struct HistoryItem: Decodable, Sendable {
         let song: SongInfo
     }
 
-    struct SongInfo: Decodable {
+    struct SongInfo: Decodable, Sendable {
         let id: String
         let art: String?
         let text: String?
@@ -55,7 +45,7 @@ struct RadioNowPlaying: Decodable {
         }
     }
 
-    struct CustomFields: Decodable {
+    struct CustomFields: Decodable, Sendable {
         let songID: String?
 
         enum CodingKeys: String, CodingKey {

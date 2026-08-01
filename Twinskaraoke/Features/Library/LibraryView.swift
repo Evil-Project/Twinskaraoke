@@ -5,51 +5,48 @@ import SwiftUI
 struct PlaylistSongCountLabel: View {
     let playlist: Playlist
     var fallbackText: String?
-    var prefersDetailCount = true
 
     @ObservedObject private var countStore = PlaylistSongCountStore.shared
 
     private var labelText: String? {
-        if let count = countStore.displayedCount(
-            for: playlist,
-            prefersDetailCount: prefersDetailCount
-        ) {
+        if let count = countStore.displayedCount(for: playlist) {
             return SongCountText.songs(count)
         }
         return fallbackText
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            Color.clear
-                .frame(width: 0, height: 0)
-                .accessibilityHidden(true)
+        Group {
             if let labelText {
                 Text(labelText)
             }
         }
         .task(id: playlist.id) {
-            countStore.loadIfNeeded(
-                for: playlist,
-                forceDetailCount: prefersDetailCount
-                    && PlaylistSongCountStore.needsDetailCount(
-                        for: playlist,
-                        isSaved: SavedPlaylistsStore.shared.isSaved(playlist)
-                    )
-            )
+            countStore.loadIfNeeded(for: playlist)
         }
+    }
+}
+
+@MainActor
+final class LibraryNavigationState: ObservableObject {
+    @Published var path = NavigationPath()
+
+    func resetForSessionChange() {
+        path = NavigationPath()
     }
 }
 
 struct LibraryView: View {
     @StateObject var viewModel = PlaylistsViewModel()
+    @StateObject private var navigationState = LibraryNavigationState()
     @StateObject private var recentSongsViewModel = LibrarySongsViewModel()
     @ObservedObject private var savedStore = SavedPlaylistsStore.shared
+    @ObservedObject private var addedTracker = RecentlyAddedTracker.shared
     @ObservedObject private var favorites = FavoritesManager.shared
+    @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateSheet = false
-    @State private var path = NavigationPath()
-    @State private var favoritesRefreshTask: Task<Void, Never>?
+    let cols = AM.Layout.playlistGridColumns
 
     private var usesCompactToolbar: Bool {
         horizontalSizeClass == .compact
@@ -58,7 +55,7 @@ struct LibraryView: View {
 
     var body: some View {
         let recentlyAddedSongs = Array(recentSongsViewModel.songs.prefix(12))
-        NavigationStack(path: $path) {
+        NavigationStack(path: $navigationState.path) {
             GeometryReader { proxy in
                 ScrollView {
                     libraryOverview(recentlyAddedSongs: recentlyAddedSongs, availableWidth: proxy.size.width)
@@ -80,7 +77,9 @@ struct LibraryView: View {
                             AppHaptic.selection.play()
                             showCreateSheet = true
                         },
-                        onRefresh: refreshLibrary
+                        onRefresh: {
+                            Task { await refreshLibrary() }
+                        }
                     )
                 }
 
@@ -93,10 +92,13 @@ struct LibraryView: View {
                 }
             }
             .refreshable {
-                refreshLibrary()
+                await refreshLibrary()
             }
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistDetailView(playlist: playlist)
+            }
+            .navigationDestination(for: LibraryDestination.self) { destination in
+                libraryDestination(destination)
             }
             .onAppear {
                 favorites.loadIfNeeded()
@@ -105,16 +107,15 @@ struct LibraryView: View {
                 recentSongsViewModel.loadIfNeeded()
             }
             .onChange(of: favorites.favoriteIDs) { _, _ in
-                // Every star tap anywhere in the app fires this; LibraryView is a
-                // tab root that is always alive, so coalesce rapid toggles into a
-                // single refetch instead of fetching the whole list per tap.
-                favoritesRefreshTask?.cancel()
-                favoritesRefreshTask = Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(1))
-                    guard !Task.isCancelled else { return }
-                    viewModel.fetchFavoriteSongs(force: true)
-                }
+                viewModel.fetchFavoriteSongs(force: true)
             }
+            .onChange(of: favorites.sessionRevision) { _, _ in
+                reloadFavoritesForCurrentSession()
+            }
+            .animation(
+                reduceMotion ? nil : AppMotion.spring(response: 0.34, dampingFraction: 0.84),
+                value: recentlyAddedSongs.map(\.id)
+            )
             .sheet(isPresented: $showCreateSheet) {
                 CreatePlaylistSheet()
             }
@@ -197,29 +198,32 @@ struct LibraryView: View {
             libraryLink(
                 icon: "music.note.list",
                 title: "Playlists",
-                destination: PlaylistsGridScreen(viewModel: viewModel)
+                destination: .playlists
             )
-            libraryLink(icon: "music.mic", title: "Artists", destination: ArtistsView())
-            libraryLink(icon: "music.note", title: "Songs", destination: LibrarySongsView())
+            libraryLink(icon: "music.mic", title: "Artists", destination: .artists)
+            libraryLink(icon: "music.note", title: "Songs", destination: .songs)
             libraryLink(
                 icon: "arrow.down.circle",
                 title: "Downloaded",
-                destination: DownloadedSongsView()
+                destination: .downloaded
             )
-            libraryLink(
-                icon: "arrow.up.circle",
-                title: "Uploaded",
-                destination: UploadedSongsView()
-            )
-            libraryLink(icon: "paintpalette", title: "Art Gallery", destination: ArtGalleryView())
-            libraryLink(icon: "play.rectangle", title: "Video Gallery", destination: VideoGalleryView())
+            libraryLink(icon: "paintpalette", title: "Art Gallery", destination: .artGallery)
+            libraryLink(icon: "play.rectangle", title: "Video Gallery", destination: .videoGallery)
             libraryLink(
                 icon: "shuffle",
                 title: "Random Songs",
-                destination: RandomSongsView(),
+                destination: .randomSongs,
                 showsDivider: false
             )
         }
+    }
+
+    private var librarySecondaryLinks: some View {
+        EmptyView()
+    }
+
+    private var librarySecondaryLinksContent: some View {
+        EmptyView()
     }
 
     @ViewBuilder
@@ -227,12 +231,10 @@ struct LibraryView: View {
         icon: String,
         title: String,
         subtitle: String? = nil,
-        destination: some View,
+        destination: LibraryDestination,
         showsDivider: Bool = true
     ) -> some View {
-        NavigationLink {
-            destination
-        } label: {
+        NavigationLink(value: destination) {
             LibraryRow(icon: icon, color: .appAccent, title: title, subtitle: subtitle)
                 .contentShape(Rectangle())
         }
@@ -243,12 +245,47 @@ struct LibraryView: View {
         }
     }
 
-    private func refreshLibrary() {
+    @ViewBuilder
+    private func libraryDestination(_ destination: LibraryDestination) -> some View {
+        switch destination {
+        case .playlists:
+            PlaylistsGridScreen(viewModel: viewModel)
+        case .artists:
+            ArtistsView()
+        case .songs:
+            LibrarySongsView()
+        case .downloaded:
+            DownloadedSongsView()
+        case .artGallery:
+            ArtGalleryView()
+        case .videoGallery:
+            VideoGalleryView()
+        case .randomSongs:
+            RandomSongsView()
+        case let .artist(artist):
+            ArtistDetailView(artist: artist)
+        case let .galleryArtist(artist):
+            ArtistArtsView(artist: artist)
+        case let .artwork(art, artist):
+            ArtDetailView(art: art, artist: artist)
+        case let .video(video):
+            VideoPlayerScreen(video: video)
+        }
+    }
+
+    private func refreshLibrary() async {
         AppHaptic.selection.play()
         favorites.loadIfNeeded()
-        viewModel.fetchPlaylists(force: true)
-        viewModel.fetchFavoriteSongs(force: true)
-        recentSongsViewModel.refresh()
+        async let playlists: Void = viewModel.refresh()
+        async let recentSongs: Void = recentSongsViewModel.refresh()
+        _ = await (playlists, recentSongs)
+    }
+
+    private func reloadFavoritesForCurrentSession() {
+        navigationState.resetForSessionChange()
+        viewModel.sessionDidChange()
+        favorites.loadIfNeeded()
+        viewModel.fetchFavoriteSongs()
     }
 }
 
@@ -258,7 +295,7 @@ private struct LibraryToolbarActions: View {
     let onRefresh: () -> Void
 
     var body: some View {
-        ToolbarCapsuleMenu(accessibilityLabel: "More Library Actions") {
+        ToolbarCapsuleMenu(accessibilityLabel: "Library Actions") {
             Button(action: onCreatePlaylist) {
                 Label("New Playlist", systemImage: "text.badge.plus")
             }
@@ -344,7 +381,7 @@ private struct WideLibraryHero: View {
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
 
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(value: playlist) {
                         Image(systemName: "chevron.right")
                             .font(AM.Font.chevron)
                             .foregroundStyle(Color.appAccent)
@@ -377,7 +414,11 @@ private struct WideLibraryHero: View {
 struct LibrarySongsView: View {
     @StateObject private var viewModel = LibrarySongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var prefetchedIDs: [String] = []
+
+
+    private var listAnimation: Animation? {
+        reduceMotion ? nil : AppMotion.spring(response: 0.34, dampingFraction: 0.84)
+    }
 
     var body: some View {
         let songs = viewModel.displayedSongs
@@ -451,28 +492,21 @@ struct LibrarySongsView: View {
         }
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refresh()
         }
         .task {
             viewModel.loadIfNeeded()
         }
-        // Diffing on displayedSongs (Equatable) avoids allocating the prefix
-        // id array on every body eval; it only builds when the list changes.
-        .onChange(of: viewModel.displayedSongs) { _, newSongs in
-            let visible = Array(newSongs.prefix(18))
-            let ids = visible.map(\.id)
-            guard ids != prefetchedIDs else { return }
-            prefetchedIDs = ids
+        .onChange(of: Array(songs.prefix(18)).map(\.id)) { _, _ in
             ArtworkPrefetcher.shared.prefetchSongs(
-                visible,
+                Array(songs.prefix(18)),
                 limit: 18,
                 reason: "library visible songs",
                 variant: .row
             )
         }
-        .onDisappear {
-            ArtworkPrefetcher.shared.cancel(reason: "library visible songs")
-        }
+        .animation(listAnimation, value: songs.map(\.id))
+        .animation(listAnimation, value: viewModel.sort)
     }
 
     private func play(_ song: Song, context: [Song]) {
@@ -521,29 +555,13 @@ struct LibrarySongsView: View {
     }
 
     private func emptyState(isSearching: Bool) -> some View {
-        VStack(spacing: AM.Spacing.l) {
-            MusicEmptyState(title: emptyTitle(isSearching: isSearching), message: emptyMessage(isSearching: isSearching))
-
-            if viewModel.loadFailed, !isSearching {
-                MusicEmptyActionButton(title: "Try Again") {
-                    AppHaptic.selection.play()
-                    viewModel.refresh()
-                }
-            }
-        }
+        MusicEmptyState(
+            title: isSearching ? "No Results" : "No Songs",
+            message: isSearching
+                ? "Try another song or artist."
+                : "Songs you load from Twins Karaoke will appear here."
+        )
         .frame(maxWidth: .infinity, minHeight: 360)
-    }
-
-    private func emptyTitle(isSearching: Bool) -> String {
-        if isSearching { return "No Results" }
-        if viewModel.loadFailed { return "Couldn't Load Songs" }
-        return "No Songs"
-    }
-
-    private func emptyMessage(isSearching: Bool) -> String {
-        if isSearching { return "Try another song or artist." }
-        if viewModel.loadFailed { return "Check your connection and try again." }
-        return "Songs you load from Twins Karaoke will appear here."
     }
 
     private var skeletonRows: some View {
@@ -620,28 +638,41 @@ struct PlaylistListRow: View {
 
 struct PlaylistsGridScreen: View {
     @ObservedObject var viewModel: PlaylistsViewModel
+    @ObservedObject var savedStore: SavedPlaylistsStore = .shared
     @ObservedObject private var userManager = UserPlaylistsManager.shared
     @ObservedObject private var favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""
-    @State private var favoritesRefreshTask: Task<Void, Never>?
     let cols = AM.Layout.playlistGridColumns
 
 
     private var isLoggedIn: Bool {
-        CredentialStore.isAuthenticated
+        UserDefaults.standard.string(forKey: "nk.token") != nil
+    }
+
+    private var combinedPlaylists: [Playlist] {
+        let userConverted = userManager.playlists.map { $0.asPlaylist() }
+        let all = viewModel.allPlaylists(saved: savedStore.playlists)
+        let existingIDs = Set(all.map(\.id))
+        let uniqueUser = userConverted.filter { !existingIDs.contains($0.id) }
+        return uniqueUser + all
+    }
+
+    private var displayedPlaylists: [Playlist] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return combinedPlaylists }
+        return combinedPlaylists.filter { playlist in
+            playlist.name.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
-        let all = viewModel.combinedPlaylists
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayed = query.isEmpty ? all : all.filter { playlist in
-            playlist.name.localizedCaseInsensitiveContains(query)
-        }
+        let all = combinedPlaylists
+        let displayed = displayedPlaylists
         ScrollView {
             Group {
-                if (viewModel.isLoading || userManager.isLoading), all.isEmpty {
+                if viewModel.isLoading, userManager.isLoading, all.isEmpty {
                     PlaylistsSkeletonView()
                 } else if displayed.isEmpty {
                     MusicEmptyState(
@@ -655,11 +686,8 @@ struct PlaylistsGridScreen: View {
                 } else {
                     LazyVGrid(columns: cols, spacing: AM.Spacing.l) {
                         ForEach(displayed) { playlist in
-                            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
-                                PlaylistGridCell(
-                                    playlist: playlist,
-                                    prefersDetailCount: true
-                                )
+                            NavigationLink(value: playlist) {
+                                PlaylistGridCell(playlist: playlist)
                             }
                             .buttonStyle(PressableButtonStyle())
                             .contextMenu {
@@ -696,13 +724,12 @@ struct PlaylistsGridScreen: View {
         }
         .task { userManager.loadIfNeeded() }
         .onChange(of: favorites.favoriteIDs) { _, _ in
-            favoritesRefreshTask?.cancel()
-            favoritesRefreshTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                viewModel.fetchFavoriteSongs(force: true)
-            }
+            viewModel.fetchFavoriteSongs(force: true)
         }
+        .animation(
+            reduceMotion ? nil : AppMotion.spring(response: 0.34, dampingFraction: 0.84),
+            value: displayed.map(\.id)
+        )
         .sheet(isPresented: $showCreateSheet) {
             CreatePlaylistSheet()
         }
@@ -712,23 +739,21 @@ struct PlaylistsGridScreen: View {
 struct PlaylistGridCell: View {
     let playlist: Playlist
     var width: CGFloat?
-    var prefersDetailCount = true
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.s) {
             artwork
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
+                .amShadow(AM.Shadow.card)
             Text(playlist.name)
                 .font(AM.Font.tileTitle)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            PlaylistSongCountLabel(
-                playlist: playlist,
-                fallbackText: prefersDetailCount ? nil : "Playlist",
-                prefersDetailCount: prefersDetailCount
-            )
-                .font(AM.Font.tileCaption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            if !playlist.isFavorites {
+                PlaylistSongCountLabel(playlist: playlist, fallbackText: "Playlist")
+                    .font(AM.Font.tileCaption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)

@@ -1,314 +1,13 @@
 import Foundation
-import os
-
-extension Notification.Name {
-  nonisolated static let karaokeSessionExpired = Notification.Name("KaraokeSessionExpired")
-}
-
-actor UploadedSongMetadataCache {
-  private struct Entry: Sendable {
-    let songs: [Song]
-    let coveredIDs: Set<String>
-    let expiresAt: Date
-  }
-
-  private let lifetime: TimeInterval
-  private var cachedValue: Entry?
-  private var inFlight: (id: UUID, task: Task<[Song], Error>)?
-  // Bumped on invalidate() so a fetch started before signout can't re-cache
-  // the previous user's uploads when it resolves.
-  private var epoch = 0
-
-  init(lifetime: TimeInterval) {
-    self.lifetime = lifetime
-  }
-
-  func value(
-    for requestedIDs: Set<String>,
-    at now: Date = Date(),
-    loader: @escaping @Sendable () async throws -> [Song]
-  ) async throws -> [Song] {
-    guard !requestedIDs.isEmpty else { return [] }
-    if let cachedValue,
-      cachedValue.expiresAt > now,
-      requestedIDs.isSubset(of: cachedValue.coveredIDs)
-    {
-      return cachedValue.songs.filter { requestedIDs.contains($0.id) }
-    }
-
-    let startEpoch = epoch
-    let request: (id: UUID, task: Task<[Song], Error>)
-    if let inFlight {
-      request = inFlight
-    } else {
-      let id = UUID()
-      let task = Task { try await loader() }
-      request = (id, task)
-      inFlight = request
-    }
-
-    do {
-      let songs = try await request.task.value
-      if epoch == startEpoch {
-        let coveredIDs = (cachedValue?.coveredIDs ?? [])
-          .union(requestedIDs)
-          .union(songs.map(\.id))
-        cachedValue = Entry(
-          songs: songs,
-          coveredIDs: coveredIDs,
-          expiresAt: now.addingTimeInterval(lifetime)
-        )
-      }
-      if inFlight?.id == request.id {
-        inFlight = nil
-      }
-      return songs.filter { requestedIDs.contains($0.id) }
-    } catch {
-      if inFlight?.id == request.id {
-        inFlight = nil
-      }
-      throw error
-    }
-  }
-
-  func invalidate() {
-    cachedValue = nil
-    inFlight = nil
-    epoch &+= 1
-  }
-}
-
-/// TTL + in-flight-dedup cache for full playlist detail payloads (the multi-MB
-/// song-list response shared by cover art, song count, and the detail view).
-/// Playlist content mutations (UserPlaylistsManager.addSong) should call
-/// `KaraokeAPIClient.invalidatePlaylistDetail(id:)`; the 60s TTL bounds staleness otherwise.
-actor PlaylistDetailCache {
-  private struct Entry: Sendable {
-    let data: Data
-    let expiresAt: Date
-  }
-
-  private let lifetime: TimeInterval
-  private var entries: [String: Entry] = [:]
-  private var inFlight: [String: (id: UUID, task: Task<Data, Error>)] = [:]
-  // Guards against stale writes: a fetch that started before an invalidation
-  // must not re-cache its pre-mutation payload when it resolves.
-  private var generations: [String: Int] = [:]
-  private var epoch = 0
-
-  init(lifetime: TimeInterval) {
-    self.lifetime = lifetime
-  }
-
-  func data(
-    for playlistID: String,
-    at now: Date = Date(),
-    loader: @escaping @Sendable () async throws -> Data
-  ) async throws -> Data {
-    // Multi-MB payloads: purge expired entries so browsing many playlists
-    // doesn't retain every detail payload for the process lifetime.
-    entries = entries.filter { $0.value.expiresAt > now }
-    if let entry = entries[playlistID] {
-      return entry.data
-    }
-
-    let startGeneration = generations[playlistID, default: 0]
-    let startEpoch = epoch
-    let request: (id: UUID, task: Task<Data, Error>)
-    if let existing = inFlight[playlistID] {
-      request = existing
-    } else {
-      let id = UUID()
-      let task = Task { try await loader() }
-      request = (id, task)
-      inFlight[playlistID] = request
-    }
-
-    do {
-      let data = try await request.task.value
-      if epoch == startEpoch, generations[playlistID, default: 0] == startGeneration {
-        entries[playlistID] = Entry(data: data, expiresAt: now.addingTimeInterval(lifetime))
-      }
-      if inFlight[playlistID]?.id == request.id {
-        inFlight[playlistID] = nil
-      }
-      return data
-    } catch {
-      if inFlight[playlistID]?.id == request.id {
-        inFlight[playlistID] = nil
-      }
-      throw error
-    }
-  }
-
-  func invalidate(playlistID: String) {
-    entries[playlistID] = nil
-    generations[playlistID, default: 0] &+= 1
-    // Cancel the in-flight load so awaiters get CancellationError (and
-    // re-fetch) instead of the pre-mutation payload, and the multi-MB
-    // download stops instead of running to completion.
-    inFlight[playlistID]?.task.cancel()
-    inFlight[playlistID] = nil
-  }
-
-  func invalidateAll() {
-    entries.removeAll()
-    // Same as invalidate(playlistID:): cancel in-flight loads so signout
-    // awaiters can't resolve with the previous user's payload.
-    inFlight.values.forEach { $0.task.cancel() }
-    inFlight.removeAll()
-    epoch &+= 1
-  }
-}
-
-/// Short-TTL cache for the canonical (catalog) half of favorite-song hydration,
-/// keyed by the exact favorite ID set so any favorite change is a cache miss.
-actor FavoriteCatalogMetadataCache {
-  private struct Entry: Sendable {
-    let key: String
-    let songs: [Song]
-    let expiresAt: Date
-  }
-
-  private let lifetime: TimeInterval
-  private var cachedValue: Entry?
-  // Keyed like PlaylistDetailCache so a concurrent request with a different
-  // key doesn't clobber the slot and fire a duplicate POST.
-  private var inFlight: [String: (id: UUID, task: Task<[Song], Error>)] = [:]
-  // Bumped on invalidate() so a fetch started before signout can't re-cache
-  // the previous user's favorites when it resolves.
-  private var epoch = 0
-
-  init(lifetime: TimeInterval) {
-    self.lifetime = lifetime
-  }
-
-  func value(
-    for ids: [String],
-    at now: Date = Date(),
-    loader: @escaping @Sendable () async throws -> [Song]
-  ) async throws -> [Song] {
-    guard !ids.isEmpty else { return [] }
-    let key = ids.sorted().joined(separator: ",")
-    if let cachedValue, cachedValue.key == key, cachedValue.expiresAt > now {
-      return cachedValue.songs
-    }
-
-    let startEpoch = epoch
-    let request: (id: UUID, task: Task<[Song], Error>)
-    if let existing = inFlight[key] {
-      request = existing
-    } else {
-      let id = UUID()
-      let task = Task { try await loader() }
-      request = (id, task)
-      inFlight[key] = request
-    }
-
-    do {
-      let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
-      if inFlight[key]?.id == request.id {
-        inFlight[key] = nil
-      }
-      return songs
-    } catch {
-      if inFlight[key]?.id == request.id {
-        inFlight[key] = nil
-      }
-      throw error
-    }
-  }
-
-  func invalidate() {
-    cachedValue = nil
-    inFlight.removeAll()
-    epoch &+= 1
-  }
-}
-
-/// Short-TTL cache for the full hydrated favorite-song list so reopening the
-/// Favorites playlist doesn't re-fetch and re-hydrate within the lifetime.
-/// Favorite toggles (FavoritesManager) and signout must invalidate it.
-actor FavoriteSongsCache {
-  private struct Entry: Sendable {
-    let songs: [Song]
-    let expiresAt: Date
-  }
-
-  private let lifetime: TimeInterval
-  private var cachedValue: Entry?
-  private var inFlight: (id: UUID, task: Task<[Song], Error>)?
-  // Bumped on invalidate() so a fetch started before a toggle or signout
-  // can't re-cache the stale list when it resolves.
-  private var epoch = 0
-
-  init(lifetime: TimeInterval) {
-    self.lifetime = lifetime
-  }
-
-  func value(
-    at now: Date = Date(),
-    loader: @escaping @Sendable () async throws -> [Song]
-  ) async throws -> [Song] {
-    if let cachedValue, cachedValue.expiresAt > now {
-      return cachedValue.songs
-    }
-
-    let startEpoch = epoch
-    let request: (id: UUID, task: Task<[Song], Error>)
-    if let inFlight {
-      request = inFlight
-    } else {
-      let id = UUID()
-      let task = Task { try await loader() }
-      request = (id, task)
-      inFlight = request
-    }
-
-    do {
-      let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
-      if inFlight?.id == request.id {
-        inFlight = nil
-      }
-      return songs
-    } catch {
-      if inFlight?.id == request.id {
-        inFlight = nil
-      }
-      throw error
-    }
-  }
-
-  func invalidate() {
-    cachedValue = nil
-    inFlight = nil
-    epoch &+= 1
-  }
-}
 
 nonisolated enum KaraokeAPIClient {
-  enum APIError: Error {
+  enum APIError: Error, Equatable {
     case invalidURL
     case invalidBody
     case invalidResponse
     case httpStatus(Int)
     case decodeFailed
   }
-
-  private static let favoriteMetadataLogger = Logger(
-    subsystem: "com.xiaoyuan151.Twinskaraoke",
-    category: "Network"
-  )
-  private static let uploadedSongMetadataCache = UploadedSongMetadataCache(lifetime: 60)
-  private static let playlistDetailCache = PlaylistDetailCache(lifetime: 60)
-  private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
-  private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
   static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
     try await trendingSongs(days: String(days), take: take)
@@ -345,7 +44,7 @@ nonisolated enum KaraokeAPIClient {
       ]
     )
     let data = try await data(for: request)
-    return decodePlaylists(from: data)
+    return try decodePlaylists(from: data)
   }
 
   static func publicPlaylists(
@@ -364,7 +63,7 @@ nonisolated enum KaraokeAPIClient {
       ]
     )
     let data = try await data(for: request)
-    return decodePlaylists(from: data)
+    return try decodePlaylists(from: data)
   }
 
   static func playlistDetail(id: String) async throws -> PlaylistDetail {
@@ -376,135 +75,55 @@ nonisolated enum KaraokeAPIClient {
     if id == Playlist.favoritesID {
       return try await favoriteSongs()
     }
-    let songs = try await playlistDetail(id: id).songListDTOs
-    return try await hydratePlaylistUploadedSongs(songs)
-  }
-
-  private static func hydratePlaylistUploadedSongs(_ songs: [Song]) async throws -> [Song] {
-    guard CredentialStore.token != nil else { return songs }
-    let missingDurationIDs = songs.filter { $0.duration <= 0 }.map(\.id)
-    guard !missingDurationIDs.isEmpty else { return songs }
-
-    do {
-      let uploadedMetadata = try await uploadedSongs(matching: missingDurationIDs)
-      return hydratingFavorites(
-        songs,
-        canonicalSongs: [],
-        uploadedSongs: uploadedMetadata
-      )
-    } catch {
-      try rethrowIfCancelled(error)
-      favoriteMetadataLogger.error(
-        "Playlist uploaded metadata fetch failed: \(String(describing: error), privacy: .public)"
-      )
-      return songs
-    }
+    return try await playlistDetail(id: id).songListDTOs
   }
 
   static func playlistSongCount(id: String) async throws -> Int? {
     let data = try await playlistDetailData(id: id)
     if let playlist = try? decode(Playlist.self, from: data) {
-      return playlist.songListDTOs?.count ?? max(playlist.songCount, 0)
+      return max(playlist.songCount, playlist.songListDTOs?.count ?? 0)
     }
     return SongPayloadDecoder.decodeSongs(from: data)?.count
   }
 
   static func favoriteSongs() async throws -> [Song] {
-    try await favoriteSongsCache.value {
-      let request = try request(
-        path: "/api/favorites/type",
-        queryItems: [URLQueryItem(name: "type", value: "0")]
-      )
-      let data = try await data(for: request)
-      // A valid empty list decodes fine; nil means no known shape matched,
-      // which must surface as an error rather than an empty favorites list
-      // (callers treat [] as authoritative star state).
-      guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
-        throw APIError.decodeFailed
-      }
-      return try await hydrateFavoriteSongs(songs)
-    }
-  }
-
-  private static func hydrateFavoriteSongs(_ songs: [Song]) async throws -> [Song] {
-    guard !songs.isEmpty else { return songs }
-    async let canonicalResult = favoriteCatalogMetadata(ids: songs.map(\.id))
-    async let uploadedResult = favoriteUploadedMetadata(ids: songs.map(\.id))
-    return hydratingFavorites(
-      songs,
-      canonicalSongs: try await canonicalResult,
-      uploadedSongs: try await uploadedResult
+    let request = try request(
+      path: "/api/favorites/type",
+      queryItems: [URLQueryItem(name: "type", value: "0")]
     )
+    let data = try await data(for: request)
+    return try decodeFavoriteSongs(from: data)
   }
 
-  private static func favoriteCatalogMetadata(ids: [String]) async throws -> [Song] {
-    do {
-      return try await favoriteCatalogMetadataCache.value(for: ids) {
-        try await fetchSongs(ids: ids)
-      }
-    } catch {
-      try rethrowIfCancelled(error)
-      favoriteMetadataLogger.error(
-        "Favorite catalog metadata fetch failed: \(String(describing: error), privacy: .public)"
-      )
-      return []
-    }
-  }
+  static func invalidateAccountScopedCaches() async {}
 
-  private static func favoriteUploadedMetadata(ids: [String]) async throws -> [Song] {
-    do {
-      return try await uploadedSongs(matching: ids)
-    } catch {
-      try rethrowIfCancelled(error)
-      favoriteMetadataLogger.error(
-        "Favorite uploaded metadata fetch failed: \(String(describing: error), privacy: .public)"
-      )
-      return []
+  static func decodeFavoriteSongs(from data: Data) throws -> [Song] {
+    if let songs = SongPayloadDecoder.decodeSongs(from: data) {
+      return songs
     }
-  }
 
-  private static func rethrowIfCancelled(_ error: Error) throws {
-    if error is CancellationError || (error as? URLError)?.code == .cancelled {
-      throw error
-    }
-  }
-
-  static func hydratingFavorites(
-    _ songs: [Song],
-    canonicalSongs: [Song],
-    uploadedSongs: [Song]
-  ) -> [Song] {
-    var canonicalByID = Dictionary(
-      canonicalSongs.map { ($0.id, $0) },
-      uniquingKeysWith: { first, _ in first }
-    )
-    for uploadedSong in uploadedSongs {
-      canonicalByID[uploadedSong.id] = uploadedSong
-    }
-    return songs.map { favorite in
-      guard let canonical = canonicalByID[favorite.id] else { return favorite }
-      return favorite.fillingMissingMetadata(from: canonical)
-    }
-  }
-
-  static func uploadedSongs(matching ids: [String]) async throws -> [Song] {
-    try await uploadedSongMetadataCache.value(for: Set(ids)) {
-      try await uploadedSongs()
-    }
-  }
-
-  static func uploadedSongs() async throws -> [Song] {
-    let data = try await data(for: uploadedSongsRequest())
-    guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
+    guard let payload = try? JSONSerialization.jsonObject(with: data) else {
       throw APIError.decodeFailed
     }
-    return songs
-  }
-
-  static func uploadedSongsRequest() throws -> URLRequest {
-    var request = try request(path: "/api/user/songs")
-    request.httpMethod = "GET"
-    return request
+    if let items = payload as? [Any] {
+      guard items.isEmpty else { throw APIError.decodeFailed }
+      return []
+    }
+    if let container = payload as? [String: Any] {
+      let supportedKeys = ["items", "songListDTOs", "songs", "favorites"]
+      let presentValues = supportedKeys.compactMap { key -> Any? in
+        guard container.keys.contains(key) else { return nil }
+        return container[key]
+      }
+      guard !presentValues.isEmpty,
+            let arrays = presentValues as? [[Any]],
+            arrays.allSatisfy(\.isEmpty)
+      else {
+        throw APIError.decodeFailed
+      }
+      return []
+    }
+    throw APIError.decodeFailed
   }
 
   static func songSuggestions(take: Int) async throws -> [Song] {
@@ -531,37 +150,16 @@ nonisolated enum KaraokeAPIClient {
   }
 
   static func fetchSong(id: String) async throws -> Song {
-    let request = try request(pathSegments: ["api", "songs", id])
+    let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+    let request = try request(path: "/api/songs/\(encoded)")
     let data = try await data(for: request)
     if let song = try? decode(Song.self, from: data) { return song }
     if let envelope = try? decode(FavoriteSongEnvelope.self, from: data), let song = envelope.song { return song }
-    if let songs = SongPayloadDecoder.decodeSongs(from: data), let song = songs.first { return song }
     if let response = try? decode(SearchResponse.self, from: data), let song = response.items.first { return song }
+    if let songs = SongPayloadDecoder.decodeSongs(from: data), let song = songs.first { return song }
     if let songs = try? decode([Song].self, from: data), let song = songs.first { return song }
     if let song = songFromJSONObject(data) { return song }
     throw APIError.decodeFailed
-  }
-
-  static func fetchSongs(ids: [String]) async throws -> [Song] {
-    var seenIDs = Set<String>()
-    let uniqueIDs = ids.filter { id in
-      seenIDs.insert(id).inserted
-    }
-    guard !uniqueIDs.isEmpty else { return [] }
-    let request = try songsByIDsRequest(uniqueIDs)
-    let data = try await data(for: request, retriesNonIdempotentRequest: true)
-    guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
-      throw APIError.decodeFailed
-    }
-    return songs
-  }
-
-  static func songsByIDsRequest(_ ids: [String]) throws -> URLRequest {
-    var request = try request(path: "/api/songs/by-ids")
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder().encode(ids)
-    return request
   }
 
   private static func songFromJSONObject(_ data: Data) -> Song? {
@@ -593,6 +191,7 @@ nonisolated enum KaraokeAPIClient {
     let originalArtists = dict["originalArtists"] as? [String]
     let coverArtists = dict["coverArtists"] as? [String]
     let userUploaded = dict["userUploaded"] as? Bool
+    let oss = dict["oss"] as? String
     return Song(
       id: id,
       title: title,
@@ -602,7 +201,8 @@ nonisolated enum KaraokeAPIClient {
       coverArt: coverArt,
       originalArtists: originalArtists,
       coverArtists: coverArtists,
-      userUploaded: userUploaded
+      userUploaded: userUploaded,
+      oss: oss
     )
   }
 
@@ -660,37 +260,24 @@ nonisolated enum KaraokeAPIClient {
       path: "/api/songs",
       body: body
     )
-    return try await data(for: request, retriesNonIdempotentRequest: true)
+    return try await data(for: request)
   }
 
   static func playlistDetailData(id: String) async throws -> Data {
-    try await playlistDetailCache.data(for: id) {
-      let request = try request(pathSegments: ["api", "playlist", id])
-      return try await data(for: request)
+    guard let encodedID = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+      throw APIError.invalidURL
     }
+    let request = try request(path: "/api/playlist/\(encodedID)")
+    return try await data(for: request)
   }
 
-  /// Drop the cached detail payload for a playlist after its contents change
-  /// (e.g. UserPlaylistsManager.addSong). The 60s TTL bounds staleness even
-  /// without explicit invalidation.
-  static func invalidatePlaylistDetail(id: String) async {
-    await playlistDetailCache.invalidate(playlistID: id)
-  }
-
-  /// Drop the cached favorite-song list after a favorite toggle so the next
-  /// read reflects the change (the 60s TTL bounds staleness otherwise).
-  static func invalidateFavoriteSongs() async {
-    await favoriteSongsCache.invalidate()
-  }
-
-  /// Drop all account-scoped cached payloads on signout so the previous
-  /// user's playlist details, favorites, and uploads can't leak into the
-  /// next session.
-  static func invalidateAccountScopedCaches() async {
-    await playlistDetailCache.invalidateAll()
-    await favoriteCatalogMetadataCache.invalidate()
-    await favoriteSongsCache.invalidate()
-    await uploadedSongMetadataCache.invalidate()
+  static func uploadedSongs() async throws -> [Song] {
+    let request = try request(path: "/api/user/songs")
+    let data = try await data(for: request)
+    guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
+      throw APIError.decodeFailed
+    }
+    return songs
   }
 
   private static func decodeSongSearchResults(from data: Data) throws -> [Song] {
@@ -703,28 +290,65 @@ nonisolated enum KaraokeAPIClient {
     throw APIError.decodeFailed
   }
 
-  private static func decodePlaylists(from data: Data) -> [Playlist] {
+  static func decodePlaylists(from data: Data) throws -> [Playlist] {
+    guard let payload = try? JSONSerialization.jsonObject(with: data),
+          let rawItems = payload as? [Any]
+    else {
+      throw APIError.decodeFailed
+    }
+    if rawItems.isEmpty { return [] }
+
     let decoder = JSONDecoder()
-    if let items = try? decoder.decode([PlaylistListItem].self, from: data) {
+    if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements,
+       !items.isEmpty
+    {
       return items.map { $0.asPlaylist() }
     }
-    if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements {
+    if let items = try? decoder.decode([PlaylistListItem].self, from: data), !items.isEmpty {
       return items.map { $0.asPlaylist() }
     }
-    if let items = try? decoder.decode([Playlist].self, from: data) {
+    if let items = (try? decoder.decode(LossyArray<Playlist>.self, from: data))?.elements,
+       !items.isEmpty
+    {
       return items
     }
-    if let items = (try? decoder.decode(LossyArray<Playlist>.self, from: data))?.elements {
+    if let items = try? decoder.decode([Playlist].self, from: data), !items.isEmpty {
       return items
     }
-    return []
+    throw APIError.decodeFailed
   }
 
   static func jsonRequest(path: String, body: [String: Any]) throws -> URLRequest {
+    try configureJSONRequest(
+      try request(path: path),
+      body: body
+    )
+  }
+
+  static func jsonRequest(
+    path: String,
+    body: [String: Any],
+    authenticationToken: String?,
+    guestID: String?
+  ) throws -> URLRequest {
+    try configureJSONRequest(
+      try request(
+        path: path,
+        authenticationToken: authenticationToken,
+        guestID: guestID
+      ),
+      body: body
+    )
+  }
+
+  private static func configureJSONRequest(
+    _ baseRequest: URLRequest,
+    body: [String: Any]
+  ) throws -> URLRequest {
     guard JSONSerialization.isValidJSONObject(body) else {
       throw APIError.invalidBody
     }
-    var request = try request(path: path)
+    var request = baseRequest
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -735,17 +359,8 @@ nonisolated enum KaraokeAPIClient {
     path: String,
     queryItems: [URLQueryItem] = []
   ) throws -> URLRequest {
-    guard var components = URLComponents(string: StorageHost.api) else {
-      throw APIError.invalidURL
-    }
-    components.path = path
-    components.queryItems = queryItems.isEmpty ? nil : queryItems
-    guard let url = components.url else {
-      throw APIError.invalidURL
-    }
-    var request = URLRequest(url: url)
-    request.timeoutInterval = 30
-    if let token = CredentialStore.token {
+    var request = try baseRequest(path: path, queryItems: queryItems)
+    if let token = UserDefaults.standard.string(forKey: "nk.token"), !token.isEmpty {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     GuestIdentity.applyIfNeeded(to: &request)
@@ -756,29 +371,77 @@ nonisolated enum KaraokeAPIClient {
     pathSegments: [String],
     queryItems: [URLQueryItem] = []
   ) throws -> URLRequest {
-    guard !pathSegments.isEmpty, var components = URLComponents(string: StorageHost.api) else {
+    var request = try baseRequest(
+      percentEncodedPath: path(from: pathSegments),
+      queryItems: queryItems
+    )
+    if let token = UserDefaults.standard.string(forKey: "nk.token"), !token.isEmpty {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    GuestIdentity.applyIfNeeded(to: &request)
+    return request
+  }
+
+  static func request(
+    path: String,
+    queryItems: [URLQueryItem] = [],
+    authenticationToken: String?,
+    guestID: String?
+  ) throws -> URLRequest {
+    var request = try baseRequest(path: path, queryItems: queryItems)
+    if let authenticationToken, !authenticationToken.isEmpty {
+      request.setValue("Bearer \(authenticationToken)", forHTTPHeaderField: "Authorization")
+    } else if let guestID, !guestID.isEmpty {
+      request.setValue(guestID, forHTTPHeaderField: "x-guest-id")
+    }
+    return request
+  }
+
+  private static func baseRequest(
+    path: String,
+    queryItems: [URLQueryItem]
+  ) throws -> URLRequest {
+    guard var components = URLComponents(string: StorageHost.api) else {
       throw APIError.invalidURL
     }
-    let encodedSegments = try pathSegments.map { segment -> String in
-      guard !segment.isEmpty,
-            segment != ".",
-            segment != "..",
+    components.path = path
+    return try request(from: components, queryItems: queryItems)
+  }
+
+  private static func baseRequest(
+    percentEncodedPath: String,
+    queryItems: [URLQueryItem]
+  ) throws -> URLRequest {
+    guard var components = URLComponents(string: StorageHost.api) else {
+      throw APIError.invalidURL
+    }
+    components.percentEncodedPath = percentEncodedPath
+    return try request(from: components, queryItems: queryItems)
+  }
+
+  private static func request(
+    from components: URLComponents,
+    queryItems: [URLQueryItem]
+  ) throws -> URLRequest {
+    var components = components
+    components.queryItems = queryItems.isEmpty ? nil : queryItems
+    guard let url = components.url else {
+      throw APIError.invalidURL
+    }
+    return URLRequest(url: url)
+  }
+
+  private static func path(from segments: [String]) throws -> String {
+    guard !segments.isEmpty else { throw APIError.invalidURL }
+    let encodedSegments = try segments.map { segment -> String in
+      guard !segment.isEmpty, segment != ".", segment != "..",
             let encoded = segment.addingPercentEncoding(withAllowedCharacters: pathSegmentAllowed)
       else {
         throw APIError.invalidURL
       }
       return encoded
     }
-    components.percentEncodedPath = "/" + encodedSegments.joined(separator: "/")
-    components.queryItems = queryItems.isEmpty ? nil : queryItems
-    guard let url = components.url else { throw APIError.invalidURL }
-    var request = URLRequest(url: url)
-    request.timeoutInterval = 30
-    if let token = CredentialStore.token {
-      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    }
-    GuestIdentity.applyIfNeeded(to: &request)
-    return request
+    return "/" + encodedSegments.joined(separator: "/")
   }
 
   private static let pathSegmentAllowed: CharacterSet = {
@@ -787,13 +450,9 @@ nonisolated enum KaraokeAPIClient {
     return allowed
   }()
 
-  static func data(
-    for request: URLRequest,
-    retriesNonIdempotentRequest: Bool = false
-  ) async throws -> Data {
+  static func data(for request: URLRequest) async throws -> Data {
     let maxRetries = 3
     let baseDelay: UInt64 = 500_000_000
-    let canRetry = retriesNonIdempotentRequest || isIdempotent(request)
 
     for attempt in 0..<maxRetries {
       do {
@@ -802,23 +461,9 @@ nonisolated enum KaraokeAPIClient {
           throw APIError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-          if httpResponse.statusCode == 401,
-            let authorization = request.value(forHTTPHeaderField: "Authorization"),
-            let currentToken = CredentialStore.token,
-            authorization == "Bearer \(currentToken)"
-          {
-            NotificationCenter.default.post(name: .karaokeSessionExpired, object: nil)
-          }
 
-          if canRetry && shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
-            let delay: UInt64
-            if httpResponse.statusCode == 429,
-              let retryAfter = retryAfterInterval(from: httpResponse)
-            {
-              delay = UInt64(retryAfter * 1_000_000_000)
-            } else {
-              delay = backoffDelay(attempt: attempt, baseDelay: baseDelay)
-            }
+          if shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
+            let delay = baseDelay * UInt64(1 << attempt)
             try await Task.sleep(nanoseconds: delay)
             continue
           }
@@ -827,8 +472,9 @@ nonisolated enum KaraokeAPIClient {
         return data
       } catch let error as URLError {
 
-        if canRetry && shouldRetry(urlError: error) && attempt < maxRetries - 1 {
-          try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt, baseDelay: baseDelay))
+        if shouldRetry(urlError: error) && attempt < maxRetries - 1 {
+          let delay = baseDelay * UInt64(1 << attempt)
+          try await Task.sleep(nanoseconds: delay)
           continue
         }
         throw error
@@ -841,49 +487,22 @@ nonisolated enum KaraokeAPIClient {
     throw APIError.invalidResponse
   }
 
-  private static func isIdempotent(_ request: URLRequest) -> Bool {
-    guard let method = request.httpMethod?.uppercased() else { return true }
-    return method == "GET" || method == "HEAD" || method == "PUT" || method == "DELETE"
-  }
-
-  // Exponential backoff with up to half a base delay of random jitter so
-  // concurrent retrying clients don't stay in lockstep.
-  private static func backoffDelay(attempt: Int, baseDelay: UInt64) -> UInt64 {
-    baseDelay * UInt64(1 << attempt) + UInt64.random(in: 0 ... baseDelay / 2)
-  }
-
-  // Retry-After may be delta-seconds or an HTTP-date. The parsed value is
-  // clamped so an absurd header can't overflow the nanosecond conversion
-  // (or park the retry for hours) at the call site.
-  private static let maxRetryAfterInterval: TimeInterval = 300
-
-  private static func retryAfterInterval(from response: HTTPURLResponse) -> TimeInterval? {
-    guard let value = response.value(forHTTPHeaderField: "Retry-After")?
-      .trimmingCharacters(in: .whitespaces)
-    else { return nil }
-    if let seconds = TimeInterval(value), seconds >= 0 {
-      return min(seconds, maxRetryAfterInterval)
-    }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-    guard let date = formatter.date(from: value) else { return nil }
-    return min(max(0, date.timeIntervalSinceNow), maxRetryAfterInterval)
-  }
-
   private static func shouldRetry(statusCode: Int) -> Bool {
 
     return statusCode == 408 ||
            statusCode == 429 ||
-           ((500..<600).contains(statusCode) && statusCode != 501)
+           statusCode >= 500
   }
 
   private static func shouldRetry(urlError: URLError) -> Bool {
 
     switch urlError.code {
     case .timedOut,
+         .cannotFindHost,
          .cannotConnectToHost,
          .networkConnectionLost,
+         .dnsLookupFailed,
+         .notConnectedToInternet,
          .resourceUnavailable,
          .badServerResponse:
       return true

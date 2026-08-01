@@ -2,9 +2,342 @@ import AVFoundation
 import Compression
 import Foundation
 
+nonisolated final class AudioCacheMainOwnership: @unchecked Sendable {
+    struct WriteLease: Equatable, Sendable {
+        let id: UUID
+        let songID: String
+        let generation: UInt64
+        let sourceURL: URL
+        let directory: URL
+        let mainURL: URL
+        let sourceMetadataURL: URL
+        let mainStagingURL: URL
+        let sourceStagingURL: URL
+    }
+
+    struct MaintenanceSnapshot: Equatable, Sendable {
+        let songID: String
+        fileprivate let generation: UInt64
+    }
+
+    private struct SongState {
+        var generation: UInt64 = 0
+        var activeLease: WriteLease?
+        var isRemoving = false
+    }
+
+    private let condition = NSCondition()
+    private let rootDirectory: URL
+    private let fileManager: FileManager
+    private var states: [String: SongState] = [:]
+    private var activeMaintenanceStagingURLs: Set<URL> = []
+    private var isClearing = false
+
+    init(rootDirectory: URL, fileManager: FileManager = .default) {
+        self.rootDirectory = rootDirectory
+        self.fileManager = fileManager
+        try? fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+    }
+
+    func beginWrite(songID: String, sourceURL: URL) -> WriteLease {
+        condition.lock()
+        while isClearing || states[songID]?.isRemoving == true {
+            condition.wait()
+        }
+
+        var state = states[songID] ?? SongState()
+        state.generation &+= 1
+        let directory = rootDirectory.appendingPathComponent(songID, isDirectory: true)
+        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let leaseID = UUID()
+        let lease = WriteLease(
+            id: leaseID,
+            songID: songID,
+            generation: state.generation,
+            sourceURL: sourceURL,
+            directory: directory,
+            mainURL: directory.appendingPathComponent("main.mp3"),
+            sourceMetadataURL: directory.appendingPathComponent("main.source"),
+            mainStagingURL: directory.appendingPathComponent("main-\(leaseID.uuidString).mp3.partial"),
+            sourceStagingURL: directory.appendingPathComponent("main-\(leaseID.uuidString).source.partial")
+        )
+        state.activeLease = lease
+        states[songID] = state
+        condition.unlock()
+        return lease
+    }
+
+    func owns(_ lease: WriteLease) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isClearing, let state = states[lease.songID], !state.isRemoving else { return false }
+        return state.generation == lease.generation && state.activeLease == lease
+    }
+
+    @discardableResult
+    func commit(_ lease: WriteLease) throws -> Bool {
+        condition.lock()
+        guard !isClearing,
+              var state = states[lease.songID],
+              !state.isRemoving,
+              state.generation == lease.generation,
+              state.activeLease == lease
+        else {
+            condition.unlock()
+            cleanupStaging(for: lease)
+            return false
+        }
+
+        var publicationStarted = false
+        do {
+            try fileManager.createDirectory(at: lease.directory, withIntermediateDirectories: true)
+            try Data(lease.sourceURL.absoluteString.utf8).write(
+                to: lease.sourceStagingURL,
+                options: .atomic
+            )
+            publicationStarted = true
+            try replaceItem(at: lease.mainURL, with: lease.mainStagingURL)
+            try replaceItem(at: lease.sourceMetadataURL, with: lease.sourceStagingURL)
+            try? fileManager.removeItem(at: lease.mainURL.appendingPathExtension("nkz"))
+            state.activeLease = nil
+            states[lease.songID] = state
+            condition.unlock()
+            cleanupStaging(for: lease)
+            return true
+        } catch {
+            if publicationStarted {
+                try? fileManager.removeItem(at: lease.mainURL)
+                try? fileManager.removeItem(at: lease.sourceMetadataURL)
+                try? fileManager.removeItem(at: lease.mainURL.appendingPathExtension("nkz"))
+            }
+            state.generation &+= 1
+            state.activeLease = nil
+            states[lease.songID] = state
+            condition.unlock()
+            cleanupStaging(for: lease)
+            throw error
+        }
+    }
+
+    @discardableResult
+    func cancel(_ lease: WriteLease) -> Bool {
+        condition.lock()
+        var didCancel = false
+        if !isClearing,
+           var state = states[lease.songID],
+           !state.isRemoving,
+           state.generation == lease.generation,
+           state.activeLease == lease
+        {
+            state.activeLease = nil
+            states[lease.songID] = state
+            didCancel = true
+        }
+        condition.unlock()
+        cleanupStaging(for: lease)
+        return didCancel
+    }
+
+    func beginMaintenance(songID: String) -> MaintenanceSnapshot? {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isClearing else { return nil }
+        let state = states[songID] ?? SongState()
+        guard !state.isRemoving, state.activeLease == nil else { return nil }
+        states[songID] = state
+        return MaintenanceSnapshot(songID: songID, generation: state.generation)
+    }
+
+    func isCurrent(_ snapshot: MaintenanceSnapshot) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isClearing, let state = states[snapshot.songID] else { return false }
+        return !state.isRemoving
+            && state.activeLease == nil
+            && state.generation == snapshot.generation
+    }
+
+    @discardableResult
+    func registerMaintenanceStaging(
+        _ urls: [URL],
+        for snapshot: MaintenanceSnapshot
+    ) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !isClearing,
+              let state = states[snapshot.songID],
+              !state.isRemoving,
+              state.activeLease == nil,
+              state.generation == snapshot.generation
+        else { return false }
+        activeMaintenanceStagingURLs.formUnion(urls)
+        return true
+    }
+
+    func unregisterMaintenanceStaging(_ urls: [URL]) {
+        condition.lock()
+        activeMaintenanceStagingURLs.subtract(urls)
+        condition.unlock()
+    }
+
+    @discardableResult
+    func commitIfUnchanged(
+        _ snapshot: MaintenanceSnapshot,
+        mutation: () throws -> Void
+    ) rethrows -> Bool {
+        condition.lock()
+        guard !isClearing,
+              var state = states[snapshot.songID],
+              !state.isRemoving,
+              state.activeLease == nil,
+              state.generation == snapshot.generation
+        else {
+            condition.unlock()
+            return false
+        }
+
+        do {
+            try mutation()
+            state.generation &+= 1
+            states[snapshot.songID] = state
+            condition.unlock()
+            return true
+        } catch {
+            state.generation &+= 1
+            states[snapshot.songID] = state
+            condition.unlock()
+            throw error
+        }
+    }
+
+    @discardableResult
+    func removeIfUnchanged(
+        _ snapshot: MaintenanceSnapshot,
+        removal: () throws -> Void
+    ) rethrows -> Bool {
+        condition.lock()
+        guard !isClearing,
+              var state = states[snapshot.songID],
+              !state.isRemoving,
+              state.activeLease == nil,
+              state.generation == snapshot.generation
+        else {
+            condition.unlock()
+            return false
+        }
+        state.generation &+= 1
+        state.isRemoving = true
+        states[snapshot.songID] = state
+        condition.unlock()
+
+        defer {
+            condition.lock()
+            if var current = states[snapshot.songID] {
+                current.isRemoving = false
+                states[snapshot.songID] = current
+            }
+            condition.broadcast()
+            condition.unlock()
+        }
+        try removal()
+        return true
+    }
+
+    func invalidateAndRemove(songID: String, removal: () -> Void) {
+        condition.lock()
+        while isClearing || states[songID]?.isRemoving == true {
+            condition.wait()
+        }
+        var state = states[songID] ?? SongState()
+        state.generation &+= 1
+        state.activeLease = nil
+        state.isRemoving = true
+        states[songID] = state
+        condition.unlock()
+
+        removal()
+
+        condition.lock()
+        if var current = states[songID] {
+            current.isRemoving = false
+            states[songID] = current
+        }
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func invalidateAllAndRemove(removal: () -> Void) {
+        condition.lock()
+        while isClearing || states.values.contains(where: \.isRemoving) {
+            condition.wait()
+        }
+        isClearing = true
+        for songID in Array(states.keys) {
+            var state = states[songID] ?? SongState()
+            state.generation &+= 1
+            state.activeLease = nil
+            states[songID] = state
+        }
+        condition.unlock()
+
+        removal()
+
+        condition.lock()
+        isClearing = false
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func cleanupPartialFiles() {
+        guard let enumerator = fileManager.enumerator(
+            at: rootDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        for case let fileURL as URL in enumerator {
+            let fileName = fileURL.lastPathComponent
+            let isWriterStaging = fileName.hasSuffix(".partial")
+            let isMainMaintenanceStaging =
+                (fileName.hasPrefix("main-compress-") || fileName.hasPrefix("main-decompress-"))
+                && (fileName.hasSuffix(".staging") || fileName.hasSuffix(".tmp"))
+            guard (isWriterStaging || isMainMaintenanceStaging),
+                  (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                  !isActiveStagingURL(fileURL)
+            else { continue }
+            try? fileManager.removeItem(at: fileURL)
+        }
+    }
+
+    private func isActiveStagingURL(_ url: URL) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return states.values.contains { state in
+            guard let lease = state.activeLease else { return false }
+            return lease.mainStagingURL == url || lease.sourceStagingURL == url
+        } || activeMaintenanceStagingURLs.contains(url)
+    }
+
+    private func cleanupStaging(for lease: WriteLease) {
+        try? fileManager.removeItem(at: lease.mainStagingURL)
+        try? fileManager.removeItem(at: lease.sourceStagingURL)
+    }
+
+    private func replaceItem(at destination: URL, with stagedURL: URL) throws {
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.moveItem(at: stagedURL, to: destination)
+    }
+}
+
 nonisolated enum AudioCacheStore {
+    typealias MainWriteLease = AudioCacheMainOwnership.WriteLease
+
     struct SongFiles {
         let directory: URL
+        let main: URL
+        let mainPartial: URL
         let mainSource: URL
         let vocals: URL
         let instruments: URL
@@ -13,77 +346,27 @@ nonisolated enum AudioCacheStore {
 
     // FileManager.default is thread-safe; Algorithm is an immutable enum value.
     private nonisolated(unsafe) static let fm = FileManager.default
-    private static let compressionLock = NSLock()
     private static let compressionExtension = "nkz"
     private nonisolated(unsafe) static let compressionAlgorithm: Algorithm = .lzfse
     private static let chunkSize = 64 * 1024
     private static let maximumPlayableFileSize: Int64 = 256 * 1024 * 1024
-    // Track-start paths probe the same cached file several times per song
-    // (header validation + duration), each opening a fresh AVAudioFile. Memoize
-    // per (path, modificationDate); `touch` bumps the modification date, so
-    // entries invalidate conservatively whenever the file changes.
-    private static let probeMemoLock = NSLock()
-    private static let probeMemoLimit = 256
-    private nonisolated(unsafe) static var durationMemo: [String: (modified: Date, duration: TimeInterval)] = [:]
-    private nonisolated(unsafe) static var validityMemo: [String: (modified: Date, valid: Bool)] = [:]
-    static let supportedMainAudioExtensions: Set<String> = [
-        "aac", "aif", "aiff", "caf", "flac", "m4a", "m4b", "mp3", "mp4", "wav",
-    ]
     private static let cacheDirectory: URL = {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }()
+    private static let mainOwnership = AudioCacheMainOwnership(
+        rootDirectory: cacheDirectory,
+        fileManager: fm
+    )
 
     static func files(for songID: String) -> SongFiles {
-        songFiles(
-            in: cacheDirectory.appendingPathComponent(
-                SongStorageKey.component(for: songID),
-                isDirectory: true
-            )
-        )
-    }
-
-    static func mainAudioURL(for songID: String, sourceURL: URL) -> URL {
-        files(for: songID).directory.appendingPathComponent(
-            "main.\(mainAudioExtension(for: sourceURL))"
-        )
-    }
-
-    static func mainPartialAudioURL(for songID: String, sourceURL: URL) -> URL {
-        files(for: songID).directory.appendingPathComponent(
-            "main.partial.\(mainAudioExtension(for: sourceURL))"
-        )
-    }
-
-    static func removeMainAudioFiles(for songID: String, excluding preservedURL: URL? = nil) {
-        let directory = files(for: songID).directory
-        let preservedURL = preservedURL?.standardizedFileURL
-        for url in cachedMainAudioURLs(in: directory) {
-            guard url.standardizedFileURL != preservedURL else { continue }
-            try? fm.removeItem(at: url)
-            try? fm.removeItem(at: compressedURL(for: url))
-        }
-    }
-
-    static func commitMainAudioFile(at stagedURL: URL, to finalURL: URL, for songID: String) throws {
-        if fm.fileExists(atPath: finalURL.path) {
-            _ = try fm.replaceItemAt(finalURL, withItemAt: stagedURL)
-        } else {
-            try fm.moveItem(at: stagedURL, to: finalURL)
-        }
-
-        // A newly committed uncompressed file supersedes any compressed copy
-        // and alternate legacy-extension variants.
-        try? fm.removeItem(at: compressedURL(for: finalURL))
-        removeMainAudioFiles(for: songID, excluding: finalURL)
-        CacheManager.noteMusicCacheCommit()
-    }
-
-    private static func songFiles(in directory: URL) -> SongFiles {
+        let directory = ensureSongDirectory(for: songID)
         return SongFiles(
             directory: directory,
+            main: directory.appendingPathComponent("main.mp3"),
+            mainPartial: directory.appendingPathComponent("main.mp3.partial"),
             mainSource: directory.appendingPathComponent("main.source"),
             vocals: directory.appendingPathComponent("vocals.wav"),
             instruments: directory.appendingPathComponent("instruments.wav"),
@@ -92,40 +375,35 @@ nonisolated enum AudioCacheStore {
     }
 
     static func ensureSongDirectory(for songID: String) -> URL {
-        let directory = cacheDirectory.appendingPathComponent(
-            SongStorageKey.component(for: songID),
-            isDirectory: true
-        )
+        let directory = cacheDirectory.appendingPathComponent(songID, isDirectory: true)
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
 
+    static func beginMainWrite(songID: String, sourceURL: URL) -> MainWriteLease {
+        mainOwnership.beginWrite(songID: songID, sourceURL: sourceURL)
+    }
+
+    static func ownsMainWrite(_ lease: MainWriteLease) -> Bool {
+        mainOwnership.owns(lease)
+    }
+
+    @discardableResult
+    static func commitMainWrite(_ lease: MainWriteLease) throws -> Bool {
+        try mainOwnership.commit(lease)
+    }
+
+    static func cancelMainWrite(_ lease: MainWriteLease) {
+        mainOwnership.cancel(lease)
+    }
+
     static func playableMainURL(for songID: String, expectedRemoteURL: URL? = nil, expectedDuration: TimeInterval? = nil) -> URL? {
-        for candidate in mainAudioCandidates(
-            songID: songID,
-            expectedRemoteURL: expectedRemoteURL
-        ) {
-            guard let playable = playableURL(for: candidate) else { continue }
-            guard validateMainSource(for: songID, expectedRemoteURL: expectedRemoteURL) else {
-                return nil
-            }
-            if let expectedDuration, expectedDuration.isFinite, expectedDuration > 1.0 {
-                let actualDuration = audioDuration(at: playable)
-                guard durationAppearsComplete(
-                    actualDuration: actualDuration,
-                    expectedDuration: expectedDuration
-                ) else {
-                    DebugLogger.log(
-                        "Discarding audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
-                        category: .cache
-                    )
-                    removeSongCache(for: songID)
-                    return nil
-                }
-            }
-            return playable
-        }
-        return nil
+        validatedMainURL(
+            for: songID,
+            expectedRemoteURL: expectedRemoteURL,
+            expectedDuration: expectedDuration,
+            allowDecompression: true
+        )
     }
 
     /// Like `playableMainURL`, but never decompresses: returns nil when only the
@@ -136,34 +414,12 @@ nonisolated enum AudioCacheStore {
         expectedRemoteURL: URL? = nil,
         expectedDuration: TimeInterval? = nil
     ) -> URL? {
-        for candidate in mainAudioCandidates(
-            songID: songID,
-            expectedRemoteURL: expectedRemoteURL
-        ) {
-            guard fm.fileExists(atPath: candidate.path), isValidAudioFile(at: candidate) else {
-                continue
-            }
-            guard validateMainSource(for: songID, expectedRemoteURL: expectedRemoteURL) else {
-                return nil
-            }
-            if let expectedDuration, expectedDuration.isFinite, expectedDuration > 1.0 {
-                let actualDuration = audioDuration(at: candidate)
-                guard durationAppearsComplete(
-                    actualDuration: actualDuration,
-                    expectedDuration: expectedDuration
-                ) else {
-                    DebugLogger.log(
-                        "Discarding immediate audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
-                        category: .cache
-                    )
-                    removeSongCache(for: songID)
-                    return nil
-                }
-            }
-            touch(candidate)
-            return candidate
-        }
-        return nil
+        validatedMainURL(
+            for: songID,
+            expectedRemoteURL: expectedRemoteURL,
+            expectedDuration: expectedDuration,
+            allowDecompression: false
+        )
     }
 
     static func playableStems(
@@ -191,40 +447,62 @@ nonisolated enum AudioCacheStore {
         return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
     }
 
-    /// Like `playableStems`, but never decompresses: returns nil when only the
-    /// compressed cache exists, so callers on the main thread can defer that
-    /// work to a background path instead.
-    static func immediatelyPlayableStems(
-        for songID: String,
-        startOffset: TimeInterval,
-        expectedDuration: TimeInterval? = nil
-    ) -> CachedStems? {
-        let songFiles = files(for: songID)
-        let vocals = songFiles.vocals
-        let instruments = songFiles.instruments
-        guard fm.fileExists(atPath: vocals.path), isValidAudioFile(at: vocals),
-              fm.fileExists(atPath: instruments.path), isValidAudioFile(at: instruments)
-        else {
-            return nil
-        }
-        guard validateStemPair(
-            vocals: vocals,
-            instruments: instruments,
-            startOffset: startOffset,
+    static func hasCachedMainAudio(for songID: String, expectedRemoteURL: URL? = nil, expectedDuration: TimeInterval? = nil) -> Bool {
+        playableMainURL(
+            for: songID,
+            expectedRemoteURL: expectedRemoteURL,
             expectedDuration: expectedDuration
-        )
-        else {
-            DebugLogger.log("Removing invalid stem cache for \(songID)", category: .cache)
-            removeStemCache(for: songID)
-            return nil
-        }
-        touch(vocals)
-        touch(instruments)
-        return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
+        ) != nil
+    }
+
+    static func hasCachedStems(for songID: String) -> Bool {
+        playableStems(for: songID, startOffset: readStartOffset(for: songID)) != nil
     }
 
     static func compressedURL(for playableURL: URL) -> URL {
         playableURL.appendingPathExtension(compressionExtension)
+    }
+
+    static func mainAudioURL(for songID: String, sourceURL: URL) -> URL {
+        ensureSongDirectory(for: songID)
+            .appendingPathComponent("main.\(audioExtension(for: sourceURL))")
+    }
+
+    static func mainPartialAudioURL(for songID: String, sourceURL: URL) -> URL {
+        ensureSongDirectory(for: songID)
+            .appendingPathComponent("main.partial.\(audioExtension(for: sourceURL))")
+    }
+
+    static func shouldRemovePartialFile(
+        named fileName: String,
+        modifiedAt: Date?,
+        createdBefore cutoff: Date
+    ) -> Bool {
+        guard fileName.contains(".partial"),
+              let modifiedAt,
+              modifiedAt < cutoff
+        else { return false }
+        return true
+    }
+
+    static func shouldCompressPlayableFile(at url: URL) -> Bool {
+        let fileName = url.lastPathComponent.lowercased()
+        guard !fileName.hasSuffix(".\(compressionExtension)") else { return false }
+        switch url.pathExtension.lowercased() {
+        case "wav", "aif", "aiff", "caf":
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func commitMainAudioFile(at stagedURL: URL, to finalURL: URL, for songID: String) throws {
+        guard fm.fileExists(atPath: stagedURL.path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let directory = ensureSongDirectory(for: songID)
+        try replaceItem(at: finalURL, with: stagedURL)
+        removeMainAudioVariants(in: directory, preserving: finalURL)
     }
 
     static func cachedSongDirectories() -> [URL] {
@@ -243,18 +521,28 @@ nonisolated enum AudioCacheStore {
     }
 
     static func removeSongCache(for songID: String) {
-        try? fm.removeItem(at: files(for: songID).directory)
-        // The music tree changed outside an enforcement pass; tell the
-        // debounced enforcer so it re-measures instead of reusing a stale size.
-        CacheManager.noteMusicCacheCommit()
+        let directory = cacheDirectory.appendingPathComponent(songID, isDirectory: true)
+        // Explicit recovery wins over in-flight writers. Validation and other
+        // opportunistic maintenance use generation-conditional removal below.
+        mainOwnership.invalidateAndRemove(songID: songID) {
+            try? fm.removeItem(at: directory)
+        }
+    }
+
+    static func clearAllCache() {
+        mainOwnership.invalidateAllAndRemove {
+            guard let entries = try? fm.contentsOfDirectory(
+                at: cacheDirectory,
+                includingPropertiesForKeys: nil
+            ) else { return }
+            for url in entries {
+                try? fm.removeItem(at: url)
+            }
+        }
     }
 
     static func removeStemCache(for songID: String) {
-        removeStemCache(in: files(for: songID).directory)
-    }
-
-    static func removeStemCache(in directory: URL) {
-        let songFiles = songFiles(in: directory)
+        let songFiles = files(for: songID)
         let urls = [
             songFiles.vocals,
             songFiles.instruments,
@@ -271,22 +559,7 @@ nonisolated enum AudioCacheStore {
         try? fm.removeItem(at: files(for: songID).offset)
     }
 
-    static func writeMainSourceURL(_ remoteURL: URL?, for songID: String) {
-        if remoteURL != nil {
-            _ = ensureSongDirectory(for: songID)
-        }
-        let sourceURL = files(for: songID).mainSource
-        guard let remoteURL else {
-            try? fm.removeItem(at: sourceURL)
-            return
-        }
-        let data = remoteURL.absoluteString.data(using: .utf8)
-        try? fm.removeItem(at: sourceURL)
-        fm.createFile(atPath: sourceURL.path, contents: data)
-    }
-
     static func writeStartOffset(_ offset: TimeInterval, for songID: String) {
-        _ = ensureSongDirectory(for: songID)
         let data = "\(offset)".data(using: .utf8)
         fm.createFile(atPath: files(for: songID).offset.path, contents: data)
     }
@@ -301,8 +574,8 @@ nonisolated enum AudioCacheStore {
         return value
     }
 
-    static func cleanupLegacyArtifacts(createdBefore cutoff: Date) {
-        cleanupPartialFiles(createdBefore: cutoff)
+    static func cleanupLegacyArtifacts() {
+        cleanupPartialFiles()
         guard
             let entries = try? fm.contentsOfDirectory(
                 at: cacheDirectory,
@@ -320,182 +593,151 @@ nonisolated enum AudioCacheStore {
         }
     }
 
-    static func cleanupPartialFiles(createdBefore cutoff: Date) {
-        guard
-            let enumerator = fm.enumerator(
-                at: cacheDirectory,
-                includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            )
-        else {
-            return
-        }
-        for case let fileURL as URL in enumerator {
-            guard let values = try? fileURL.resourceValues(
-                      forKeys: [.isRegularFileKey, .contentModificationDateKey]
-                  ),
-                  values.isRegularFile == true,
-                  let modifiedAt = values.contentModificationDate,
-                  shouldRemovePartialFile(
-                      named: fileURL.lastPathComponent,
-                      modifiedAt: modifiedAt,
-                      createdBefore: cutoff
-                  )
-            else { continue }
-            try? fm.removeItem(at: fileURL)
-        }
-    }
-
-    static func shouldRemovePartialFile(
-        named name: String,
-        modifiedAt: Date,
-        createdBefore cutoff: Date
-    ) -> Bool {
-        (name.hasSuffix(".partial") || name.contains(".partial.")) && modifiedAt < cutoff
-    }
-
-    static func mainAudioExtension(for sourceURL: URL) -> String {
-        let pathExtension = sourceURL.pathExtension.lowercased()
-        return supportedMainAudioExtensions.contains(pathExtension) ? pathExtension : "mp3"
-    }
-
-    private static func mainAudioCandidates(songID: String, expectedRemoteURL: URL?) -> [URL] {
-        if let expectedRemoteURL {
-            // The container extension is part of Core Audio's file-type
-            // selection. Do not reuse a legacy `main.mp3` that contains M4A
-            // bytes from the same source URL.
-            return [mainAudioURL(for: songID, sourceURL: expectedRemoteURL)]
-        }
-        return cachedMainAudioURLs(in: files(for: songID).directory)
-    }
-
-    private static func cachedMainAudioURLs(in directory: URL) -> [URL] {
-        guard let entries = try? fm.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-        return entries
-            .filter { url in
-                let name = url.lastPathComponent
-                return name.hasPrefix("main.")
-                    && !name.contains(".partial.")
-                    && !name.contains(".promoting-")
-                    && supportedMainAudioExtensions.contains(url.pathExtension.lowercased())
-            }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    static func cleanupPartialFiles() {
+        mainOwnership.cleanupPartialFiles()
     }
 
     static func compressIdleAssets(excluding songIDs: Set<String>) {
-        guard compressionLock.try() else { return }
-        defer { compressionLock.unlock() }
-
-        let excludedStorageKeys = SongStorageKey.components(for: songIDs)
-        for directory in cachedSongDirectories()
-            where !excludedStorageKeys.contains(directory.lastPathComponent)
-        {
+        for directory in cachedSongDirectories() where !songIDs.contains(directory.lastPathComponent) {
             if Task.isCancelled { break }
-            compressAssets(in: directory)
+            let songID = directory.lastPathComponent
+            compressAssets(for: songID)
         }
     }
 
     static func compressAssets(for songID: String) {
-        // Match compressIdleAssets: the wav deletes below must hold the same
-        // lock playableURL holds while decompressing and handing a file out.
-        guard compressionLock.try() else { return }
-        defer { compressionLock.unlock() }
-        compressAssets(in: files(for: songID).directory)
-    }
-
-    private static func compressAssets(in directory: URL) {
-        let songFiles = songFiles(in: directory)
-        guard !Task.isCancelled else { return }
+        let songFiles = files(for: songID)
+        compressMainFileIfNeeded(for: songID, files: songFiles)
         compressPlayableFileIfNeeded(at: songFiles.vocals)
-        guard !Task.isCancelled else { return }
         compressPlayableFileIfNeeded(at: songFiles.instruments)
     }
 
-    static func shouldCompressPlayableFile(at url: URL) -> Bool {
-        url.pathExtension.lowercased() == "wav"
-    }
-
     static func touch(_ url: URL) {
-        let standardizedURL = url.standardizedFileURL
-        let standardizedCacheDirectory = cacheDirectory.standardizedFileURL
-        let cachePathPrefix = standardizedCacheDirectory.path + "/"
-        // Lyrics cache files live outside AudioCache but share the same
-        // access-date LRU bookkeeping.
-        let standardizedLyricsDirectory = LyricsCacheStore.cacheDirectory.standardizedFileURL
-        let lyricsPathPrefix = standardizedLyricsDirectory.path + "/"
-        guard standardizedURL.path.hasPrefix(cachePathPrefix)
-            || standardizedURL.path.hasPrefix(lyricsPathPrefix)
-        else { return }
-
+        guard isCacheURL(url) else { return }
         let now = Date()
-        try? fm.setAttributes([.modificationDate: now], ofItemAtPath: standardizedURL.path)
-        carryProbeMemosAcrossTouch(of: standardizedURL)
+        try? fm.setAttributes([.modificationDate: now], ofItemAtPath: url.path)
 
-        let songDirectory = standardizedURL.hasDirectoryPath
-            ? standardizedURL
-            : standardizedURL.deletingLastPathComponent()
-        if songDirectory != standardizedCacheDirectory,
-           songDirectory != standardizedLyricsDirectory
-        {
+        let rootPath = cacheDirectory.path
+        let songDirectory = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
+        if isCacheURL(songDirectory), songDirectory.path != rootPath {
             try? fm.setAttributes([.modificationDate: now], ofItemAtPath: songDirectory.path)
         }
     }
 
-    /// The probe memos are keyed by modification date, which touch() just
-    /// bumped; carry any memoized results forward to the new date so the next
-    /// lookup doesn't re-open the file with AVAudioFile.
-    private static func carryProbeMemosAcrossTouch(of url: URL) {
-        let path = url.path
-        let modified = modificationDate(of: url)
-        probeMemoLock.lock()
-        if let entry = durationMemo[path] {
-            durationMemo[path] = (modified: modified, duration: entry.duration)
-        }
-        if let entry = validityMemo[path] {
-            validityMemo[path] = (modified: modified, valid: entry.valid)
-        }
-        probeMemoLock.unlock()
+    private static func isCacheURL(_ url: URL) -> Bool {
+        let rootPath = cacheDirectory.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        return path == rootPath || path.hasPrefix(rootPath + "/")
     }
 
-    private static func validateMainSource(for songID: String, expectedRemoteURL: URL?) -> Bool {
-        guard let expectedRemoteURL else { return true }
-        guard let cachedSource = readMainSourceURL(for: songID) else {
-            DebugLogger.log(
-                "Discarding legacy audio cache without source metadata for \(songID)",
-                category: .cache
-            )
-            removeSongCache(for: songID)
-            return false
-        }
-        guard cachedSource == expectedRemoteURL.absoluteString else {
-            DebugLogger.log(
-                "Discarding stale audio cache for \(songID) due to source mismatch",
-                category: .cache
-            )
-            removeSongCache(for: songID)
-            return false
-        }
-        return true
+    private static func hasCachedPlayableFile(at url: URL) -> Bool {
+        fm.fileExists(atPath: url.path) || fm.fileExists(atPath: compressedURL(for: url).path)
     }
 
-    static func durationAppearsComplete(
-        actualDuration: TimeInterval,
-        expectedDuration: TimeInterval?
+    private static func audioExtension(for sourceURL: URL) -> String {
+        let ext = sourceURL.pathExtension.lowercased()
+        return ext.isEmpty ? "mp3" : ext
+    }
+
+    private static func removeMainAudioVariants(in directory: URL, preserving finalURL: URL) {
+        for ext in ["mp3", "m4a", "aac", "wav", "caf", "aif", "aiff"] {
+            let url = directory.appendingPathComponent("main.\(ext)")
+            if url != finalURL {
+                try? fm.removeItem(at: url)
+                try? fm.removeItem(at: compressedURL(for: url))
+            }
+            try? fm.removeItem(at: directory.appendingPathComponent("main.partial.\(ext)"))
+        }
+    }
+
+    private static func validatedMainURL(
+        for songID: String,
+        expectedRemoteURL: URL?,
+        expectedDuration: TimeInterval?,
+        allowDecompression: Bool
+    ) -> URL? {
+        for _ in 0 ..< 3 {
+            guard let snapshot = mainOwnership.beginMaintenance(songID: songID) else { return nil }
+            let songFiles = files(for: songID)
+            guard hasCachedPlayableFile(at: songFiles.main) else { return nil }
+
+            if let expectedRemoteURL {
+                guard let cachedSource = readMainSourceURL(at: songFiles.mainSource) else {
+                    if discardMainCache(
+                        snapshot,
+                        files: songFiles,
+                        message: "Discarding legacy audio cache without source metadata for \(songID)"
+                    ) { return nil }
+                    continue
+                }
+                guard cachedSource == expectedRemoteURL.absoluteString else {
+                    if discardMainCache(
+                        snapshot,
+                        files: songFiles,
+                        message: "Discarding stale audio cache for \(songID) due to source mismatch"
+                    ) { return nil }
+                    continue
+                }
+            }
+
+            let actualURL: URL
+            if fm.fileExists(atPath: songFiles.main.path) {
+                guard isValidAudioFile(at: songFiles.main) else {
+                    if discardMainCache(
+                        snapshot,
+                        files: songFiles,
+                        message: "Discarding broken main audio cache for \(songID)"
+                    ) { return nil }
+                    continue
+                }
+                actualURL = songFiles.main
+            } else {
+                guard allowDecompression,
+                      decompressMainFileIfNeeded(snapshot: snapshot, files: songFiles)
+                else { return nil }
+                continue
+            }
+
+            if let expectedDuration, expectedDuration > 0 {
+                let actualDuration = getAudioDuration(at: actualURL)
+                guard actualDuration.isFinite, actualDuration > 1.0 else {
+                    if discardMainCache(
+                        snapshot,
+                        files: songFiles,
+                        message: "Discarding audio cache for \(songID) because duration could not be measured"
+                    ) { return nil }
+                    continue
+                }
+                let tolerance: TimeInterval = 2.0
+                guard abs(actualDuration - expectedDuration) <= tolerance else {
+                    if discardMainCache(
+                        snapshot,
+                        files: songFiles,
+                        message: "Discarding audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s"
+                    ) { return nil }
+                    continue
+                }
+            }
+
+            guard mainOwnership.isCurrent(snapshot) else { continue }
+            touch(actualURL)
+            return actualURL
+        }
+        return nil
+    }
+
+    private static func discardMainCache(
+        _ snapshot: AudioCacheMainOwnership.MaintenanceSnapshot,
+        files songFiles: SongFiles,
+        message: String
     ) -> Bool {
-        guard actualDuration.isFinite, actualDuration > 1.0 else { return false }
-        guard let expectedDuration, expectedDuration.isFinite, expectedDuration > 1.0 else {
-            return true
+        DebugLogger.log(message, category: .cache)
+        return mainOwnership.removeIfUnchanged(snapshot) {
+            try? fm.removeItem(at: songFiles.directory)
         }
-        let tolerance = max(5.0, min(15.0, expectedDuration * 0.03))
-        return actualDuration + tolerance >= expectedDuration
     }
 
-    private static func readMainSourceURL(for songID: String) -> String? {
-        let sourceURL = files(for: songID).mainSource
+    private static func readMainSourceURL(at sourceURL: URL) -> String? {
         guard let data = try? Data(contentsOf: sourceURL),
               let rawValue = String(data: data, encoding: .utf8)
         else { return nil }
@@ -506,23 +748,15 @@ nonisolated enum AudioCacheStore {
     private static let minimumPlayableFileSize = 4096
 
     private static func playableURL(for url: URL) -> URL? {
-        // Only wav stems ever get a compressed sibling; the compressor never
-        // touches other files, so they skip the lock dance entirely. Taking
-        // the lock for them would stall reads whenever a long
-        // compressIdleAssets sweep holds it.
-        guard shouldCompressPlayableFile(at: url) else {
-            guard fm.fileExists(atPath: url.path) else { return nil }
-            return validateAndHandOut(url)
-        }
-        // The compressor deletes wav files it has compressed; hold the same
-        // lock across the existence check, decompression, validation, and
-        // handout so the file cannot be deleted or replaced mid-flight.
-        // Blocking acquire is fine: decompressing callers run on background
-        // threads (main-thread paths use the immediatelyPlayable variants).
-        compressionLock.lock()
-        defer { compressionLock.unlock() }
         if fm.fileExists(atPath: url.path) {
-            return validateAndHandOut(url)
+            if !isValidAudioFile(at: url) {
+                DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
+                try? fm.removeItem(at: url)
+                try? fm.removeItem(at: compressedURL(for: url))
+                return nil
+            }
+            touch(url)
+            return url
         }
         let compressed = compressedURL(for: url)
         guard fm.fileExists(atPath: compressed.path) else { return nil }
@@ -535,9 +769,6 @@ nonisolated enum AudioCacheStore {
                 return nil
             }
             touch(url)
-            // The fresh decompression bumped the wav's modification date;
-            // touch the producing .nkz too so compressedIsCurrent doesn't see
-            // it as stale and recompress the pair after every play.
             touch(compressed)
             return url
         } catch {
@@ -548,67 +779,21 @@ nonisolated enum AudioCacheStore {
         }
     }
 
-    /// Validate, touch, and hand out an existing playable file; removes it (and
-    /// any compressed sibling) when broken.
-    private static func validateAndHandOut(_ url: URL) -> URL? {
-        if !isValidAudioFile(at: url) {
-            DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
-            try? fm.removeItem(at: url)
-            try? fm.removeItem(at: compressedURL(for: url))
-            return nil
-        }
-        touch(url)
-        return url
-    }
-
     private static func isValidAudioFile(at url: URL) -> Bool {
-        let path = url.path
-        let modified = modificationDate(of: url)
-        probeMemoLock.lock()
-        if let entry = validityMemo[path], entry.modified == modified {
-            probeMemoLock.unlock()
-            return entry.valid
-        }
-        probeMemoLock.unlock()
-        let valid: Bool = {
-            guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                  size >= minimumPlayableFileSize else { return false }
-            return AVEnginePlayback.hasValidAudioHeader(at: url)
-        }()
-        probeMemoLock.lock()
-        if validityMemo.count >= probeMemoLimit { validityMemo.removeAll() }
-        validityMemo[path] = (modified, valid)
-        probeMemoLock.unlock()
-        return valid
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size >= minimumPlayableFileSize else { return false }
+        return AVEnginePlayback.hasValidAudioHeader(at: url)
     }
 
     static func audioDuration(at url: URL) -> TimeInterval {
-        let path = url.path
-        let modified = modificationDate(of: url)
-        probeMemoLock.lock()
-        if let entry = durationMemo[path], entry.modified == modified {
-            probeMemoLock.unlock()
-            return entry.duration
-        }
-        probeMemoLock.unlock()
-        var duration: TimeInterval = 0
         if let file = try? AVAudioFile(forReading: url) {
             let sampleRate = file.fileFormat.sampleRate
             if sampleRate > 0 {
-                let candidate = Double(file.length) / sampleRate
-                if candidate.isFinite, candidate > 0 { duration = candidate }
+                let duration = Double(file.length) / sampleRate
+                if duration.isFinite, duration > 0 { return duration }
             }
         }
-        probeMemoLock.lock()
-        if durationMemo.count >= probeMemoLimit { durationMemo.removeAll() }
-        durationMemo[path] = (modified, duration)
-        probeMemoLock.unlock()
-        return duration
-    }
-
-    private static func modificationDate(of url: URL) -> Date {
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
-            ?? .distantPast
+        return 0
     }
 
     static func acceptsAudioResponse(_ response: URLResponse?) -> Bool {
@@ -625,6 +810,10 @@ nonisolated enum AudioCacheStore {
 
     static func isPlayableAudioFile(at url: URL) -> Bool {
         isValidAudioFile(at: url)
+    }
+
+    private static func getAudioDuration(at url: URL) -> TimeInterval {
+        audioDuration(at: url)
     }
 
     private static func validateStemPair(
@@ -655,10 +844,93 @@ nonisolated enum AudioCacheStore {
             && instrumentsDuration + expectedTolerance >= expectedStemDuration
     }
 
-    // Callers must hold compressionLock (see compressIdleAssets /
-    // compressAssets(for:)); the wav deletes here race playableURL otherwise.
+    private static func compressMainFileIfNeeded(for songID: String, files songFiles: SongFiles) {
+        guard let snapshot = mainOwnership.beginMaintenance(songID: songID),
+              fm.fileExists(atPath: songFiles.main.path)
+        else { return }
+        let compressed = compressedURL(for: songFiles.main)
+
+        if compressedIsCurrent(for: songFiles.main, compressedURL: compressed) {
+            if canDecompressFile(compressed) {
+                _ = mainOwnership.commitIfUnchanged(snapshot) {
+                    try? fm.removeItem(at: songFiles.main)
+                }
+            } else {
+                DebugLogger.log("Removing invalid compressed cache: \(compressed.lastPathComponent)", category: .cache)
+                _ = mainOwnership.commitIfUnchanged(snapshot) {
+                    try? fm.removeItem(at: compressed)
+                }
+            }
+            return
+        }
+
+        let stagingURL = songFiles.directory.appendingPathComponent(
+            "main-compress-\(UUID().uuidString).nkz.staging"
+        )
+        let stagingURLs = [stagingURL, stagingURL.appendingPathExtension("tmp")]
+        guard mainOwnership.registerMaintenanceStaging(stagingURLs, for: snapshot) else { return }
+        defer {
+            mainOwnership.unregisterMaintenanceStaging(stagingURLs)
+            for url in stagingURLs {
+                try? fm.removeItem(at: url)
+            }
+        }
+
+        do {
+            try compressFile(from: songFiles.main, to: stagingURL)
+            guard canDecompressFile(stagingURL) else {
+                DebugLogger.log("Compression produced invalid file: \(songFiles.main.lastPathComponent)", category: .cache)
+                return
+            }
+            _ = try mainOwnership.commitIfUnchanged(snapshot) {
+                try replaceItem(at: compressed, with: stagingURL)
+                try? fm.removeItem(at: songFiles.main)
+            }
+        } catch {
+            DebugLogger.log("Audio cache compress failed for \(songFiles.main.lastPathComponent): \(error)", category: .cache)
+        }
+    }
+
+    private static func decompressMainFileIfNeeded(
+        snapshot: AudioCacheMainOwnership.MaintenanceSnapshot,
+        files songFiles: SongFiles
+    ) -> Bool {
+        let compressed = compressedURL(for: songFiles.main)
+        guard fm.fileExists(atPath: compressed.path) else { return false }
+        let stagingURL = songFiles.directory.appendingPathComponent(
+            "main-decompress-\(UUID().uuidString).mp3.staging"
+        )
+        let stagingURLs = [stagingURL, stagingURL.appendingPathExtension("tmp")]
+        guard mainOwnership.registerMaintenanceStaging(stagingURLs, for: snapshot) else { return false }
+        defer {
+            mainOwnership.unregisterMaintenanceStaging(stagingURLs)
+            for url in stagingURLs {
+                try? fm.removeItem(at: url)
+            }
+        }
+
+        do {
+            try decompressFileIfNeeded(from: compressed, to: stagingURL)
+            guard isValidAudioFile(at: stagingURL) else {
+                DebugLogger.log("Removing broken compressed cache: \(compressed.lastPathComponent)", category: .cache)
+                _ = mainOwnership.commitIfUnchanged(snapshot) {
+                    try? fm.removeItem(at: compressed)
+                }
+                return false
+            }
+            return try mainOwnership.commitIfUnchanged(snapshot) {
+                try replaceItem(at: songFiles.main, with: stagingURL)
+            }
+        } catch {
+            DebugLogger.log("Audio cache decompress failed for \(songFiles.main.lastPathComponent): \(error)", category: .cache)
+            _ = mainOwnership.commitIfUnchanged(snapshot) {
+                try? fm.removeItem(at: compressed)
+            }
+            return false
+        }
+    }
+
     private static func compressPlayableFileIfNeeded(at url: URL) {
-        guard shouldCompressPlayableFile(at: url), !Task.isCancelled else { return }
         guard fm.fileExists(atPath: url.path) else { return }
         let compressed = compressedURL(for: url)
 
@@ -680,8 +952,6 @@ nonisolated enum AudioCacheStore {
                 DebugLogger.log("Compression produced invalid file: \(compressed.lastPathComponent)", category: .cache)
                 try? fm.removeItem(at: compressed)
             }
-        } catch is CancellationError {
-            try? fm.removeItem(at: compressed)
         } catch {
             DebugLogger.log("Audio cache compress failed for \(url.lastPathComponent): \(error)", category: .cache)
             try? fm.removeItem(at: compressed)
@@ -702,12 +972,15 @@ nonisolated enum AudioCacheStore {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
 
+    private static func replaceItem(at destinationURL: URL, with stagedURL: URL) throws {
+        if fm.fileExists(atPath: destinationURL.path) {
+            try fm.removeItem(at: destinationURL)
+        }
+        try fm.moveItem(at: stagedURL, to: destinationURL)
+    }
+
     private static func compressFile(from sourceURL: URL, to destinationURL: URL) throws {
-        // Per-operation temp name: cache operations for the same destination
-        // must never share (and corrupt) a temp file.
-        let tempURL = destinationURL
-            .appendingPathExtension(UUID().uuidString)
-            .appendingPathExtension("tmp")
+        let tempURL = destinationURL.appendingPathExtension("tmp")
         try? fm.removeItem(at: tempURL)
         fm.createFile(atPath: tempURL.path, contents: nil)
 
@@ -725,12 +998,10 @@ nonisolated enum AudioCacheStore {
             }
 
             while true {
-                try Task.checkCancellation()
                 let chunk = try reader.read(upToCount: chunkSize) ?? Data()
                 if chunk.isEmpty { break }
                 try filter.write(chunk)
             }
-            try Task.checkCancellation()
             try filter.finalize()
 
             try? fm.removeItem(at: destinationURL)
@@ -742,11 +1013,7 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func decompressFileIfNeeded(from sourceURL: URL, to destinationURL: URL) throws {
-        // Per-operation temp name: cache operations for the same destination
-        // must never share (and corrupt) a temp file.
-        let tempURL = destinationURL
-            .appendingPathExtension(UUID().uuidString)
-            .appendingPathExtension("tmp")
+        let tempURL = destinationURL.appendingPathExtension("tmp")
         try? fm.removeItem(at: tempURL)
         fm.createFile(atPath: tempURL.path, contents: nil)
 

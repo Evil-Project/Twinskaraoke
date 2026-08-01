@@ -3,6 +3,9 @@ import Foundation
 
 @MainActor
 final class RadioController: ObservableObject {
+    typealias MetadataLoader = @Sendable () async throws -> RadioNowPlaying
+    typealias PlaybackStarter = @MainActor (_ streamURL: URL, _ song: Song, _ artworkURL: URL?) -> Void
+
     static let shared = RadioController()
     static let metadataURL = URL(
         string: "https://radio.twinskaraoke.com/api/nowplaying_static/neuro_21.json"
@@ -13,10 +16,40 @@ final class RadioController: ObservableObject {
     @Published var refreshErrorMessage: String?
     @Published var lastUpdated: Date?
     private var pollTimer: Timer?
+    private var pollingGeneration = 0
     private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration = 0
+    private var playbackRequestTask: Task<Void, Never>?
+    private var playbackRequestGeneration = 0
     private var lastMetadataSignature: String?
-    private init() {}
+    private let metadataLoader: MetadataLoader
+    private let playbackStarter: PlaybackStarter
+
+    init(
+        metadataLoader: @escaping MetadataLoader = {
+            let (data, response) = try await URLSession.shared.data(from: RadioController.metadataURL)
+            guard let response = response as? HTTPURLResponse,
+                (200 ..< 300).contains(response.statusCode)
+            else {
+                throw URLError(.badServerResponse)
+            }
+            return try JSONDecoder().decode(RadioNowPlaying.self, from: data)
+        },
+        playbackStarter: @escaping PlaybackStarter = { streamURL, song, artworkURL in
+            AudioPlayerManager.shared.playRadio(
+                streamURL: streamURL,
+                song: song,
+                artworkURL: artworkURL
+            )
+        }
+    ) {
+        self.metadataLoader = metadataLoader
+        self.playbackStarter = playbackStarter
+    }
+
     func start() {
+        pollingGeneration &+= 1
+        let generation = pollingGeneration
         if AppRuntime.isUITestMode {
             pollTimer?.invalidate()
             pollTimer = nil
@@ -26,11 +59,14 @@ final class RadioController: ObservableObject {
             return
         }
 
-        Task { await refresh() }
+        // Register the initial refresh before returning so stop() can always
+        // cancel it, even when start and stop happen in the same run-loop turn.
+        beginRefresh()
         pollTimer?.invalidate()
         let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                await self?.refresh()
+                guard let self, pollingGeneration == generation, pollTimer != nil else { return }
+                beginRefresh()
             }
         }
         pollTimer = timer
@@ -38,32 +74,55 @@ final class RadioController: ObservableObject {
     }
 
     func stop() {
+        pollingGeneration &+= 1
         pollTimer?.invalidate()
         pollTimer = nil
+        refreshGeneration += 1
         refreshTask?.cancel()
         refreshTask = nil
+        isRefreshing = false
+        cancelPendingPlaybackRequest()
     }
 
-    func playLiveStream(retry: Int = 0) {
-        guard let np = nowPlaying else {
-            guard retry < 1 else { return }
-            Task {
+    func playLiveStream() {
+        cancelPendingPlaybackRequest()
+        guard let nowPlaying else {
+            let generation = playbackRequestGeneration
+            let task = Task { @MainActor [weak self] in
+                guard let self else { return }
                 await refresh()
-                await MainActor.run { self.playLiveStream(retry: retry + 1) }
+                guard generation == playbackRequestGeneration, !Task.isCancelled else { return }
+                if let nowPlaying {
+                    startLiveStream(from: nowPlaying)
+                }
+                guard generation == playbackRequestGeneration else { return }
+                playbackRequestTask = nil
             }
+            playbackRequestTask = task
             return
         }
-        guard let streamURL = URL(string: np.station.listenUrl) else { return }
-        let info = np.nowPlaying?.song
+
+        startLiveStream(from: nowPlaying)
+    }
+
+    func cancelPendingPlaybackRequest() {
+        playbackRequestGeneration &+= 1
+        playbackRequestTask?.cancel()
+        playbackRequestTask = nil
+    }
+
+    private func startLiveStream(from metadata: RadioNowPlaying) {
+        guard let streamURL = URL(string: metadata.station.listenUrl) else { return }
+        let info = metadata.nowPlaying?.song
         let song =
             (info
                 ?? RadioNowPlaying.SongInfo(
-                    id: Self.stationID, art: nil, text: np.station.name,
-                    artist: np.station.description, title: np.station.name,
+                    id: Self.stationID, art: nil, text: metadata.station.name,
+                    artist: metadata.station.description, title: metadata.station.name,
                     customFields: nil
                 )).toSong(stationID: Self.stationID)
         let artURL = info?.art.flatMap { URL(string: $0) }
-        AudioPlayerManager.shared.playRadio(streamURL: streamURL, song: song, artworkURL: artURL)
+        playbackStarter(streamURL, song, artURL)
     }
 
     func refresh() async {
@@ -72,34 +131,47 @@ final class RadioController: ObservableObject {
             return
         }
 
-        if let existing = refreshTask {
-            await existing.value
-            return
-        }
-
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            await performRefresh()
-            refreshTask = nil
-        }
-        refreshTask = task
+        let task = beginRefresh()
         await task.value
     }
 
-    private func performRefresh() async {
+    @discardableResult
+    private func beginRefresh() -> Task<Void, Never> {
+        if let existing = refreshTask {
+            return existing
+        }
+
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await performRefresh(generation: generation)
+            guard generation == refreshGeneration else { return }
+            refreshTask = nil
+        }
+        refreshTask = task
+        return task
+    }
+
+    private func performRefresh(generation: Int) async {
+        guard generation == refreshGeneration else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            if generation == refreshGeneration {
+                isRefreshing = false
+            }
+        }
 
         let maxRetries = 3
 
         for attempt in 0 ..< maxRetries {
             do {
-                let (data, _) = try await URLSession.shared.data(from: Self.metadataURL)
-                let np = try JSONDecoder().decode(RadioNowPlaying.self, from: data)
+                let np = try await metadataLoader()
+                guard generation == refreshGeneration, !Task.isCancelled else { return }
                 nowPlaying = np
                 prefetchArtwork(from: np)
                 refreshErrorMessage = nil
-                lastUpdated = Date()
+                lastUpdated = .now
                 if AudioPlayerManager.shared.isRadioMode, let info = np.nowPlaying?.song {
                     let signature = metadataSignature(for: info)
                     if signature != lastMetadataSignature {
@@ -114,11 +186,18 @@ final class RadioController: ObservableObject {
                 guard !Task.isCancelled else { return }
                 if attempt < maxRetries - 1 {
                     let delay = Double(1 << attempt)
-                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    do {
+                        try await Task.sleep(for: .seconds(delay))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        return
+                    }
                 }
             }
         }
 
+        guard generation == refreshGeneration, !Task.isCancelled else { return }
         refreshErrorMessage =
             nowPlaying == nil
                 ? "Radio metadata is temporarily unavailable."
@@ -150,7 +229,7 @@ final class RadioController: ObservableObject {
         nowPlaying = Self.uiTestNowPlaying
         refreshErrorMessage = nil
         isRefreshing = false
-        lastUpdated = Date()
+        lastUpdated = .now
         if let info = nowPlaying?.nowPlaying?.song {
             lastMetadataSignature = metadataSignature(for: info)
         }

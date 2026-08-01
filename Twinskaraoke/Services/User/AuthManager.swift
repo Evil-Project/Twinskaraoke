@@ -5,39 +5,42 @@ import Foundation
 import Security
 
 @MainActor
-private final class WebAuthenticationPresentationContextProvider:
-    NSObject, ASWebAuthenticationPresentationContextProviding
-{
-    private let anchor: ASPresentationAnchor
-
-    init(anchor: ASPresentationAnchor) {
-        self.anchor = anchor
+final class AuthManager: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    enum AuthenticationMethod: Equatable {
+        case password
+        case discord
     }
 
-    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        anchor
-    }
-}
+    typealias SessionStateResetter = @MainActor () -> Void
+    typealias PasswordTokenLoader = @MainActor @Sendable (_ username: String, _ password: String) async throws -> String
 
-@MainActor
-final class AuthManager: NSObject, ObservableObject {
+    private struct WebAuthenticationSessionHandle {
+        let id: UUID
+        let session: ASWebAuthenticationSession
+        let cancelContinuation: @MainActor () -> Void
+    }
+
+    static let shared = AuthManager()
+
     @Published private(set) var isLoggedIn = false
     @Published private(set) var currentUsername: String?
     @Published private(set) var currentUserId: String?
     @Published private(set) var currentAvatar: String?
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var activeAuthenticationMethod: AuthenticationMethod?
     private(set) var authToken: String?
-    private let defaults = UserDefaults.standard
-    private var webAuthenticationSession: ASWebAuthenticationSession?
-    private var webAuthenticationContextProvider: WebAuthenticationPresentationContextProvider?
-    private var sessionExpiredObserver: NSObjectProtocol?
+    private let defaults: UserDefaults
+    private let sessionStateResetter: SessionStateResetter
+    private let passwordTokenLoader: PasswordTokenLoader
+    private var authenticationGeneration: UInt64 = 0
+    private var webAuthenticationSession: WebAuthenticationSessionHandle?
 
     private enum K {
-        nonisolated static let userId = "nk.userId"
-        nonisolated static let username = "nk.username"
-        nonisolated static let avatar = "nk.avatar"
-        nonisolated static let sessionCommitted = "nk.sessionCommitted"
+        static let token = "nk.token"
+        static let userId = "nk.userId"
+        static let username = "nk.username"
+        static let avatar = "nk.avatar"
     }
 
     private enum Endpoint {
@@ -56,51 +59,40 @@ final class AuthManager: NSObject, ObservableObject {
         static let redirectUri = "neurokaraoke://auth"
     }
 
-    override init() {
+    override convenience init() {
+        self.init(
+            defaults: .standard,
+            sessionStateResetter: {
+                FavoritesManager.shared.clear()
+                UserPlaylistsManager.shared.clear()
+            }
+        )
+    }
+
+    init(
+        defaults: UserDefaults,
+        sessionStateResetter: @escaping SessionStateResetter,
+        passwordTokenLoader: PasswordTokenLoader? = nil
+    ) {
+        self.defaults = defaults
+        self.sessionStateResetter = sessionStateResetter
+        self.passwordTokenLoader = passwordTokenLoader ?? AuthManager.requestPasswordToken
         super.init()
         loadPersisted()
-        sessionExpiredObserver = NotificationCenter.default.addObserver(
-            forName: .karaokeSessionExpired,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.handleExpiredSession()
-            }
-        }
-    }
-
-    isolated deinit {
-        // AccountView mints a fresh AuthManager per visit; without removal
-        // the block-based observer would accumulate for the app's lifetime.
-        if let sessionExpiredObserver {
-            NotificationCenter.default.removeObserver(sessionExpiredObserver)
-        }
-    }
-
-    private func handleExpiredSession() {
-        guard isLoggedIn else { return }
-        logout()
-        errorMessage = "Your session expired — please sign in again"
     }
 
     private func loadPersisted() {
-        let token = CredentialStore.token
-        let username = defaults.string(forKey: K.username)
-        let commitMarker = defaults.object(forKey: K.sessionCommitted) as? Bool
-        guard Self.persistedSessionIsComplete(
-            token: token,
-            username: username,
-            commitMarker: commitMarker
-        ), let token, let username
+        guard
+            let persistedToken = defaults.string(forKey: K.token),
+            let token = Self.normalizedToken(persistedToken),
+            let username = defaults.string(forKey: K.username),
+            !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
-            if token != nil || username != nil || commitMarker != nil {
-                clearPersistedSession()
-            }
+            clearPersistedCredentials()
             return
         }
-        if commitMarker == nil {
-            defaults.set(true, forKey: K.sessionCommitted)
+        if token != persistedToken {
+            defaults.set(token, forKey: K.token)
         }
         authToken = token
         currentUsername = username
@@ -110,59 +102,33 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     private func commit(token: String, userId: String, username: String, avatar: String?) throws {
-        let previousUserID = defaults.string(forKey: K.userId)
-        let previousCommitMarker = defaults.object(forKey: K.sessionCommitted)
-        defaults.set(false, forKey: K.sessionCommitted)
-        do {
-            try CredentialStore.saveToken(token)
-        } catch {
-            if let previousCommitMarker {
-                defaults.set(previousCommitMarker, forKey: K.sessionCommitted)
-            } else {
-                defaults.removeObject(forKey: K.sessionCommitted)
-            }
-            throw error
-        }
+        guard let token = Self.normalizedToken(token) else { throw AuthError.parse }
+        defaults.set(token, forKey: K.token)
         defaults.set(userId, forKey: K.userId)
         defaults.set(username, forKey: K.username)
         defaults.set(avatar, forKey: K.avatar)
-        defaults.set(true, forKey: K.sessionCommitted)
-        if previousUserID != userId {
-            clearAccountScopedState()
-        }
+        sessionStateResetter()
         authToken = token
         currentUserId = userId
         currentUsername = username
         currentAvatar = avatar
         isLoggedIn = true
         isLoading = false
+        activeAuthenticationMethod = nil
         errorMessage = nil
-        NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
     }
 
     func login(username: String, password: String) async {
+        guard !Task.isCancelled else { return }
         guard !username.isEmpty, !password.isEmpty else {
             errorMessage = "Please fill in all fields"
             return
         }
-        isLoading = true
-        errorMessage = nil
+        let authenticationGeneration = beginAuthenticationAttempt(method: .password)
         do {
-            let (data, resp) = try await postJSON(
-                url: Endpoint.login,
-                body: [
-                    "username": username,
-                    "password": password,
-                ]
-            )
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                throw AuthError.http((resp as? HTTPURLResponse)?.statusCode ?? 0, body)
-            }
-            guard
-                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let token = json["token"] as? String
-            else { throw AuthError.parse }
+            let loadedToken = try await passwordTokenLoader(username, password)
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
+            guard let token = Self.normalizedToken(loadedToken) else { throw AuthError.parse }
             let parsed = parseJwt(token)
             try commit(
                 token: token,
@@ -171,22 +137,19 @@ final class AuthManager: NSObject, ObservableObject {
                 avatar: parsed?.avatar
             )
         } catch {
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             isLoading = false
+            activeAuthenticationMethod = nil
             errorMessage = friendlyError(error)
         }
     }
 
     func loginWithDiscord() async {
-        guard webAuthenticationSession == nil else { return }
-        isLoading = true
-        errorMessage = nil
+        guard !Task.isCancelled else { return }
+        let authenticationGeneration = beginAuthenticationAttempt(method: .discord)
         do {
-            guard let presentationAnchor = activePresentationAnchor() else {
-                throw AuthError.invalidCallback
-            }
             let verifier = makeVerifier()
             let challenge = makeChallenge(verifier)
-            let state = makeVerifier()
             var comps = URLComponents(string: Endpoint.discordAuth)!
             comps.queryItems = [
                 .init(name: "client_id", value: Endpoint.discordClientId),
@@ -195,50 +158,20 @@ final class AuthManager: NSObject, ObservableObject {
                 .init(name: "scope", value: "identify"),
                 .init(name: "code_challenge", value: challenge),
                 .init(name: "code_challenge_method", value: "S256"),
-                .init(name: "state", value: state),
             ]
-            let callbackURL = try await withCheckedThrowingContinuation {
-                (cont: CheckedContinuation<URL, Error>) in
-                let session = ASWebAuthenticationSession(
-                    url: comps.url!,
-                    callbackURLScheme: "neurokaraoke"
-                ) { [weak self] url, error in
-                    Task { @MainActor [weak self] in
-                        self?.webAuthenticationSession = nil
-                        self?.webAuthenticationContextProvider = nil
-                    }
-                    if let error {
-                        cont.resume(throwing: Self.mappedWebAuthenticationError(error))
-                        return
-                    }
-                    guard let url else {
-                        cont.resume(throwing: AuthError.cancelled)
-                        return
-                    }
-                    cont.resume(returning: url)
-                }
-                let contextProvider = WebAuthenticationPresentationContextProvider(
-                    anchor: presentationAnchor
-                )
-                session.presentationContextProvider = contextProvider
-                session.prefersEphemeralWebBrowserSession = true
-                webAuthenticationContextProvider = contextProvider
-                webAuthenticationSession = session
-                guard session.start() else {
-                    webAuthenticationSession = nil
-                    webAuthenticationContextProvider = nil
-                    cont.resume(throwing: AuthError.invalidCallback)
-                    return
-                }
-            }
+            guard let authenticationURL = comps.url else { throw AuthError.invalidCallback }
+            let callbackURL = try await requestDiscordCallbackURL(authenticationURL: authenticationURL)
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             guard
                 let cbComps = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
-                cbComps.queryItems?.first(where: { $0.name == "state" })?.value == state,
                 let code = cbComps.queryItems?.first(where: { $0.name == "code" })?.value
             else { throw AuthError.invalidCallback }
             let discordToken = try await exchangeDiscordCode(code, verifier: verifier)
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             let nkToken = try await exchangeForNKToken(discordToken)
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             let profile = try await fetchDiscordProfile(discordToken)
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             try commit(
                 token: nkToken,
                 userId: profile.id,
@@ -246,38 +179,17 @@ final class AuthManager: NSObject, ObservableObject {
                 avatar: profile.avatar
             )
         } catch {
-            webAuthenticationSession = nil
-            webAuthenticationContextProvider = nil
+            guard canApplyAuthenticationResult(authenticationGeneration) else { return }
             isLoading = false
+            activeAuthenticationMethod = nil
             if case AuthError.cancelled = error { return }
             errorMessage = friendlyError(error)
         }
     }
 
-    private static let requestTimeout: TimeInterval = 15
-
-    /// Shared POST-with-JSON-body request: bounded timeout, JSON content
-    /// type, optional bearer token. Callers inspect the HTTP status.
-    private func postJSON(
-        url: String,
-        body: [String: Any],
-        bearerToken: String? = nil
-    ) async throws -> (Data, URLResponse) {
-        var req = URLRequest(url: URL(string: url)!)
-        req.httpMethod = "POST"
-        req.timeoutInterval = Self.requestTimeout
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let bearerToken {
-            req.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-        }
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        return try await URLSession.shared.data(for: req)
-    }
-
     private func exchangeDiscordCode(_ code: String, verifier: String) async throws -> String {
         var req = URLRequest(url: URL(string: Endpoint.discordToken)!)
         req.httpMethod = "POST"
-        req.timeoutInterval = Self.requestTimeout
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         let encoded =
             Endpoint.redirectUri
@@ -294,46 +206,73 @@ final class AuthManager: NSObject, ObservableObject {
         }
         guard
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let at = json["access_token"] as? String
+            let at = json["access_token"] as? String,
+            !at.isEmpty
         else { throw AuthError.parse }
         return at
     }
 
     private func exchangeForNKToken(_ discordToken: String) async throws -> String {
-        let (data, resp) = try await postJSON(
-            url: Endpoint.nkTokenExchange,
-            body: ["accessToken": discordToken]
+        var req = URLRequest(url: URL(string: Endpoint.nkTokenExchange)!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["accessToken": discordToken])
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        return try Self.parseNKTokenExchangeResponse(
+            data: data,
+            statusCode: (resp as? HTTPURLResponse)?.statusCode ?? 0
         )
-        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-            throw AuthError.http(
-                (resp as? HTTPURLResponse)?.statusCode ?? 0,
-                String(data: data, encoding: .utf8) ?? ""
-            )
-        }
-        guard let token = Self.exchangedToken(from: data) else { throw AuthError.parse }
-        return token
     }
 
-    nonisolated static func exchangedToken(from data: Data) -> String? {
-        let raw = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !raw.isEmpty else { return nil }
-
-        if let json = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) {
-            if let object = json as? [String: Any] {
-                return validatedExchangedToken(
-                    object["token"] as? String ?? object["accessToken"] as? String
-                )
-            }
-            if let string = json as? String {
-                return validatedExchangedToken(string)
-            }
-            return nil
+    static func parseNKTokenExchangeResponse(data: Data, statusCode: Int) throws -> String {
+        let responseBody = String(data: data, encoding: .utf8) ?? ""
+        guard (200 ..< 300).contains(statusCode) else {
+            throw AuthError.http(statusCode, responseBody)
         }
-        return validatedExchangedToken(raw)
+
+        let raw = responseBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { throw AuthError.parse }
+
+        let token: String
+        if raw.hasPrefix("{") {
+            guard
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let value = json["token"] as? String ?? json["accessToken"] as? String
+            else { throw AuthError.parse }
+            token = value
+        } else if raw.hasPrefix("\"") {
+            guard let value = try? JSONDecoder().decode(String.self, from: Data(raw.utf8)) else {
+                throw AuthError.parse
+            }
+            token = value
+        } else if raw.hasPrefix("[") {
+            throw AuthError.parse
+        } else {
+            token = raw
+        }
+
+        guard let normalizedToken = Self.normalizedToken(token) else { throw AuthError.parse }
+        return normalizedToken
     }
 
-    nonisolated static func mappedWebAuthenticationError(_ error: Error) -> Error {
+    static func exchangedToken(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let value = json["token"] as? String ?? json["accessToken"] as? String
+            return value.flatMap(normalizedToken)
+        }
+        if let value = try? JSONDecoder().decode(String.self, from: data) {
+            return normalizedToken(value)
+        }
+        return nil
+    }
+
+    static func mappedWebAuthenticationError(_ error: Error) -> Error {
+        if let sessionError = error as? ASWebAuthenticationSessionError,
+           sessionError.code == .canceledLogin
+        {
+            return AuthError.cancelled
+        }
         let nsError = error as NSError
         if nsError.domain == ASWebAuthenticationSessionErrorDomain,
            nsError.code == ASWebAuthenticationSessionError.Code.canceledLogin.rawValue
@@ -343,18 +282,20 @@ final class AuthManager: NSObject, ObservableObject {
         return error
     }
 
-    private nonisolated static func validatedExchangedToken(_ candidate: String?) -> String? {
-        guard let token = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !token.isEmpty,
-              token.utf8.count <= 8_192
+    static func persistedSessionIsComplete(
+        token: String?,
+        username: String?,
+        commitMarker: Bool?
+    ) -> Bool {
+        guard commitMarker != false,
+              let token,
+              normalizedToken(token) != nil,
+              let username,
+              !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
-            return nil
+            return false
         }
-        let allowed = CharacterSet.alphanumerics.union(
-            CharacterSet(charactersIn: "-._~+/=")
-        )
-        guard token.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { return nil }
-        return token
+        return true
     }
 
     private struct DiscordProfile {
@@ -364,7 +305,6 @@ final class AuthManager: NSObject, ObservableObject {
 
     private func fetchDiscordProfile(_ token: String) async throws -> DiscordProfile {
         var req = URLRequest(url: URL(string: Endpoint.discordUser)!)
-        req.timeoutInterval = Self.requestTimeout
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
@@ -399,14 +339,13 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     func approveQRSession(sessionId: String) async throws {
-        // Trust the Keychain token, not the in-memory flags, so a stale
-        // AuthManager state can't approve a session with the wrong identity.
-        guard let token = CredentialStore.token else { throw AuthError.notSignedIn }
-        let (data, resp) = try await postJSON(
-            url: "\(StorageHost.api)/api/auth/approve-qr",
-            body: ["sessionId": sessionId],
-            bearerToken: token
-        )
+        guard let token = authToken, isLoggedIn else { throw AuthError.notSignedIn }
+        var req = URLRequest(url: URL(string: "\(StorageHost.api)/api/auth/approve-qr")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["sessionId": sessionId])
+        let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             throw AuthError.http(
                 (resp as? HTTPURLResponse)?.statusCode ?? 0,
@@ -416,33 +355,128 @@ final class AuthManager: NSObject, ObservableObject {
     }
 
     func logout() {
-        clearPersistedSession()
-        clearAccountScopedState()
+        cancelAuthentication()
+        clearPersistedCredentials()
+        sessionStateResetter()
         authToken = nil
         currentUserId = nil
         currentUsername = nil
         currentAvatar = nil
         isLoggedIn = false
-        NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
+        isLoading = false
+        activeAuthenticationMethod = nil
+        errorMessage = nil
     }
 
-    /// The persisted session as the watch bridge sees it.
-    ///
-    /// Reads storage rather than instance state because the bridge outlives any
-    /// one `AuthManager` — `AccountView` mints a fresh one per visit — and
-    /// because the Keychain is the only trustworthy record of being signed in.
-    /// `generation` is filled in by the publisher.
-    nonisolated static func persistedDescriptor() -> WatchSessionLink.Descriptor {
-        let defaults = UserDefaults.standard
-        let token = CredentialStore.token
-        let username = defaults.string(forKey: K.username)
-        guard persistedSessionIsComplete(
-            token: token,
-            username: username,
-            commitMarker: defaults.object(forKey: K.sessionCommitted) as? Bool
-        ) else {
+    func cancelAuthentication() {
+        authenticationGeneration &+= 1
+        cancelWebAuthenticationSession()
+        isLoading = false
+        activeAuthenticationMethod = nil
+        errorMessage = nil
+    }
+
+    private func beginAuthenticationAttempt(method: AuthenticationMethod) -> UInt64 {
+        authenticationGeneration &+= 1
+        cancelWebAuthenticationSession()
+        isLoading = true
+        activeAuthenticationMethod = method
+        errorMessage = nil
+        return authenticationGeneration
+    }
+
+    private func canApplyAuthenticationResult(_ generation: UInt64) -> Bool {
+        guard generation == authenticationGeneration else { return false }
+        guard !Task.isCancelled else {
+            isLoading = false
+            activeAuthenticationMethod = nil
+            errorMessage = nil
+            return false
+        }
+        return true
+    }
+
+    private func requestDiscordCallbackURL(authenticationURL: URL) async throws -> URL {
+        let sessionID = UUID()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                var didResume = false
+                let resume: @MainActor (Result<URL, Error>) -> Void = { [weak self] result in
+                    guard !didResume else { return }
+                    didResume = true
+                    if self?.webAuthenticationSession?.id == sessionID {
+                        self?.webAuthenticationSession = nil
+                    }
+                    continuation.resume(with: result)
+                }
+
+                let session = ASWebAuthenticationSession(
+                    url: authenticationURL,
+                    callbackURLScheme: "neurokaraoke"
+                ) { url, error in
+                    Task { @MainActor in
+                        if let sessionError = error as? ASWebAuthenticationSessionError,
+                           sessionError.code == .canceledLogin
+                        {
+                            resume(.failure(AuthError.cancelled))
+                            return
+                        }
+                        if let error {
+                            resume(.failure(error))
+                            return
+                        }
+                        guard let url else {
+                            resume(.failure(AuthError.cancelled))
+                            return
+                        }
+                        resume(.success(url))
+                    }
+                }
+                session.presentationContextProvider = self
+                session.prefersEphemeralWebBrowserSession = true
+                webAuthenticationSession = WebAuthenticationSessionHandle(
+                    id: sessionID,
+                    session: session,
+                    cancelContinuation: {
+                        resume(.failure(AuthError.cancelled))
+                    }
+                )
+                guard session.start() else {
+                    resume(.failure(AuthError.invalidCallback))
+                    return
+                }
+            }
+        } onCancel: { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.cancelWebAuthenticationSession(matching: sessionID)
+            }
+        }
+    }
+
+    private func cancelWebAuthenticationSession(matching sessionID: UUID? = nil) {
+        guard let activeSession = webAuthenticationSession else { return }
+        if let sessionID, activeSession.id != sessionID { return }
+        webAuthenticationSession = nil
+        activeSession.cancelContinuation()
+        activeSession.session.cancel()
+    }
+
+    private func clearPersistedCredentials() {
+        [K.token, K.userId, K.username, K.avatar].forEach { defaults.removeObject(forKey: $0) }
+    }
+
+    static func persistedDescriptor(defaults: UserDefaults = .standard) -> WatchSessionLink.Descriptor {
+        guard
+            let persistedToken = defaults.string(forKey: K.token),
+            normalizedToken(persistedToken) != nil,
+            let username = defaults.string(forKey: K.username),
+            !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
             return .signedOut
         }
+
         return WatchSessionLink.Descriptor(
             isSignedIn: true,
             userID: defaults.string(forKey: K.userId),
@@ -452,26 +486,30 @@ final class AuthManager: NSObject, ObservableObject {
         )
     }
 
-    nonisolated static func persistedSessionIsComplete(
-        token: String?,
-        username: String?,
-        commitMarker: Bool?
-    ) -> Bool {
-        guard let token, !token.isEmpty, let username, !username.isEmpty else { return false }
-        return commitMarker != false
-    }
-
-    private func clearPersistedSession() {
-        CredentialStore.deleteToken()
-        [K.userId, K.username, K.avatar, K.sessionCommitted].forEach {
-            defaults.removeObject(forKey: $0)
+    private static func requestPasswordToken(username: String, password: String) async throws -> String {
+        var request = URLRequest(url: URL(string: Endpoint.login)!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "username": username,
+            "password": password,
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw AuthError.http((response as? HTTPURLResponse)?.statusCode ?? 0, body)
         }
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rawToken = json["token"] as? String,
+            let token = Self.normalizedToken(rawToken)
+        else { throw AuthError.parse }
+        return token
     }
 
-    private func clearAccountScopedState() {
-        FavoritesManager.shared.clear()
-        UserPlaylistsManager.shared.clear()
-        Task { await KaraokeAPIClient.invalidateAccountScopedCaches() }
+    private static func normalizedToken(_ token: String) -> String? {
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedToken.isEmpty ? nil : normalizedToken
     }
 
     private func makeVerifier() -> String {
@@ -504,18 +542,21 @@ final class AuthManager: NSObject, ObservableObject {
         return error.localizedDescription
     }
 
-    private func activePresentationAnchor() -> ASPresentationAnchor? {
+    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
         let scenes = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
         let windows = scenes.flatMap(\.windows)
         if let window = windows.first(where: \.isKeyWindow) ?? windows.first {
             return window
         }
-        guard let scene = scenes.first else { return nil }
+        guard let scene = scenes.first else {
+            // Auth UI is only requested while a scene is connected.
+            preconditionFailure("presentationAnchor requested with no connected window scene")
+        }
         return ASPresentationAnchor(windowScene: scene)
     }
 
-    enum AuthError: Error {
+    enum AuthError: Error, Equatable {
         case http(Int, String)
         case parse, invalidCallback, cancelled, notSignedIn
     }

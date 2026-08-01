@@ -23,14 +23,9 @@ struct PlaylistDetailView: View {
         reduceMotion ? nil : .easeInOut(duration: 0.18)
     }
 
-    init(playlistID: String, playlistName: String, fallbackSongs: [Song] = []) {
+    init(playlistID: String, playlistName: String) {
         self.playlistName = playlistName
-        _viewModel = StateObject(
-            wrappedValue: PlaylistDetailViewModel(
-                playlistID: playlistID,
-                fallbackSongs: fallbackSongs
-            )
-        )
+        _viewModel = StateObject(wrappedValue: PlaylistDetailViewModel(playlistID: playlistID))
     }
 
     var body: some View {
@@ -42,12 +37,10 @@ struct PlaylistDetailView: View {
                     Spacer()
                 }
                 .listRowBackground(Color.clear)
-            } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
-                WatchLoadErrorState(
-                    title: "Couldn't Load Playlist",
-                    message: loadError,
-                    retryAction: { viewModel.fetchSongs() }
-                )
+            } else if let message = viewModel.loadErrorMessage {
+                WatchLoadFailureState(message: message) {
+                    viewModel.fetchSongs(force: true)
+                }
                 .listRowBackground(Color.clear)
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
@@ -69,24 +62,22 @@ struct PlaylistDetailView: View {
                 .listRowBackground(Color.clear)
 
                 Section {
-                    ForEach(indexedSongs) { item in
-                        let offset = item.offset
-                        let song = item.song
+                    ForEach(Array(viewModel.songs.enumerated()), id: \.element.id) { offset, song in
                         let isCurrent = audioManager.currentSong?.id == song.id
                         Button {
-                            play(item)
+                            play(song)
                         } label: {
                             WatchSongRow(
                                 song: song,
                                 isCurrent: isCurrent,
                                 isPlaying: isCurrent && audioManager.isPlaying,
                                 showsDuration: !isCurrent,
-                                trailingSystemImage: isCurrent ? (audioManager.isPlaying ? "pause.fill" : "play.fill") : nil,
+                                trailingSystemImage: isCurrent ? "chevron.right" : nil,
                                 artworkSize: 38
                             )
                         }
                         .buttonStyle(.watchPressable)
-                        .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
+                        .accessibilityLabel(isCurrent ? "Open \(song.title)" : song.title)
                         .accessibilityValue(accessibilityValue(for: song, offset: offset, isCurrent: isCurrent))
                         .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play from \(playlistName).")
                     }
@@ -109,14 +100,6 @@ struct PlaylistDetailView: View {
         }
     }
 
-    // Karaoke setlists legitimately repeat a song and Song identity is the id
-    // alone, so rows use a composite id to keep ForEach identifiers unique.
-    private var indexedSongs: [PlaylistSongRowItem] {
-        viewModel.songs.enumerated().map { offset, song in
-            PlaylistSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
-        }
-    }
-
     private var songCountText: String {
         let count = viewModel.songs.count
         if count == 1 { return "1 song" }
@@ -132,18 +115,6 @@ struct PlaylistDetailView: View {
             return "\(hours)h \(minutes)m"
         }
         return "\(minutes)m"
-    }
-
-    // Row taps pass the row item so a repeated song starts at the tapped
-    // occurrence; play(song:context:) would resolve the first match instead.
-    private func play(_ item: PlaylistSongRowItem) {
-        if audioManager.currentSong?.id != item.song.id {
-            audioManager.playSong(at: item.offset, context: viewModel.songs)
-            WatchHaptic.play(.start)
-        } else {
-            WatchHaptic.play(.click)
-        }
-        showPlayer = true
     }
 
     private func play(_ song: Song) {
@@ -208,6 +179,7 @@ private struct WatchPlaylistDetailHeader: View {
                     Image(systemName: "music.note.list")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.appAccent)
+                        .accessibilityHidden(true)
                 }
                 .frame(width: 42, height: 42)
 
@@ -282,7 +254,7 @@ private struct WatchPlaylistHeaderButton: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .foregroundColor(tint)
-                .frame(maxWidth: .infinity, minHeight: 30)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(fill)
@@ -291,11 +263,4 @@ private struct WatchPlaylistHeaderButton: View {
         .buttonStyle(.watchPressable)
         .accessibilityLabel(title)
     }
-}
-
-
-private struct PlaylistSongRowItem: Identifiable {
-    let id: String
-    let offset: Int
-    let song: Song
 }

@@ -1,29 +1,11 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject var audioManager: AudioManager
+    @StateObject var audioManager = AudioManager.shared
     @StateObject var homeViewModel = HomeViewModel()
-    @ObservedObject private var auth = WatchAuthManager.shared
-    @ObservedObject private var recents = RecentlyPlayedStore.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
-    @State private var path = NavigationPath()
-
-    /// Everything this screen can push.
-    ///
-    /// The stack drives navigation from one path and one `navigationDestination`.
-    /// Mixing value-based links with `navigationDestination(isPresented:)` in a
-    /// single stack leaves the view-based links inert — taps land, nothing is
-    /// pushed — which is what made every Browse row except Radio look dead.
-    private enum Destination: Hashable {
-        case player
-        case playlists
-        case favorites
-        case songs
-        case radio
-        case search
-        case account
-    }
+    @State private var navigateToPlayer = false
 
     private var reduceMotion: Bool {
         AppMotion.reduceMotion(
@@ -41,7 +23,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack {
             List {
                 WatchHomeHeader(
                     isPlaying: audioManager.isPlaying,
@@ -53,36 +35,23 @@ struct HomeView: View {
 
                 if let currentSong = audioManager.currentSong {
                     Section("Now Playing") {
-                        NavigationLink(value: Destination.player) {
+                        NavigationLink(destination: PlayerView().environmentObject(audioManager)) {
                             WatchSongRow(
                                 song: currentSong,
                                 isCurrent: true,
                                 isPlaying: audioManager.isPlaying,
-                                trailingSystemImage: audioManager.isPlaying ? "pause.fill" : "play.fill"
+                                trailingSystemImage: "chevron.right"
                             )
                         }
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Now Playing")
                         .accessibilityValue("\(currentSong.title), \(currentSong.artistName), \(audioManager.isPlaying ? "Playing" : "Paused")")
                         .accessibilityHint("Double tap to open the player.")
-                    }
-                }
-                if !recentlyPlayed.isEmpty {
-                    Section("Recently Played") {
-                        ForEach(Array(recentlyPlayed.enumerated()), id: \.element.id) { index, song in
-                            Button {
-                                // Queue the whole history, not just the rows
-                                // shown, so playing the last one keeps going.
-                                play(song, context: recents.songs)
-                            } label: {
-                                WatchSongRow(song: song)
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                WatchHaptic.play(.click)
                             }
-                            .buttonStyle(.watchPressable)
-                            .accessibilityIdentifier("WatchHome.recent.\(index)")
-                            .accessibilityLabel(song.title)
-                            .accessibilityValue("\(song.artistName), \(song.durationText)")
-                            .accessibilityHint("Double tap to play this song again.")
-                        }
+                        )
                     }
                 }
                 if !homeViewModel.trending.isEmpty {
@@ -96,14 +65,12 @@ struct HomeView: View {
                                     song: song,
                                     isCurrent: isCurrent,
                                     isPlaying: isCurrent && audioManager.isPlaying,
-                                    trailingSystemImage: isCurrent
-                                        ? (audioManager.isPlaying ? "pause.fill" : "play.fill")
-                                        : nil
+                                    trailingSystemImage: isCurrent ? "chevron.right" : nil
                                 )
                             }
                             .buttonStyle(.watchPressable)
                             .accessibilityIdentifier("WatchHome.trending.\(index)")
-                            .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Open \(song.title)" : song.title)
+                            .accessibilityLabel(isCurrent ? "Open \(song.title)" : song.title)
                             .accessibilityValue("\(song.artistName), \(song.durationText)")
                             .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play this song.")
                         }
@@ -116,146 +83,82 @@ struct HomeView: View {
                             Spacer()
                         }
                     }
+                } else if let message = homeViewModel.loadErrorMessage {
+                    Section("Trending") {
+                        WatchLoadFailureState(message: message) {
+                            homeViewModel.fetchTrending(force: true)
+                        }
+                        .listRowBackground(Color.clear)
+                    }
                 }
                 Section("Browse") {
-                    browseLink(
-                        .playlists,
-                        title: "Playlists",
-                        subtitle: "Curated playlists",
-                        systemImage: "music.note.list",
-                        tint: .appAccent,
-                        identifier: "WatchHome.playlists",
-                        hint: "Opens curated playlists."
-                    )
-                    if auth.linkState == .signedIn {
-                        browseLink(
-                            .favorites,
-                            title: "Favorites",
-                            subtitle: "Songs you starred",
-                            systemImage: "star.fill",
-                            tint: .yellow,
-                            identifier: "WatchHome.favorites",
-                            hint: "Opens songs you starred."
+                    NavigationLink(destination: PlaylistsGridView()) {
+                        WatchBrowseLinkRow(
+                            title: "Playlists",
+                            subtitle: "Curated playlists",
+                            systemImage: "music.note.list",
+                            tint: .appAccent
                         )
                     }
-                    browseLink(
-                        .songs,
-                        title: "Songs",
-                        subtitle: "Trending songs",
-                        systemImage: "music.note",
-                        tint: .purple,
-                        identifier: "WatchHome.songs",
-                        hint: "Opens trending songs."
-                    )
-                    browseLink(
-                        .radio,
-                        title: "Radio",
-                        subtitle: "Listen live",
-                        systemImage: "dot.radiowaves.left.and.right",
-                        tint: .orange,
-                        identifier: "WatchHome.radio",
-                        hint: "Opens the live station."
-                    )
-                    browseLink(
-                        .search,
-                        title: "Search",
-                        subtitle: "Find songs and artists",
-                        systemImage: "magnifyingglass",
-                        tint: .blue,
-                        identifier: "WatchHome.search",
-                        hint: "Opens search."
-                    )
-                    browseLink(
-                        .account,
-                        title: "Account",
-                        subtitle: accountSubtitle,
-                        systemImage: "person.crop.circle",
-                        tint: .green,
-                        identifier: "WatchHome.account",
-                        hint: "Opens account and session status."
-                    )
+                    .accessibilityIdentifier("WatchHome.playlists")
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Playlists")
+                    .accessibilityHint("Opens curated playlists.")
+                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    NavigationLink(destination: SongsView().environmentObject(audioManager)) {
+                        WatchBrowseLinkRow(
+                            title: "Songs",
+                            subtitle: "Browse trending songs",
+                            systemImage: "music.note",
+                            tint: .purple
+                        )
+                    }
+                    .accessibilityIdentifier("WatchHome.songs")
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Songs")
+                    .accessibilityHint("Opens trending songs.")
+                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    NavigationLink(destination: SearchView().environmentObject(audioManager)) {
+                        WatchBrowseLinkRow(
+                            title: "Search",
+                            subtitle: "Find songs and artists",
+                            systemImage: "magnifyingglass",
+                            tint: .blue
+                        )
+                    }
+                    .accessibilityIdentifier("WatchHome.search")
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Search")
+                    .accessibilityHint("Opens search.")
+                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
+                    NavigationLink(destination: AccountView()) {
+                        WatchBrowseLinkRow(
+                            title: "Account",
+                            subtitle: "Guest session details",
+                            systemImage: "person.crop.circle",
+                            tint: .green
+                        )
+                    }
+                    .accessibilityIdentifier("WatchHome.account")
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Account")
+                    .accessibilityHint("Opens guest session details.")
+                    .simultaneousGesture(TapGesture().onEnded { WatchHaptic.play(.click) })
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .animation(songStateAnimation, value: audioManager.currentSong?.id)
             .animation(playbackAnimation, value: audioManager.isPlaying)
-            .navigationDestination(for: Destination.self) { destination in
-                view(for: destination)
+            .navigationDestination(isPresented: $navigateToPlayer) {
+                PlayerView()
+                    .environmentObject(audioManager)
             }
             .onAppear {
                 homeViewModel.fetchTrending()
             }
         }
-    }
-
-    // `title` and `hint` are keys rather than plain strings so the literals at
-    // each call site still land in the string catalog. Passing them as `String`
-    // hides them from extraction — the four Browse hints dropped out of
-    // Localizable.xcstrings the moment these rows moved behind a helper.
-    // `subtitle` stays a String: Account's is a live session status, not a key.
-    private func browseLink(
-        _ destination: Destination,
-        title: LocalizedStringKey,
-        subtitle: String,
-        systemImage: String,
-        tint: Color,
-        identifier: String,
-        hint: LocalizedStringKey
-    ) -> some View {
-        NavigationLink(value: destination) {
-            WatchBrowseLinkRow(
-                title: title,
-                subtitle: subtitle,
-                systemImage: systemImage,
-                tint: tint
-            )
-        }
-        .accessibilityIdentifier(identifier)
-        .buttonStyle(.watchPressable)
-        .accessibilityLabel(title)
-        .accessibilityHint(hint)
-    }
-
-    @ViewBuilder
-    private func view(for destination: Destination) -> some View {
-        switch destination {
-        case .player:
-            PlayerView().environmentObject(audioManager)
-        case .playlists:
-            PlaylistsGridView()
-        case .favorites:
-            FavoritesView().environmentObject(audioManager)
-        case .songs:
-            SongsView().environmentObject(audioManager)
-        case .radio:
-            RadioView().environmentObject(audioManager)
-        case .search:
-            SearchView().environmentObject(audioManager)
-        case .account:
-            AccountView()
-        }
-    }
-
-    /// The current song already has its own section above, so it is dropped
-    /// here rather than appearing twice on one short screen.
-    private var recentlyPlayed: [Song] {
-        Array(
-            recents.songs
-                .filter { $0.id != audioManager.currentSong?.id }
-                .prefix(3)
-        )
-    }
-
-    private var accountSubtitle: String {
-        switch auth.linkState {
-        case .signedIn:
-            auth.username ?? "Signed in"
-        case .awaitingPhone:
-            "Waiting for iPhone"
-        case .signedOut:
-            "Guest session"
-        }
+        .environmentObject(audioManager)
     }
 
     private func play(_ song: Song, context: [Song]) {
@@ -265,7 +168,7 @@ struct HomeView: View {
         } else {
             WatchHaptic.play(.click)
         }
-        path.append(Destination.player)
+        navigateToPlayer = true
     }
 }
 
@@ -315,7 +218,7 @@ private struct WatchHomeHeader: View {
 }
 
 private struct WatchBrowseLinkRow: View {
-    let title: LocalizedStringKey
+    let title: String
     let subtitle: String
     let systemImage: String
     let tint: Color

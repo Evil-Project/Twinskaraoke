@@ -4,47 +4,78 @@ import SwiftUI
 
 @MainActor
 final class FavoritesManager: ObservableObject {
+    typealias FavoriteIDsLoader = @Sendable () async throws -> [String]
+    typealias ToggleSender = @Sendable (
+        _ songID: String,
+        _ sessionScope: UserSessionScope
+    ) async -> Bool
+    typealias SessionScopeProvider = @MainActor () -> UserSessionScope
+
     static let shared = FavoritesManager()
+
     @Published private(set) var favoriteIDs: Set<String> = []
+    @Published private(set) var sessionRevision: UInt64 = 0
+
     private var inFlight: Set<String> = []
     private var loaded = false
     private var isLoading = false
     private var lastLoadFailure: Date?
-    private var stateGeneration = 0
-    private var mutationRevision = 0
-    private var reloadAfterMutations = false
     private let loadFailureRetryDelay: TimeInterval = 30
+    private var loadTask: Task<Void, Never>?
+    private var toggleTasks: [String: Task<Void, Never>] = [:]
+    private var stateGeneration: UInt64 = 0
+    private var loadGeneration: UInt64 = 0
+    private var mutationRevision: UInt64 = 0
+    private var needsReloadAfterMutation = false
+    private var activeSessionScope: UserSessionScope
+    private let favoriteIDsLoader: FavoriteIDsLoader
+    private let toggleSender: ToggleSender
+    private let sessionScopeProvider: SessionScopeProvider
+
+    init(
+        favoriteIDsLoader: @escaping FavoriteIDsLoader = FavoritesManager.loadFavoriteIDs,
+        toggleSender: @escaping ToggleSender = FavoritesManager.sendFavoriteToggle,
+        sessionScopeProvider: @escaping SessionScopeProvider = { UserSessionScope.current }
+    ) {
+        self.favoriteIDsLoader = favoriteIDsLoader
+        self.toggleSender = toggleSender
+        self.sessionScopeProvider = sessionScopeProvider
+        activeSessionScope = sessionScopeProvider()
+    }
+
+    deinit {
+        loadTask?.cancel()
+        toggleTasks.values.forEach { $0.cancel() }
+    }
 
     func isFavorite(_ songID: String) -> Bool {
-        favoriteIDs.contains(songID)
+        synchronizeSessionIfNeeded()
+        return favoriteIDs.contains(songID)
     }
 
     func loadIfNeeded() {
+        synchronizeSessionIfNeeded()
         guard !loaded, !isLoading else { return }
         if let lastLoadFailure, Date().timeIntervalSince(lastLoadFailure) < loadFailureRetryDelay {
             return
         }
-        Task { @MainActor in await load() }
+        startLoad(force: false)
     }
 
-    func reload() {
-        guard !isLoading else { return }
-        Task { @MainActor in await load() }
+    @discardableResult
+    func reload() -> Task<Void, Never>? {
+        synchronizeSessionIfNeeded()
+        return startLoad(force: true)
     }
 
     func clear() {
-        stateGeneration += 1
-        favoriteIDs = []
-        inFlight = []
-        loaded = false
-        isLoading = false
-        lastLoadFailure = nil
-        mutationRevision = 0
-        reloadAfterMutations = false
+        resetState(for: sessionScopeProvider())
     }
 
     func toggle(songID: String) {
+        synchronizeSessionIfNeeded()
         guard !inFlight.contains(songID) else { return }
+
         let wasFavorite = favoriteIDs.contains(songID)
         if wasFavorite {
             favoriteIDs.remove(songID)
@@ -53,86 +84,214 @@ final class FavoritesManager: ObservableObject {
         }
         inFlight.insert(songID)
         mutationRevision &+= 1
-        if isLoading {
-            reloadAfterMutations = true
-        }
-        let generation = stateGeneration
-        Task {
-            let ok = await send(songID: songID)
-            if ok {
-                // Serialize invalidation ahead of the reload below: a racing
-                // load()/reload() must not read the pre-toggle list from the
-                // cache and commit stale star state as loaded.
-                await KaraokeAPIClient.invalidateFavoriteSongs()
-            }
-            await MainActor.run {
-                guard stateGeneration == generation else { return }
-                inFlight.remove(songID)
-                if !ok {
-                    if wasFavorite {
-                        favoriteIDs.insert(songID)
-                    } else {
-                        favoriteIDs.remove(songID)
-                    }
+
+        let sessionGeneration = stateGeneration
+        let sessionScope = activeSessionScope
+        let toggleSender = toggleSender
+        toggleTasks[songID] = Task { @MainActor [weak self, toggleSender] in
+            guard let self else { return }
+            synchronizeSessionIfNeeded()
+            guard stateGeneration == sessionGeneration,
+                  activeSessionScope == sessionScope,
+                  !Task.isCancelled
+            else { return }
+
+            let succeeded = await toggleSender(songID, sessionScope)
+            synchronizeSessionIfNeeded()
+            guard stateGeneration == sessionGeneration,
+                  activeSessionScope == sessionScope,
+                  !Task.isCancelled
+            else { return }
+
+            toggleTasks[songID] = nil
+            inFlight.remove(songID)
+            if !succeeded {
+                if wasFavorite {
+                    favoriteIDs.insert(songID)
+                } else {
+                    favoriteIDs.remove(songID)
                 }
-                scheduleReloadAfterMutationsIfNeeded()
+                needsReloadAfterMutation = true
             }
+            startReconciliationIfPossible()
         }
     }
 
-    private func load() async {
-        guard CredentialStore.isAuthenticated else { return }
-        let generation = stateGeneration
-        let revision = mutationRevision
-        isLoading = true
-        defer {
-            if stateGeneration == generation {
-                isLoading = false
-                scheduleReloadAfterMutationsIfNeeded()
-            }
+    @discardableResult
+    private func startLoad(force: Bool) -> Task<Void, Never>? {
+        synchronizeSessionIfNeeded()
+        guard inFlight.isEmpty else {
+            needsReloadAfterMutation = true
+            return nil
         }
-        // Read from the same source as the Favorites playlist. The old
-        // /api/user/favorites ID list did not match the playlist's songs
-        // (starred songs showed an inactive star everywhere), while
-        // favoriteSongs() returns the complete set and shares the
-        // FavoriteSongsCache with the playlist.
-        let songs: [Song]
-        do {
-            songs = try await KaraokeAPIClient.favoriteSongs()
-        } catch {
-            DebugLogger.log(
-                "Favorites load failed: \(error.localizedDescription)",
-                category: .network
-            )
-            if stateGeneration == generation {
+        if isLoading {
+            guard force else { return nil }
+            cancelLoad()
+        }
+        guard force || !loaded else { return nil }
+
+        loadGeneration &+= 1
+        let requestGeneration = loadGeneration
+        let sessionGeneration = stateGeneration
+        let mutationRevision = mutationRevision
+        let sessionScope = activeSessionScope
+        let favoriteIDsLoader = favoriteIDsLoader
+        isLoading = true
+
+        let task = Task { @MainActor [weak self, favoriteIDsLoader] in
+            do {
+                let ids = try await favoriteIDsLoader()
+                guard let self else { return }
+                synchronizeSessionIfNeeded()
+                guard isCurrentLoad(
+                    requestGeneration: requestGeneration,
+                    sessionGeneration: sessionGeneration,
+                    sessionScope: sessionScope
+                ) else { return }
+
+                isLoading = false
+                loadTask = nil
+                guard self.mutationRevision == mutationRevision else {
+                    loaded = false
+                    needsReloadAfterMutation = true
+                    startReconciliationIfPossible()
+                    return
+                }
+
+                favoriteIDs = Set(ids)
+                loaded = true
+                lastLoadFailure = nil
+            } catch {
+                guard let self else { return }
+                synchronizeSessionIfNeeded()
+                guard isCurrentLoad(
+                    requestGeneration: requestGeneration,
+                    sessionGeneration: sessionGeneration,
+                    sessionScope: sessionScope
+                ) else { return }
+
+                isLoading = false
+                loadTask = nil
                 lastLoadFailure = Date()
             }
-            return
         }
-        guard stateGeneration == generation else { return }
-        guard mutationRevision == revision, inFlight.isEmpty else {
-            reloadAfterMutations = true
-            return
-        }
-        favoriteIDs = Set(songs.map(\.id))
-        loaded = true
+        loadTask = task
+        return task
+    }
+
+    private func startReconciliationIfPossible() {
+        guard needsReloadAfterMutation, inFlight.isEmpty else { return }
+        needsReloadAfterMutation = false
+        startLoad(force: true)
+    }
+
+    private func synchronizeSessionIfNeeded() {
+        let currentScope = sessionScopeProvider()
+        guard currentScope != activeSessionScope else { return }
+        resetState(for: currentScope)
+    }
+
+    private func resetState(for sessionScope: UserSessionScope) {
+        stateGeneration &+= 1
+        mutationRevision &+= 1
+        activeSessionScope = sessionScope
+        cancelLoad()
+        toggleTasks.values.forEach { $0.cancel() }
+        toggleTasks.removeAll()
+        inFlight.removeAll()
+        favoriteIDs = []
+        loaded = false
         lastLoadFailure = nil
+        needsReloadAfterMutation = false
+        sessionRevision &+= 1
     }
 
-    private func scheduleReloadAfterMutationsIfNeeded() {
-        guard reloadAfterMutations, inFlight.isEmpty, !isLoading else { return }
-        reloadAfterMutations = false
-        Task { @MainActor [weak self] in
-            await self?.load()
+    private func cancelLoad() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
+    private func isCurrentLoad(
+        requestGeneration: UInt64,
+        sessionGeneration: UInt64,
+        sessionScope: UserSessionScope
+    ) -> Bool {
+        requestGeneration == loadGeneration
+            && sessionGeneration == stateGeneration
+            && sessionScope == activeSessionScope
+            && !Task.isCancelled
+    }
+
+    nonisolated private static func loadFavoriteIDs() async throws -> [String] {
+        let request = try KaraokeAPIClient.request(path: "/api/user/favorites")
+        let data = try await KaraokeAPIClient.data(for: request)
+        return try decodeFavoriteIDs(from: data)
+    }
+
+    nonisolated private static func sendFavoriteToggle(
+        songID: String,
+        sessionScope: UserSessionScope
+    ) async -> Bool {
+        let encoded = songID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? songID
+        do {
+            var request = try KaraokeAPIClient.request(
+                path: "/api/user/favorites/\(encoded)",
+                authenticationToken: sessionScope.authenticationToken,
+                guestID: sessionScope.guestID
+            )
+            request.httpMethod = "PUT"
+            _ = try await KaraokeAPIClient.data(for: request)
+            return true
+        } catch {
+            return false
         }
     }
 
-    private func send(songID: String) async -> Bool {
-        guard var req = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "user", "favorites", songID]
-        )
-        else { return false }
-        req.httpMethod = "PUT"
-        return (try? await KaraokeAPIClient.data(for: req)) != nil
+    nonisolated static func decodeFavoriteIDs(from data: Data) throws -> [String] {
+        let payload: Any
+        do {
+            payload = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw KaraokeAPIClient.APIError.decodeFailed
+        }
+
+        if let array = payload as? [Any] {
+            return try decodeFavoriteIDArray(array)
+        }
+
+        if let object = payload as? [String: Any],
+           let value = object["favorites"] ?? object["items"],
+           let array = value as? [Any]
+        {
+            return try decodeFavoriteIDArray(array)
+        }
+
+        throw KaraokeAPIClient.APIError.decodeFailed
+    }
+
+    nonisolated private static func decodeFavoriteIDArray(_ array: [Any]) throws -> [String] {
+        if array.isEmpty { return [] }
+
+        if let ids = array as? [String], ids.count == array.count {
+            guard ids.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+                throw KaraokeAPIClient.APIError.decodeFailed
+            }
+            return ids
+        }
+
+        guard let objects = array as? [[String: Any]], objects.count == array.count else {
+            throw KaraokeAPIClient.APIError.decodeFailed
+        }
+
+        return try objects.map { object in
+            guard let id = object["id"] as? String ?? object["songId"] as? String,
+                  !id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else {
+                throw KaraokeAPIClient.APIError.decodeFailed
+            }
+            return id
+        }
     }
 }

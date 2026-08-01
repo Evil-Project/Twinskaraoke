@@ -38,7 +38,7 @@ private final class RadioPlaybackState: ObservableObject {
 }
 
 struct RadioView: View {
-    @ObservedObject private var radio = RadioController.shared
+    @StateObject private var radio = RadioController.shared
     @ObservedObject private var playback = RadioPlaybackState.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -103,9 +103,6 @@ struct RadioView: View {
             }
             .onAppear { radio.start() }
             .onDisappear {
-                // Polling must keep running while the stream is playing so
-                // now-playing metadata stays fresh; stop() only invalidates
-                // the metadata poll timer and never touches playback.
                 if !playback.isRadioMode {
                     radio.stop()
                 }
@@ -126,7 +123,7 @@ struct RadioView: View {
         }
     }
 
-    private func playOrPauseLiveStation() {
+    private func playOrStopLiveStation() {
         if playback.isRadioMode, playback.currentSongID != nil {
             AudioPlayerManager.shared.togglePlayPause()
         } else {
@@ -217,11 +214,19 @@ struct RadioView: View {
 
     @ViewBuilder
     private var radioActions: some View {
+        let liveStatus = RadioLiveStatusPresentation(
+            isRadioMode: playback.isRadioMode,
+            isPlaying: playback.isPlaying,
+            isBuffering: playback.isBuffering
+        )
         Button {
             AppHaptic.medium.play()
-            radio.playLiveStream()
+            playOrStopLiveStation()
         } label: {
-            Label("Play Live Station", systemImage: "dot.radiowaves.left.and.right")
+            Label(
+                liveStatus.isActive ? "Stop Live Station" : "Play Live Station",
+                systemImage: liveStatus.isActive ? "stop.fill" : "dot.radiowaves.left.and.right"
+            )
         }
 
         Button {
@@ -241,7 +246,11 @@ struct RadioView: View {
     private func stationCard(horizontalPadding: CGFloat = AM.Spacing.screenMargin) -> some View {
         let np = radio.nowPlaying
         let song = np?.nowPlaying?.song
-        let isLivePlaying = playback.isRadioMode && playback.isPlaying
+        let liveStatus = RadioLiveStatusPresentation(
+            isRadioMode: playback.isRadioMode,
+            isPlaying: playback.isPlaying,
+            isBuffering: playback.isBuffering
+        )
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Featured Episode")
@@ -263,11 +272,11 @@ struct RadioView: View {
             radioHero(
                 song: song,
                 station: np?.station,
-                isLivePlaying: isLivePlaying
+                liveStatus: liveStatus
             )
 
             RadioLiveStatusStrip(
-                isPlaying: isLivePlaying,
+                status: liveStatus,
                 listenerCount: np?.listeners?.unique,
                 lastUpdated: radio.lastUpdated
             )
@@ -341,7 +350,7 @@ struct RadioView: View {
     private func radioHero(
         song: RadioNowPlaying.SongInfo?,
         station: RadioNowPlaying.Station?,
-        isLivePlaying: Bool
+        liveStatus: RadioLiveStatusPresentation
     ) -> some View {
         ZStack(alignment: .bottomLeading) {
             Group {
@@ -365,7 +374,7 @@ struct RadioView: View {
             )
 
             VStack(alignment: .leading, spacing: 8) {
-                RadioLiveBadge(isActive: isLivePlaying)
+                RadioLiveBadge(status: liveStatus)
                 Text(song?.displayArtist ?? station?.description ?? "Live radio")
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.9))
@@ -374,7 +383,7 @@ struct RadioView: View {
             .padding(16)
 
             radioPlayButton(
-                isLivePlaying: isLivePlaying,
+                status: liveStatus,
                 accessibilityValue: song?.displayTitle ?? station?.name ?? "Twinskaraoke Radio"
             )
             .padding(14)
@@ -387,29 +396,42 @@ struct RadioView: View {
         .shadow(color: Color.appHeroShadowIdle, radius: 10, y: 5)
     }
 
-    private func radioPlayButton(isLivePlaying: Bool, accessibilityValue: String) -> some View {
+    private func radioPlayButton(
+        status: RadioLiveStatusPresentation,
+        accessibilityValue: String
+    ) -> some View {
         Button {
             AppHaptic.medium.play()
-            playOrPauseLiveStation()
+            playOrStopLiveStation()
         } label: {
             ZStack {
                 Circle()
                     .fill(.white)
                     .frame(width: 48, height: 48)
-                if playback.isBuffering, playback.isRadioMode, !playback.isPlaying {
-                    ProgressView()
-                        .controlSize(.regular)
-                } else {
-                    Image(systemName: isLivePlaying ? "pause.fill" : "play.fill")
+                switch status {
+                case .ready:
+                    Image(systemName: "play.fill")
                         .font(.title3.bold())
                         .foregroundStyle(Color.black)
-                        .offset(x: isLivePlaying ? 0 : 2)
+                        .offset(x: 2)
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                case .buffering:
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.black.opacity(0.62))
+                    Image(systemName: "stop.fill")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.black)
+                case .onAir:
+                    Image(systemName: "stop.fill")
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.black)
                         .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 }
             }
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.85))
-        .accessibilityLabel(isLivePlaying ? "Pause live station" : "Play live station")
+        .accessibilityLabel(status.isActive ? "Stop live station" : "Play live station")
         .accessibilityValue(accessibilityValue)
         .accessibilityHint("Controls the live radio stream.")
     }
@@ -426,8 +448,7 @@ struct RadioView: View {
             RadioSectionHeader("New & Recent")
                 .padding(.horizontal, horizontalPadding)
             LazyVStack(spacing: 0) {
-                ForEach(history.prefix(10).enumerated().map { PositionedRadioHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
-                    let item = positioned.item
+                ForEach(Array(history.prefix(10).enumerated()), id: \.offset) { _, item in
                     Button {
                         showLiveSchedule()
                     } label: {
@@ -453,25 +474,6 @@ struct RadioView: View {
     }
 }
 
-/// Row identity for the radio history list. The offset keeps IDs unique when
-/// the same song appears twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The song ID makes the ID change when a poll prepends new
-/// items: with purely positional identity every row keeps its old view, so
-/// all visible artwork flashes back through placeholders on each track change.
-private struct PositionedRadioHistoryItem: Identifiable {
-    struct ID: Hashable {
-        let offset: Int
-        let songID: String
-    }
-
-    let offset: Int
-    let item: RadioNowPlaying.HistoryItem
-
-    var id: ID {
-        ID(offset: offset, songID: item.song.id)
-    }
-}
-
 private struct RadioSectionHeader: View {
     let title: String
 
@@ -491,14 +493,14 @@ private struct RadioSectionHeader: View {
 }
 
 private struct RadioLiveBadge: View {
-    let isActive: Bool
+    let status: RadioLiveStatusPresentation
 
     var body: some View {
         HStack(spacing: 5) {
             ZStack {
                 Circle()
-                    .fill(.white.opacity(isActive ? 0.26 : 0.12))
-                    .frame(width: isActive ? 11 : 8, height: isActive ? 11 : 8)
+                    .fill(.white.opacity(status.isActive ? 0.26 : 0.12))
+                    .frame(width: status.isActive ? 11 : 8, height: status.isActive ? 11 : 8)
                     .accessibilityHidden(true)
                 Circle()
                     .fill(.white)
@@ -506,7 +508,7 @@ private struct RadioLiveBadge: View {
             }
             .frame(width: 12, height: 12)
 
-            Text("LIVE")
+            Text(status.badgeText)
                 .font(.caption.bold())
                 .foregroundStyle(.white)
         }
@@ -514,12 +516,12 @@ private struct RadioLiveBadge: View {
         .padding(.vertical, 5)
         .background(Capsule().fill(Color.appAccent))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isActive ? "Live and playing" : "Live")
+        .accessibilityLabel(status.accessibilityLabel)
     }
 }
 
 private struct RadioLiveStatusStrip: View {
-    let isPlaying: Bool
+    let status: RadioLiveStatusPresentation
     let listenerCount: Int?
     let lastUpdated: Date?
 
@@ -539,8 +541,8 @@ private struct RadioLiveStatusStrip: View {
     @ViewBuilder
     private var statusPills: some View {
         RadioStatusPill(
-            systemImage: isPlaying ? "speaker.wave.2.fill" : "dot.radiowaves.left.and.right",
-            text: isPlaying ? "On Air" : "Live Ready",
+            systemImage: status.systemImage,
+            text: status.title,
             tint: .appAccent
         )
         if let listenerCount {

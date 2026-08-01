@@ -3,29 +3,65 @@ import Foundation
 
 @MainActor
 final class PlaylistsViewModel: ObservableObject {
+    typealias Loader = @Sendable () async throws -> [Playlist]
+
     @Published var playlists: [Playlist] = []
     @Published var isLoading = false
-    /// Set when the initial load fails so the view can offer a retry instead
-    /// of showing a misleading empty state.
-    @Published var loadError: String?
+    @Published private(set) var loadErrorMessage: String?
+    private var loadTask: Task<Void, Never>?
+    private var loadGeneration: UInt64 = 0
+    private let loader: Loader
 
-    func fetchMusic() {
-        guard !isLoading, playlists.isEmpty else { return }
+    init(
+        loader: @escaping Loader = {
+            try await KaraokeAPIClient.playlists(
+                startIndex: 0,
+                pageSize: 15,
+                isSetlist: true,
+                sortDescending: false
+            )
+        }
+    ) {
+        self.loader = loader
+    }
+
+    deinit {
+        loadTask?.cancel()
+    }
+
+    func fetchMusic(force: Bool = false) {
+        guard force || (!isLoading && playlists.isEmpty) else { return }
+
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        loadTask?.cancel()
         isLoading = true
-        loadError = nil
-        Task { [weak self] in
-            guard let self else { return }
-            defer { isLoading = false }
+        loadErrorMessage = nil
+        let loader = loader
+        loadTask = Task { @MainActor [weak self, loader] in
             do {
-                playlists = try await KaraokeAPIClient.playlists(
-                    startIndex: 0,
-                    pageSize: 15,
-                    isSetlist: true,
-                    sortDescending: false
-                )
+                let playlists = try await loader()
+                guard let self,
+                      generation == self.loadGeneration,
+                      !Task.isCancelled
+                else { return }
+                self.playlists = playlists
+                self.loadErrorMessage = nil
             } catch {
-                loadError = "Check your connection and try again."
+                guard let self,
+                      generation == self.loadGeneration,
+                      !Task.isCancelled
+                else { return }
+                self.playlists = []
+                self.loadErrorMessage =
+                    "Playlists are temporarily unavailable. Check your connection and try again."
             }
+            guard let self,
+                  generation == self.loadGeneration,
+                  !Task.isCancelled
+            else { return }
+            self.isLoading = false
+            self.loadTask = nil
         }
     }
 }

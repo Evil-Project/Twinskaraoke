@@ -1,13 +1,45 @@
+import Combine
 import SwiftUI
 
+@MainActor
+final class SearchRootState: ObservableObject {
+    @Published var navigationPath = NavigationPath()
+    var isSelected = false
+    var isShellTransitioning = false
+    let searchViewModel = SearchViewModel()
+    let genresViewModel = GenresViewModel()
+    let topChartViewModel = TopChartViewModel()
+    let publicPlaylistsViewModel = PublicPlaylistsViewModel()
+}
+
+private enum SearchBrowseDestination: Hashable {
+    case topChart
+    case publicPlaylists
+    case genre(GenreSummary)
+}
+
+private enum SearchSuggestionDestination: Hashable {
+    case category(String)
+}
+
 struct SearchView: View {
-    @StateObject var viewModel = SearchViewModel()
+    @ObservedObject private var state: SearchRootState
+    @ObservedObject var viewModel: SearchViewModel
 
     @ObservedObject private var playback = PlaybackRowState.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var pendingSongID: String?
     @State private var playbackTask: Task<Void, Never>?
+
+    init(state: SearchRootState) {
+        _state = ObservedObject(wrappedValue: state)
+        _viewModel = ObservedObject(wrappedValue: state.searchViewModel)
+    }
+
+    private var stateChangeAnimation: Animation? {
+        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.84)
+    }
 
     private var subtleStateTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98))
@@ -30,7 +62,7 @@ struct SearchView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigationPathBinding) {
             GeometryReader { proxy in
                 Group {
                     if viewModel.isSearching, viewModel.results.isEmpty {
@@ -38,17 +70,22 @@ struct SearchView: View {
                             .transition(.opacity)
                     } else if let errorMessage = viewModel.searchErrorMessage,
                               viewModel.results.isEmpty,
-                              viewModel.hasActiveQuery
+                              !viewModel.searchText.isEmpty
                     {
                         SearchErrorStateView(message: errorMessage) {
                             viewModel.retrySearch()
                         }
                         .transition(subtleStateTransition)
-                    } else if viewModel.results.isEmpty, viewModel.hasActiveQuery {
+                    } else if viewModel.results.isEmpty, !viewModel.searchText.isEmpty {
                         SearchNoResultsStateView(query: viewModel.searchText)
                             .transition(resultsEmptyTransition)
                     } else if viewModel.results.isEmpty {
-                        BrowseCategoriesView(availableWidth: proxy.size.width)
+                        BrowseCategoriesView(
+                            availableWidth: proxy.size.width,
+                            genresVM: state.genresViewModel,
+                            topChartVM: state.topChartViewModel,
+                            publicPlaylistsVM: state.publicPlaylistsViewModel
+                        )
                             .transition(.opacity)
                     } else {
                         List {
@@ -86,6 +123,10 @@ struct SearchView: View {
                     }
                 }
                 .musicScreenBackground()
+                .animation(
+                    stateChangeAnimation,
+                    value: "\(viewModel.isSearching)-\(viewModel.results.count)-\(viewModel.searchText.isEmpty)"
+                )
             }
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.large)
@@ -115,9 +156,20 @@ struct SearchView: View {
                 playbackTask?.cancel()
                 playbackTask = nil
                 pendingSongID = nil
-                ArtworkPrefetcher.shared.cancel(reason: "search results")
             }
         }
+    }
+
+    private var navigationPathBinding: Binding<NavigationPath> {
+        Binding(
+            get: { state.navigationPath },
+            set: { newPath in
+                guard (state.isSelected && !state.isShellTransitioning) || !newPath.isEmpty else {
+                    return
+                }
+                state.navigationPath = newPath
+            }
+        )
     }
 
     private func playSelection(_ song: Song) {
@@ -175,10 +227,11 @@ private struct SearchResultsSummaryHeader: View {
 
 private struct BrowseCategoriesView: View {
     let availableWidth: CGFloat
-    @StateObject private var genresVM = GenresViewModel()
-    @StateObject private var topChartVM = TopChartViewModel()
-    @StateObject private var publicPlaylistsVM = PublicPlaylistsViewModel()
+    @ObservedObject var genresVM: GenresViewModel
+    @ObservedObject var topChartVM: TopChartViewModel
+    @ObservedObject var publicPlaylistsVM: PublicPlaylistsViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let genres: [(String, [Color])] = [
         (
             "Pop", [Color(red: 0.90, green: 0.20, blue: 0.55), Color(red: 0.40, green: 0.05, blue: 0.30)]
@@ -243,6 +296,9 @@ private struct BrowseCategoriesView: View {
     }
 
     private var categoryColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return singleColumn
+        }
         if horizontalSizeClass == .compact {
             return compactTwoColumns
         }
@@ -253,6 +309,9 @@ private struct BrowseCategoriesView: View {
     }
 
     private var featuredColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return singleColumn
+        }
         if horizontalSizeClass == .compact {
             return compactTwoColumns
         }
@@ -267,6 +326,10 @@ private struct BrowseCategoriesView: View {
             GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: AM.Spacing.m, alignment: .top),
             GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: AM.Spacing.m, alignment: .top),
         ]
+    }
+
+    private var singleColumn: [GridItem] {
+        [GridItem(.flexible(minimum: 0, maximum: .infinity), alignment: .top)]
     }
 
     var body: some View {
@@ -291,14 +354,17 @@ private struct BrowseCategoriesView: View {
         .tabBarScrollInset()
         .refreshable {
             AppHaptic.selection.play()
-            genresVM.refresh()
-            topChartVM.refresh()
-            publicPlaylistsVM.refresh()
+            genresVM.loadIfNeeded()
+            topChartVM.loadIfNeeded()
+            publicPlaylistsVM.loadIfNeeded()
         }
         .onAppear {
             genresVM.loadIfNeeded()
             topChartVM.loadIfNeeded()
             publicPlaylistsVM.loadIfNeeded()
+        }
+        .navigationDestination(for: SearchBrowseDestination.self) { destination in
+            browseDestination(destination)
         }
     }
 
@@ -349,9 +415,7 @@ private struct BrowseCategoriesView: View {
 
     private func featuredGrid(horizontalPadding: CGFloat) -> some View {
         LazyVGrid(columns: featuredColumns, spacing: AM.Spacing.m) {
-            NavigationLink(
-                destination: TopChartCollectionView(viewModel: topChartVM)
-            ) {
+            NavigationLink(value: SearchBrowseDestination.topChart) {
                 SearchFeaturedShortcutTile(
                     title: "Twinskaraoke Top 100",
                     gradient: [
@@ -364,17 +428,19 @@ private struct BrowseCategoriesView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
             .accessibilityLabel("Twinskaraoke Top 100")
             .accessibilityIdentifier("SearchCategory.TwinskaraokeTop100")
-            .accessibilityValue("\(topChartVM.songs.count) songs")
+            .accessibilityValue(
+                topChartVM.loadFailed ? "Unavailable" : "\(topChartVM.songs.count) songs"
+            )
             .accessibilityHint("Opens the Top 100 songs collection")
 
-            NavigationLink(
-                destination: PublicPlaylistsCollectionView(viewModel: publicPlaylistsVM)
-            ) {
+            NavigationLink(value: SearchBrowseDestination.publicPlaylists) {
                 SearchFeaturedShortcutTile(
                     title: "Public Playlists",
-                    subtitle: publicPlaylistsVM.playlists.isEmpty
-                        ? "Community mixes"
-                        : "\(publicPlaylistsVM.playlists.count) playlists",
+                    subtitle: publicPlaylistsVM.loadFailed
+                        ? "Temporarily unavailable"
+                        : publicPlaylistsVM.playlists.isEmpty
+                            ? "Community mixes"
+                            : "\(publicPlaylistsVM.playlists.count) playlists",
                     gradient: [
                         Color(red: 0.19, green: 0.55, blue: 0.96),
                         Color(red: 0.12, green: 0.22, blue: 0.58),
@@ -385,7 +451,10 @@ private struct BrowseCategoriesView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
             .accessibilityLabel("Public Playlists")
             .accessibilityIdentifier("SearchCategory.PublicPlaylists")
-            .accessibilityValue("\(publicPlaylistsVM.playlists.count) playlists")
+            .accessibilityValue(
+                publicPlaylistsVM.loadFailed
+                    ? "Unavailable" : "\(publicPlaylistsVM.playlists.count) playlists"
+            )
             .accessibilityHint("Opens public playlists")
         }
         .padding(.horizontal, horizontalPadding)
@@ -421,9 +490,7 @@ private struct BrowseCategoriesView: View {
             LazyVGrid(columns: categoryColumns, spacing: AM.Spacing.m) {
                 ForEach(genresVM.genres) { genre in
                     let palette = paletteForGenre(genre.name)
-                    NavigationLink(
-                        destination: GenreDetailView(genre: genre, viewModel: genresVM, palette: palette)
-                    ) {
+                    NavigationLink(value: SearchBrowseDestination.genre(genre)) {
                         CategoryTile(
                             title: genre.name,
                             gradient: palette,
@@ -435,10 +502,7 @@ private struct BrowseCategoriesView: View {
                     .accessibilityIdentifier("SearchCategory.\(genre.name.accessibilitySlug)")
                     .accessibilityValue("\(genre.songCount) songs")
                     .accessibilityHint("Opens \(genre.name) songs")
-                    .onAppear {
-                        genresVM.loadMoreIfNeeded(current: genre)
-                        genresVM.loadPreviewIfNeeded(for: genre)
-                    }
+                    .onAppear { genresVM.loadMoreIfNeeded(current: genre) }
                 }
             }
             .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -451,17 +515,26 @@ private struct BrowseCategoriesView: View {
         }) {
             return match.1
         }
-        return genres[Self.stablePaletteIndex(for: name, count: genres.count)].1
+        guard let index = SearchGenrePalette.index(for: name, paletteCount: genres.count) else {
+            return [Color.appAccent, Color.appAccent.opacity(0.62)]
+        }
+        return genres[index].1
     }
 
-    /// FNV-1a over unicode scalars: stable across launches, unlike `hashValue`.
-    private static func stablePaletteIndex(for name: String, count: Int) -> Int {
-        var hash: UInt64 = 1_469_598_103_934_665_603
-        for scalar in name.unicodeScalars {
-            hash ^= UInt64(scalar.value)
-            hash &*= 1_099_511_628_211
+    @ViewBuilder
+    private func browseDestination(_ destination: SearchBrowseDestination) -> some View {
+        switch destination {
+        case .topChart:
+            TopChartCollectionView(viewModel: topChartVM)
+        case .publicPlaylists:
+            PublicPlaylistsCollectionView(viewModel: publicPlaylistsVM)
+        case let .genre(genre):
+            GenreDetailView(
+                genre: genre,
+                viewModel: genresVM,
+                palette: paletteForGenre(genre.name)
+            )
         }
-        return Int(hash % UInt64(count))
     }
 }
 
@@ -469,10 +542,32 @@ private struct TopChartCollectionView: View {
     @ObservedObject var viewModel: TopChartViewModel
 
     var body: some View {
-        BrowseSongCollectionView(
-            title: "Twinskaraoke Top 100",
-            songs: viewModel.songs
-        )
+        Group {
+            if viewModel.isLoading, viewModel.songs.isEmpty {
+                CenteredLoadingView(label: "Loading Top 100")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .musicScreenBackground()
+            } else if viewModel.loadFailed, viewModel.songs.isEmpty {
+                VStack(spacing: AM.Spacing.l) {
+                    MusicEmptyState(
+                        title: "Top 100 Unavailable",
+                        message: "Check your connection, then try again."
+                    )
+                    MusicEmptyActionButton(title: "Try Again") {
+                        viewModel.retry()
+                    }
+                    .frame(minHeight: 44)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .musicScreenBackground()
+            } else {
+                BrowseSongCollectionView(
+                    title: "Twinskaraoke Top 100",
+                    songs: viewModel.songs
+                )
+            }
+        }
+        .accessibilityIdentifier("TopChartCollection.Destination")
         .task {
             viewModel.loadIfNeeded()
         }
@@ -483,13 +578,34 @@ private struct PublicPlaylistsCollectionView: View {
     @ObservedObject var viewModel: PublicPlaylistsViewModel
 
     var body: some View {
-        PlaylistListView(
-            title: "Public Playlists",
-            playlists: viewModel.playlists,
-            apiURL: { startIndex, pageSize in
-                viewModel.urlForList(startIndex: startIndex, pageSize: pageSize)
+        Group {
+            if viewModel.isLoading, viewModel.playlists.isEmpty {
+                CenteredLoadingView(label: "Loading public playlists")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .musicScreenBackground()
+            } else if viewModel.loadFailed, viewModel.playlists.isEmpty {
+                VStack(spacing: AM.Spacing.l) {
+                    MusicEmptyState(
+                        title: "Public Playlists Unavailable",
+                        message: "Check your connection, then try again."
+                    )
+                    MusicEmptyActionButton(title: "Try Again") {
+                        viewModel.retry()
+                    }
+                    .frame(minHeight: 44)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .musicScreenBackground()
+            } else {
+                PlaylistListView(
+                    title: "Public Playlists",
+                    playlists: viewModel.playlists,
+                    apiURL: { startIndex, pageSize in
+                        viewModel.urlForList(startIndex: startIndex, pageSize: pageSize)
+                    }
+                )
             }
-        )
+        }
         .task {
             viewModel.loadIfNeeded()
         }
@@ -500,27 +616,56 @@ struct GenreDetailView: View {
     let genre: GenreSummary
     @ObservedObject var viewModel: GenresViewModel
     let palette: [Color]
+    @State private var isLoadingDetail = false
 
     var body: some View {
-        let loadedSongs = viewModel.allSongs[genre.id]
+        let songs = viewModel.allSongs[genre.id] ?? []
         Group {
-            if loadedSongs == nil, !viewModel.failedDetailIDs.contains(genre.id) {
+            if isLoadingDetail, songs.isEmpty {
                 GenreDetailLoadingView(genre: genre)
                     .transition(.opacity)
             } else {
                 BrowseSongCollectionView(
                     title: genre.name,
-                    songs: loadedSongs ?? []
+                    songs: songs
                 )
                 .transition(.opacity)
             }
         }
-        // Keyed on the purge generation, not the cache entry: a memory-warning
-        // purge cancels in-flight detail tasks without changing allSongs, so a
-        // nil-entry key would never change and the load would never restart.
-        .task(id: viewModel.detailGeneration) {
-            viewModel.loadDetailIfNeeded(for: genre)
+        .task {
+            await loadGenreDetail()
         }
+    }
+
+    private func loadGenreDetail() async {
+        guard viewModel.allSongs[genre.id] == nil else { return }
+        isLoadingDetail = true
+        defer { isLoadingDetail = false }
+
+        guard let url = URL(string: "\(StorageHost.api)/api/genres/\(genre.id)") else {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        GuestIdentity.applyIfNeeded(to: &request)
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+            if let detail = try? JSONDecoder().decode(GenreDetail.self, from: data),
+               let songs = detail.songs
+            {
+                await MainActor.run {
+                    viewModel.allSongs[genre.id] = songs
+                    if let first = songs.first {
+                        viewModel.firstSongs[genre.id] = first
+                    }
+                    let artURL = songs.first(where: { $0.hasOwnArtwork })?.imageURL
+                    if let artURL {
+                        viewModel.artworkURLs[genre.id] = artURL
+                    }
+                }
+            }
+        } catch {}
     }
 }
 
@@ -562,7 +707,7 @@ struct SearchCategorySongCollectionView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
 
     private var categoryStateAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.quick
+        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.84)
     }
 
 
@@ -600,6 +745,7 @@ struct SearchCategorySongCollectionView: View {
             loader.loadIfNeeded()
         }
         .animation(categoryStateAnimation, value: loader.isLoading)
+        .animation(categoryStateAnimation, value: loader.songs.count)
     }
 }
 
@@ -632,8 +778,39 @@ private struct SearchErrorStateView: View {
 private struct SearchNoResultsStateView: View {
     let query: String
     private let suggestions = ["Hits", "New Releases", "K-Pop", "Romance"]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var suggestionColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            return [GridItem(.flexible(minimum: 0, maximum: .infinity))]
+        }
+        return AM.Layout.adaptiveGridColumns(minimum: 132, spacing: AM.Spacing.s)
+    }
 
     var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView {
+                    noResultsContent
+                        .padding(.vertical, AM.Spacing.xl)
+                }
+                .scrollIndicators(.hidden)
+            } else {
+                noResultsContent
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, AM.Spacing.screenMargin)
+        .accessibilityElement(children: .contain)
+        .navigationDestination(for: SearchSuggestionDestination.self) { destination in
+            switch destination {
+            case let .category(suggestion):
+                SearchCategorySongCollectionView(title: suggestion, query: suggestion)
+            }
+        }
+    }
+
+    private var noResultsContent: some View {
         VStack(spacing: AM.Spacing.xl) {
             SearchStateGlyph()
             VStack(spacing: AM.Spacing.s) {
@@ -654,21 +831,19 @@ private struct SearchNoResultsStateView: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 LazyVGrid(
-                    columns: AM.Layout.adaptiveGridColumns(minimum: 132, spacing: AM.Spacing.s),
+                    columns: suggestionColumns,
                     spacing: AM.Spacing.s
                 ) {
                     ForEach(suggestions, id: \.self) { suggestion in
-                        NavigationLink(
-                            destination: SearchCategorySongCollectionView(
-                                title: suggestion,
-                                query: suggestion
-                            )
-                        ) {
+                        NavigationLink(value: SearchSuggestionDestination.category(suggestion)) {
                             Text(suggestion)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.82)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, AM.Spacing.m)
+                                .padding(.vertical, AM.Spacing.s)
                                 .frame(maxWidth: .infinity, minHeight: 44)
                                 .background(Color.appSecondaryBackground, in: Capsule())
                                 .overlay {
@@ -682,9 +857,7 @@ private struct SearchNoResultsStateView: View {
             }
             .frame(maxWidth: 340)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, AM.Spacing.screenMargin)
-        .accessibilityElement(children: .contain)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -698,7 +871,7 @@ private struct SearchRecoveryStateView: View {
     @State private var hasAppeared = false
 
     private var entranceAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.standard
+        reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82)
     }
 
 
@@ -853,6 +1026,7 @@ private struct SearchFeaturedShortcutTile: View {
     let gradient: [Color]
     var artworkURL: URL?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var isCompactWidth: Bool {
         horizontalSizeClass == .compact
@@ -877,22 +1051,31 @@ private struct SearchFeaturedShortcutTile: View {
                 Text(title)
                     .font(.headline.bold())
                     .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.82)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let subtitle {
                     Text(subtitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .shadow(color: .black.opacity(0.34), radius: 4, x: 0, y: 1)
             .padding(AM.Spacing.l)
             .allowsHitTesting(false)
         }
-        .frame(height: isCompactWidth ? 124 : 144)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: featuredTileMinimumHeight, alignment: .bottomLeading)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
+        .amShadow(AM.Shadow.card)
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
+    }
+
+    private var featuredTileMinimumHeight: CGFloat {
+        if dynamicTypeSize.isAccessibilitySize { return 184 }
+        return isCompactWidth ? 124 : 144
     }
 
     @ViewBuilder
@@ -918,6 +1101,7 @@ private struct CategoryTile: View {
     let gradient: [Color]
     var artworkURL: URL?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var isCompactWidth: Bool {
         horizontalSizeClass == .compact
@@ -953,13 +1137,21 @@ private struct CategoryTile: View {
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.4), radius: 4, x: 0, y: 1)
                 .padding(AM.Spacing.m)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.82)
+                .fixedSize(horizontal: false, vertical: true)
                 .allowsHitTesting(false)
         }
-        .frame(height: isCompactWidth ? 92 : 102)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: categoryTileMinimumHeight, alignment: .bottomLeading)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
+        .amShadow(AM.Shadow.card)
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
+    }
+
+    private var categoryTileMinimumHeight: CGFloat {
+        if dynamicTypeSize.isAccessibilitySize { return 132 }
+        return isCompactWidth ? 92 : 102
     }
 }
 

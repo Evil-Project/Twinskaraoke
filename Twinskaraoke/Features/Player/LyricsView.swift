@@ -10,9 +10,11 @@ struct LyricsView: View {
     let onSeek: (TimeInterval) -> Void
     var onRetry: (() -> Void)?
     @Environment(\.appReduceMotion) private var reduceMotion
+    @State private var isAutoFollowSuspended = false
+    @State private var autoFollowResumeTask: Task<Void, Never>?
 
     private var scrollAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.gentle
+        reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85)
     }
 
     private var currentIndex: Int {
@@ -38,45 +40,47 @@ struct LyricsView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Spacer().frame(height: 0)
                         if let first = lyrics.first {
-                            IntroDots(isActive: isIntro, startTime: first.time, currentTime: currentTime)
-                                .id("intro-dots")
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 4)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    AppHaptic.selection.play()
-                                    onSeek(0)
-                                }
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("Intro")
-                                .accessibilityValue(introAccessibilityValue(startTime: first.time))
-                                .accessibilityHint("Double tap to restart the song.")
-                                .accessibilityAddTraits(isIntro ? .isSelected : [])
-                                .accessibilityAction {
-                                    AppHaptic.selection.play()
-                                    onSeek(0)
-                                }
+                            Button {
+                                resumeAutoFollow()
+                                scrollTo("intro-dots", proxy: proxy, animated: false)
+                                AppHaptic.selection.play()
+                                onSeek(0)
+                            } label: {
+                                IntroDots(isActive: isIntro, startTime: first.time, currentTime: currentTime)
+                                    .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id("intro-dots")
+                            .padding(.horizontal, 4)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Intro")
+                            .accessibilityValue(introAccessibilityValue(startTime: first.time))
+                            .accessibilityHint("Double tap to restart the song.")
+                            .accessibilityAddTraits(isIntro ? .isSelected : [])
+                            .accessibilityAction {
+                                resumeAutoFollow()
+                                AppHaptic.selection.play()
+                                onSeek(0)
+                            }
                         }
-                        ForEach(lyrics.indices, id: \.self) { index in
-                            let line = lyrics[index]
+                        ForEach(Array(lyrics.enumerated()), id: \.element.id) { index, line in
                             LyricLineRow(
                                 line: line,
                                 index: index,
                                 currentIndex: currentIndex,
-                                currentTime: line.isInstrumental && index == currentIndex
-                                    ? currentTime
-                                    : nil,
+                                currentTime: currentTime,
                                 showTranslation: showTranslations,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
+                                    resumeAutoFollow()
                                     scrollTo(line.id, proxy: proxy, animated: false)
                                     onSeek(time)
                                 }
                             )
-                            .equatable()
                             .id(line.id)
                         }
                         Spacer().frame(height: 120)
@@ -92,15 +96,62 @@ struct LyricsView: View {
                             .frame(height: 60)
                     }
                 )
+                .onScrollPhaseChange { _, phase in
+                    handleScrollPhase(phase, proxy: proxy)
+                }
                 .onChange(of: currentIndex) { _, idx in
+                    guard !isAutoFollowSuspended else { return }
                     if idx < 0 {
                         scrollTo("intro-dots", proxy: proxy)
                     } else if idx < lyrics.count {
                         scrollTo(lyrics[idx].id, proxy: proxy)
                     }
                 }
+                .onChange(of: lyrics.first?.id) { _, _ in
+                    resumeAutoFollow()
+                }
+                .onDisappear {
+                    resumeAutoFollow()
+                }
             }
         }
+    }
+
+    private func handleScrollPhase(_ phase: ScrollPhase, proxy: ScrollViewProxy) {
+        if phase == .interacting {
+            autoFollowResumeTask?.cancel()
+            isAutoFollowSuspended = true
+        } else if phase == .idle, isAutoFollowSuspended {
+            scheduleAutoFollowResume(proxy: proxy)
+        }
+    }
+
+    private func scheduleAutoFollowResume(proxy: ScrollViewProxy) {
+        autoFollowResumeTask?.cancel()
+        autoFollowResumeTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            isAutoFollowSuspended = false
+            autoFollowResumeTask = nil
+            scrollToCurrentLyric(proxy: proxy)
+        }
+    }
+
+    private func scrollToCurrentLyric(proxy: ScrollViewProxy) {
+        if currentIndex < 0 {
+            scrollTo("intro-dots", proxy: proxy)
+        } else if currentIndex < lyrics.count {
+            scrollTo(lyrics[currentIndex].id, proxy: proxy)
+        }
+    }
+
+    private func resumeAutoFollow() {
+        autoFollowResumeTask?.cancel()
+        autoFollowResumeTask = nil
+        isAutoFollowSuspended = false
     }
 
     private func scrollTo(_ id: some Hashable, proxy: ScrollViewProxy, animated: Bool = true) {
@@ -135,11 +186,11 @@ private struct InstrumentalDots: View {
     }
 }
 
-private struct LyricLineRow: View, Equatable {
+private struct LyricLineRow: View {
     let line: LyricLine
     let index: Int
     let currentIndex: Int
-    let currentTime: TimeInterval?
+    let currentTime: TimeInterval
     let showTranslation: Bool
     let nextLineTime: TimeInterval?
     let onSeek: (TimeInterval) -> Void
@@ -157,23 +208,10 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var gapProgress: Double? {
-        guard isCurrent,
-              let currentTime,
-              let nextLineTime,
-              nextLineTime > line.time
-        else { return nil }
+        guard let nextLineTime, nextLineTime > line.time else { return nil }
         let elapsed = currentTime - line.time
         let total = nextLineTime - line.time
         return max(0, min(1, elapsed / total))
-    }
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.line == rhs.line
-            && lhs.index == rhs.index
-            && lhs.currentIndex == rhs.currentIndex
-            && lhs.currentTime == rhs.currentTime
-            && lhs.showTranslation == rhs.showTranslation
-            && lhs.nextLineTime == rhs.nextLineTime
     }
 
     var body: some View {
@@ -195,6 +233,7 @@ private struct LyricLineRow: View, Equatable {
                         Text(line.text)
                             .scaledSystemFont(size: isCurrent ? 30 : 23, weight: isCurrent ? .bold : .semibold)
                             .foregroundStyle(lineColor)
+                            .blur(radius: lineBlur)
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -215,10 +254,11 @@ private struct LyricLineRow: View, Equatable {
                 }
             }
             .padding(.horizontal, 4)
-            .blur(radius: lineBlur)
+            .scaleEffect(reduceMotion ? 1.0 : (isCurrent ? 1.0 : 0.92), anchor: .leading)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
-        .scaleEffect(reduceMotion ? 1.0 : (isCurrent ? 1.0 : 0.92), anchor: .leading)
         .opacity(lineOpacity)
         .animation(lineAnimation, value: currentIndex)
         .animation(translationAnimation, value: showTranslation)
@@ -255,11 +295,11 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.gentle
+        reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.82)
     }
 
     private var translationAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.quick
+        reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)
     }
 
     private var translationTransition: AnyTransition {
@@ -273,11 +313,7 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineBlur: CGFloat {
-        // Depth-of-field: the active line stays crisp while lines soften with
-        // distance, like Apple Music. Skipped under reduce motion, where the
-        // constant refocusing would read as movement.
-        guard !reduceMotion, !isCurrent else { return 0 }
-        return min(2.0, 0.7 * CGFloat(distance))
+        0
     }
 
     private var lineOpacity: Double {

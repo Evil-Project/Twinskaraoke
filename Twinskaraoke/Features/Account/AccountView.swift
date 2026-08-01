@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AccountView: View {
-    @StateObject private var auth = AuthManager()
+    @ObservedObject private(set) var auth: AuthManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showLoginSheet = false
     @State private var showQRApprove = false
@@ -10,6 +10,20 @@ struct AccountView: View {
     @State private var badges: [Badge] = []
     @State private var uploadLimits: UploadLimits?
     @State private var levelUpAnnouncement: LevelUpAnnouncement?
+    @State private var accountLoadGeneration: UInt64 = 0
+    @State private var accountDataToken: String?
+    @State private var showRefreshError = false
+    private let accountDataLoader = AccountDataLoader()
+
+    @MainActor
+    init(auth: AuthManager) {
+        self.auth = auth
+    }
+
+    @MainActor
+    init() {
+        self.init(auth: .shared)
+    }
 
     private var usesWideOverview: Bool {
         horizontalSizeClass == .regular
@@ -31,16 +45,19 @@ struct AccountView: View {
                         .presentationDetents([.medium])
                         .presentationBackground(.clear)
                 }
-                .task(id: auth.isLoggedIn) {
-                    if auth.isLoggedIn {
-                        await loadData()
+                .alert("Couldn't Refresh Account", isPresented: $showRefreshError) {
+                } message: {
+                    Text("Some account information couldn't be updated. Please try again.")
+                }
+                .task(id: auth.authToken) {
+                    if let token = auth.authToken {
+                        if accountDataToken != token {
+                            resetAccountData(for: token)
+                        }
+                        await loadData(isUserInitiated: false)
                         FavoritesManager.shared.reload()
                     } else {
-                        profile = nil
-                        badges = []
-                        uploadLimits = nil
-                        levelUpAnnouncement = nil
-                        FavoritesManager.shared.clear()
+                        resetAccountData(for: nil)
                     }
                 }
         }
@@ -73,7 +90,7 @@ struct AccountView: View {
         .refreshable {
             if auth.isLoggedIn {
                 AppHaptic.selection.play()
-                await loadData()
+                await loadData(isUserInitiated: true)
             }
         }
     }
@@ -186,22 +203,44 @@ struct AccountView: View {
         badges.filter(\.unlocked)
     }
 
-    private func loadData() async {
+    private func resetAccountData(for token: String?) {
+        accountLoadGeneration &+= 1
+        accountDataToken = token
+        showRefreshError = false
+        profile = nil
+        badges = []
+        uploadLimits = nil
+        levelUpAnnouncement = nil
+    }
+
+    private func loadData(isUserInitiated: Bool) async {
         guard let token = auth.authToken else { return }
-        async let badgeData = fetchAuthorized(path: "/api/badge/profile", token: token)
-        async let limitData = fetchAuthorized(path: "/api/user/upload-limits", token: token)
-        if let data = await badgeData,
-           let decoded = try? JSONDecoder().decode(ProfileResponse.self, from: data)
-        {
-            handleLevelChange(with: decoded.profile)
-            profile = decoded.profile
-            badges = decoded.badges ?? []
-            persistAvatarIfNeeded(decoded.profile.avatarUrl)
+        accountLoadGeneration &+= 1
+        let ownership = AccountLoadOwnership(
+            token: token,
+            generation: accountLoadGeneration
+        )
+        showRefreshError = false
+
+        let result = await accountDataLoader.load(token: token)
+        guard !Task.isCancelled,
+              ownership.isCurrent(
+                  token: auth.authToken,
+                  generation: accountLoadGeneration
+              )
+        else { return }
+
+        if let response = result.profileResponse {
+            handleLevelChange(with: response.profile)
+            profile = response.profile
+            badges = response.badges ?? []
+            persistAvatarIfNeeded(response.profile.avatarUrl)
         }
-        if let data = await limitData,
-           let decoded = try? JSONDecoder().decode(UploadLimits.self, from: data)
-        {
-            uploadLimits = decoded
+        if let limits = result.uploadLimits {
+            uploadLimits = limits
+        }
+        if isUserInitiated, result.hasFailures {
+            showRefreshError = true
         }
     }
 
@@ -213,13 +252,6 @@ struct AccountView: View {
         if defaults.string(forKey: "nk.avatar") != avatarUrl {
             defaults.set(avatarUrl, forKey: "nk.avatar")
         }
-    }
-
-    private func fetchAuthorized(path: String, token: String) async -> Data? {
-        guard let url = URL(string: "\(StorageHost.api)\(path)") else { return nil }
-        var req = URLRequest(url: url)
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        return try? await URLSession.shared.data(for: req).0
     }
 
     private func handleLevelChange(with newProfile: Profile) {

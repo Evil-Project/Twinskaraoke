@@ -15,8 +15,8 @@ struct ArtistsView: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return viewModel.artists }
         return viewModel.artists.filter { artist in
-            artist.name.localizedCaseInsensitiveContains(query)
-                || artist.summary?.localizedCaseInsensitiveContains(query) == true
+            artist.name.localizedStandardContains(query)
+                || artist.summary?.localizedStandardContains(query) == true
         }
     }
 
@@ -34,7 +34,9 @@ struct ArtistsView: View {
                         )
                         MusicEmptyActionButton(title: "Try Again") {
                             AppHaptic.selection.play()
-                            viewModel.refresh()
+                            Task {
+                                await viewModel.refresh()
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,7 +52,7 @@ struct ArtistsView: View {
             } else {
                 List {
                     ForEach(displayedArtists) { artist in
-                        NavigationLink(destination: ArtistDetailView(artist: artist)) {
+                        NavigationLink(value: LibraryDestination.artist(artist)) {
                             ArtistRow(artist: artist)
                         }
                         .onAppear { viewModel.loadMoreIfNeeded(current: artist) }
@@ -83,7 +85,7 @@ struct ArtistsView: View {
         )
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refresh()
         }
         .onAppear { viewModel.fetchInitial() }
     }
@@ -235,10 +237,11 @@ struct ArtistDetailView: View {
                     Menu {
                         ArtistActionsMenu(songs: songs)
                     } label: {
-                        Image(systemName: "ellipsis")
+                        Label("Artist Actions", systemImage: "ellipsis")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.appAccent)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
+                            .labelStyle(.iconOnly)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressableButtonStyle(scale: 0.92, dim: 0.78, haptic: .selection))

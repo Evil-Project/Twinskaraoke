@@ -55,9 +55,7 @@ struct VideoGalleryView: View {
                 .frame(maxWidth: .infinity, minHeight: 420)
             } else if let featured = viewModel.videos.first {
                 VStack(alignment: .leading, spacing: 24) {
-                    NavigationLink {
-                        VideoPlayerScreen(video: featured)
-                    } label: {
+                    NavigationLink(value: LibraryDestination.video(featured)) {
                         FeaturedVideoCard(video: featured)
                     }
                     .buttonStyle(PressableButtonStyle(haptic: .selection))
@@ -77,9 +75,7 @@ struct VideoGalleryView: View {
                             .padding(.horizontal, 16)
                             LazyVGrid(columns: cols, spacing: 20) {
                                 ForEach(viewModel.videos.dropFirst()) { video in
-                                    NavigationLink {
-                                        VideoPlayerScreen(video: video)
-                                    } label: {
+                                    NavigationLink(value: LibraryDestination.video(video)) {
                                         VideoGalleryCell(video: video)
                                     }
                                     .buttonStyle(PressableButtonStyle(haptic: .selection))
@@ -454,9 +450,7 @@ struct VideoPlayerScreen: View {
                         .padding(.horizontal, 16)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(similar.videos.enumerated()), id: \.element.id) { idx, item in
-                                NavigationLink {
-                                    VideoPlayerScreen(video: item)
-                                } label: {
+                                NavigationLink(value: LibraryDestination.video(item)) {
                                     SimilarVideoRow(video: item)
                                 }
                                 .buttonStyle(PressableButtonStyle(haptic: .selection))
