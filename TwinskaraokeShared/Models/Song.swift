@@ -19,9 +19,59 @@ nonisolated struct LossyArray<Element: Decodable>: Decodable, Sendable where Ele
 
 nonisolated private struct DiscardedDecodable: Decodable, Sendable {}
 
+nonisolated private struct FlexibleArtist: Decodable, Sendable {
+  let name: String
+
+  private enum CodingKeys: String, CodingKey {
+    case name, artistName, displayName, title
+  }
+
+  init(from decoder: Decoder) throws {
+    if let container = try? decoder.singleValueContainer(),
+      let value = try? container.decode(String.self)
+    {
+      name = value
+      return
+    }
+
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    for key in [CodingKeys.name, .artistName, .displayName, .title] {
+      if let value = try? container.decode(String.self, forKey: key) {
+        name = value
+        return
+      }
+    }
+    throw DecodingError.dataCorrupted(
+      .init(codingPath: decoder.codingPath, debugDescription: "Artist has no name")
+    )
+  }
+}
+
+nonisolated private struct FlexibleArtistList: Decodable, Sendable {
+  let values: [String]
+
+  init(from decoder: Decoder) throws {
+    if let artist = try? FlexibleArtist(from: decoder) {
+      let value = artist.name.trimmingCharacters(in: .whitespacesAndNewlines)
+      values = value.isEmpty ? [] : [value]
+      return
+    }
+
+    var container = try decoder.unkeyedContainer()
+    var decoded: [String] = []
+    while !container.isAtEnd {
+      let elementDecoder = try container.superDecoder()
+      guard let artist = try? FlexibleArtist(from: elementDecoder) else { continue }
+      let value = artist.name.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !value.isEmpty { decoded.append(value) }
+    }
+    values = decoded
+  }
+}
+
 nonisolated enum SongCountText {
   static func songs(_ count: Int) -> String {
-    count == 1 ? "1 song" : "\(count) songs"
+    count == 1 ? String(localized: "1 song") : String(localized: "\(count) songs")
   }
 }
 
@@ -39,7 +89,8 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case id, title, duration, absolutePath, coverArt, originalArtists, coverArtists, userUploaded, oss
-    case cloudflareID = "cloudflareId"
+    case cloudflareId
+    case cloudflareID
   }
 
   init(
@@ -66,6 +117,52 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     self.oss = oss
   }
 
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+    guard let decodedID = Self.decodeString(from: container, keys: [.id]),
+      !decodedID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      throw DecodingError.keyNotFound(
+        CodingKeys.id,
+        .init(codingPath: decoder.codingPath, debugDescription: "Song is missing an id")
+      )
+    }
+    guard let decodedTitle = Self.decodeString(from: container, keys: [.title]),
+      !decodedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      throw DecodingError.keyNotFound(
+        CodingKeys.title,
+        .init(codingPath: decoder.codingPath, debugDescription: "Song is missing a title")
+      )
+    }
+
+    id = decodedID
+    title = decodedTitle
+    duration = Self.decodeDuration(from: container)
+    absolutePath = Self.decodeString(from: container, keys: [.absolutePath])
+    cloudflareID = Self.decodeString(from: container, keys: [.cloudflareId, .cloudflareID])
+    coverArt = try? container.decodeIfPresent(Media.self, forKey: .coverArt)
+    originalArtists = Self.decodeArtists(from: container, forKey: .originalArtists)
+    coverArtists = Self.decodeArtists(from: container, forKey: .coverArtists)
+    userUploaded = Self.decodeBool(from: container, forKey: .userUploaded)
+    oss = Self.decodeString(from: container, keys: [.oss])
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(title, forKey: .title)
+    try container.encode(duration, forKey: .duration)
+    try container.encodeIfPresent(absolutePath, forKey: .absolutePath)
+    try container.encodeIfPresent(cloudflareID, forKey: .cloudflareId)
+    try container.encodeIfPresent(coverArt, forKey: .coverArt)
+    try container.encodeIfPresent(originalArtists, forKey: .originalArtists)
+    try container.encodeIfPresent(coverArtists, forKey: .coverArtists)
+    try container.encodeIfPresent(userUploaded, forKey: .userUploaded)
+    try container.encodeIfPresent(oss, forKey: .oss)
+  }
+
   init(
     id: String,
     title: String,
@@ -75,8 +172,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     coverArtists: [String]?,
     originalArtists: [String]?,
     cloudflareId: String?,
-    userUploaded: Bool?,
-    oss: String? = nil
+    userUploaded: Bool?
   ) {
     self.init(
       id: id,
@@ -87,8 +183,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
       coverArt: coverArt,
       originalArtists: originalArtists,
       coverArtists: coverArtists,
-      userUploaded: userUploaded,
-      oss: oss
+      userUploaded: userUploaded
     )
   }
 
@@ -117,28 +212,58 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   var downloadCoverImageURL: URL? {
     guard hasOwnArtwork else { return nil }
     return ArtworkURLBuilder.imageURL(
-      cloudflareID: cloudflareID,
-      path: coverArt?.absolutePath,
+      cloudflareID: artworkCloudflareID,
+      path: artworkPath,
       variant: .download
     )
   }
 
   private func imageURL(variant: ArtworkImageVariant) -> URL? {
     ArtworkURLBuilder.imageURL(
-      cloudflareID: cloudflareID,
-      path: coverArt?.absolutePath,
+      cloudflareID: artworkCloudflareID,
+      path: artworkPath,
       variant: variant
     ) ?? neuroFallbackImageURL
   }
 
   var hasOwnArtwork: Bool {
-    cloudflareID != nil || coverArt?.absolutePath != nil
+    artworkCloudflareID != nil || artworkPath != nil
+  }
+
+  func fillingMissingMetadata(from canonical: Song) -> Song {
+    guard id == canonical.id else { return self }
+    return Song(
+      id: id,
+      title: title,
+      duration: duration > 0 ? duration : canonical.duration,
+      absolutePath: Self.preferredString(absolutePath, fallback: canonical.absolutePath),
+      cloudflareID: hasOwnArtwork
+        ? cloudflareID
+        : Self.preferredString(cloudflareID, fallback: canonical.cloudflareID),
+      coverArt: hasUsableArtwork(coverArt) ? coverArt : canonical.coverArt,
+      originalArtists: Self.preferredArtists(originalArtists, fallback: canonical.originalArtists),
+      coverArtists: Self.preferredArtists(coverArtists, fallback: canonical.coverArtists),
+      userUploaded: userUploaded ?? canonical.userUploaded,
+      oss: Self.preferredString(oss, fallback: canonical.oss)
+    )
+  }
+
+  private var artworkCloudflareID: String? {
+    Self.preferredString(cloudflareID, fallback: coverArt?.cloudflareId)
+  }
+
+  private var artworkPath: String? {
+    Self.preferredString(coverArt?.absolutePath, fallback: nil)
+  }
+
+  private func hasUsableArtwork(_ media: Media?) -> Bool {
+    Self.preferredString(media?.cloudflareId, fallback: media?.absolutePath) != nil
   }
 
   private static let neuroArtistNames: Set<String> = ["Neuro", "Neuro v1", "Neuro v2"]
 
   private var neuroFallbackImageURL: URL? {
-    #if os(watchOS)
+    #if os(watchOS) || os(tvOS)
     return nil
     #else
     let artists = coverArtists ?? []
@@ -149,7 +274,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var fallbackArtCredit: String? {
-    #if os(watchOS)
+    #if os(watchOS) || os(tvOS)
     return nil
     #else
     guard !hasOwnArtwork else { return nil }
@@ -161,22 +286,10 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var audioURL: URL? {
-    if let path = Self.normalizedAudioPath(absolutePath) {
-      let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
-      return URL(string: "\(StorageHost.base)/\(cleanPath)")
+    for source in [absolutePath, oss].compactMap({ $0 }) {
+      if let url = Self.audioURL(from: source) { return url }
     }
-    // User-uploaded songs deliver their audio path in `oss`; it can contain
-    // spaces and other characters that need percent-encoding.
-    guard let oss = Self.normalizedAudioPath(oss) else { return nil }
-    let cleanPath = oss.hasPrefix("/") ? String(oss.dropFirst()) : oss
-    let encodedPath = cleanPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? cleanPath
-    return URL(string: "\(StorageHost.base)/\(encodedPath)")
-  }
-
-  private static func normalizedAudioPath(_ path: String?) -> String? {
-    guard let path else { return nil }
-    let normalized = path.trimmingCharacters(in: .whitespacesAndNewlines)
-    return normalized.isEmpty ? nil : normalized
+    return nil
   }
 
   var displayTitle: String {
@@ -192,20 +305,25 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     let original = originalArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
     let cover = coverArtists?.filter { !$0.isEmpty }.joined(separator: ", ") ?? ""
     switch (original.isEmpty, cover.isEmpty) {
-    case (false, false): return "\(original) · Cover by \(cover)"
+    case (false, false): return "\(original) · \(String(localized: "Cover by \(cover)"))"
     case (false, true): return original
-    case (true, false): return "Cover by \(cover)"
+    case (true, false): return String(localized: "Cover by \(cover)")
     case (true, true):
       let apiProvidedArtists = originalArtists != nil || coverArtists != nil
-      return apiProvidedArtists ? "Unknown Artist" : ""
+      return apiProvidedArtists ? String(localized: "Unknown Artist") : ""
     }
   }
 
   var artistName: String {
-    if let originals = originalArtists, !originals.isEmpty {
+    // decodeArtists can yield a non-nil empty array ("coverArtists": []), and
+    // directly constructed songs can carry whitespace-only entries, so filter
+    // blanks and fall back like displayArtist instead of returning "".
+    let originals = originalArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+    if !originals.isEmpty {
       return originals.joined(separator: ", ")
     }
-    return coverArtists?.joined(separator: ", ") ?? "Unknown Artist"
+    let covers = coverArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
+    return covers.isEmpty ? String(localized: "Unknown Artist") : covers.joined(separator: ", ")
   }
 
   var hasArtistMetadata: Bool {
@@ -221,8 +339,130 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     return String(format: "%d:%02d", m, s)
   }
 
+  /// Identity-based equality: two `Song` values are equal when they share an
+  /// `id`, even if their metadata (title, artists, artwork, …) differs. Do not
+  /// use `==` to detect metadata changes between two instances.
   static func == (lhs: Song, rhs: Song) -> Bool { lhs.id == rhs.id }
 
+  private static func decodeString(
+    from container: KeyedDecodingContainer<CodingKeys>,
+    keys: [CodingKeys]
+  ) -> String? {
+    for key in keys {
+      if let value = try? container.decode(String.self, forKey: key) { return value }
+    }
+    return nil
+  }
+
+  private static func decodeDuration(
+    from container: KeyedDecodingContainer<CodingKeys>
+  ) -> Int {
+    if let value = try? container.decode(Int.self, forKey: .duration) {
+      return max(0, value)
+    }
+    if let value = try? container.decode(Double.self, forKey: .duration), value.isFinite {
+      return max(0, Int(value))
+    }
+    if let value = try? container.decode(String.self, forKey: .duration),
+      let parsed = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)),
+      parsed.isFinite
+    {
+      return max(0, Int(parsed))
+    }
+    return 0
+  }
+
+  private static func decodeArtists(
+    from container: KeyedDecodingContainer<CodingKeys>,
+    forKey key: CodingKeys
+  ) -> [String]? {
+    guard container.contains(key),
+      (try? container.decodeNil(forKey: key)) != true
+    else { return nil }
+    return (try? container.decode(FlexibleArtistList.self, forKey: key))?.values
+  }
+
+  private static func decodeBool(
+    from container: KeyedDecodingContainer<CodingKeys>,
+    forKey key: CodingKeys
+  ) -> Bool? {
+    if let value = try? container.decode(Bool.self, forKey: key) { return value }
+    if let value = try? container.decode(Int.self, forKey: key) { return value != 0 }
+    if let value = try? container.decode(String.self, forKey: key) {
+      switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+      case "true", "1", "yes": return true
+      case "false", "0", "no": return false
+      default: return nil
+      }
+    }
+    return nil
+  }
+
+  private static func preferredArtists(_ artists: [String]?, fallback: [String]?) -> [String]? {
+    guard let artists else { return fallback }
+    return artists.isEmpty ? fallback : artists
+  }
+
+  private static func preferredString(_ value: String?, fallback: String?) -> String? {
+    guard let value else { return fallback }
+    return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : value
+  }
+
+  private static func audioURL(from source: String) -> URL? {
+    let value = source.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return nil }
+
+    if value.hasPrefix("//") {
+      return URL(string: "https:\(value)")
+    }
+    if let url = URL(string: value),
+      let scheme = url.scheme?.lowercased(),
+      ["http", "https"].contains(scheme),
+      url.host != nil
+    {
+      return url
+    }
+
+    guard var components = URLComponents(string: StorageHost.base) else { return nil }
+    let segments = value.split(separator: "/", omittingEmptySubsequences: true)
+    guard !segments.isEmpty else { return nil }
+    let encodedSegments = segments.map { segment in
+      let decoded = String(segment).removingPercentEncoding ?? String(segment)
+      return decoded.addingPercentEncoding(withAllowedCharacters: audioPathSegmentAllowed) ?? decoded
+    }
+    let basePath = components.percentEncodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    components.percentEncodedPath = "/" + ([basePath] + encodedSegments)
+      .filter { !$0.isEmpty }
+      .joined(separator: "/")
+    return components.url
+  }
+
+  private static let audioPathSegmentAllowed: CharacterSet = {
+    var allowed = CharacterSet.urlPathAllowed
+    allowed.remove(charactersIn: "/%?#")
+    return allowed
+  }()
+
+}
+
+nonisolated private struct SongCollection: Decodable, Sendable {
+  let songs: [Song]
+
+  init(from decoder: Decoder) throws {
+    var container = try decoder.unkeyedContainer()
+    var decoded: [Song] = []
+    while !container.isAtEnd {
+      let elementDecoder = try container.superDecoder()
+      if let song = try? Song(from: elementDecoder) {
+        decoded.append(song)
+      } else if let envelope = try? FavoriteSongEnvelope(from: elementDecoder),
+        let song = envelope.song
+      {
+        decoded.append(song)
+      }
+    }
+    songs = decoded
+  }
 }
 
 nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
@@ -336,12 +576,13 @@ nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
 
   var isFavorites: Bool { id == Self.favoritesID }
 
-  var isSessionOwned: Bool { isFavorites || isPersonal }
-
   var songCountText: String {
     SongCountText.songs(songCount)
   }
 
+  /// Identity-based equality and hashing: two `Playlist` values are equal (and
+  /// hash the same) when they share an `id`, even if their metadata differs.
+  /// Do not use `==` to detect metadata changes between two instances.
   static func == (lhs: Playlist, rhs: Playlist) -> Bool { lhs.id == rhs.id }
 
   func hash(into hasher: inout Hasher) {
@@ -352,21 +593,7 @@ nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
     from container: KeyedDecodingContainer<CodingKeys>,
     forKey key: CodingKeys
   ) -> [Song]? {
-    if let decoded = try? container.decode(LossyArray<Song>.self, forKey: key) {
-      return decoded.elements
-    }
-    if let decoded = try? container.decode([Song].self, forKey: key) {
-      return decoded
-    }
-    if let decoded = try? container.decode(LossyArray<FavoriteSongEnvelope>.self, forKey: key) {
-      let songs = decoded.elements.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    if let decoded = try? container.decode([FavoriteSongEnvelope].self, forKey: key) {
-      let songs = decoded.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    return nil
+    (try? container.decode(SongCollection.self, forKey: key))?.songs
   }
 }
 
@@ -403,7 +630,7 @@ nonisolated struct PlaylistListItem: Decodable, Identifiable, Sendable {
   }
 
   func asPlaylist() -> Playlist {
-    let effectiveCount = max(songCount, songListDTOs?.count ?? 0)
+    let effectiveCount = songCount > 0 ? songCount : songListDTOs?.count ?? 0
     return Playlist(
       id: id,
       name: name,
@@ -418,21 +645,7 @@ nonisolated struct PlaylistListItem: Decodable, Identifiable, Sendable {
     from container: KeyedDecodingContainer<CodingKeys>,
     forKey key: CodingKeys
   ) -> [Song]? {
-    if let decoded = try? container.decode(LossyArray<Song>.self, forKey: key) {
-      return decoded.elements
-    }
-    if let decoded = try? container.decode([Song].self, forKey: key) {
-      return decoded
-    }
-    if let decoded = try? container.decode(LossyArray<FavoriteSongEnvelope>.self, forKey: key) {
-      let songs = decoded.elements.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    if let decoded = try? container.decode([FavoriteSongEnvelope].self, forKey: key) {
-      let songs = decoded.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    return nil
+    (try? container.decode(SongCollection.self, forKey: key))?.songs
   }
 }
 
@@ -477,6 +690,36 @@ nonisolated struct PlaylistDetail: Codable, Sendable {
   let id: String
   let name: String
   let songListDTOs: [Song]
+
+  private enum CodingKeys: String, CodingKey {
+    case id, name, songListDTOs, items, songs, favorites
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    name = try container.decode(String.self, forKey: .name)
+    songListDTOs =
+      Self.decodeSongs(from: container, forKey: .songListDTOs)
+      ?? Self.decodeSongs(from: container, forKey: .items)
+      ?? Self.decodeSongs(from: container, forKey: .songs)
+      ?? Self.decodeSongs(from: container, forKey: .favorites)
+      ?? []
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(name, forKey: .name)
+    try container.encode(songListDTOs, forKey: .songListDTOs)
+  }
+
+  private static func decodeSongs(
+    from container: KeyedDecodingContainer<CodingKeys>,
+    forKey key: CodingKeys
+  ) -> [Song]? {
+    (try? container.decode(SongCollection.self, forKey: key))?.songs
+  }
 }
 
 nonisolated struct SearchResponse: Codable, Sendable {
@@ -492,32 +735,7 @@ nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {
   let coverArtists: [String]?
   let coverArt: SearchMedia?
   let cloudflareId: String?
-  let userUploaded: Bool?
   let oss: String?
-
-  init(
-    id: String,
-    title: String,
-    duration: Int,
-    absolutePath: String?,
-    originalArtists: [String]?,
-    coverArtists: [String]?,
-    coverArt: SearchMedia?,
-    cloudflareId: String?,
-    userUploaded: Bool? = nil,
-    oss: String? = nil
-  ) {
-    self.id = id
-    self.title = title
-    self.duration = duration
-    self.absolutePath = absolutePath
-    self.originalArtists = originalArtists
-    self.coverArtists = coverArtists
-    self.coverArt = coverArt
-    self.cloudflareId = cloudflareId
-    self.userUploaded = userUploaded
-    self.oss = oss
-  }
 
   var imageURL: URL? {
     imageURL(variant: .card)
@@ -544,25 +762,21 @@ nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {
   }
 
   func toSong() -> Song? {
-    let playableAbsolutePath = absolutePath.flatMap {
-      $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
-    }
-    let playableOSS = oss.flatMap {
-      $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
-    }
-    guard playableAbsolutePath != nil || playableOSS != nil else { return nil }
-    return Song(
+    // Oss-only uploads have no absolutePath; mirror Song.audioURL's fallback
+    // chain and accept the item when either source yields a playable URL.
+    let song = Song(
       id: id,
       title: title,
       duration: duration,
-      absolutePath: playableAbsolutePath,
+      absolutePath: absolutePath,
+      cloudflareID: cloudflareId,
       coverArt: coverArt.map { SongMedia(absolutePath: $0.absolutePath) },
-      coverArtists: coverArtists,
       originalArtists: originalArtists,
-      cloudflareId: cloudflareId,
-      userUploaded: userUploaded,
-      oss: playableOSS
+      coverArtists: coverArtists,
+      userUploaded: nil,
+      oss: oss
     )
+    return song.audioURL != nil ? song : nil
   }
 
 }
@@ -615,21 +829,7 @@ nonisolated struct SongArrayContainer: Decodable, Sendable {
     from container: KeyedDecodingContainer<CodingKeys>,
     forKey key: CodingKeys
   ) -> [Song]? {
-    if let decoded = try? container.decode(LossyArray<Song>.self, forKey: key) {
-      return decoded.elements
-    }
-    if let decoded = try? container.decode([Song].self, forKey: key) {
-      return decoded
-    }
-    if let decoded = try? container.decode(LossyArray<FavoriteSongEnvelope>.self, forKey: key) {
-      let songs = decoded.elements.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    if let decoded = try? container.decode([FavoriteSongEnvelope].self, forKey: key) {
-      let songs = decoded.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    return nil
+    (try? container.decode(SongCollection.self, forKey: key))?.songs
   }
 }
 
@@ -638,24 +838,14 @@ nonisolated enum SongPayloadDecoder {
     guard let data else { return nil }
     let decoder = JSONDecoder()
 
-    if let wrapped = try? decoder.decode(SongArrayContainer.self, from: data),
-      !wrapped.songs.isEmpty
-    {
+    // A payload matching a known shape but containing no songs is a valid
+    // empty list (e.g. an empty uploads library), not a decode failure;
+    // nil is reserved for payloads where no shape matched at all.
+    if let wrapped = try? decoder.decode(SongArrayContainer.self, from: data) {
       return wrapped.songs
     }
-    if let list = (try? decoder.decode(LossyArray<Song>.self, from: data))?.elements, !list.isEmpty {
-      return list
-    }
-    if let list = try? decoder.decode([Song].self, from: data), !list.isEmpty {
-      return list
-    }
-    if let wrapped = try? decoder.decode(LossyArray<FavoriteSongEnvelope>.self, from: data) {
-      let songs = wrapped.elements.compactMap(\.song)
-      if !songs.isEmpty { return songs }
-    }
-    if let wrapped = try? decoder.decode([FavoriteSongEnvelope].self, from: data) {
-      let songs = wrapped.compactMap(\.song)
-      if !songs.isEmpty { return songs }
+    if let list = try? decoder.decode(SongCollection.self, from: data) {
+      return list.songs
     }
     return nil
   }

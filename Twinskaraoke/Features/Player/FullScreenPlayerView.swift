@@ -21,16 +21,26 @@ private struct PlayerLayoutMetrics {
         containerSize.width >= 420
     }
 
-    var usesTwoColumnPlayer: Bool {
-        containerSize.width >= 700 && contentHeight >= 560
+    private var isRoomy: Bool {
+        contentHeight >= 1000
     }
 
-    var usesTwoColumnLyrics: Bool {
-        usesTwoColumnPlayer
+    /// iPad-class canvas. Slide Over and half-width Split View stay on the
+    /// compact phone layout, which reads better at those widths.
+    var usesPadLayout: Bool {
+        containerSize.width >= 600 && contentHeight >= 600
+    }
+
+    /// Landscape iPad: lyrics fill the top, transport spans a bar along the
+    /// bottom. Portrait instead keeps artwork and transport in a left rail.
+    var padUsesBottomBar: Bool {
+        usesPadLayout
+            && containerSize.width >= 900
+            && containerSize.width > contentHeight * 1.15
     }
 
     var horizontalPadding: CGFloat {
-        if usesTwoColumnPlayer { return 0 }
+        if usesPadLayout { return 0 }
         if isWidePhone { return 34 }
         return isCompactHeight ? 24 : 28
     }
@@ -40,26 +50,75 @@ private struct PlayerLayoutMetrics {
     }
 
     var artSize: CGFloat {
-        if usesTwoColumnPlayer { return wideArtSize }
         let widthBound = containerSize.width - (horizontalPadding * 2)
         let heightFraction = contentHeight * (isCompactHeight ? 0.43 : 0.48)
         let maxSize: CGFloat = isWidePhone ? 390 : 360
         return min(widthBound, heightFraction, maxSize)
     }
 
-    var wideArtSize: CGFloat {
-        min(containerSize.width * 0.44, contentHeight * 0.68, 460)
+    // MARK: - iPad geometry
+
+    var padOuterPadding: CGFloat {
+        if containerSize.width >= 1180 { return 44 }
+        if containerSize.width >= 860 { return 34 }
+        return 26
     }
 
-    var wideLyricsArtSize: CGFloat {
-        let panelWidth: CGFloat = 330
-        let spacing: CGFloat = 36
-        let available = wideContentMaxWidth - panelWidth - spacing
-        return min(wideArtSize, max(240, min(360, available)))
+    var padColumnSpacing: CGFloat {
+        containerSize.width >= 1000 ? 34 : 26
     }
 
-    var wideContentMaxWidth: CGFloat {
-        min(containerSize.width - 88, 980)
+    /// Keeps the layout from stretching edge to edge on a 13" canvas.
+    var padContentMaxWidth: CGFloat {
+        padUsesBottomBar ? 1160 : 1120
+    }
+
+    /// Lyric lines are short, so a full-width panel would strand a lot of empty
+    /// space to the right of the text in landscape.
+    var padLyricsPanelMaxWidth: CGFloat {
+        padUsesBottomBar ? 880 : .infinity
+    }
+
+    var padRailWidth: CGFloat {
+        min(max(containerSize.width * 0.40, 296), 400)
+    }
+
+    var padRailArtSize: CGFloat {
+        min(padRailWidth, contentHeight * 0.34, 360)
+    }
+
+    /// Lyrics-off layout: artwork carries the screen, transport sits below it.
+    var padArtworkSize: CGFloat {
+        min(containerSize.width * 0.5, contentHeight * 0.44, 460)
+    }
+
+    var padArtworkContentMaxWidth: CGFloat {
+        560
+    }
+
+    /// Clears the drag handle pinned to the top of the player.
+    var padTopInset: CGFloat {
+        26
+    }
+
+    var padTransportTopPadding: CGFloat {
+        isRoomy ? 26 : 20
+    }
+
+    var padVolumeTopPadding: CGFloat {
+        isRoomy ? 24 : 18
+    }
+
+    var padPanelHeaderPadding: CGFloat {
+        containerSize.width >= 860 ? 22 : 18
+    }
+
+    var padBarArtSize: CGFloat {
+        64
+    }
+
+    var padBarTransportMaxWidth: CGFloat {
+        300
     }
 
     var radioArtSize: CGFloat {
@@ -75,13 +134,11 @@ private struct PlayerLayoutMetrics {
     }
 
     var lyricsTopSpacer: CGFloat {
-        if usesTwoColumnPlayer { return artworkTopSpacer }
-        return isCompactHeight ? 8 : 8
+        isCompactHeight ? 8 : 12
     }
 
     var lyricsBottomSpacer: CGFloat {
-        if usesTwoColumnPlayer { return artworkBottomSpacer }
-        return isCompactHeight ? 12 : 10
+        isCompactHeight ? 10 : 12
     }
 
     var progressTopPadding: CGFloat {
@@ -94,14 +151,6 @@ private struct PlayerLayoutMetrics {
 
     var controlsBottomSpacer: CGFloat {
         isCompactHeight ? 30 : 46
-    }
-
-    var wideControlsTopPadding: CGFloat {
-        isCompactHeight ? 38 : 46
-    }
-
-    var wideControlsBottomSpacer: CGFloat {
-        isCompactHeight ? 30 : 38
     }
 
     var transportControlHeight: CGFloat {
@@ -143,6 +192,109 @@ private struct PlayerLayoutMetrics {
     var lyricsSubtitleSize: CGFloat {
         isCompactHeight ? 12 : 13
     }
+
+    /// A `GeometryReader` reports a zero size before the first layout pass;
+    /// layout decisions that stick (the initial player surface) wait for this.
+    var hasResolvedGeometry: Bool {
+        containerSize.width > 0 && containerSize.height > 0
+    }
+}
+
+private let playerTitleButtonBackground = Color.clear
+
+private var playerTitleButtonBorder: some View {
+    Circle()
+        .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
+}
+
+private func playerTitleIconColor(isActive _: Bool = false) -> Color {
+    Color.primary
+}
+
+private extension View {
+    /// The circular background/border worn by the player's title-surface
+    /// buttons. The iPad control bar sits on its own glass and skips it.
+    @ViewBuilder
+    func playerTitleButtonChrome(_ isVisible: Bool) -> some View {
+        if isVisible {
+            background(playerTitleButtonBackground, in: Circle())
+                .overlay(playerTitleButtonBorder)
+        } else {
+            self
+        }
+    }
+}
+
+/// The favorite toggle shared by the player's three title surfaces: the compact
+/// title row, the compact lyrics header and the iPad landscape control bar.
+/// They differ only in metrics and chrome, so the toggle, haptics, symbol
+/// effect and accessibility live here rather than in triplicate.
+private struct PlayerFavoriteButton: View {
+    let song: Song
+    var font: Font = .title3
+    var size: CGFloat = 44
+    var showsChrome: Bool = true
+
+    @ObservedObject private var favorites = FavoritesManager.shared
+    @Environment(\.appReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let isFavorite = favorites.isFavorite(song.id)
+        Button {
+            let wasFavorite = favorites.isFavorite(song.id)
+            favorites.toggle(songID: song.id)
+            if wasFavorite {
+                AppHaptic.selection.play()
+            } else {
+                AppHaptic.success.play()
+            }
+        } label: {
+            Group {
+                if #available(iOS 17.0, *), !reduceMotion {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.bounce, value: isFavorite)
+                } else {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                }
+            }
+            .font(font)
+            .foregroundStyle(playerTitleIconColor(isActive: isFavorite))
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
+            .playerTitleButtonChrome(showsChrome)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
+        .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+        .accessibilityValue(song.title)
+        .accessibilityHint("Updates favorites for the current song.")
+    }
+}
+
+/// The overflow menu paired with ``PlayerFavoriteButton`` on the same three
+/// surfaces.
+private struct PlayerMoreMenu: View {
+    let song: Song
+    var font: Font = .headline.bold()
+    var size: CGFloat = 44
+    var showsChrome: Bool = true
+    let onAddToPlaylist: () -> Void
+
+    var body: some View {
+        Menu {
+            SongActionsMenuItems(song: song, onAddToPlaylist: onAddToPlaylist)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(font)
+                .foregroundStyle(playerTitleIconColor())
+                .frame(width: size, height: size)
+                .contentShape(Rectangle())
+                .playerTitleButtonChrome(showsChrome)
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
+        .accessibilityLabel("More")
+        .accessibilityValue(song.title)
+    }
 }
 
 struct FullScreenPlayerView: View {
@@ -153,6 +305,8 @@ struct FullScreenPlayerView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
     @State private var showLyrics = false
+    @State private var didSetInitialSurface = false
+    @State private var usesPadCanvas = false
     @State private var showKaraokeControls = false
     @State private var showTranslatedLyrics = false
     @State private var showCoverArt = false
@@ -165,6 +319,7 @@ struct FullScreenPlayerView: View {
     @State private var coverArtArtistLink: String?
     @StateObject private var lyricsViewModel = LyricsViewModel()
     @StateObject private var upcomingLyricsViewModel = LyricsViewModel()
+
     var body: some View {
         let song = audioManager.currentSong
         Group {
@@ -246,13 +401,47 @@ struct FullScreenPlayerView: View {
             showAddToPlaylist = false
             coverArtArtistName = nil
             coverArtArtistLink = nil
+            if let id = newId {
+                fetchCoverArtArtist(songID: id)
+            }
             if !audioManager.isRadioMode, let id = newId {
-                // Prefer already-ready preload; if upcoming is still loading the
-                // same id, kick a fetch so the UI isn't stuck empty, then adopt
-                // when preload finishes (isLoading / loadedSongID observers).
-                if !adoptUpcomingLyricsIfCurrent(matches: id) {
+                if upcomingLyricsViewModel.loadedSongID == id,
+                   !upcomingLyricsViewModel.didFail,
+                   !upcomingLyricsViewModel.isLoading,
+                   !upcomingLyricsViewModel.lyrics.isEmpty || upcomingLyricsViewModel.hasNoLyrics
+                {
+                    lyricsViewModel.adopt(
+                        songID: id,
+                        lyrics: upcomingLyricsViewModel.lyrics,
+                        hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
+                    )
+                } else if upcomingLyricsViewModel.isLoading {
+                    // Prefetch for this song may still be in flight; the
+                    // isLoading handoff below adopts it (or fetches on
+                    // failure) instead of firing a duplicate GET.
+                } else {
                     lyricsViewModel.fetch(songID: id)
                 }
+            }
+        }
+        .onChange(of: upcomingLyricsViewModel.isLoading) { _, isLoading in
+            // Hand off an in-flight prefetch that just settled: adopt it when
+            // it landed for the current song, otherwise fetch fresh.
+            guard !isLoading, !audioManager.isRadioMode,
+                  let id = audioManager.currentSong?.id,
+                  lyricsViewModel.loadedSongID != id
+            else { return }
+            if upcomingLyricsViewModel.loadedSongID == id,
+               !upcomingLyricsViewModel.didFail,
+               !upcomingLyricsViewModel.lyrics.isEmpty || upcomingLyricsViewModel.hasNoLyrics
+            {
+                lyricsViewModel.adopt(
+                    songID: id,
+                    lyrics: upcomingLyricsViewModel.lyrics,
+                    hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
+                )
+            } else {
+                lyricsViewModel.fetch(songID: id)
             }
         }
         .onChange(of: audioManager.upcomingSong?.id) { _, upcomingId in
@@ -260,18 +449,9 @@ struct FullScreenPlayerView: View {
                 upcomingLyricsViewModel.fetch(songID: id)
             }
         }
-        .onChange(of: upcomingLyricsViewModel.isLoading) { _, isLoading in
-            guard !isLoading else { return }
-            if let id = audioManager.currentSong?.id {
-                _ = adoptUpcomingLyricsIfCurrent(matches: id)
-            }
-        }
-        .onChange(of: upcomingLyricsViewModel.loadedSongID) { _, loadedId in
-            guard let loadedId else { return }
-            _ = adoptUpcomingLyricsIfCurrent(matches: loadedId)
-        }
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
-            if isRadio { showLyrics = false }
+            // Radio has no lyrics; leaving it restores the canvas default.
+            showLyrics = isRadio ? false : usesPadCanvas
         }
         .onChange(of: popupPresentation.isExpanded) { _, isShown in
             if !isShown { dismiss() }
@@ -284,32 +464,48 @@ struct FullScreenPlayerView: View {
         .onAppear {
             favorites.loadIfNeeded()
             if let id = audioManager.currentSong?.id {
+                fetchCoverArtArtist(songID: id)
                 if !audioManager.isRadioMode {
                     lyricsViewModel.fetch(songID: id)
                 }
             }
         }
-        .task(id: audioManager.currentSong?.id) {
-            coverArtArtistName = nil
-            coverArtArtistLink = nil
-            guard let song = audioManager.currentSong else { return }
-            await fetchCoverArtArtist(for: song)
-        }
     }
 
     @ViewBuilder
     private func musicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
-        if showLyrics {
-            if metrics.usesTwoColumnLyrics {
-                wideLyricsLayout(song: song, metrics: metrics)
+        Group {
+            if metrics.usesPadLayout {
+                if showLyrics {
+                    padLyricsLayout(song: song, metrics: metrics)
+                } else {
+                    padArtworkLayout(song: song, metrics: metrics)
+                }
             } else {
                 compactMusicLayout(song: song, metrics: metrics)
             }
-        } else if metrics.usesTwoColumnPlayer {
-            wideMusicLayout(song: song, metrics: metrics)
-        } else {
-            compactMusicLayout(song: song, metrics: metrics)
         }
+        .onAppear { syncSurfaceToCanvas(metrics: metrics) }
+        .onChange(of: metrics.containerSize) { _, _ in
+            syncSurfaceToCanvas(metrics: metrics)
+        }
+    }
+
+    /// An iPad-class canvas opens straight into live lyrics — there is room for
+    /// them alongside the artwork, so the artwork-only view isn't the useful
+    /// default there. This is a canvas decision, not a device one: a Slide Over
+    /// or half-width Split View window runs the compact layout and should land
+    /// on artwork. Geometry is only known once the player has laid out, so the
+    /// initial surface is applied here rather than seeded from the device idiom.
+    private func syncSurfaceToCanvas(metrics: PlayerLayoutMetrics) {
+        guard metrics.hasResolvedGeometry else { return }
+        // Kept in sync so leaving radio mode can restore the canvas default.
+        if usesPadCanvas != metrics.usesPadLayout {
+            usesPadCanvas = metrics.usesPadLayout
+        }
+        guard !didSetInitialSurface else { return }
+        didSetInitialSurface = true
+        showLyrics = metrics.usesPadLayout
     }
 
     private func compactMusicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
@@ -389,127 +585,224 @@ struct FullScreenPlayerView: View {
         .accessibilityIdentifier(showLyrics ? "FullScreenPlayer.layout.compactLyrics" : "FullScreenPlayer.layout.compact")
     }
 
-    private func wideMusicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
-        HStack(alignment: .center, spacing: 46) {
-            VStack(alignment: .leading, spacing: 22) {
-                PlayerArtworkView(song: song, size: metrics.artSize, onTap: { handleCoverArtTap(song: song) })
-                    .contextMenu {
-                        songActions(song: song)
-                    } preview: {
-                        SongContextPreview(song: song)
-                    }
-                titleRow(song: song, metrics: metrics, horizontalPadding: 0)
+    /// Lyrics-first iPad player. Portrait keeps artwork and transport together
+    /// in a left rail with lyrics beside them; landscape hands the top of the
+    /// canvas to the lyrics and spreads the transport along the bottom.
+    private func padLyricsLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        Group {
+            if metrics.padUsesBottomBar {
+                VStack(spacing: metrics.padColumnSpacing) {
+                    padLyricsPanel(song: song, metrics: metrics)
+                    padControlBar(song: song, metrics: metrics)
+                }
+            } else {
+                HStack(alignment: .top, spacing: metrics.padColumnSpacing) {
+                    padSideRail(song: song, metrics: metrics)
+                        .frame(width: metrics.padRailWidth)
+                    padLyricsPanel(song: song, metrics: metrics)
+                }
             }
-            .frame(width: metrics.artSize, alignment: .leading)
-
-            VStack(spacing: 0) {
-                progressSection(song: song, metrics: metrics)
-                controlsRow(metrics: metrics)
-                    .padding(.horizontal, metrics.horizontalPadding)
-                    .padding(.top, metrics.wideControlsTopPadding)
-                Spacer(minLength: metrics.wideControlsBottomSpacer)
-                PlayerVolumeRow(horizontalPadding: 0)
-                PlayerBottomToolbar(
-                    showingQueue: $showingQueue,
-                    song: song,
-                    onLyricsToggle: {
-                        withOptionalAnimation(playerSurfaceAnimation) {
-                            showLyrics.toggle()
-                        }
-                        if showLyrics { lyricsViewModel.fetch(songID: song.id) }
-                    },
-                    showLyrics: showLyrics,
-                    horizontalPadding: 20
-                )
-            }
-            .frame(maxWidth: 420)
         }
-        .frame(maxWidth: metrics.wideContentMaxWidth, maxHeight: .infinity)
+        .padding(.top, metrics.padTopInset)
+        .frame(maxWidth: metrics.padContentMaxWidth, maxHeight: .infinity)
+        .padding(.horizontal, metrics.padOuterPadding)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("FullScreenPlayer.layout.wideLyrics")
+    }
+
+    /// Lyrics-off iPad player: artwork centred with the transport beneath it.
+    private func padArtworkLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+            PlayerArtworkView(
+                song: song,
+                size: metrics.padArtworkSize,
+                onTap: { handleCoverArtTap(song: song) }
+            )
+            .contextMenu {
+                songActions(song: song)
+            } preview: {
+                SongContextPreview(song: song)
+            }
+            titleRow(song: song, metrics: metrics, horizontalPadding: 0)
+                .padding(.top, 26)
+            Spacer(minLength: 18)
+            padTransportStack(song: song, metrics: metrics)
+        }
+        .padding(.top, metrics.padTopInset)
+        .frame(maxWidth: metrics.padArtworkContentMaxWidth, maxHeight: .infinity)
+        .padding(.horizontal, metrics.padOuterPadding)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("FullScreenPlayer.layout.wide")
     }
 
-    private func wideLyricsLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
-        HStack(alignment: .center, spacing: 36) {
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
-                PlayerArtworkView(
-                    song: song,
-                    size: metrics.wideLyricsArtSize,
-                    onTap: { handleCoverArtTap(song: song) }
-                )
-                .contextMenu {
-                    songActions(song: song)
-                } preview: {
-                    SongContextPreview(song: song)
-                }
-                .padding(.bottom, 24)
-
-                titleRow(song: song, metrics: metrics, horizontalPadding: 0)
-                    .padding(.bottom, 18)
-                progressSection(song: song, metrics: metrics)
-                controlsRow(metrics: metrics)
-                    .padding(.horizontal, metrics.horizontalPadding)
-                    .padding(.top, metrics.wideControlsTopPadding)
-                Spacer(minLength: metrics.wideControlsBottomSpacer)
-                PlayerVolumeRow(horizontalPadding: 0)
-                PlayerBottomToolbar(
-                    showingQueue: $showingQueue,
-                    song: song,
-                    onLyricsToggle: {
-                        withOptionalAnimation(playerSurfaceAnimation) {
-                            showLyrics.toggle()
-                        }
-                        if showLyrics { lyricsViewModel.fetch(songID: song.id) }
-                    },
-                    showLyrics: showLyrics,
-                    horizontalPadding: 20
-                )
-                Spacer(minLength: 0)
+    private func padSideRail(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        VStack(spacing: 0) {
+            // The artwork floats in the space above the transport rather than
+            // pinning to the top, which would strand a gap in the middle.
+            Spacer(minLength: 0)
+            PlayerArtworkView(
+                song: song,
+                size: metrics.padRailArtSize,
+                onTap: { handleCoverArtTap(song: song) }
+            )
+            .contextMenu {
+                songActions(song: song)
+            } preview: {
+                SongContextPreview(song: song)
             }
-            .frame(width: metrics.wideLyricsArtSize, alignment: .leading)
-
-            VStack(spacing: 0) {
-                wideLyricsHeader(song: song)
-                TimedLyricsView(
-                    lyrics: lyricsViewModel.lyrics,
-                    showTranslations: showTranslatedLyrics,
-                    isLoading: lyricsViewModel.isLoading,
-                    didFail: lyricsViewModel.didFail,
-                    hasNoLyrics: lyricsViewModel.hasNoLyrics,
-                    onSeek: { time in
-                        let duration = audioManager.playbackDuration
-                        guard duration > 0 else { return }
-                        audioManager.seek(to: (time + 0.1) / duration)
-                    },
-                    onRetry: { lyricsViewModel.retry() }
-                )
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            .overlay(alignment: .bottomLeading) {
-                lyricsTranslationButton
-                    .padding(.leading, 26)
-                    .padding(.bottom, 24)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if DeviceCapability.supportsKaraoke, audioManager.aiEnabled {
-                    KaraokeRightDock(showKaraokeControls: $showKaraokeControls)
-                        .padding(.trailing, 26)
-                        .padding(.bottom, 24)
-                }
-            }
-            .modifier(GlassRoundedRect(cornerRadius: AM.Radius.sheet))
-            .frame(minWidth: 330, maxWidth: 500, maxHeight: .infinity)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("FullScreenPlayer.lyricsPanel")
+            titleRow(song: song, metrics: metrics, horizontalPadding: 0, compact: true)
+                .padding(.top, 24)
+            Spacer(minLength: 24)
+            padTransportStack(song: song, metrics: metrics)
         }
-        .frame(maxWidth: metrics.wideContentMaxWidth, maxHeight: .infinity)
+        .frame(maxHeight: .infinity)
+    }
+
+    /// Progress, transport, volume and the toolbar as one bottom-anchored block.
+    private func padTransportStack(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        VStack(spacing: 0) {
+            progressSection(song: song, metrics: metrics)
+            controlsRow(metrics: metrics)
+                .padding(.top, metrics.padTransportTopPadding)
+            PlayerVolumeRow(horizontalPadding: 0)
+                .padding(.top, metrics.padVolumeTopPadding)
+            padToolbar(song: song, horizontalPadding: 12)
+        }
+    }
+
+    /// Landscape transport: now playing on the left, transport centred, output
+    /// and volume on the right.
+    private func padControlBar(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        VStack(spacing: 6) {
+            progressSection(song: song, metrics: metrics)
+
+            HStack(alignment: .center, spacing: 24) {
+                padBarNowPlaying(song: song, metrics: metrics)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                controlsRow(metrics: metrics, compact: true)
+                    .frame(width: metrics.padBarTransportMaxWidth)
+
+                VStack(spacing: 6) {
+                    // The song's own actions move into this cluster so the
+                    // now playing group keeps its width for the title.
+                    HStack(spacing: 0) {
+                        padFavoriteButton(song: song)
+                            .padding(.top, 16)
+                        padToolbar(song: song, horizontalPadding: 0)
+                        padMoreMenu(song: song)
+                            .padding(.top, 16)
+                    }
+                    PlayerVolumeRow(horizontalPadding: 0)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private func padBarNowPlaying(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        HStack(spacing: 14) {
+            PlayerArtworkView(
+                song: song,
+                size: metrics.padBarArtSize,
+                onTap: { handleCoverArtTap(song: song) }
+            )
+            .frame(width: metrics.padBarArtSize)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title)
+                    .font(.headline.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentTransition(.opacity)
+                Text(song.displayArtist)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+            }
+            .animation(reduceMotion ? nil : AppMotion.quick, value: song.id)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Now playing")
+            .accessibilityValue("\(song.title), \(song.displayArtist)")
+        }
+        .contextMenu {
+            songActions(song: song)
+        } preview: {
+            SongContextPreview(song: song)
+        }
+    }
+
+    /// The control bar already sits on glass, so its actions drop the circular
+    /// chrome the other two surfaces wear.
+    private func padFavoriteButton(song: Song) -> some View {
+        PlayerFavoriteButton(song: song, showsChrome: false)
+    }
+
+    private func padMoreMenu(song: Song) -> some View {
+        PlayerMoreMenu(song: song, font: .title3, showsChrome: false) {
+            showAddToPlaylist = true
+        }
+    }
+
+    private func padToolbar(song: Song, horizontalPadding: CGFloat) -> some View {
+        PlayerBottomToolbar(
+            showingQueue: $showingQueue,
+            song: song,
+            onLyricsToggle: {
+                withOptionalAnimation(playerSurfaceAnimation) {
+                    showLyrics.toggle()
+                }
+                if showLyrics { lyricsViewModel.fetch(songID: song.id) }
+            },
+            showLyrics: showLyrics,
+            horizontalPadding: horizontalPadding
+        )
+    }
+
+    private func padLyricsPanel(song: Song, metrics: PlayerLayoutMetrics) -> some View {
+        VStack(spacing: 0) {
+            padLyricsHeader(song: song)
+                .padding(.horizontal, metrics.padPanelHeaderPadding)
+                .padding(.top, 20)
+                .padding(.bottom, 8)
+            TimedLyricsView(
+                lyrics: lyricsViewModel.lyrics,
+                showTranslations: showTranslatedLyrics,
+                isLoading: lyricsViewModel.isLoading,
+                didFail: lyricsViewModel.didFail,
+                hasNoLyrics: lyricsViewModel.hasNoLyrics,
+                onSeek: { time in
+                    let duration = audioManager.playbackDuration
+                    guard duration > 0 else { return }
+                    audioManager.seek(to: (time + 0.1) / duration)
+                },
+                onRetry: { lyricsViewModel.retry() }
+            )
+        }
+        .padding(.bottom, 12)
+        .overlay(alignment: .bottomLeading) {
+            lyricsTranslationButton
+                .padding(.leading, 22)
+                .padding(.bottom, 20)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if DeviceCapability.supportsKaraoke, audioManager.aiEnabled {
+                KaraokeRightDock(showKaraokeControls: $showKaraokeControls)
+                    .padding(.trailing, 22)
+                    .padding(.bottom, 20)
+            }
+        }
+        .modifier(GlassRoundedRect(cornerRadius: AM.Radius.sheet))
+        .frame(maxWidth: metrics.padLyricsPanelMaxWidth, maxHeight: .infinity)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("FullScreenPlayer.layout.wideLyrics")
+        .accessibilityIdentifier("FullScreenPlayer.lyricsPanel")
     }
 
     private var dismissBar: some View {
@@ -563,58 +856,24 @@ struct FullScreenPlayerView: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                let wasFavorite = favorites.isFavorite(song.id)
-                favorites.toggle(songID: song.id)
-                if wasFavorite {
-                    AppHaptic.selection.play()
-                } else {
-                    AppHaptic.success.play()
-                }
-            } label: {
-                Image(systemName: favorites.isFavorite(song.id) ? "star.fill" : "star")
-                    .font(.title3)
-                    .foregroundStyle(playerTitleIconColor(isActive: favorites.isFavorite(song.id)))
-                    .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel(
-                favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites"
-            )
+            PlayerFavoriteButton(song: song)
 
-            Menu {
-                songActions(song: song)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline.bold())
-                    .foregroundStyle(playerTitleIconColor())
-                    .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-                    .contentShape(Circle())
+            PlayerMoreMenu(song: song) {
+                showAddToPlaylist = true
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-            .accessibilityLabel("More")
-            .accessibilityValue(song.title)
         }
         .padding(.horizontal, metrics.horizontalPadding)
         .padding(.bottom, 10)
     }
 
-    private func wideLyricsHeader(song: Song) -> some View {
+    /// The song title and its actions live in the rail (portrait) or the control
+    /// bar (landscape), so the panel header only labels the column.
+    private func padLyricsHeader(song _: Song) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Lyrics")
-                    .font(.title.bold())
-                    .foregroundStyle(.primary)
-                    .accessibilityIdentifier("FullScreenPlayer.wideLyricsTitle")
-                Text(song.title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text("Lyrics")
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .accessibilityIdentifier("FullScreenPlayer.wideLyricsTitle")
 
             Spacer(minLength: 8)
 
@@ -633,98 +892,43 @@ struct FullScreenPlayerView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Hide lyrics")
             .accessibilityHint("Returns to the player controls.")
-
-            Menu {
-                songActions(song: song)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline.bold())
-                    .foregroundStyle(playerTitleIconColor())
-                    .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-            .accessibilityLabel("More")
-            .accessibilityValue(song.title)
         }
-        .padding(.bottom, 10)
     }
 
     private func titleRow(
         song: Song,
         metrics: PlayerLayoutMetrics,
-        horizontalPadding: CGFloat? = nil
+        horizontalPadding: CGFloat? = nil,
+        compact: Bool = false
     ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: compact ? 8 : 12) {
+            VStack(alignment: .leading, spacing: compact ? 2 : 4) {
                 Text(song.title)
-                    .font(metrics.titleSize <= 20 ? .headline.bold() : AM.Font.nowPlayingTitle)
+                    .font(compact || metrics.titleSize <= 20 ? .headline.bold() : AM.Font.nowPlayingTitle)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .contentTransition(.opacity)
                 Text(song.displayArtist)
-                    .font(metrics.artistSize <= 15 ? .subheadline : AM.Font.nowPlayingArtist)
+                    .font(compact || metrics.artistSize <= 15 ? .subheadline : AM.Font.nowPlayingArtist)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .contentTransition(.opacity)
             }
+            .animation(reduceMotion ? nil : AppMotion.quick, value: song.id)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Now playing")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
             Spacer(minLength: 8)
-            Button {
-                let wasFavorite = favorites.isFavorite(song.id)
-                favorites.toggle(songID: song.id)
-                if wasFavorite {
-                    AppHaptic.selection.play()
-                } else {
-                    AppHaptic.success.play()
-                }
-            } label: {
-                Group {
-                    let isFav = favorites.isFavorite(song.id)
-                    if #available(iOS 17.0, *), !reduceMotion {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                            .contentTransition(.symbolEffect(.replace))
-                    } else {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                    }
-                }
-                .font(.title2)
-                .foregroundStyle(playerTitleIconColor(isActive: favorites.isFavorite(song.id)))
-                .frame(
-                    width: max(metrics.titleButtonSize, 44),
-                    height: max(metrics.titleButtonSize, 44)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-            .accessibilityLabel(
-                favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites"
+            PlayerFavoriteButton(
+                song: song,
+                font: .title2,
+                size: max(metrics.titleButtonSize, 44)
             )
-            .accessibilityValue(song.title)
-            .accessibilityHint("Updates favorites for the current song.")
-            .background(playerTitleButtonBackground, in: Circle())
-            .overlay(playerTitleButtonBorder)
 
-            Menu {
-                songActions(song: song)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline.bold())
-                    .foregroundStyle(playerTitleIconColor())
-                    .frame(
-                        width: max(metrics.titleButtonSize, 44),
-                        height: max(metrics.titleButtonSize, 44)
-                    )
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
-                    .contentShape(Circle())
+            PlayerMoreMenu(song: song, size: max(metrics.titleButtonSize, 44)) {
+                showAddToPlaylist = true
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-            .accessibilityLabel("More")
-            .accessibilityValue(song.title)
         }
         .contextMenu {
             songActions(song: song)
@@ -732,19 +936,6 @@ struct FullScreenPlayerView: View {
             SongContextPreview(song: song)
         }
         .padding(.horizontal, horizontalPadding ?? metrics.horizontalPadding)
-    }
-
-    private var playerTitleButtonBackground: Color {
-        Color.clear
-    }
-
-    private var playerTitleButtonBorder: some View {
-        Circle()
-            .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
-    }
-
-    private func playerTitleIconColor(isActive _: Bool = false) -> Color {
-        Color.primary
     }
 
     private func progressSection(song _: Song, metrics: PlayerLayoutMetrics) -> some View {
@@ -787,7 +978,7 @@ struct FullScreenPlayerView: View {
                 .foregroundStyle(audioManager.isEditingProgress ? .primary : .secondary)
                 .scaleEffect(audioManager.isEditingProgress ? 1.12 : 1.0, anchor: .center)
                 .animation(
-                    reduceMotion ? nil : AppMotion.spring(response: 0.3, dampingFraction: 0.85),
+                    reduceMotion ? nil : AppMotion.quick,
                     value: audioManager.isEditingProgress
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
@@ -821,16 +1012,19 @@ struct FullScreenPlayerView: View {
         }
     }
 
-    private func controlsRow(metrics: PlayerLayoutMetrics) -> some View {
-        HStack(spacing: 0) {
+    private func controlsRow(metrics: PlayerLayoutMetrics, compact: Bool = false) -> some View {
+        let sideSize = compact ? metrics.sideControlSize * 0.78 : metrics.sideControlSize
+        let primarySize = compact ? metrics.primaryControlSize * 0.8 : metrics.primaryControlSize
+        let rowHeight = compact ? metrics.transportControlHeight * 0.82 : metrics.transportControlHeight
+        return HStack(spacing: 0) {
             Button {
                 audioManager.playPrevious()
             } label: {
                 Image(systemName: "backward.fill")
-                    .font(.system(size: metrics.sideControlSize, weight: .bold))
+                    .font(.system(size: sideSize, weight: .bold))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: metrics.transportControlHeight)
+                    .frame(height: rowHeight)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .light))
             .accessibilityLabel("Previous track")
@@ -846,10 +1040,10 @@ struct FullScreenPlayerView: View {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                     }
                 }
-                .font(.system(size: metrics.primaryControlSize, weight: .bold))
+                .font(.system(size: primarySize, weight: .bold))
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
-                .frame(height: metrics.transportControlHeight)
+                .frame(height: rowHeight)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .medium))
             .accessibilityLabel(audioManager.isPlaying ? "Pause" : "Play")
@@ -858,10 +1052,10 @@ struct FullScreenPlayerView: View {
                 audioManager.playNextOrRandom()
             } label: {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: metrics.sideControlSize, weight: .bold))
+                    .font(.system(size: sideSize, weight: .bold))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: metrics.transportControlHeight)
+                    .frame(height: rowHeight)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .light))
             .accessibilityLabel("Next track")
@@ -871,10 +1065,9 @@ struct FullScreenPlayerView: View {
 
     private func backgroundView(song: Song) -> some View {
         PlayerAmbientBackground(
-            artworkURL: audioManager.displayImageURL(for: song, variant: .card),
-            isPlaying: audioManager.isPlaying
+            artworkURL: audioManager.displayImageURL(for: song, variant: .blur),
+            isPlaying: audioManager.isPlaying && popupPresentation.isExpanded
         )
-        .id(song.id)
     }
 
     private func formattedTime(_ seconds: Double) -> String {
@@ -889,7 +1082,7 @@ struct FullScreenPlayerView: View {
     }
 
     private var playerSurfaceAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.86, blendDuration: 0.08)
+        reduceMotion ? nil : AppMotion.standard
     }
 
     private var lyricsSurfaceTransition: AnyTransition {
@@ -954,13 +1147,12 @@ struct FullScreenPlayerView: View {
             .modifier(GlassCircle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.7))
-        .disabled(isLyricsTranslationDisabled)
-        .opacity(isLyricsTranslationDisabled ? 0.5 : 1)
+        .disabled(lyricsViewModel.isLoading || lyricsViewModel.hasNoLyrics)
         .accessibilityLabel(lyricsTranslationAccessibilityLabel)
         .accessibilityValue(lyricsTranslationAccessibilityValue)
         .accessibilityHint(lyricsTranslationAccessibilityHint)
         .animation(
-            reduceMotion ? nil : AppMotion.spring(response: 0.32, dampingFraction: 0.86),
+            reduceMotion ? nil : AppMotion.quick,
             value: lyricsViewModel.translationState
         )
     }
@@ -972,11 +1164,9 @@ struct FullScreenPlayerView: View {
     }
 
     private var lyricsTranslationAccessibilityLabel: String {
-        LyricsTranslationControlPresentation.accessibilityLabel(
-            showingTranslatedLyrics: showTranslatedLyrics,
-            hasTranslatedLyrics: lyricsViewModel.hasTranslatedLyrics,
-            state: lyricsViewModel.translationState
-        )
+        if showTranslatedLyrics { return "Hide Translated Lyrics" }
+        if lyricsViewModel.hasTranslatedLyrics { return "Show Translated Lyrics" }
+        return "Translate Lyrics"
     }
 
     private var lyricsTranslationAccessibilityValue: String {
@@ -991,85 +1181,47 @@ struct FullScreenPlayerView: View {
     }
 
     private var lyricsTranslationAccessibilityHint: String {
-        LyricsTranslationControlPresentation.accessibilityHint(
-            state: lyricsViewModel.translationState,
-            didFail: lyricsViewModel.didFail,
-            hasNoLyrics: lyricsViewModel.hasNoLyrics,
-            hasTranslatedLyrics: lyricsViewModel.hasTranslatedLyrics
-        )
-    }
-
-    private var isLyricsTranslationDisabled: Bool {
-        LyricsTranslationControlPresentation.isDisabled(
-            state: lyricsViewModel.translationState,
-            isLoading: lyricsViewModel.isLoading,
-            didFail: lyricsViewModel.didFail,
-            hasNoLyrics: lyricsViewModel.hasNoLyrics,
-            hasLyrics: !lyricsViewModel.lyrics.isEmpty
-        )
-    }
-
-    /// Adopts preloaded upcoming lyrics into the current lyrics VM when the
-    /// preload finished for the song that is now (or already) playing.
-    /// Returns true when adoption happened.
-    @discardableResult
-    private func adoptUpcomingLyricsIfCurrent(matches songID: String) -> Bool {
-        guard !audioManager.isRadioMode else { return false }
-        guard audioManager.currentSong?.id == songID else { return false }
-        guard upcomingLyricsViewModel.loadedSongID == songID,
-              !upcomingLyricsViewModel.didFail,
-              !upcomingLyricsViewModel.isLoading,
-              !upcomingLyricsViewModel.lyrics.isEmpty || upcomingLyricsViewModel.hasNoLyrics
-        else { return false }
-
-        // Skip if current VM already has a finished result for this song.
-        if lyricsViewModel.loadedSongID == songID,
-           !lyricsViewModel.isLoading,
-           !lyricsViewModel.didFail,
-           !lyricsViewModel.lyrics.isEmpty || lyricsViewModel.hasNoLyrics
-        {
-            return false
+        if lyricsViewModel.hasNoLyrics { return "Lyrics are not available for this song." }
+        if lyricsViewModel.hasTranslatedLyrics {
+            return "Toggles translated lyrics."
         }
-
-        lyricsViewModel.adopt(
-            songID: songID,
-            lyrics: upcomingLyricsViewModel.lyrics,
-            hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
-        )
-        return true
+        return "Requests translated lyrics."
     }
 
     private func saveCoverArt(url: URL?) {
         guard !coverArtSaveStatus.isSaving else { return }
         guard let url else { return }
         coverArtSaveStatus = .saving
-        URLSession.shared.dataTask(with: url) { data, _, error in
-            DispatchQueue.main.async {
-                #if canImport(UIKit)
-                    if let data, let image = UIImage(data: data) {
-                        ImageSaver.shared.save(image: image) { result in
-                            DispatchQueue.main.async {
-                                switch result {
-                                case .success:
-                                    coverArtSaveStatus = .success
-                                case let .failure(err):
-                                    coverArtSaveStatus = .failed(err.localizedDescription)
-                                }
-                                resetCoverArtSaveStatusLater()
+        Task {
+            #if canImport(UIKit)
+                if let image = await CoverArtService.fetchImage(from: url) {
+                    ImageSaver.shared.save(image: image) { result in
+                        Task { @MainActor in
+                            switch result {
+                            case .success:
+                                coverArtSaveStatus = .success
+                            case let .failure(err):
+                                coverArtSaveStatus = .failed(err.localizedDescription)
                             }
+                            resetCoverArtSaveStatusLater()
                         }
-                        return
                     }
-                #endif
-                coverArtSaveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
-                resetCoverArtSaveStatusLater()
-            }
-        }.resume()
+                    return
+                }
+            #endif
+            coverArtSaveStatus = .failed("Couldn't save")
+            resetCoverArtSaveStatusLater()
+        }
     }
 
     private func resetCoverArtSaveStatusLater() {
+        // A second save may start within the window; only reset if the status
+        // hasn't moved on since this timer was scheduled.
+        let status = coverArtSaveStatus
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            coverArtSaveStatus = .idle
+            if coverArtSaveStatus == status {
+                coverArtSaveStatus = .idle
+            }
         }
     }
 
@@ -1078,70 +1230,31 @@ struct FullScreenPlayerView: View {
             showCoverArt = true
             return
         }
-        let urlString = "\(StorageHost.api)/public/art/yuri/random"
-        guard let apiURL = URL(string: urlString) else {
-            showCoverArt = true
-            return
-        }
-        var request = URLRequest(url: apiURL)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            DispatchQueue.main.async {
-                guard let data,
-                      let item = try? JSONDecoder().decode(RandomYuriArtItem.self, from: data),
-                      let baseURL = URL(string: item.url)
-                else {
-                    showCoverArt = true
-                    return
-                }
-                let imageURL = ArtworkURLBuilder.variantURL(from: baseURL, variant: .hero) ?? baseURL
-                easterEggImageURL = imageURL
-                easterEggArtistName = item.artistCredit
-                easterEggArtistLink = nil
+        Task {
+            guard let art = await CoverArtService.fetchRandomYuriArt() else {
                 showCoverArt = true
+                return
             }
-        }.resume()
+            easterEggImageURL = art.imageURL
+            easterEggArtistName = art.artistCredit
+            easterEggArtistLink = nil
+            showCoverArt = true
+        }
     }
 
-    private func fetchCoverArtArtist(for song: Song) async {
-        let songID = song.id
-        if song.fallbackArtCredit != nil {
+    private func fetchCoverArtArtist(songID: String) {
+        if let song = audioManager.currentSong, song.fallbackArtCredit != nil {
             let fallback = FallbackArtProvider.shared.art(for: song.id)
-            guard !Task.isCancelled, audioManager.currentSong?.id == songID else { return }
             coverArtArtistName = fallback?.artistName
             coverArtArtistLink = fallback?.artistLink
             return
         }
-        let encodedID = songID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? songID
-        guard var request = try? KaraokeAPIClient.request(path: "/api/songs/\(encodedID)") else {
-            return
+        Task {
+            guard let credit = await CoverArtService.fetchArtistCredit(songID: songID) else { return }
+            // A slow response for a previous song must not label the current one.
+            guard audioManager.currentSong?.id == songID else { return }
+            coverArtArtistName = credit.name
+            coverArtArtistLink = credit.link
         }
-        GuestIdentity.applyIfNeeded(to: &request)
-        guard let data = try? await KaraokeAPIClient.data(for: request),
-              !Task.isCancelled,
-              audioManager.currentSong?.id == songID,
-              let payload = try? JSONDecoder().decode(CoverArtArtistPayload.self, from: data),
-              let artist = payload.coverArt?.artist
-        else { return }
-        coverArtArtistName = artist.name
-        coverArtArtistLink = artist.socialLink
     }
-}
-
-private struct CoverArtArtistPayload: Decodable {
-    struct CoverArt: Decodable {
-        struct Artist: Decodable {
-            let name: String?
-            let socialLink: String?
-        }
-
-        let artist: Artist?
-    }
-
-    let coverArt: CoverArt?
-}
-
-private struct RandomYuriArtItem: Decodable {
-    let url: String
-    let artistCredit: String?
 }

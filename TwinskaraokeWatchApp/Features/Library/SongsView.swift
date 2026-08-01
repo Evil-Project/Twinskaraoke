@@ -30,16 +30,18 @@ struct SongsView: View {
                     ProgressView()
                     Spacer()
                 }
-            } else if let message = viewModel.loadErrorMessage {
-                WatchLoadFailureState(message: message) {
-                    viewModel.fetchSongs(force: true)
-                }
+            } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
+                WatchLoadErrorState(
+                    title: "Couldn't Load Songs",
+                    message: loadError,
+                    retryAction: { viewModel.fetchSongs() }
+                )
                 .listRowBackground(Color.clear)
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
                     title: "No Songs",
-                    message: "Songs from Twinskaraoke will appear here."
+                    message: "Trending songs will appear here."
                 )
                 .listRowBackground(Color.clear)
             } else {
@@ -63,16 +65,18 @@ struct SongsView: View {
                             isCurrent: isCurrent,
                             isPlaying: isCurrent && audioManager.isPlaying,
                             showsDuration: !isCurrent,
-                            trailingSystemImage: isCurrent ? "chevron.right" : nil
+                            trailingSystemImage: isCurrent
+                                ? (audioManager.isPlaying ? "pause.fill" : "play.fill")
+                                : nil
                         )
                     }
                     .buttonStyle(.watchPressable)
-                    .accessibilityLabel(isCurrent ? "Open \(song.title)" : song.title)
+                    .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
                     .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play this song.")
                 }
             }
         }
-        .navigationTitle("Songs")
+        .navigationTitle("Trending")
         .animation(listAnimation, value: audioManager.currentSong?.id)
         .animation(playbackAnimation, value: audioManager.isPlaying)
         .animation(listAnimation, value: viewModel.songs.count)
@@ -148,12 +152,11 @@ private struct WatchSongsLibraryHeader: View {
                     Image(systemName: "music.note.list")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.appAccent)
-                        .accessibilityHidden(true)
                 }
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Songs")
+                    Text("Trending")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
@@ -200,7 +203,7 @@ private struct WatchSongsLibraryHeader: View {
                 .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Songs")
+        .accessibilityLabel("Trending")
         .accessibilityValue(summaryText)
     }
 
@@ -224,7 +227,7 @@ private struct WatchSongsHeaderButton: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .foregroundColor(tint)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(fill)

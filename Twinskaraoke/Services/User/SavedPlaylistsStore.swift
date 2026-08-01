@@ -7,27 +7,29 @@ final class SavedPlaylistsStore: ObservableObject {
     static let shared = SavedPlaylistsStore()
     private static let storageKey = "nk.savedPlaylists.v1"
     @Published private(set) var playlists: [Playlist] = []
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    // O(1) membership cache for isSaved, which is called per visible
+    // playlist count label on every publish.
+    private var savedIDs: Set<String> = []
+    private init() {
         load()
     }
 
     func isSaved(_ playlist: Playlist) -> Bool {
-        playlists.contains { $0.id == playlist.id }
+        savedIDs.contains(playlist.id)
     }
 
     func add(_ playlist: Playlist) {
-        guard !playlist.isSessionOwned else { return }
+        guard !playlist.isFavorites else { return }
         if isSaved(playlist) { return }
         playlists.insert(playlist, at: 0)
+        savedIDs.insert(playlist.id)
         RecentlyAddedTracker.shared.bump(playlist.id)
         save()
     }
 
     func remove(id: String) {
         playlists.removeAll { $0.id == id }
+        savedIDs.remove(id)
         save()
     }
 
@@ -36,18 +38,30 @@ final class SavedPlaylistsStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = defaults.data(forKey: Self.storageKey) else { return }
+        guard let data = UserDefaults.standard.data(forKey: Self.storageKey) else { return }
         if let decoded = try? JSONDecoder().decode([Playlist].self, from: data) {
-            playlists = decoded.filter { !$0.isSessionOwned }
-            if playlists.count != decoded.count {
-                save()
-            }
+            playlists = decoded
+            savedIDs = Set(decoded.map(\.id))
         }
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(playlists) {
-            defaults.set(data, forKey: Self.storageKey)
+        // Persist lightweight metadata only: songListDTOs embeds full song
+        // arrays and stays in memory. load() still decodes older blobs that
+        // include the songs.
+        let stripped = playlists.map {
+            Playlist(
+                id: $0.id,
+                name: $0.name,
+                songCount: $0.songCount,
+                media: $0.media,
+                mosaicMedia: $0.mosaicMedia,
+                songListDTOs: nil,
+                isPersonal: $0.isPersonal
+            )
+        }
+        if let data = try? JSONEncoder().encode(stripped) {
+            UserDefaults.standard.set(data, forKey: Self.storageKey)
         }
     }
 }

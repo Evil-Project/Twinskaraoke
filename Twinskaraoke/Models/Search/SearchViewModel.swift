@@ -5,10 +5,16 @@ import Foundation
     import UIKit
 #endif
 
-nonisolated struct GenreSummary: Decodable, Identifiable, Hashable {
+nonisolated struct GenreSummary: Decodable, Identifiable {
     let id: String
     let name: String
     let songCount: Int
+
+    init(id: String, name: String, songCount: Int) {
+        self.id = id
+        self.name = name
+        self.songCount = songCount
+    }
 
     enum CodingKeys: String, CodingKey { case id, name, songCount, count }
     init(from decoder: Decoder) throws {
@@ -31,44 +37,28 @@ struct GenreDetail: Decodable {
 
 @MainActor
 final class PublicPlaylistsViewModel: ObservableObject {
-    typealias PageLoader = @Sendable (_ startIndex: Int, _ pageSize: Int) async throws -> [Playlist]
-
     @Published var playlists: [Playlist] = []
-    @Published private(set) var isLoading = false
     @Published var isLoadingMore = false
-    @Published private(set) var loadFailed = false
     private var canLoadMore = true
     private var hasLoaded = false
+    private var requestToken = 0
     private let pageSize = 25
-    private let pageLoader: PageLoader
 
-    init(
-        pageLoader: @escaping PageLoader = { startIndex, pageSize in
-            try await KaraokeAPIClient.publicPlaylists(
-                startIndex: startIndex,
-                pageSize: pageSize
-            )
-        }
-    ) {
-        self.pageLoader = pageLoader
-    }
-
-    @discardableResult
-    func loadIfNeeded() -> Task<Void, Never>? {
-        guard !hasLoaded, !isLoading else { return nil }
+    func loadIfNeeded() {
+        guard !hasLoaded else { return }
         if AppRuntime.isUITestMode {
             hasLoaded = true
             applyUITestFixture()
-            return nil
+            return
         }
-        return fetchPage(startIndex: 0, replace: true)
+        hasLoaded = true
+        fetchPage(startIndex: 0, replace: true)
     }
 
-    @discardableResult
-    func retry() -> Task<Void, Never>? {
-        guard !isLoading else { return nil }
+    func refresh() {
         hasLoaded = false
-        return loadIfNeeded()
+        canLoadMore = true
+        loadIfNeeded()
     }
 
     func loadMoreIfNeeded(current: Playlist) {
@@ -82,45 +72,52 @@ final class PublicPlaylistsViewModel: ObservableObject {
         "\(StorageHost.api)/api/playlist/public?startIndex=\(startIndex)&pageSize=\(pageSize)&search=&sortBy=UpdatedAt&sortDescending=True"
     }
 
-    @discardableResult
-    private func fetchPage(startIndex: Int, replace: Bool) -> Task<Void, Never> {
+    private func fetchPage(startIndex: Int, replace: Bool) {
         if replace {
-            isLoading = true
-            loadFailed = false
+            requestToken += 1
         } else {
             isLoadingMore = true
         }
-        let pageLoader = pageLoader
-        let pageSize = pageSize
-        return Task { [weak self] in
+        let token = requestToken
+        Task { [weak self] in
             guard let self else { return }
+            // defer, not a trailing statement: the token guards below return
+            // from the whole closure, which would otherwise strand
+            // isLoadingMore at true and permanently block pagination.
+            //
+            // Only the request that still owns the token clears the flag. A
+            // superseded load-more clearing it would let pagination restart
+            // from stale playlists while the replacing fetch is still in
+            // flight. Whichever request is newest always matches, so the flag
+            // still cannot be stranded.
+            defer {
+                if token == requestToken { isLoadingMore = false }
+            }
             do {
-                let items = try await pageLoader(startIndex, pageSize)
+                let items = try await KaraokeAPIClient.publicPlaylists(
+                    startIndex: startIndex,
+                    pageSize: pageSize
+                )
+                guard token == requestToken else { return }
                 if replace {
                     playlists = items
-                    hasLoaded = true
-                    loadFailed = false
                 } else {
                     let existing = Set(playlists.map(\.id))
                     playlists += items.filter { !existing.contains($0.id) }
                 }
                 canLoadMore = items.count >= pageSize
             } catch {
-                if replace {
-                    hasLoaded = false
-                    loadFailed = playlists.isEmpty
-                }
+                guard token == requestToken else { return }
+                // Keep the current items on a failed replace fetch so the view
+                // can retry instead of landing on a dead-end empty state.
+                canLoadMore = false
             }
-            isLoading = false
-            isLoadingMore = false
         }
     }
 
     private func applyUITestFixture() {
         playlists = Self.uiTestFixturePlaylists
-        isLoading = false
         isLoadingMore = false
-        loadFailed = false
         canLoadMore = false
     }
 
@@ -161,71 +158,41 @@ final class PublicPlaylistsViewModel: ObservableObject {
 
 @MainActor
 final class TopChartViewModel: ObservableObject {
-    typealias SongsLoader = @Sendable () async throws -> [Song]
-
     @Published var songs: [Song] = []
     @Published var weeklyTrending: [Song] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var loadFailed = false
     private var hasLoaded = false
-    private let allTimeLoader: SongsLoader
-    private let weeklyLoader: SongsLoader
+    private var requestToken = 0
 
-    init(
-        allTimeLoader: @escaping SongsLoader = {
-            try await KaraokeAPIClient.trendingSongs(days: "all")
-        },
-        weeklyLoader: @escaping SongsLoader = {
-            try await KaraokeAPIClient.trendingSongs(take: 20)
-        }
-    ) {
-        self.allTimeLoader = allTimeLoader
-        self.weeklyLoader = weeklyLoader
-    }
-
-    @discardableResult
-    func loadIfNeeded() -> Task<Void, Never>? {
-        guard !hasLoaded, !isLoading else { return nil }
+    func loadIfNeeded() {
+        guard !hasLoaded else { return }
         if AppRuntime.isUITestMode {
             hasLoaded = true
             applyUITestFixture()
-            return nil
+            return
         }
-        isLoading = true
-        loadFailed = false
-        let allTimeLoader = allTimeLoader
-        let weeklyLoader = weeklyLoader
-        return Task { [weak self] in
-            async let allTime = try? allTimeLoader()
-            async let weekly = try? weeklyLoader()
-            let loadedSongs = await allTime
-            let loadedWeeklyTrending = await weekly
+        hasLoaded = true
+        requestToken += 1
+        let token = requestToken
+        Task { [weak self] in
             guard let self else { return }
-
-            if let loadedSongs {
-                songs = loadedSongs
-            }
-            if let loadedWeeklyTrending {
-                weeklyTrending = loadedWeeklyTrending
-            }
-            hasLoaded = loadedSongs != nil && loadedWeeklyTrending != nil
-            loadFailed = loadedSongs == nil && songs.isEmpty
-            isLoading = false
+            async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
+            async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
+            let allTimeSongs = await allTime ?? []
+            let weeklySongs = await weekly ?? []
+            guard token == requestToken else { return }
+            songs = allTimeSongs
+            weeklyTrending = weeklySongs
         }
     }
 
-    @discardableResult
-    func retry() -> Task<Void, Never>? {
-        guard !isLoading else { return nil }
+    func refresh() {
         hasLoaded = false
-        return loadIfNeeded()
+        loadIfNeeded()
     }
 
     private func applyUITestFixture() {
         songs = Self.uiTestFixtureSongs
         weeklyTrending = Array(Self.uiTestFixtureSongs.prefix(2))
-        isLoading = false
-        loadFailed = false
     }
 
     private static var uiTestFixtureSongs: [Song] {
@@ -250,24 +217,35 @@ final class GenresViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var canLoadMore = true
+    @Published private(set) var failedDetailIDs = Set<String>()
     private var page = 0
     private let pageSize = 50
     private var hasLoaded = false
     private var genreDetailOrder: [String] = []
     private let maxCachedGenreDetails = 30
     private var detailRequestsInFlight = Set<String>()
+    private var pendingDetailOrder: [String] = []
+    private var pendingDetails: [String: GenreSummary] = [:]
+    private var detailTasks: [String: Task<Void, Never>] = [:]
+    // Published so views can key work on it: a purge cancels in-flight detail
+    // tasks, and without a generation-keyed restart those views would spin
+    // forever on their loading branch.
+    @Published private(set) var detailGeneration: UInt64 = 0
+    private var pageGeneration: UInt64 = 0
+    private var detailFailureDates: [String: Date] = [:]
+    private let maxConcurrentDetailRequests = 4
     private var genresNeedingFallback = Set<String>()
     private var fallbackCancellable: AnyCancellable?
+    private var memoryWarningCancellable: AnyCancellable?
 
     init() {
         #if canImport(UIKit)
-            NotificationCenter.default.addObserver(
-                forName: UIApplication.didReceiveMemoryWarningNotification,
-                object: nil, queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.clearCachedGenreDetails()
-                }
+            memoryWarningCancellable = NotificationCenter.default.publisher(
+                for: UIApplication.didReceiveMemoryWarningNotification
+            )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.clearCachedGenreDetails() }
             }
         #endif
         fallbackCancellable = FallbackArtProvider.shared.objectWillChange
@@ -285,7 +263,20 @@ final class GenresViewModel: ObservableObject {
 
     func loadIfNeeded() {
         guard !hasLoaded, !isLoading else { return }
+        if AppRuntime.isUITestMode {
+            applyUITestFixture()
+            return
+        }
         fetchPage(0, replace: true)
+    }
+
+    func refresh() {
+        hasLoaded = false
+        // Bypass the isLoading guard so a pull-to-refresh during the initial
+        // fetch starts a new replace-fetch; the new pageGeneration token in
+        // fetchPage invalidates the in-flight response.
+        isLoading = false
+        loadIfNeeded()
     }
 
     func loadMoreIfNeeded(current: GenreSummary) {
@@ -296,36 +287,67 @@ final class GenresViewModel: ObservableObject {
     }
 
     private func clearCachedGenreDetails() {
+        detailGeneration &+= 1
+        detailTasks.values.forEach { $0.cancel() }
+        detailTasks.removeAll()
+        detailRequestsInFlight.removeAll()
+        pendingDetailOrder.removeAll()
+        pendingDetails.removeAll()
         allSongs.removeAll()
         firstSongs.removeAll()
         genreDetailOrder.removeAll()
+    }
+
+    private func applyUITestFixture() {
+        let fixtureGenres = [
+            GenreSummary(id: "ui-genre-dance", name: "Dance", songCount: 3),
+            GenreSummary(id: "ui-genre-pop", name: "Pop", songCount: 3),
+            GenreSummary(id: "ui-genre-rock", name: "Rock", songCount: 3),
+        ]
+        let fixtureSongs = [
+            UITestFixtures.song(id: "ui-genre-song-1", title: "Wake Me Up Before You Go-Go", artist: "Wham!"),
+            UITestFixtures.song(id: "ui-genre-song-2", title: "Hero", artist: "Mili"),
+            UITestFixtures.song(id: "ui-genre-song-3", title: "Cure For Me", artist: "AURORA"),
+        ]
+
+        genres = fixtureGenres
+        allSongs = Dictionary(uniqueKeysWithValues: fixtureGenres.map { ($0.id, fixtureSongs) })
+        firstSongs = Dictionary(uniqueKeysWithValues: fixtureGenres.map { ($0.id, fixtureSongs[0]) })
+        hasLoaded = true
+        canLoadMore = false
+        isLoading = false
+        isLoadingMore = false
     }
 
     private func fetchPage(_ page: Int, replace: Bool) {
         guard replace || (!isLoadingMore && canLoadMore) else { return }
         guard !isLoading else { return }
         guard
-            let url = URL(
-                string:
-                "\(StorageHost.api)/api/filters/genres?page=\(page)&pageSize=\(pageSize)"
+            let request = try? KaraokeAPIClient.request(
+                path: "/api/filters/genres",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "pageSize", value: String(pageSize)),
+                ]
             )
         else { return }
         if replace {
+            pageGeneration &+= 1
             isLoading = true
-            detailRequestsInFlight.removeAll()
+            pendingDetailOrder.removeAll()
+            pendingDetails.removeAll()
         } else {
             isLoadingMore = true
         }
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, page, replace] in
-                self?.applyGenrePageResponse(data, page: page, replace: replace)
-            }
-        }.resume()
+        let generation = pageGeneration
+        Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyGenrePageResponse(data, page: page, replace: replace, generation: generation)
+        }
     }
 
-    private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool) {
+    private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool, generation: UInt64) {
+        guard generation == pageGeneration else { return }
         defer {
             isLoading = false
             isLoadingMore = false
@@ -346,36 +368,93 @@ final class GenresViewModel: ObservableObject {
         }
         canLoadMore = list.count == pageSize
         self.page = page + 1
-        for genre in filtered {
+    }
+
+    func loadPreviewIfNeeded(for genre: GenreSummary) {
+        guard artworkURLs[genre.id] == nil else { return }
+        enqueueDetail(for: genre, priority: false)
+    }
+
+    func loadDetailIfNeeded(for genre: GenreSummary) {
+        guard allSongs[genre.id] == nil else { return }
+        failedDetailIDs.remove(genre.id)
+        enqueueDetail(for: genre, priority: true)
+    }
+
+    private func enqueueDetail(for genre: GenreSummary, priority: Bool) {
+        guard allSongs[genre.id] == nil, !detailRequestsInFlight.contains(genre.id) else { return }
+        if !priority,
+           let failedAt = detailFailureDates[genre.id],
+           Date().timeIntervalSince(failedAt) < 30
+        {
+            return
+        }
+        if pendingDetails[genre.id] != nil {
+            if priority {
+                pendingDetailOrder.removeAll { $0 == genre.id }
+                pendingDetailOrder.insert(genre.id, at: 0)
+            }
+            return
+        }
+        pendingDetails[genre.id] = genre
+        if priority {
+            pendingDetailOrder.insert(genre.id, at: 0)
+        } else {
+            pendingDetailOrder.append(genre.id)
+        }
+        startQueuedDetailRequests()
+    }
+
+    private func startQueuedDetailRequests() {
+        while detailRequestsInFlight.count < maxConcurrentDetailRequests,
+              let genreID = pendingDetailOrder.first
+        {
+            pendingDetailOrder.removeFirst()
+            guard let genre = pendingDetails.removeValue(forKey: genreID),
+                  detailRequestsInFlight.insert(genreID).inserted
+            else { continue }
             fetchDetail(for: genre)
         }
     }
 
     private func fetchDetail(for genre: GenreSummary) {
-        if allSongs[genre.id] != nil { return }
-        guard detailRequestsInFlight.insert(genre.id).inserted else { return }
-        guard let url = URL(string: "\(StorageHost.api)/api/genres/\(genre.id)") else {
+        let generation = detailGeneration
+        guard let request = try? KaraokeAPIClient.request(
+            pathSegments: ["api", "genres", genre.id]
+        ) else {
             detailRequestsInFlight.remove(genre.id)
+            startQueuedDetailRequests()
             return
         }
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, genre] in
-                self?.applyGenreDetailResponse(data, for: genre)
-            }
-        }.resume()
+        let task = Task { [weak self] in
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyGenreDetailResponse(data, for: genre, generation: generation)
+        }
+        detailTasks[genre.id] = task
     }
 
-    private func applyGenreDetailResponse(_ data: Data?, for genre: GenreSummary) {
-        defer { detailRequestsInFlight.remove(genre.id) }
+    private func applyGenreDetailResponse(
+        _ data: Data?,
+        for genre: GenreSummary,
+        generation: UInt64
+    ) {
+        guard generation == detailGeneration else { return }
+        defer {
+            detailTasks.removeValue(forKey: genre.id)
+            detailRequestsInFlight.remove(genre.id)
+            startQueuedDetailRequests()
+        }
         guard let data,
               let detail = try? JSONDecoder().decode(GenreDetail.self, from: data),
               let songs = detail.songs
         else {
+            detailFailureDates[genre.id] = Date()
+            failedDetailIDs.insert(genre.id)
             return
         }
 
+        detailFailureDates.removeValue(forKey: genre.id)
+        failedDetailIDs.remove(genre.id)
         allSongs[genre.id] = songs
         if let first = songs.first {
             firstSongs[genre.id] = first
@@ -461,39 +540,40 @@ final class SearchCategorySongsViewModel: ObservableObject {
 
 @MainActor
 final class SearchViewModel: ObservableObject {
-    typealias SearchLoader = @Sendable (_ query: String, _ pageSize: Int) async throws -> [Song]
-
     @Published var results: [Song] = []
     @Published var searchText = ""
     @Published var isSearching = false
     @Published var searchErrorMessage: String?
+
+    /// Whether the field holds a query the search pipeline would actually run.
+    /// Views must branch on this rather than `!searchText.isEmpty`: the
+    /// pipeline trims before searching, so whitespace-only input clears the
+    /// results, and a raw emptiness check would then show a "no results" state
+    /// for a query that was never issued instead of the browse categories.
+    ///
+    /// Deliberately a derived value: `searchText` is two-way bound to the
+    /// search field, so trimming it at publish time would swallow spaces as
+    /// the user types them.
+    var hasActiveQuery: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private var queryToken: Int = 0
     private var searchTask: Task<Void, Never>?
-    private let searchLoader: SearchLoader
 
-    init(
-        debounceInterval: RunLoop.SchedulerTimeType.Stride = .milliseconds(500),
-        searchLoader: @escaping SearchLoader = { query, pageSize in
-            try await KaraokeAPIClient.searchSongs(query: query, pageSize: pageSize)
-        }
-    ) {
-        self.searchLoader = searchLoader
+    init() {
         $searchText
+            // Trim before removeDuplicates so edits that only change
+            // surrounding whitespace ("abc" -> "abc ") don't refire an
+            // identical search request.
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .removeDuplicates()
-            .handleEvents(receiveOutput: { [weak self] query in
-                self?.invalidateSearchForQueryEdit(query)
-            })
-            .debounce(for: debounceInterval, scheduler: RunLoop.main)
             .sink { [weak self] query in
                 if !query.isEmpty { self?.search(query) } else { self?.clearSearch() }
             }
             .store(in: &cancellables)
-    }
-
-    deinit {
-        searchTask?.cancel()
     }
 
     func retrySearch() {
@@ -502,54 +582,44 @@ final class SearchViewModel: ObservableObject {
         search(query)
     }
 
-    @discardableResult
-    func search(_ query: String) -> Task<Void, Never>? {
+    func search(_ query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
             clearSearch()
-            return nil
+            return
         }
+        searchTask?.cancel()
         queryToken += 1
         let token = queryToken
         results = []
         isSearching = true
         searchErrorMessage = nil
-        searchTask?.cancel()
-        let searchLoader = searchLoader
 
-        let task = Task { [weak self] in
+        searchTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                let songs = try await searchLoader(trimmedQuery, 30)
-                guard !Task.isCancelled, let self else { return }
+                let songs = try await KaraokeAPIClient.searchSongs(query: trimmedQuery, pageSize: 30)
+                guard !Task.isCancelled else { return }
                 applySearchResponse(songs, token: token)
+            } catch is CancellationError {
+                return
             } catch KaraokeAPIClient.APIError.httpStatus(_) {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 applySearchFailure("Search returned an unexpected response. Try again.", token: token)
             } catch KaraokeAPIClient.APIError.decodeFailed {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 applySearchFailure("Search results couldn't be read. Try again.", token: token)
             } catch {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 applySearchFailure("Check your connection and try again.", token: token)
             }
         }
-        searchTask = task
-        return task
-    }
-
-    private func invalidateSearchForQueryEdit(_ query: String) {
-        queryToken += 1
-        searchTask?.cancel()
-        searchTask = nil
-        results = []
-        isSearching = !query.isEmpty
-        searchErrorMessage = nil
     }
 
     private func clearSearch() {
-        queryToken += 1
         searchTask?.cancel()
         searchTask = nil
+        queryToken += 1
         results = []
         isSearching = false
         searchErrorMessage = nil
@@ -557,17 +627,21 @@ final class SearchViewModel: ObservableObject {
 
     private func applySearchResponse(_ loadedSongs: [Song], token: Int) {
         guard queryToken == token else { return }
+        searchTask = nil
         results = loadedSongs
         searchErrorMessage = nil
         isSearching = false
-        searchTask = nil
     }
 
     private func applySearchFailure(_ message: String, token: Int) {
         guard queryToken == token else { return }
+        searchTask = nil
         results = []
         searchErrorMessage = message
         isSearching = false
-        searchTask = nil
+    }
+
+    deinit {
+        searchTask?.cancel()
     }
 }

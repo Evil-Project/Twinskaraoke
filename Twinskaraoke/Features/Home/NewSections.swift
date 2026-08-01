@@ -6,29 +6,41 @@ struct NewFeaturedRail: View {
     let songs: [Song]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
-                if let primary {
-                    NewFeatureCard(
-                        kicker: "Updated Playlist",
-                        title: "New Tracks",
-                        subtitle: primary.displayArtist.isEmpty ? "Twinskaraoke" : primary.displayArtist,
-                        song: primary,
-                        context: songs
-                    )
+        GeometryReader { proxy in
+            let cardWidth = featureCardWidth(for: proxy.size.width)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
+                    if let primary {
+                        NewFeatureCard(
+                            kicker: "Updated Playlist",
+                            title: "New Tracks",
+                            subtitle: primary.displayArtist.isEmpty ? "Twinskaraoke" : primary.displayArtist,
+                            song: primary,
+                            context: songs,
+                            width: cardWidth,
+                            artworkSize: cardWidth * 0.56
+                        )
+                    }
+                    if let secondary {
+                        NewFeatureCard(
+                            kicker: "Featured Release",
+                            title: secondary.title,
+                            subtitle: secondary.displayArtist,
+                            song: secondary,
+                            context: songs,
+                            width: cardWidth,
+                            artworkSize: cardWidth * 0.56
+                        )
+                    }
                 }
-                if let secondary {
-                    NewFeatureCard(
-                        kicker: "Featured Release",
-                        title: secondary.title,
-                        subtitle: secondary.displayArtist,
-                        song: secondary,
-                        context: songs
-                    )
-                }
+                .padding(.horizontal, AM.Spacing.screenMargin)
             }
-            .padding(.horizontal, AM.Spacing.screenMargin)
         }
+        .frame(height: 316)
+    }
+
+    private func featureCardWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(max(availableWidth - AM.Spacing.screenMargin * 2, 300), 420)
     }
 }
 
@@ -38,7 +50,8 @@ private struct NewFeatureCard: View {
     let subtitle: String
     let song: Song
     let context: [Song]
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let width: CGFloat
+    let artworkSize: CGFloat
 
     var body: some View {
         Button {
@@ -54,13 +67,11 @@ private struct NewFeatureCard: View {
                     Text(title)
                         .font(.headline)
                         .foregroundStyle(.primary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
                     Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
                 }
                 ZStack(alignment: .bottomLeading) {
                     RemoteArtworkImage(
@@ -81,14 +92,10 @@ private struct NewFeatureCard: View {
                         .background(.black.opacity(0.32), in: Circle())
                         .padding(10)
                 }
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .frame(width: width, height: artworkSize)
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .containerRelativeFrame(.horizontal) { length, _ in
-            min(max(length - AM.Spacing.screenMargin * 2, 300), 420)
+            .frame(width: width, alignment: .leading)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
         .accessibilityElement(children: .combine)

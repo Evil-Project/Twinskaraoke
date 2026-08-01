@@ -19,12 +19,14 @@ nonisolated enum StorageHost {
 
   private static var isChinaRegion: Bool { resolvedIsChinaRegion }
 
-  private static var resolvedIsChinaRegion: Bool {
+  /// Resolved once per process: the `nk.storageRegion` override is a debug key
+  /// with no in-app settings UI, so a region change requires an app restart.
+  private static let resolvedIsChinaRegion: Bool = {
     if let override = UserDefaults.standard.string(forKey: "nk.storageRegion") {
       return override == "cn"
     }
 
     let region = Locale.current.region?.identifier ?? Locale.current.identifier
     return region.uppercased() == "CN"
-  }
+  }()
 }

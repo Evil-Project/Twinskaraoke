@@ -1,95 +1,71 @@
 import Combine
 import Foundation
 
+/// A search result paired with its playable Song, resolved once per results change
+/// so rows don't re-run toSong() on every body evaluation.
+struct WatchSearchResult: Identifiable {
+    let item: SearchSongItem
+    let song: Song?
+    var id: String { item.id }
+}
+
 @MainActor
 final class SearchViewModel: ObservableObject {
-    typealias SearchLoader = @Sendable (_ query: String, _ pageSize: Int) async throws -> [SearchSongItem]
-
-    @Published var results: [SearchSongItem] = []
+    @Published var results: [SearchSongItem] = [] {
+        didSet {
+            resolvedResults = results.map { WatchSearchResult(item: $0, song: $0.toSong()) }
+            playableSongs = resolvedResults.compactMap(\.song)
+        }
+    }
+    @Published private(set) var resolvedResults: [WatchSearchResult] = []
+    @Published private(set) var playableSongs: [Song] = []
     @Published var isLoading = false
     @Published var searchText = ""
-    @Published private(set) var searchErrorMessage: String?
+    /// Set when the latest query fails so the view can offer a retry instead
+    /// of showing a misleading "no results" state.
+    @Published var loadError: String?
     private var cancellables = Set<AnyCancellable>()
     private var queryToken = 0
-    private var lastRequestedQuery = ""
-    private var searchTask: Task<Void, Never>?
-    private let searchLoader: SearchLoader
 
-    init(
-        searchLoader: @escaping SearchLoader = { query, pageSize in
-            try await KaraokeAPIClient.searchSongItems(query: query, pageSize: pageSize)
-        }
-    ) {
-        self.searchLoader = searchLoader
+    init() {
         $searchText
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .removeDuplicates()
-            .handleEvents(receiveOutput: { [weak self] text in
-                self?.prepareForSearchTextChange(text)
-            })
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .removeDuplicates()
             .sink { [weak self] text in
-                guard !text.isEmpty else { return }
-                self?.performSearch(query: text)
+                if !text.isEmpty {
+                    self?.performSearch(query: text)
+                } else {
+                    self?.queryToken += 1
+                    self?.results = []
+                    self?.isLoading = false
+                    self?.loadError = nil
+                }
             }
             .store(in: &cancellables)
     }
 
-    func submitSearch() {
-        performSearch(query: searchText)
-    }
-
-    func retrySearch() {
-        performSearch(query: searchText, force: true)
-    }
-
-    func performSearch(query: String, force: Bool = false) {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
-            clearSearch()
-            return
-        }
-        let retryingFailedQuery = searchErrorMessage != nil && trimmedQuery == lastRequestedQuery
-        guard force || retryingFailedQuery || trimmedQuery != lastRequestedQuery else { return }
-
+    func performSearch(query: String) {
         queryToken += 1
         let token = queryToken
-        lastRequestedQuery = trimmedQuery
-        searchTask?.cancel()
-        results = []
         isLoading = true
-        searchErrorMessage = nil
-        let searchLoader = searchLoader
-        searchTask = Task { [weak self] in
+        loadError = nil
+        Task { [weak self] in
+            guard let self else { return }
+            defer {
+                // Only the latest query clears the spinner; a stale completion
+                // must not hide the loader while a newer search is in flight.
+                if queryToken == token { isLoading = false }
+            }
             do {
-                let items = try await searchLoader(trimmedQuery, 20)
-                guard let self else { return }
-                guard queryToken == token, !Task.isCancelled else { return }
+                let items = try await KaraokeAPIClient.searchSongItems(query: query, pageSize: 20)
+                guard queryToken == token else { return }
                 results = items
-                isLoading = false
-                searchTask = nil
             } catch {
-                guard let self else { return }
-                guard queryToken == token, !Task.isCancelled else { return }
+                guard queryToken == token else { return }
                 results = []
-                isLoading = false
-                searchErrorMessage = "Search is temporarily unavailable. Check your connection and try again."
-                searchTask = nil
+                loadError = "Check your connection and try again."
             }
         }
-    }
-
-    private func clearSearch() {
-        prepareForSearchTextChange("")
-    }
-
-    private func prepareForSearchTextChange(_ query: String) {
-        queryToken += 1
-        lastRequestedQuery = ""
-        searchTask?.cancel()
-        searchTask = nil
-        results = []
-        isLoading = !query.isEmpty
-        searchErrorMessage = nil
     }
 }

@@ -22,14 +22,6 @@ struct LoginSheet: View {
         hasEnteredCredentials && !auth.isLoading
     }
 
-    private var isPasswordAuthenticationActive: Bool {
-        auth.isLoading && auth.activeAuthenticationMethod == .password
-    }
-
-    private var isDiscordAuthenticationActive: Bool {
-        auth.isLoading && auth.activeAuthenticationMethod == .discord
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -55,11 +47,10 @@ struct LoginSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    GlassXButton(action: cancelAndDismiss)
+                    GlassXButton(action: { dismiss() })
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
-            .interactiveDismissDisabled(auth.isLoading)
             .onChange(of: auth.isLoggedIn) { _, isLoggedIn in
                 if isLoggedIn { dismiss() }
             }
@@ -132,8 +123,7 @@ struct LoginSheet: View {
                     .onSubmit { focus = .password }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .frame(minHeight: 52)
+            .frame(height: 52)
             Divider().padding(.leading, 50)
             HStack(spacing: 12) {
                 Image(systemName: "lock.fill")
@@ -175,8 +165,7 @@ struct LoginSheet: View {
                 .accessibilityValue(showPassword ? "Visible" : "Hidden")
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .frame(minHeight: 52)
+            .frame(height: 52)
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -219,10 +208,9 @@ struct LoginSheet: View {
     private var signInButton: some View {
         Button(action: signIn) {
             ZStack {
-                if isPasswordAuthenticationActive {
+                if auth.isLoading {
                     ProgressView()
                         .controlSize(.regular)
-                        .tint(.white)
                 } else {
                     Text("Sign In")
                         .font(.headline)
@@ -230,16 +218,15 @@ struct LoginSheet: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .frame(minHeight: 50)
+            .frame(height: 50)
             .background(ProfileTheme.gradient)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .opacity(isPasswordAuthenticationActive || canSubmit ? 1 : 0.5)
+            .opacity(hasEnteredCredentials ? 1 : 0.5)
         }
         .disabled(!canSubmit)
         .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78))
-        .accessibilityLabel(isPasswordAuthenticationActive ? "Signing In" : "Sign In")
-        .accessibilityValue(signInAccessibilityValue)
+        .accessibilityLabel(auth.isLoading ? "Signing In" : "Sign In")
+        .accessibilityValue(canSubmit ? "Ready" : "Username and password required")
         .accessibilityHint("Signs in with your Twinskaraoke account.")
     }
 
@@ -259,32 +246,21 @@ struct LoginSheet: View {
             AppHaptic.medium.play()
             Task { await auth.loginWithDiscord() }
         } label: {
-            ZStack {
-                if isDiscordAuthenticationActive {
-                    ProgressView()
-                        .controlSize(.regular)
-                        .tint(.white)
-                } else {
-                    HStack(spacing: 10) {
-                        DiscordIcon(size: 20, color: .white)
-                        Text("Continue with Discord")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                    }
-                }
+            HStack(spacing: 10) {
+                DiscordIcon(size: 20, color: .white)
+                Text("Continue with Discord")
+                    .font(.headline)
+                    .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .frame(minHeight: 50)
+            .frame(height: 50)
             .background(Color(hex: "5865F2"))
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .disabled(auth.isLoading)
-        .opacity(auth.isLoading && !isDiscordAuthenticationActive ? 0.5 : 1)
         .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78))
-        .accessibilityLabel(isDiscordAuthenticationActive ? "Connecting to Discord" : "Continue with Discord")
-        .accessibilityValue(auth.isLoading ? "Sign-in in progress" : "Ready")
+        .accessibilityLabel("Continue with Discord")
+        .accessibilityValue(auth.isLoading ? "Unavailable while signing in" : "Ready")
         .accessibilityHint("Opens Discord sign-in.")
     }
 
@@ -306,21 +282,6 @@ struct LoginSheet: View {
         AppHaptic.medium.play()
         focus = nil
         Task { await auth.login(username: trimmedUsername, password: password) }
-    }
-
-    private func cancelAndDismiss() {
-        auth.cancelAuthentication()
-        dismiss()
-    }
-
-    private var signInAccessibilityValue: String {
-        if isPasswordAuthenticationActive {
-            return "Sign-in in progress"
-        }
-        if auth.isLoading {
-            return "Unavailable while another sign-in method is in progress"
-        }
-        return canSubmit ? "Ready" : "Username and password required"
     }
 
     private var errorTransition: AnyTransition {

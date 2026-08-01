@@ -104,16 +104,15 @@ struct RadioPlayerLayout: View {
     }
 
     private var playStopButton: some View {
-        let isLiveActive = audioManager.isPlaying || audioManager.isBuffering
-        return Button {
+        Button {
             audioManager.togglePlayPause()
         } label: {
             Group {
                 if #available(iOS 17.0, *), !reduceMotion {
-                    Image(systemName: isLiveActive ? "stop.fill" : "play.fill")
+                    Image(systemName: audioManager.isPlaying ? "stop.fill" : "play.fill")
                         .contentTransition(.symbolEffect(.replace))
                 } else {
-                    Image(systemName: isLiveActive ? "stop.fill" : "play.fill")
+                    Image(systemName: audioManager.isPlaying ? "stop.fill" : "play.fill")
                 }
             }
             .font(.largeTitle.bold())
@@ -122,21 +121,20 @@ struct RadioPlayerLayout: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.6, haptic: .medium))
-        .accessibilityLabel(isLiveActive ? "Stop live radio" : "Play live radio")
+        .accessibilityLabel(audioManager.isPlaying ? "Stop live radio" : "Play live radio")
         .accessibilityValue(song.title)
         .accessibilityHint("Controls the live radio stream.")
     }
 
     @ViewBuilder
     private var radioActions: some View {
-        let isLiveActive = audioManager.isPlaying || audioManager.isBuffering
         Button {
             AppHaptic.medium.play()
             audioManager.togglePlayPause()
         } label: {
             Label(
-                isLiveActive ? "Stop Live Radio" : "Play Live Radio",
-                systemImage: isLiveActive ? "stop.fill" : "play.fill"
+                audioManager.isPlaying ? "Stop Live Radio" : "Play Live Radio",
+                systemImage: audioManager.isPlaying ? "stop.fill" : "play.fill"
             )
         }
 

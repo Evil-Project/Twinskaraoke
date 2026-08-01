@@ -246,7 +246,7 @@ struct WatchEmptyState: View {
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
-        .accessibilityValue(message)
+        .accessibilityHint(message)
     }
 }
 

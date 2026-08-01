@@ -3,64 +3,47 @@ import Foundation
 
 @MainActor
 final class PlaylistDetailViewModel: ObservableObject {
-    typealias Loader = @Sendable (_ playlistID: String) async throws -> [Song]
-
     @Published var songs: [Song] = []
     @Published var isLoading = false
-    @Published private(set) var loadErrorMessage: String?
+    /// Set when the initial load fails so the view can offer a retry instead
+    /// of showing a misleading empty state.
+    @Published var loadError: String?
     let playlistID: String
-    private var loadTask: Task<Void, Never>?
-    private var loadGeneration: UInt64 = 0
-    private let loader: Loader
+    /// Songs the caller already had — personal playlists arrive from
+    /// `/api/user/playlists` with their contents inline. Shown immediately so
+    /// the screen is never blank while the network answers, and kept if the
+    /// answer is an empty list, which is what the curated endpoint says about
+    /// a playlist ID it does not know.
+    private let fallbackSongs: [Song]
+    private var hasLoadedRemoteSongs = false
 
-    init(
-        playlistID: String,
-        loader: @escaping Loader = { playlistID in
-            try await KaraokeAPIClient.playlistSongs(id: playlistID)
-        }
-    ) {
+    init(playlistID: String, fallbackSongs: [Song] = []) {
         self.playlistID = playlistID
-        self.loader = loader
+        self.fallbackSongs = fallbackSongs
+        songs = fallbackSongs
     }
 
-    deinit {
-        loadTask?.cancel()
-    }
-
-    func fetchSongs(force: Bool = false) {
-        guard force || (!isLoading && songs.isEmpty) else { return }
-
-        loadGeneration &+= 1
-        let generation = loadGeneration
-        loadTask?.cancel()
+    func fetchSongs() {
+        guard !isLoading, !hasLoadedRemoteSongs else { return }
         isLoading = true
-        loadErrorMessage = nil
-        let loader = loader
-        let playlistID = playlistID
-        loadTask = Task { @MainActor [weak self, loader] in
+        loadError = nil
+        Task { [weak self] in
+            guard let self else { return }
+            defer { isLoading = false }
             do {
-                let songs = try await loader(playlistID)
-                guard let self,
-                      generation == self.loadGeneration,
-                      !Task.isCancelled
-                else { return }
-                self.songs = songs
-                self.loadErrorMessage = nil
+                let loaded = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+                hasLoadedRemoteSongs = true
+                if !loaded.isEmpty || fallbackSongs.isEmpty {
+                    songs = loaded
+                }
             } catch {
-                guard let self,
-                      generation == self.loadGeneration,
-                      !Task.isCancelled
-                else { return }
-                self.songs = []
-                self.loadErrorMessage =
-                    "This playlist is temporarily unavailable. Check your connection and try again."
+                // Only worth saying when there is nothing on screen to say it
+                // over; a personal playlist showing its inline songs does not
+                // need an error about the fetch that would have replaced them.
+                if songs.isEmpty {
+                    loadError = "Check your connection and try again."
+                }
             }
-            guard let self,
-                  generation == self.loadGeneration,
-                  !Task.isCancelled
-            else { return }
-            self.isLoading = false
-            self.loadTask = nil
         }
     }
 }

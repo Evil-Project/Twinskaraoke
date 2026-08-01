@@ -5,28 +5,27 @@ import Foundation
 final class ArtistsViewModel: ObservableObject {
     @Published var artists: [Artist] = []
     @Published var isLoading = false
-    @Published var loadFailed = false
     @Published var canLoadMore = true
+    @Published private(set) var loadFailed = false
     private var page = 0
     private let pageSize = 25
-    private var loadOwnership = LatestLoadOwnershipGate()
+    private var loadGeneration = 0
     private var activeTask: Task<Void, Never>?
-
     func fetchInitial() {
         guard artists.isEmpty, !isLoading else { return }
         page = 0
         canLoadMore = true
-        loadFailed = false
         load(reset: true)
     }
 
-    func refresh() async {
-        cancelActiveLoad()
+    func refresh() {
+        activeTask?.cancel()
+        activeTask = nil
+        loadGeneration += 1
+        isLoading = false
         page = 0
         canLoadMore = true
-        loadFailed = false
-        let task = load(reset: true)
-        await task?.value
+        load(reset: true)
     }
 
     func loadMoreIfNeeded(current: Artist) {
@@ -36,61 +35,53 @@ final class ArtistsViewModel: ObservableObject {
         }
     }
 
-    @discardableResult
-    private func load(reset: Bool) -> Task<Void, Never>? {
-        guard !isLoading else { return nil }
+    private func load(reset: Bool) {
+        guard !isLoading else { return }
         let startIndex = page * pageSize
-        let urlString =
-            "\(StorageHost.api)/api/artists?startIndex=\(startIndex)&pageSize=\(pageSize)&search=&sortBy=Name&sortDescending=False"
-        guard let url = URL(string: urlString) else { return nil }
+        guard let request = try? KaraokeAPIClient.request(
+            path: "/api/artists",
+            queryItems: [
+                URLQueryItem(name: "startIndex", value: String(startIndex)),
+                URLQueryItem(name: "pageSize", value: String(pageSize)),
+                URLQueryItem(name: "search", value: ""),
+                URLQueryItem(name: "sortBy", value: "Name"),
+                URLQueryItem(name: "sortDescending", value: "False"),
+            ]
+        ) else { return }
         isLoading = true
-        let loadToken = loadOwnership.begin()
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        let task = Task { @MainActor [weak self] in
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard !Task.isCancelled else { return }
-                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                self?.applyArtistsResponse(
-                    data,
-                    statusCode: statusCode,
-                    reset: reset,
-                    loadToken: loadToken
-                )
-            } catch {
-                guard !Task.isCancelled else { return }
-                self?.applyArtistsResponse(
-                    nil,
-                    statusCode: nil,
-                    reset: reset,
-                    loadToken: loadToken
-                )
-            }
+        if reset {
+            loadFailed = false
         }
-        activeTask = task
-        return task
+        loadGeneration += 1
+        let generation = loadGeneration
+        activeTask = Task { [weak self] in
+            // KaraokeAPIClient.data throws on non-2xx and posts
+            // .karaokeSessionExpired on 401.
+            let data = try? await KaraokeAPIClient.data(for: request)
+            self?.applyArtistsResponse(data, reset: reset, generation: generation)
+        }
     }
 
     private func applyArtistsResponse(
         _ data: Data?,
-        statusCode: Int?,
         reset: Bool,
-        loadToken: LatestLoadOwnershipGate.Token
+        generation: Int
     ) {
-        guard loadOwnership.finish(loadToken) else { return }
-        activeTask = nil
-        defer { isLoading = false }
+        guard generation == loadGeneration else { return }
+        defer {
+            activeTask = nil
+            isLoading = false
+        }
 
-        guard let statusCode, (200 ... 299).contains(statusCode),
-              let data,
+        guard let data,
               let decoded = try? JSONDecoder().decode([Artist].self, from: data)
         else {
-            loadFailed = reset && artists.isEmpty
+            if reset, artists.isEmpty {
+                loadFailed = true
+            }
             return
         }
 
-        loadFailed = false
         if reset {
             artists = decoded
         } else {
@@ -99,13 +90,6 @@ final class ArtistsViewModel: ObservableObject {
         }
         page += 1
         canLoadMore = decoded.count == pageSize
-    }
-
-    private func cancelActiveLoad() {
-        loadOwnership.cancel()
-        activeTask?.cancel()
-        activeTask = nil
-        isLoading = false
     }
 
     deinit {
@@ -120,41 +104,59 @@ final class ArtistDetailViewModel: ObservableObject {
     @Published private(set) var hasLoadedDetail = false
     @Published var errorMessage: String?
     private var loadedID: String?
-    private var loadOwnership = LatestLoadOwnershipGate()
-    private var loadTask: URLSessionDataTask?
+    private var loadGeneration = 0
+    private var activeTask: Task<Void, Never>?
 
     func load(id: String, fallback: Artist?, force: Bool = false) {
-        if !force, loadedID == id, hasLoadedDetail || isLoading { return }
-        cancelActiveLoad()
+        if !force, loadedID == id, hasLoadedDetail { return }
         if artist == nil || loadedID != id { artist = fallback }
         loadedID = id
+        activeTask?.cancel()
+        activeTask = nil
+        loadGeneration += 1
+        let generation = loadGeneration
         hasLoadedDetail = false
         errorMessage = nil
-        guard let url = URL(string: "\(StorageHost.api)/api/artist/\(id)") else { return }
+        guard let request = try? KaraokeAPIClient.request(
+            pathSegments: ["api", "artist", id]
+        ) else {
+            isLoading = false
+            errorMessage = "The artist could not be loaded right now."
+            return
+        }
         isLoading = true
-        let loadToken = loadOwnership.begin()
-        var request = URLRequest(url: url)
-        GuestIdentity.applyIfNeeded(to: &request)
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            Task { @MainActor [weak self, data, id, loadToken] in
-                self?.applyArtistDetailResponse(data, id: id, loadToken: loadToken)
+        activeTask = Task { [weak self] in
+            do {
+                let data = try await KaraokeAPIClient.data(for: request)
+                self?.applyArtistDetailResponse(data, error: nil, id: id, generation: generation)
+            } catch let error as URLError {
+                self?.applyArtistDetailResponse(nil, error: error, id: id, generation: generation)
+            } catch {
+                // Non-2xx and other API failures map to the generic load error.
+                self?.applyArtistDetailResponse(nil, error: nil, id: id, generation: generation)
             }
         }
-        loadTask = task
-        task.resume()
     }
 
     private func applyArtistDetailResponse(
         _ data: Data?,
+        error: Error?,
         id: String,
-        loadToken: LatestLoadOwnershipGate.Token
+        generation: Int
     ) {
-        guard loadedID == id, loadOwnership.finish(loadToken) else { return }
-        loadTask = nil
-        defer { isLoading = false }
+        guard loadedID == id, generation == loadGeneration else { return }
+        defer {
+            activeTask = nil
+            isLoading = false
+        }
 
-        guard let data else {
+        guard error == nil else {
             errorMessage = "Check your connection and try again."
+            return
+        }
+        guard let data
+        else {
+            errorMessage = "The artist could not be loaded right now."
             return
         }
 
@@ -168,14 +170,7 @@ final class ArtistDetailViewModel: ObservableObject {
         errorMessage = nil
     }
 
-    private func cancelActiveLoad() {
-        loadOwnership.cancel()
-        loadTask?.cancel()
-        loadTask = nil
-        isLoading = false
-    }
-
     deinit {
-        loadTask?.cancel()
+        activeTask?.cancel()
     }
 }

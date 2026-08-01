@@ -3,44 +3,45 @@ import Foundation
 
 @MainActor
 final class LibrarySongsViewModel: ObservableObject {
-    struct PageResponse: Sendable {
-        let data: Data
-        let statusCode: Int
+    @Published var songs: [Song] = [] {
+        didSet { songsGeneration &+= 1 }
     }
-
-    typealias PageLoader = @Sendable (URLRequest) async throws -> PageResponse
-
-    @Published var songs: [Song] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
     @Published var sort: LibrarySongSort = .recentlyAdded {
         didSet { rebuildDisplayedSongs() }
     }
-    @Published var searchText = "" {
-        didSet { rebuildDisplayedSongs() }
-    }
+    @Published var searchText = ""
     @Published private(set) var displayedSongs: [Song] = []
+    @Published private(set) var loadFailed = false
     private var hasLoaded = false
     private var canLoadMore = true
     private var page = 1
-    private var loadOwnership = LatestLoadOwnershipGate()
+    private var requestToken = 0
+    private var isReplacing = false
     private var activeTask: Task<Void, Never>?
-    private let pageLoader: PageLoader
+    private var cancellables = Set<AnyCancellable>()
+    private var songsGeneration: UInt64 = 0
+    private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
     private let pageSize = 40
 
-    init(
-        pageLoader: @escaping PageLoader = { request in
-            let (data, response) = try await URLSession.shared.data(for: request)
-            return PageResponse(
-                data: data,
-                statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0
-            )
-        }
-    ) {
-        self.pageLoader = pageLoader
+    init() {
+        $searchText
+            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.rebuildDisplayedSongs() }
+            .store(in: &cancellables)
     }
 
-    private func rebuildDisplayedSongs() {
+    // Sorting is the expensive half of a rebuild; cache it per (sort, songs)
+    // so search keystrokes only pay for the filter pass.
+    private var sortedSongs: [Song] {
+        if let sortCache,
+           sortCache.sort == sort,
+           sortCache.generation == songsGeneration
+        {
+            return sortCache.songs
+        }
         let sorted: [Song] = switch sort {
         case .recentlyAdded:
             songs
@@ -53,6 +54,12 @@ final class LibrarySongsViewModel: ObservableObject {
         case .duration:
             songs.sorted { $0.duration < $1.duration }
         }
+        sortCache = (sort, songsGeneration, sorted)
+        return sorted
+    }
+
+    private func rebuildDisplayedSongs() {
+        let sorted = sortedSongs
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -60,9 +67,9 @@ final class LibrarySongsViewModel: ObservableObject {
             return
         }
         displayedSongs = sorted.filter { song in
-            song.title.localizedStandardContains(query)
-                || song.displayArtist.localizedStandardContains(query)
-                || song.displayTitle.localizedStandardContains(query)
+            song.title.localizedCaseInsensitiveContains(query)
+                || song.displayArtist.localizedCaseInsensitiveContains(query)
+                || song.displayTitle.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -71,17 +78,19 @@ final class LibrarySongsViewModel: ObservableObject {
         fetch(page: 1, replace: true)
     }
 
-    func refresh() async {
-        cancelActiveLoad()
+    func refresh() {
+        activeTask?.cancel()
+        activeTask = nil
+        requestToken += 1
+        isLoading = false
+        isLoadingMore = false
         hasLoaded = false
         canLoadMore = true
-        page = 1
-        let task = fetch(page: 1, replace: true)
-        await task?.value
+        fetch(page: 1, replace: true)
     }
 
     func loadMoreIfNeeded(current: Song) {
-        guard canLoadMore, !isLoading, !isLoadingMore else { return }
+        guard canLoadMore, !isLoading, !isLoadingMore, !isReplacing else { return }
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let visible = displayedSongs
         guard let index = visible.firstIndex(where: { $0.id == current.id }) else { return }
@@ -90,19 +99,21 @@ final class LibrarySongsViewModel: ObservableObject {
     }
 
     func loadMore() {
-        guard canLoadMore, !isLoading, !isLoadingMore else { return }
+        guard canLoadMore, !isLoading, !isLoadingMore, !isReplacing else { return }
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         fetch(page: page + 1, replace: false)
     }
 
-    @discardableResult
-    private func fetch(page: Int, replace: Bool) -> Task<Void, Never>? {
-        guard canLoadMore || replace else { return nil }
-        guard !isLoading, !isLoadingMore else { return nil }
-        guard let url = URL(string: "\(StorageHost.api)/api/songs") else { return nil }
+    private func fetch(page: Int, replace: Bool) {
+        guard canLoadMore || replace else { return }
+        guard !isLoading, !isLoadingMore else { return }
+        guard let url = URL(string: "\(StorageHost.api)/api/songs") else { return }
 
-        let loadToken = loadOwnership.begin()
+        requestToken += 1
+        let token = requestToken
         if replace {
+            loadFailed = false
+            isReplacing = true
             isLoading = songs.isEmpty
         } else {
             isLoadingMore = true
@@ -112,7 +123,7 @@ final class LibrarySongsViewModel: ObservableObject {
         request.httpMethod = "POST"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = UserDefaults.standard.string(forKey: "nk.token") {
+        if let token = CredentialStore.token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         GuestIdentity.applyIfNeeded(to: &request)
@@ -124,61 +135,54 @@ final class LibrarySongsViewModel: ObservableObject {
             "sortDescending": true,
         ])
 
-        let pageLoader = pageLoader
-        let task = Task { @MainActor [weak self, pageLoader] in
+        // Routed through KaraokeAPIClient.data so 401s trigger the
+        // session-expired flow and transient failures get retried.
+        activeTask = Task { [weak self] in
             do {
-                let response = try await pageLoader(request)
-                guard !Task.isCancelled else { return }
-                self?.applyResponse(
-                    response,
-                    error: nil,
-                    page: page,
-                    replace: replace,
-                    loadToken: loadToken
+                let data = try await KaraokeAPIClient.data(
+                    for: request,
+                    retriesNonIdempotentRequest: true
                 )
+                self?.applyResponse(data, error: nil, page: page, replace: replace, token: token)
             } catch {
-                guard !Task.isCancelled else { return }
-                self?.applyResponse(
-                    nil,
-                    error: error,
-                    page: page,
-                    replace: replace,
-                    loadToken: loadToken
-                )
+                self?.applyResponse(nil, error: error, page: page, replace: replace, token: token)
             }
         }
-        activeTask = task
-        return task
     }
 
     private func applyResponse(
-        _ response: PageResponse?,
+        _ data: Data?,
         error: Error?,
         page: Int,
         replace: Bool,
-        loadToken: LatestLoadOwnershipGate.Token
+        token: Int
     ) {
-        guard loadOwnership.finish(loadToken) else { return }
-        activeTask = nil
+        guard token == requestToken else { return }
         defer {
+            activeTask = nil
             isLoading = false
             isLoadingMore = false
+            if replace { isReplacing = false }
         }
 
         if let error {
+            guard (error as? URLError)?.code != .cancelled, !(error is CancellationError) else { return }
             DebugLogger.log("Library songs fetch failed: \(error.localizedDescription)", category: .network)
-            return
-        }
-        guard let response else {
-            DebugLogger.log("Library songs returned no response", category: .network)
-            return
-        }
-        guard (200 ... 299).contains(response.statusCode) else {
-            DebugLogger.log("Library songs HTTP \(response.statusCode)", category: .network)
+            if replace, songs.isEmpty {
+                hasLoaded = true
+                loadFailed = true
+            }
             return
         }
 
-        let decoded = Self.decodeSongs(from: response.data)
+        guard let decoded = Self.decodeSongs(from: data) else {
+            DebugLogger.log("Library songs decode failed", category: .network)
+            if replace, songs.isEmpty {
+                hasLoaded = true
+                loadFailed = true
+            }
+            return
+        }
         let filtered = decoded.filter {
             !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
         }
@@ -193,7 +197,9 @@ final class LibrarySongsViewModel: ObservableObject {
         }
         rebuildDisplayedSongs()
 
-        canLoadMore = pageSongs.count == pageSize
+        // The server paginates on the unfiltered count; using the filtered
+        // pageSongs here would stop infinite scroll on a page with filtered items.
+        canLoadMore = decoded.count == pageSize
         if !pageSongs.isEmpty || replace {
             self.page = page
         }
@@ -205,23 +211,15 @@ final class LibrarySongsViewModel: ObservableObject {
         )
     }
 
-    private func cancelActiveLoad() {
-        loadOwnership.cancel()
-        activeTask?.cancel()
-        activeTask = nil
-        isLoading = false
-        isLoadingMore = false
+    private static func decodeSongs(from data: Data?) -> [Song]? {
+        guard let data else { return nil }
+        if let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data) {
+            return decoded.items
+        }
+        return SongPayloadDecoder.decodeSongs(from: data)
     }
 
     deinit {
         activeTask?.cancel()
-    }
-
-    private static func decodeSongs(from data: Data?) -> [Song] {
-        guard let data else { return [] }
-        if let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data) {
-            return decoded.items
-        }
-        return SongPayloadDecoder.decodeSongs(from: data) ?? []
     }
 }

@@ -6,14 +6,16 @@ import SwiftUI
     import UIKit
 #endif
 
-// MARK: - Playback State
-
 @MainActor
 private final class PopupPlaybackState: ObservableObject {
     static let shared = PopupPlaybackState()
 
     var hasCurrentSong: Bool {
         snapshot.id != nil
+    }
+
+    var id: String {
+        snapshot.id ?? "now-playing"
     }
 
     var title: String {
@@ -29,7 +31,7 @@ private final class PopupPlaybackState: ObservableObject {
     }
 
     var isPlaying: Bool {
-        snapshot.isPlaying || (snapshot.isRadioMode && snapshot.isBuffering)
+        snapshot.isPlaying
     }
 
     var isRadioMode: Bool {
@@ -76,15 +78,6 @@ private final class PopupPlaybackState: ObservableObject {
             }
             .store(in: &cancellables)
 
-        manager.$isBuffering
-            .removeDuplicates()
-            .sink { [weak self] isBuffering in
-                self?.updatePendingSnapshot { snapshot in
-                    snapshot.isBuffering = isBuffering
-                }
-            }
-            .store(in: &cancellables)
-
         manager.$isRadioMode
             .removeDuplicates()
             .sink { [weak self] isRadioMode in
@@ -120,7 +113,6 @@ private struct PopupPlaybackSnapshot {
     var subtitle = ""
     var artwork: UIImage?
     var isPlaying = false
-    var isBuffering = false
     var isRadioMode = false
 
     func matches(_ other: PopupPlaybackSnapshot) -> Bool {
@@ -129,12 +121,9 @@ private struct PopupPlaybackSnapshot {
             && subtitle == other.subtitle
             && artwork === other.artwork
             && isPlaying == other.isPlaying
-            && isBuffering == other.isBuffering
             && isRadioMode == other.isRadioMode
     }
 }
-
-// MARK: - Root Views
 
 struct ContentView: View {
     var body: some View {
@@ -145,17 +134,20 @@ struct ContentView: View {
 
 private struct PopupHostView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @StateObject private var searchState = SearchRootState()
-    @State private var selectedSection: RootSection? = RootSection.launchSelection
-    @State private var shellMode: RootShellMode?
-    @State private var shellTransitionGeneration = 0
+    @Environment(\.appReduceMotion) private var reduceMotion
+    @StateObject private var homeViewModel = HomeViewModel()
+    @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
+
+    init() {
+        _selectedSection = State(initialValue: Self.initialSection)
+    }
 
     var body: some View {
         rootShell
+            .environmentObject(homeViewModel)
             .modifier(PopupModifier())
             .onAppear {
-                searchState.isSelected = currentSection == .search
                 configureTabBarAppearance()
                 if DeveloperMode.shouldTriggerEasterEgg() {
                     showCaptcha = true
@@ -172,96 +164,98 @@ private struct PopupHostView: View {
 
     private var rootShell: some View {
         GeometryReader { proxy in
-            let desiredMode = rootShellMode(availableWidth: proxy.size.width)
-            let activeMode = shellMode ?? desiredMode
-            ZStack(alignment: .leading) {
-                rootTabs
-                    .padding(.leading, activeMode == .sidebar ? 321 : 0)
-                    .toolbar(activeMode == .sidebar ? .hidden : .visible, for: .tabBar)
-
-                if activeMode == .sidebar {
-                    sidebar
-                        .transition(.identity)
+            Group {
+                if usesSidebarShell(availableWidth: proxy.size.width) {
+                    sidebarShell
+                } else {
+                    rootTabs
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onAppear {
-                shellMode = desiredMode
-            }
-            .onChange(of: desiredMode) { _, newMode in
-                transitionShell(to: newMode)
-            }
         }
     }
 
-    private func rootShellMode(availableWidth: CGFloat) -> RootShellMode {
+    private func usesSidebarShell(availableWidth: CGFloat) -> Bool {
         guard AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
             availableWidth: availableWidth
-        ) else { return .tabs }
+        ) else { return false }
         #if canImport(UIKit)
             let idiom = UIDevice.current.userInterfaceIdiom
-            return idiom == .pad || idiom == .mac ? .sidebar : .tabs
+            return idiom == .pad || idiom == .mac
         #else
-            return .sidebar
+            return true
         #endif
     }
 
     private var rootTabs: some View {
-        RootSectionTabs(selection: selectedTabBinding, searchState: searchState)
-            .tint(.appAccent)
+        TabView(selection: selectedTabBinding) {
+            HomeView()
+                .tabItem { Label(RootSection.home.title, systemImage: RootSection.home.selectedSystemImage) }
+                .tag(RootSection.home)
+            NewView()
+                .tabItem { Label(RootSection.new.title, systemImage: RootSection.new.selectedSystemImage) }
+                .tag(RootSection.new)
+            RadioView()
+                .tabItem { Label(RootSection.radio.title, systemImage: RootSection.radio.selectedSystemImage) }
+                .tag(RootSection.radio)
+            LibraryView()
+                .tabItem { Label(RootSection.library.title, systemImage: RootSection.library.selectedSystemImage) }
+                .tag(RootSection.library)
+            SearchView()
+                .tabItem { Label(RootSection.search.title, systemImage: RootSection.search.selectedSystemImage) }
+                .tag(RootSection.search)
+        }
+        .tint(.appAccent)
     }
 
-    private var sidebar: some View {
-        HStack(spacing: 0) {
-            NavigationStack {
-                List(selection: sidebarSelectionBinding) {
-                    ForEach(RootSectionGroup.allCases) { group in
-                        Section(group.title) {
-                            ForEach(group.sections) { section in
-                                Button {
-                                    selectSection(section)
-                                } label: {
-                                    SidebarSectionRow(section: section, isSelected: currentSection == section)
-                                }
-                                .buttonStyle(.plain)
-                                .tag(Optional(section))
+    private var sidebarShell: some View {
+        NavigationSplitView {
+            List(selection: $selectedSection) {
+                ForEach(RootSectionGroup.allCases) { group in
+                    Section(group.title) {
+                        ForEach(group.sections) { section in
+                            SidebarSectionRow(section: section, isSelected: currentSection == section)
+                                // `List(selection: Binding<RootSection?>)` matches rows by a tag
+                                // whose type is RootSection — a `RootSection?` tag never matches,
+                                // leaving every row unselectable (taps highlight, nothing happens).
+                                .tag(section)
                                 .accessibilityIdentifier(section.sidebarAccessibilityIdentifier)
-                            }
                         }
                     }
                 }
-                .listStyle(.sidebar)
-                .navigationTitle("Twinskaraoke")
-                .navigationBarTitleDisplayMode(.inline)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    SidebarNowPlayingHint()
-                }
             }
-            .frame(width: 320)
-
-            Divider()
+            .listStyle(.sidebar)
+            .navigationTitle("Twinskaraoke")
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                SidebarNowPlayingHint()
+            }
+        } detail: {
+            currentSection.content
+                .id(currentSection)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
         }
-        .frame(width: 321)
-        .frame(maxHeight: .infinity)
-        .background(Color.appBackground)
+        .navigationSplitViewStyle(.balanced)
         .tint(.appAccent)
+        .animation(shellAnimation, value: currentSection)
+        .onChange(of: selectedSection) { _, newValue in
+            if newValue == nil {
+                selectedSection = .home
+            } else {
+                AppHaptic.selection.play()
+            }
+        }
     }
 
     private var selectedTabBinding: Binding<RootSection> {
         Binding(
             get: { currentSection },
             set: { newSection in
-                selectSection(newSection)
-            }
-        )
-    }
-
-    private var sidebarSelectionBinding: Binding<RootSection?> {
-        Binding(
-            get: { selectedSection },
-            set: { newSection in
-                selectSection(newSection ?? .home)
+                if selectedSection != newSection {
+                    AppHaptic.selection.play()
+                }
+                selectedSection = newSection
             }
         )
     }
@@ -270,27 +264,8 @@ private struct PopupHostView: View {
         selectedSection ?? .home
     }
 
-    private func selectSection(_ section: RootSection) {
-        if currentSection != section {
-            AppHaptic.selection.play()
-        }
-        searchState.isSelected = section == .search
-        selectedSection = section
-    }
-
-    private func transitionShell(to newMode: RootShellMode) {
-        guard shellMode != newMode else { return }
-        shellTransitionGeneration += 1
-        let generation = shellTransitionGeneration
-        searchState.isShellTransitioning = true
-        shellMode = newMode
-
-        Task { @MainActor in
-            await Task.yield()
-            await Task.yield()
-            guard shellTransitionGeneration == generation else { return }
-            searchState.isShellTransitioning = false
-        }
+    private var shellAnimation: Animation? {
+        reduceMotion ? nil : AppMotion.snap
     }
 
     private func configureTabBarAppearance() {
@@ -306,52 +281,17 @@ private struct PopupHostView: View {
         #endif
     }
 
-}
-
-private enum RootShellMode: Equatable {
-    case tabs
-    case sidebar
-}
-
-private struct RootSectionTabs: View {
-    @Binding var selection: RootSection
-    @ObservedObject var searchState: SearchRootState
-
-    var body: some View {
-        TabView(selection: $selection) {
-            ForEach(RootSection.allCases) { section in
-                RootSectionDestination(section: section, searchState: searchState)
-                    .tabItem {
-                        Label(section.title, systemImage: section.selectedSystemImage)
-                    }
-                    .tag(section)
-            }
+    private static var initialSection: RootSection {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flagIndex = arguments.firstIndex(of: "-UITestInitialSection"),
+              arguments.indices.contains(flagIndex + 1),
+              let section = RootSection(rawValue: arguments[flagIndex + 1].lowercased())
+        else {
+            return .home
         }
+        return section
     }
 }
-
-private struct RootSectionDestination: View {
-    let section: RootSection
-    @ObservedObject var searchState: SearchRootState
-
-    @ViewBuilder
-    var body: some View {
-        switch section {
-        case .home:
-            HomeView()
-        case .new:
-            NewView()
-        case .radio:
-            RadioView()
-        case .library:
-            LibraryView()
-        case .search:
-            SearchView(state: searchState)
-        }
-    }
-}
-
-// MARK: - App Navigation Enums
 
 private enum RootSection: String, CaseIterable, Identifiable {
     case home
@@ -398,18 +338,20 @@ private enum RootSection: String, CaseIterable, Identifiable {
         }
     }
 
-}
-
-private extension RootSection {
-    static var launchSelection: RootSection {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard let flagIndex = arguments.firstIndex(of: "-UITestInitialSection"),
-              arguments.indices.contains(flagIndex + 1),
-              let section = RootSection(rawValue: arguments[flagIndex + 1].lowercased())
-        else {
-            return .home
+    @ViewBuilder
+    var content: some View {
+        switch self {
+        case .home:
+            HomeView()
+        case .new:
+            NewView()
+        case .radio:
+            RadioView()
+        case .library:
+            LibraryView()
+        case .search:
+            SearchView()
         }
-        return section
     }
 }
 
@@ -436,8 +378,6 @@ private enum RootSectionGroup: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Sidebar Helper Views
-
 private struct SidebarSectionRow: View {
     let section: RootSection
     let isSelected: Bool
@@ -458,8 +398,6 @@ private struct SidebarSectionRow: View {
             .accessibilityHidden(true)
         }
         .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(section.title)
     }
@@ -502,8 +440,10 @@ private struct SidebarNowPlayingHint: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Now Playing")
                 .accessibilityValue(popupState.subtitle.isEmpty ? popupState.title : "\(popupState.title), \(popupState.subtitle)")
+                .transition(.opacity)
             }
         }
+        .animation(AppMotion.quick, value: popupState.hasCurrentSong)
     }
 
     @ViewBuilder
@@ -538,140 +478,48 @@ private extension RootSection {
     }
 }
 
-// MARK: - LNPopupUI Modifiers & iOS 27 Fallback
-
-private enum SystemCompatibility {
-    static var isIOS27OrNewer: Bool {
-        guard #available(iOS 27, *) else { return false }
-        return true
-    }
-}
-
 private struct PopupModifier: ViewModifier {
     @ObservedObject private var popupState = PopupPlaybackState.shared
     @ObservedObject private var presentationState = PopupPresentationState.shared
 
     func body(content: Content) -> some View {
-        Group {
-            if SystemCompatibility.isIOS27OrNewer {
-                // iOS 27 Beta Safe Fallback Layout
-                content
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if popupState.hasCurrentSong {
-                            iOS27FallbackMiniPlayer
-                                .padding(.horizontal, 10)
-                                .padding(.bottom, 8)
-                        }
-                    }
-                    .sheet(isPresented: Binding(
-                        get: { presentationState.isExpanded },
-                        set: { presentationState.setExpanded($0) }
-                    )) {
-                        FullScreenPlayerView()
-                            .environmentObject(AudioPlayerManager.shared)
-                    }
-            } else {
-                // Stable LNPopupUI Native Layout
-                content
-                    .popup(
-                        isBarPresented: .constant(popupState.hasCurrentSong),
-                        isPopupOpen: Binding(
-                            get: { presentationState.isExpanded },
-                            set: { isOpen in
-                                if isOpen {
-                                    #if canImport(UIKit)
-                                        let isIntentionalOpen =
-                                            presentationState.isExpanded || PopupOpenIntentGate.shared.consumeIntent()
-                                        guard isIntentionalOpen else {
-                                            presentationState.collapse()
-                                            return
-                                        }
-                                    #endif
+        content
+            .popup(
+                isBarPresented: .constant(popupState.hasCurrentSong),
+                isPopupOpen: Binding(
+                    get: { presentationState.isExpanded },
+                    set: { isOpen in
+                        if isOpen {
+                            #if canImport(UIKit)
+                                let isIntentionalOpen =
+                                    presentationState.isExpanded || PopupOpenIntentGate.shared.consumeIntent()
+                                guard isIntentionalOpen else {
+                                    presentationState.collapse()
+                                    return
                                 }
-                                presentationState.setExpanded(isOpen)
-                            }
-                        )
-                    ) {
-                        PopupContent(popupState: popupState)
-                    }
-                    .popupBarStyle(.floating)
-                    .popupBarProgressViewStyle(.none)
-                    .popupCloseButtonStyle(.none)
-                    .popupInteractionStyle(.drag)
-                    .popupBarMarqueeScrollEnabled(false)
-                    .popupBarCustomizer { popupBar in
-                        popupBar.accessibilityIdentifier = "MiniPlayerBar"
-                        popupBar.accessibilityLabel = "Now Playing"
-                        popupBar.accessibilityHint = "Opens the full-screen player."
-                        PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
-                    }
-            }
-        }
-    }
-
-    // Custom iOS 27 Fallback Mini Player (Styled exactly like the original floating player)
-    @ViewBuilder
-    private var iOS27FallbackMiniPlayer: some View {
-        HStack(spacing: 12) {
-            Button {
-                presentationState.setExpanded(true)
-            } label: {
-                HStack(spacing: 12) {
-                    if let artwork = popupState.artwork {
-                        Image(uiImage: artwork)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-                    } else {
-                        MusicArtworkPlaceholder(cornerRadius: 6)
-                            .frame(width: 44, height: 44)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(popupState.title)
-                            .font(.headline)
-                            .lineLimit(1)
-                        if !popupState.subtitle.isEmpty {
-                            Text(popupState.subtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                            #endif
                         }
+                        presentationState.setExpanded(isOpen)
                     }
-
-                    Spacer(minLength: 0)
-                }
+                )
+            ) {
+                PopupContent(popupState: popupState)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Now Playing")
-            .accessibilityValue(
-                popupState.subtitle.isEmpty
-                    ? popupState.title
-                    : "\(popupState.title), \(popupState.subtitle)"
-            )
-            .accessibilityHint("Opens the full-screen player.")
+            .popupBarStyle(.floating)
+            .popupBarProgressViewStyle(.none)
+            .popupCloseButtonStyle(.none)
+            .popupInteractionStyle(.drag)
+            .popupBarMarqueeScrollEnabled(false)
+            .popupBarCustomizer { popupBar in
+                popupBar.accessibilityIdentifier = "MiniPlayerBar"
+                popupBar.accessibilityLabel = "Now Playing"
+                popupBar.accessibilityHint = "Opens the full-screen player."
 
-            PopupBarTrailingItems(
-                isPlaying: popupState.isPlaying,
-                isRadioMode: popupState.isRadioMode,
-                onTogglePlayPause: {
-                    AudioPlayerManager.shared.togglePlayPause()
-                },
-                onNext: {
-                    AudioPlayerManager.shared.playNextOrRandom()
-                }
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        // Replicate the floating LNPopupUI pill style
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
-        )
+                PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
+                #if canImport(UIKit)
+                    ShimejiMiniPlayerTracker.shared.register(popupBar)
+                #endif
+            }
     }
 }
 
@@ -685,53 +533,40 @@ private struct PopupContent: View {
     var body: some View {
         FullScreenPlayerView()
             .environmentObject(AudioPlayerManager.shared)
-            .modifier(
-                PopupTitleModifier(
-                    title: popupState.title,
-                    subtitle: popupState.subtitle
-                )
-            )
-            .modifier(PopupImageModifier(artwork: popupState.artwork))
-            .popupBarButtons {
-                PopupBarTrailingItems(
-                    isPlaying: popupState.isPlaying,
-                    isRadioMode: popupState.isRadioMode,
-                    onTogglePlayPause: {
-                        #if canImport(UIKit)
-                            PopupOpenIntentGate.shared.suppressNextOpen()
-                        #endif
-                        AudioPlayerManager.shared.togglePlayPause()
-                    },
-                    onNext: {
-                        #if canImport(UIKit)
-                            PopupOpenIntentGate.shared.suppressNextOpen()
-                        #endif
-                        AudioPlayerManager.shared.playNextOrRandom()
+            .popupItem {
+                PopupItem(
+                    id: popupState.id,
+                    verbatimTitle: popupState.title,
+                    verbatimSubtitle: popupState.subtitle.isEmpty ? nil : popupState.subtitle,
+                    image: popupImage
+                ) {
+                    ToolbarItemGroup(placement: .popupBar) {
+                        PopupBarTrailingItems(
+                            isPlaying: popupState.isPlaying,
+                            isRadioMode: popupState.isRadioMode,
+                            onTogglePlayPause: {
+                                #if canImport(UIKit)
+                                    PopupOpenIntentGate.shared.suppressNextOpen()
+                                #endif
+                                AudioPlayerManager.shared.togglePlayPause()
+                            },
+                            onNext: {
+                                #if canImport(UIKit)
+                                    PopupOpenIntentGate.shared.suppressNextOpen()
+                                #endif
+                                AudioPlayerManager.shared.playNextOrRandom()
+                            }
+                        )
                     }
-                )
+                }
             }
     }
-}
 
-private struct PopupTitleModifier: ViewModifier, Equatable {
-    let title: String
-    let subtitle: String
-    func body(content: Content) -> some View {
-        content.popupTitle(title, subtitle: subtitle)
-    }
-}
-
-private struct PopupImageModifier: ViewModifier, Equatable {
-    let artwork: UIImage?
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.artwork === rhs.artwork
-    }
-
-    func body(content: Content) -> some View {
-        if let artwork {
-            content.popupImage(Image(uiImage: artwork))
+    private var popupImage: Image {
+        if let artwork = popupState.artwork {
+            Image(uiImage: artwork)
         } else {
-            content.popupImage(Image(systemName: "music.note"))
+            Image(systemName: "music.note")
         }
     }
 }

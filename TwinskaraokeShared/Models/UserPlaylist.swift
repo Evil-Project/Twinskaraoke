@@ -1,6 +1,6 @@
 import Foundation
 
-struct UserPlaylist: Codable, Identifiable, Hashable, Sendable {
+struct UserPlaylist: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let description: String?
@@ -52,7 +52,7 @@ struct UserPlaylist: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-struct UserPlaylistMedia: Codable, Sendable {
+struct UserPlaylistMedia: Codable {
     let id: String?
     let fileName: String?
     let contentType: String?

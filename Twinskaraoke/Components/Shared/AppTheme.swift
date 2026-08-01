@@ -241,7 +241,6 @@ enum AM {
         static let wideContentMaxWidth: CGFloat = 1180
         static let wideRailMaxWidth: CGFloat = 740
         static let wideInspectorWidth: CGFloat = 340
-        static let wideCanvasMinimumWidth: CGFloat = 1040
 
         static func usesWideCanvas(
             horizontalSizeClass: UserInterfaceSizeClass?,
@@ -254,7 +253,7 @@ enum AM {
                 }
             #endif
             guard let availableWidth else { return false }
-            return availableWidth >= wideCanvasMinimumWidth
+            return availableWidth >= 1050
         }
 
         static func shelfTileWidth(for availableWidth: CGFloat, compact: Bool = false) -> CGFloat {
@@ -656,7 +655,6 @@ struct AMSectionHeader<Destination: View>: View {
             Spacer()
         }
         .padding(.top, 2)
-        .frame(minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
     }
 }

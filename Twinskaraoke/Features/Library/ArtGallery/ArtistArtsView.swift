@@ -40,7 +40,9 @@ struct ArtistArtsView: View {
 
                     LazyVGrid(columns: cols, spacing: 8) {
                         ForEach(arts) { art in
-                            NavigationLink(value: LibraryDestination.artwork(art, artist: artist)) {
+                            NavigationLink {
+                                ArtDetailView(art: art, artist: artist)
+                            } label: {
                                 ArtThumbnail(art: art)
                             }
                             .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))

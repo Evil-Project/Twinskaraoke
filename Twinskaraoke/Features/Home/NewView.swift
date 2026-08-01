@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct NewView: View {
-    @StateObject var viewModel = HomeViewModel()
-    @StateObject private var recentlyPlayed = RecentlyPlayedStore.shared
+    @EnvironmentObject var viewModel: HomeViewModel
+    @ObservedObject private var recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
+    @State private var artworkPrefetchTracker = ArtworkPrefetchTracker()
 
     private var loadingAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.spring(response: 0.38, dampingFraction: 0.84)
+        reduceMotion ? nil : AppMotion.standard
     }
 
     var body: some View {
@@ -15,15 +16,9 @@ struct NewView: View {
             GeometryReader { proxy in
                 ScrollView {
                     Group {
-                        if viewModel.isLoading, !viewModel.hasNewVisibleContent {
+                        if viewModel.isLoading {
                             NewSkeletonView()
                                 .transition(.opacity)
-                        } else if !viewModel.hasNewVisibleContent,
-                                  let message = viewModel.newLoadErrorMessage {
-                            NewLoadFailureView(message: message) {
-                                viewModel.fetchHomeData(force: true)
-                            }
-                            .transition(.opacity)
                         } else {
                             newOverview(availableWidth: proxy.size.width)
                                 .transition(.opacity)
@@ -44,13 +39,17 @@ struct NewView: View {
                     AccountToolbarButton()
                 }
             }
-            .refreshable { await viewModel.refresh() }
-            .onChange(of: viewModel.isLoading) { _, isLoading in
-                guard !isLoading else { return }
-                prefetchVisibleArtwork()
+            .refreshable { await viewModel.refreshHomeData() }
+            .onChange(of: artworkPrefetchSignature) { _, _ in
+                prefetchVisibleArtworkIfNeeded()
             }
             .onAppear {
-                prefetchVisibleArtwork()
+                prefetchVisibleArtworkIfNeeded()
+            }
+            .onDisappear {
+                artworkPrefetchTracker.reset()
+                ArtworkPrefetcher.shared.cancel(reason: "new songs")
+                ArtworkPrefetcher.shared.cancel(reason: "new playlists")
             }
         }
     }
@@ -98,7 +97,7 @@ struct NewView: View {
             }
 
             if !viewModel.trending.isEmpty {
-                NewSongRail(title: "Trending Songs", songs: viewModel.trending)
+                NewSongRail(title: "More to Explore", songs: viewModel.trending)
             }
         }
     }
@@ -139,7 +138,7 @@ struct NewView: View {
                     }
 
                     if !viewModel.trending.isEmpty {
-                        NewSongRail(title: "Trending Songs", songs: viewModel.trending)
+                        NewSongRail(title: "More to Explore", songs: viewModel.trending)
                     }
                 }
                 .frame(minWidth: 520, maxWidth: .infinity, alignment: .topLeading)
@@ -164,30 +163,32 @@ struct NewView: View {
         .accessibilityIdentifier("New.WideOverview")
     }
 
-    private func prefetchVisibleArtwork() {
-        let songs =
-            [viewModel.newReleases.first, viewModel.trending.first].compactMap { $0 }
+    private var artworkPrefetchSongs: [Song] {
+        [viewModel.newReleases.first, viewModel.trending.first].compactMap { $0 }
             + Array(viewModel.newReleases.prefix(12))
             + Array(viewModel.trending.prefix(8))
-        ArtworkPrefetcher.shared.prefetchSongs(songs, limit: 18, reason: "new songs")
-        ArtworkPrefetcher.shared.prefetchPlaylists(
-            Array((viewModel.recentPlaylists + recentlyPlayed.playlists).prefix(8)),
-            limit: 12,
-            reason: "new playlists"
+    }
+
+    private var artworkPrefetchPlaylists: [Playlist] {
+        Array((viewModel.recentPlaylists + recentlyPlayed.playlists).prefix(8))
+    }
+
+    private var artworkPrefetchSignature: ArtworkPrefetchSignature {
+        ArtworkPrefetchSignature(
+            songs: artworkPrefetchSongs,
+            playlists: artworkPrefetchPlaylists
         )
     }
-}
 
-private struct NewLoadFailureView: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        VStack(spacing: AM.Spacing.l) {
-            MusicEmptyState(title: "Unable to Load New Music", message: message)
-            MusicEmptyActionButton(title: "Try Again", action: retry)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AM.Spacing.xxl)
+    private func prefetchVisibleArtworkIfNeeded() {
+        artworkPrefetchTracker.prefetch(
+            signature: artworkPrefetchSignature,
+            songs: artworkPrefetchSongs,
+            playlists: artworkPrefetchPlaylists,
+            songReason: "new songs",
+            playlistReason: "new playlists",
+            songLimit: 18,
+            playlistLimit: 12
+        )
     }
 }

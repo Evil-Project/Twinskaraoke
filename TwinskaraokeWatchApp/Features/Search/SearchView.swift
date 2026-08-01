@@ -24,13 +24,10 @@ struct SearchView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
-                    .accessibilityHidden(true)
                 TextField("Search", text: $viewModel.searchText)
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
-                    .frame(minHeight: 44)
                     .onSubmit {
-                        viewModel.submitSearch()
                         WatchHaptic.play(.click)
                     }
                 if !trimmedSearchText.isEmpty {
@@ -41,8 +38,6 @@ struct SearchView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
                             .frame(width: 22, height: 22)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.watchPressable)
                     .accessibilityLabel("Clear Search")
@@ -50,6 +45,7 @@ struct SearchView: View {
                 }
             }
             .padding(.horizontal, 9)
+            .padding(.vertical, 7)
             .background(Color.secondary.opacity(0.18))
             .clipShape(RoundedRectangle(cornerRadius: 9))
             .overlay {
@@ -69,27 +65,17 @@ struct SearchView: View {
                 } else if viewModel.isLoading, viewModel.results.isEmpty {
                     HStack {
                         Spacer()
-                        ProgressView("Searching")
-                            .accessibilityValue(trimmedSearchText)
+                        ProgressView()
                         Spacer()
                     }
                     .listRowBackground(Color.clear)
-                } else if let errorMessage = viewModel.searchErrorMessage {
-                    WatchEmptyState(
-                        systemImage: "wifi.exclamationmark",
-                        title: "Search Unavailable",
-                        message: errorMessage
+                } else if let loadError = viewModel.loadError, viewModel.results.isEmpty {
+                    WatchLoadErrorState(
+                        title: "Search Failed",
+                        message: loadError,
+                        retryAction: { viewModel.performSearch(query: trimmedSearchText) }
                     )
                     .listRowBackground(Color.clear)
-
-                    Button {
-                        viewModel.retrySearch()
-                        WatchHaptic.play(.click)
-                    } label: {
-                        Label("Try Again", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.watchPressable)
                 } else if viewModel.results.isEmpty {
                     WatchEmptyState(
                         systemImage: "music.mic",
@@ -101,29 +87,53 @@ struct SearchView: View {
                     WatchSearchResultsSummary(
                         query: trimmedSearchText,
                         totalCount: viewModel.results.count,
-                        playableCount: playableSongs.count,
+                        playableCount: viewModel.playableSongs.count,
                         isLoading: viewModel.isLoading
                     )
                     .listRowBackground(Color.clear)
-                    ForEach(viewModel.results) { item in
-                        if let song = item.toSong() {
-                            let isCurrent = audioManager.currentSong?.id == song.id
-                            Button {
-                                play(song, context: playableSongs)
-                            } label: {
+                    ForEach(viewModel.resolvedResults) { result in
+                        Button {
+                            if let song = result.song {
+                                play(song, context: viewModel.playableSongs)
+                            } else {
+                                WatchHaptic.play(.failure)
+                            }
+                        } label: {
+                            if let song = result.song {
+                                let isCurrent = audioManager.currentSong?.id == song.id
                                 WatchSongRow(
                                     song: song,
                                     isCurrent: isCurrent,
                                     isPlaying: isCurrent && audioManager.isPlaying,
-                                    trailingSystemImage: isCurrent ? "chevron.right" : nil
+                                    trailingSystemImage: isCurrent
+                                        ? (audioManager.isPlaying ? "pause.fill" : "play.fill")
+                                        : nil
                                 )
+                            } else {
+                                let item = result.item
+                                HStack(spacing: 10) {
+                                    WatchSongArtwork(url: item.rowImageURL, size: 38)
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                            .lineLimit(1)
+                                        Text(item.originalArtistDisplay)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .padding(.vertical, 3)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(item.title)
+                                .accessibilityValue(item.originalArtistDisplay)
+                                .accessibilityHint("This result cannot be played on Apple Watch.")
                             }
-                            .buttonStyle(.watchPressable)
-                            .accessibilityLabel(isCurrent ? "Open \(song.title)" : song.title)
-                            .accessibilityHint(accessibilityHint(for: item))
-                        } else {
-                            WatchUnavailableSearchRow(item: item)
                         }
+                        .buttonStyle(.watchPressable)
+                        .accessibilityHint(accessibilityHint(for: result))
                     }
                 }
             }
@@ -137,10 +147,20 @@ struct SearchView: View {
             PlayerView()
                 .environmentObject(audioManager)
         }
+        .onAppear {
+            prefetchArtwork()
+        }
+        .compatibleOnChange(of: viewModel.resolvedResults.map(\.id)) { _ in
+            prefetchArtwork()
+        }
+        .onDisappear {
+            WatchArtworkPrefetcher.shared.cancel(reason: "search")
+        }
     }
 
-    private var playableSongs: [Song] {
-        viewModel.results.compactMap { $0.toSong() }
+    private func prefetchArtwork() {
+        let urls = viewModel.resolvedResults.compactMap { $0.song?.rowImageURL ?? $0.item.rowImageURL }
+        WatchArtworkPrefetcher.shared.prefetch(urls: urls, reason: "search")
     }
 
     private var trimmedSearchText: String {
@@ -157,8 +177,8 @@ struct SearchView: View {
         showPlayer = true
     }
 
-    private func accessibilityHint(for item: SearchSongItem) -> String {
-        guard let song = item.toSong() else {
+    private func accessibilityHint(for result: WatchSearchResult) -> String {
+        guard let song = result.song else {
             return "This result cannot be played on Apple Watch."
         }
         if audioManager.currentSong?.id == song.id {
@@ -170,46 +190,6 @@ struct SearchView: View {
     private func clearSearch() {
         viewModel.searchText = ""
         WatchHaptic.play(.click)
-    }
-}
-
-private struct WatchUnavailableSearchRow: View {
-    let item: SearchSongItem
-
-    var body: some View {
-        HStack(spacing: 10) {
-            WatchSongArtwork(url: item.rowImageURL, size: 38)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                Text(item.originalArtistDisplay)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            Text("Unavailable")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.vertical, 3)
-        .frame(minHeight: 44)
-        .opacity(0.68)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.title)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityIdentifier("WatchSearch.unavailable.\(item.id)")
-    }
-
-    private var accessibilityValue: String {
-        let artist = item.originalArtistDisplay
-        return artist.isEmpty ? "Unavailable on Apple Watch" : "\(artist), unavailable on Apple Watch"
     }
 }
 
@@ -249,9 +229,7 @@ private struct WatchSearchResultsSummary: View {
         .padding(.vertical, 5)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(resultCountText)
-        .accessibilityValue(
-            isLoading ? "Updating results for \(query)" : "Results for \(query)"
-        )
+        .accessibilityValue("Results for \(query)")
     }
 
     private var resultCountText: String {

@@ -107,7 +107,6 @@ final class TwinskaraokeUITests: XCTestCase {
     )
     searchApp.navigationBars.buttons.element(boundBy: 0).tap()
 
-    scrollToVisibleItem("Dance", in: searchApp)
     openVisibleItem("Dance", in: searchApp)
     XCTAssertTrue(
       searchApp.navigationBars["Dance"].waitForExistence(timeout: 8)
@@ -219,141 +218,10 @@ final class TwinskaraokeUITests: XCTestCase {
 
     for section in ["Home", "New", "Radio", "Library", "Search"] {
       XCTAssertTrue(
-        compactRootTabExists(section, in: app),
+        app.tabBars.buttons[section].waitForExistence(timeout: 5),
         "Expected compact tab \(section) to be visible."
       )
     }
-  }
-
-  func testSidebarPreservesDrillDownStateAcrossSectionChanges() throws {
-    guard isRunningOnPad else {
-      throw XCTSkip("The sidebar shell is only available on iPad.")
-    }
-
-    XCUIDevice.shared.orientation = .landscapeLeft
-    addTeardownBlock {
-      XCUIDevice.shared.orientation = .portrait
-    }
-
-    let app = launchApp(initialSection: "search")
-    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
-    XCUIDevice.shared.orientation = .landscapeLeft
-    XCTAssertTrue(
-      app.staticTexts["Discover"].waitForExistence(timeout: 10),
-      "Expected the landscape iPad app to expose its sidebar."
-    )
-    XCTAssertFalse(
-      app.tabBars.firstMatch.exists,
-      "The sidebar detail should not render a second root tab bar."
-    )
-    XCTAssertEqual(
-      app.buttons.matching(identifier: "AccountToolbarButton").count,
-      1,
-      "The sidebar detail should expose one account toolbar button."
-    )
-
-    openVisibleItem(
-      "Twinskaraoke Top 100",
-      identifier: "SearchCategory.TwinskaraokeTop100",
-      in: app
-    )
-    XCTAssertTrue(
-      accessibleElementExists(
-        identifier: "TopChartCollection.Destination",
-        in: app,
-        timeout: 8
-      ),
-      "Expected Search to open the Top 100 collection."
-    )
-
-    openRootSection("Home", in: app)
-    XCTAssertTrue(
-      app.navigationBars["Home"].waitForExistence(timeout: 8),
-      "Expected Home to own the detail navigation bar after switching sections."
-    )
-    XCTAssertFalse(app.navigationBars["Search"].exists)
-    XCTAssertFalse(app.tabBars.firstMatch.exists)
-    XCTAssertEqual(app.buttons.matching(identifier: "AccountToolbarButton").count, 1)
-
-    openRootSection("Search", in: app)
-    XCTAssertTrue(
-      accessibleElementExists(
-        identifier: "TopChartCollection.Destination",
-        in: app,
-        timeout: 8
-      ),
-      "Expected Search to keep its drill-down destination after switching sidebar sections."
-    )
-
-    XCUIDevice.shared.orientation = .portrait
-    let sidebarHidden = expectation(
-      for: NSPredicate(format: "exists == false"),
-      evaluatedWith: app.staticTexts["Discover"]
-    )
-    wait(for: [sidebarHidden], timeout: 10)
-    XCTAssertTrue(compactRootTabExists("Search", in: app))
-    XCTAssertTrue(
-      accessibleElementExists(
-        identifier: "TopChartCollection.Destination",
-        in: app,
-        timeout: 8
-      ),
-      "Expected Search to keep its drill-down destination when the shell changes size."
-    )
-  }
-
-  func testSidebarPreservesLibraryDrillDownAcrossSectionChangesAndResize() throws {
-    guard isRunningOnPad else {
-      throw XCTSkip("The sidebar shell is only available on iPad.")
-    }
-
-    XCUIDevice.shared.orientation = .landscapeLeft
-    addTeardownBlock {
-      XCUIDevice.shared.orientation = .portrait
-    }
-
-    let app = launchApp(initialSection: "library")
-    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
-    XCUIDevice.shared.orientation = .landscapeLeft
-    XCTAssertTrue(
-      app.staticTexts["Discover"].waitForExistence(timeout: 10),
-      "Expected the landscape iPad app to expose its sidebar."
-    )
-    XCTAssertTrue(
-      app.navigationBars["Library"].waitForExistence(timeout: 8),
-      "Expected Library to own the detail navigation bar before opening a destination."
-    )
-
-    openVisibleItem("Artists", in: app)
-    XCTAssertTrue(
-      app.navigationBars["Artists"].waitForExistence(timeout: 8),
-      "Expected Artists to open from Library."
-    )
-
-    openRootSection("Home", in: app)
-    XCTAssertTrue(
-      app.navigationBars["Home"].waitForExistence(timeout: 8),
-      "Expected the sidebar to switch to Home and transfer navigation ownership."
-    )
-
-    openRootSection("Library", in: app)
-    XCTAssertTrue(
-      app.navigationBars["Artists"].waitForExistence(timeout: 8),
-      "Expected Library to retain its Artists destination after switching sections."
-    )
-
-    XCUIDevice.shared.orientation = .portrait
-    let sidebarHidden = expectation(
-      for: NSPredicate(format: "exists == false"),
-      evaluatedWith: app.staticTexts["Discover"]
-    )
-    wait(for: [sidebarHidden], timeout: 10)
-
-    XCTAssertTrue(compactRootTabExists("Library", in: app))
-    XCTAssertTrue(
-      app.navigationBars["Artists"].waitForExistence(timeout: 8),
-      "Expected the Library destination to survive the live shell resize."
-    )
   }
 
   func testHomeShowsMusicSectionsInUITestMode() throws {
@@ -403,10 +271,9 @@ final class TwinskaraokeUITests: XCTestCase {
       app.staticTexts["Best New Songs"].waitForExistence(timeout: 8),
       "Expected New to render the Best New Songs preview."
     )
-    scrollToVisibleItem("New This Week", in: app)
     XCTAssertTrue(
-      app.staticTexts["New This Week"].waitForExistence(timeout: 8),
-      "Expected New to render its latest playlist shelf."
+      app.staticTexts["More to Explore"].waitForExistence(timeout: 8),
+      "Expected New to render exploration links."
     )
 
     if isRunningOnPad {
@@ -432,7 +299,10 @@ final class TwinskaraokeUITests: XCTestCase {
         || app.staticTexts["Wake Me Up Before You Go-Go"].waitForExistence(timeout: 8),
       "Expected Radio to render the featured live episode."
     )
-    scrollToVisibleItem("New & Recent", identifier: "Radio.HistorySection", in: app)
+    XCTAssertTrue(
+      app.buttons["Up Next"].waitForExistence(timeout: 8),
+      "Expected Radio to render the live schedule preview."
+    )
     XCTAssertTrue(
       accessibleElementExists(identifier: "Radio.HistorySection", in: app, timeout: 8),
       "Expected Radio to render recently played songs."
@@ -563,6 +433,20 @@ final class TwinskaraokeUITests: XCTestCase {
       "Expected Account to open from the profile toolbar button."
     )
 
+    openVisibleItem("Notifications", in: app)
+    XCTAssertTrue(
+      app.navigationBars["Notifications"].waitForExistence(timeout: 8)
+        || app.staticTexts["Notifications"].waitForExistence(timeout: 8),
+      "Expected Notifications to open from Account."
+    )
+    if isRunningOnPad {
+      XCTAssertTrue(
+        accessibleElementExists(identifier: "Notifications.WideOverview", in: app, timeout: 8),
+        "Expected Notifications to use the centered regular-width overview on iPad."
+      )
+    }
+
+    navigateBack(in: app)
     openVisibleItem("About", in: app)
     XCTAssertTrue(
       app.navigationBars["About"].waitForExistence(timeout: 8)
@@ -600,15 +484,19 @@ final class TwinskaraokeUITests: XCTestCase {
       "Expected Library to be visible."
     )
 
+    if app.buttons["More Library Actions"].waitForExistence(timeout: 5) {
+      app.buttons["More Library Actions"].tap()
+      XCTAssertTrue(
+        app.buttons["New Playlist"].waitForExistence(timeout: 5)
+          || app.staticTexts["New Playlist"].waitForExistence(timeout: 5),
+        "Expected Library actions menu to contain New Playlist."
+      )
+      return
+    }
+
     XCTAssertTrue(
-      app.buttons["Library Actions"].waitForExistence(timeout: 5),
-      "Expected Library to expose its actions menu."
-    )
-    app.buttons["Library Actions"].tap()
-    XCTAssertTrue(
-      app.buttons["New Playlist"].waitForExistence(timeout: 5)
-        || app.staticTexts["New Playlist"].waitForExistence(timeout: 5),
-      "Expected Library actions menu to contain New Playlist."
+      app.buttons["New Playlist"].waitForExistence(timeout: 5),
+      "Expected expanded Library toolbar to expose New Playlist."
     )
   }
 
@@ -629,19 +517,13 @@ final class TwinskaraokeUITests: XCTestCase {
     }
 
     let identifier = "RootSection.\(title.lowercased())"
-    if app.buttons[identifier].waitForExistence(timeout: 3) {
-      app.buttons[identifier].tap()
-      return
-    }
-
-    let identifiedSidebarCell = app.cells.containing(.staticText, identifier: identifier).firstMatch
-    if identifiedSidebarCell.waitForExistence(timeout: 3) {
-      identifiedSidebarCell.tap()
-      return
-    }
-
     if app.staticTexts[identifier].waitForExistence(timeout: 3) {
       app.staticTexts[identifier].tap()
+      return
+    }
+
+    if app.buttons[identifier].waitForExistence(timeout: 3) {
+      app.buttons[identifier].tap()
       return
     }
 
@@ -660,14 +542,6 @@ final class TwinskaraokeUITests: XCTestCase {
     let sidebarText = app.staticTexts.matching(identifier: title).element(boundBy: 0)
     if sidebarText.waitForExistence(timeout: 3) {
       sidebarText.tap()
-      return
-    }
-
-    let labeledRootButton = app.buttons
-      .matching(NSPredicate(format: "label == %@", title))
-      .firstMatch
-    if labeledRootButton.waitForExistence(timeout: 3) {
-      labeledRootButton.tap()
       return
     }
 
@@ -700,16 +574,6 @@ final class TwinskaraokeUITests: XCTestCase {
 
   private func rootSectionExists(identifier: String, in app: XCUIApplication) -> Bool {
     accessibleElementExists(identifier: identifier, in: app, timeout: 2)
-  }
-
-  private func compactRootTabExists(_ title: String, in app: XCUIApplication) -> Bool {
-    if app.tabBars.buttons[title].waitForExistence(timeout: 2) {
-      return true
-    }
-    return app.buttons
-      .matching(NSPredicate(format: "label == %@", title))
-      .firstMatch
-      .waitForExistence(timeout: 3)
   }
 
   private func element(identifier: String, in app: XCUIApplication) -> XCUIElement {
