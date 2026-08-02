@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import MediaPlayer
 import SwiftUI
+import Observation
 
 #if canImport(UIKit)
     import SDWebImage
@@ -46,46 +47,48 @@ private enum ManagedAVPlayerKind {
 }
 
 @MainActor
-final class PlaybackClock: ObservableObject {
+@Observable
+final class PlaybackClock {
     static let shared = PlaybackClock()
 
-    @Published var progress: Double = 0
+    var progress: Double = 0
 
     private init() {}
 }
 
 @MainActor
-final class AudioPlayerManager: ObservableObject {
+@Observable
+final class AudioPlayerManager {
     static let shared = AudioPlayerManager()
-    @Published var currentSong: Song?
-    @Published var isPlaying = false
-    @Published var isBuffering = false
+    var currentSong: Song?
+    var isPlaying = false
+    var isBuffering = false
 
     var progress: Double {
         get { PlaybackClock.shared.progress }
         set { PlaybackClock.shared.progress = newValue }
     }
 
-    @Published var queue: [Song] = []
-    @Published var isEditingProgress = false
-    @Published var volume: Double = 1.0
-    @Published var isUserScrubbingVolume: Bool = false
+    var queue: [Song] = []
+    var isEditingProgress = false
+    var volume: Double = 1.0
+    var isUserScrubbingVolume: Bool = false
     private var suppressTransitionAfterSeek = false
     private var preferredStreamResumeSongID: String?
     private var preferredStreamResumeTime: TimeInterval?
     private var deferredAIEffect: AudioEffect?
-    @Published var routeIcon: String = "airplayaudio"
-    @Published var routeName: String = ""
-    @Published var repeatMode: RepeatMode = .off
-    @Published var isShuffled: Bool = false
-    @Published var autoplayEnabled: Bool = true
-    @Published var isRadioMode: Bool = false
-    @Published var radioArtworkURL: URL?
+    var routeIcon: String = "airplayaudio"
+    var routeName: String = ""
+    var repeatMode: RepeatMode = .off
+    var isShuffled: Bool = false
+    var autoplayEnabled: Bool = true
+    var isRadioMode: Bool = false
+    var radioArtworkURL: URL?
     private var isStreamMode: Bool {
         streamPlayer != nil
     }
 
-    @Published var aiEnabled: Bool = {
+    var aiEnabled: Bool = {
         if UserDefaults.standard.object(forKey: "nk.aiEnabled") != nil {
             return UserDefaults.standard.bool(forKey: "nk.aiEnabled")
         }
@@ -111,7 +114,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var aiAutoAnalyze: Bool = UserDefaults.standard.bool(forKey: "nk.aiAutoAnalyze") {
+    var aiAutoAnalyze: Bool = UserDefaults.standard.bool(forKey: "nk.aiAutoAnalyze") {
         didSet {
             UserDefaults.standard.set(aiAutoAnalyze, forKey: "nk.aiAutoAnalyze")
             DebugLogger.log("AI auto-analyze: \(aiAutoAnalyze)", category: .ai)
@@ -134,7 +137,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var karaokeMode: Bool = false {
+    var karaokeMode: Bool = false {
         didSet {
             guard !_suppressModeSwitch else { return }
             if karaokeMode, isBackgroundKaraokeLocked {
@@ -154,7 +157,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var aiVocalStrength: Float = AudioPlayerManager.loadAIVocalStrength() {
+    var aiVocalStrength: Float = AudioPlayerManager.loadAIVocalStrength() {
         didSet {
             let clamped = min(1, max(0, aiVocalStrength))
             if clamped != aiVocalStrength {
@@ -171,7 +174,7 @@ final class AudioPlayerManager: ObservableObject {
         return Float(min(1, max(0, raw)))
     }
 
-    @Published var bassEnhanceMode: Bool = false {
+    var bassEnhanceMode: Bool = false {
         didSet {
             guard !_suppressModeSwitch else { return }
             if bassEnhanceMode, shouldDeferAIEffectActivation {
@@ -186,7 +189,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var bassEnhanceStrength: Float = AudioPlayerManager.loadFloat(
+    var bassEnhanceStrength: Float = AudioPlayerManager.loadFloat(
         "nk.bassEnhanceStrength", default: 0.5
     ) {
         didSet {
@@ -195,7 +198,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var vocalEnhanceMode: Bool = false {
+    var vocalEnhanceMode: Bool = false {
         didSet {
             guard !_suppressModeSwitch else { return }
             if vocalEnhanceMode, shouldDeferAIEffectActivation {
@@ -210,7 +213,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var vocalEnhanceStrength: Float = AudioPlayerManager.loadFloat(
+    var vocalEnhanceStrength: Float = AudioPlayerManager.loadFloat(
         "nk.vocalEnhanceStrength", default: 0.5
     ) {
         didSet {
@@ -219,7 +222,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var instrumentalEnhanceMode: Bool = false {
+    var instrumentalEnhanceMode: Bool = false {
         didSet {
             guard !_suppressModeSwitch else { return }
             if instrumentalEnhanceMode, shouldDeferAIEffectActivation {
@@ -234,7 +237,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var instrumentalEnhanceStrength: Float = AudioPlayerManager.loadFloat(
+    var instrumentalEnhanceStrength: Float = AudioPlayerManager.loadFloat(
         "nk.instrumentalEnhanceStrength", default: 0.5
     ) {
         didSet {
@@ -243,7 +246,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var eqEnabled: Bool = UserDefaults.standard.bool(forKey: "nk.eqEnabled") {
+    var eqEnabled: Bool = UserDefaults.standard.bool(forKey: "nk.eqEnabled") {
         didSet {
             UserDefaults.standard.set(eqEnabled, forKey: "nk.eqEnabled")
             avEngine.setEQEnabled(eqEnabled)
@@ -251,7 +254,7 @@ final class AudioPlayerManager: ObservableObject {
     }
 
     private var eqPresetIsApplying = false
-    @Published var eqPreset: EQPreset = {
+    var eqPreset: EQPreset = {
         let raw = UserDefaults.standard.string(forKey: "nk.eqPreset") ?? ""
         return EQPreset(rawValue: raw) ?? .flat
     }() {
@@ -264,7 +267,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var eqGainsDB: [Float] = (UserDefaults.standard.array(forKey: "nk.eqGainsDB") as? [Float])
+    var eqGainsDB: [Float] = (UserDefaults.standard.array(forKey: "nk.eqGainsDB") as? [Float])
         ?? Array(repeating: 0, count: 10)
     {
         didSet {
@@ -276,7 +279,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var autoMixEnabled: Bool =
+    var autoMixEnabled: Bool =
         (UserDefaults.standard.object(forKey: "nk.autoMixEnabled") as? Bool ?? true)
     {
         didSet {
@@ -288,7 +291,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var crossfadeEnabled: Bool =
+    var crossfadeEnabled: Bool =
         (UserDefaults.standard.object(forKey: "nk.crossfadeEnabled") as? Bool ?? false)
     {
         didSet {
@@ -300,7 +303,7 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var crossfadeSeconds: Double = AudioPlayerManager.loadCrossfadeSeconds() {
+    var crossfadeSeconds: Double = AudioPlayerManager.loadCrossfadeSeconds() {
         didSet {
             let clamped = min(15, max(1, crossfadeSeconds))
             if clamped != crossfadeSeconds {
@@ -314,10 +317,10 @@ final class AudioPlayerManager: ObservableObject {
         }
     }
 
-    @Published var upcomingSong: Song?
-    @Published private(set) var preparedStemSongID: String?
+    var upcomingSong: Song?
+    private(set) var preparedStemSongID: String?
     #if canImport(UIKit)
-        @Published var nowPlayingArtwork: UIImage?
+        var nowPlayingArtwork: UIImage?
     #endif
     private var lastNowPlayingElapsedSecond: Int?
     private var lastNowPlayingPlaybackRate: Double?
@@ -337,7 +340,7 @@ final class AudioPlayerManager: ObservableObject {
 
     // Construct the graph only after init has configured/activated the audio
     // session, so its fixed effects bus adopts the active hardware sample rate.
-    private lazy var avEngine = AVEnginePlayback()
+    @ObservationIgnored private lazy var avEngine = AVEnginePlayback()
     private let transitionCoordinator = TransitionCoordinator()
     private var radioPlayer: AVPlayer?
     private var streamPlayer: AVPlayer?
@@ -347,7 +350,7 @@ final class AudioPlayerManager: ObservableObject {
     private var streamPlayerCancellables = Set<AnyCancellable>()
     private var radioPlaybackRequested = false
     private var streamPlaybackRequested = false
-    private var remotePlaybackCacheTask: Task<Void, Never>?
+    @ObservationIgnored private var remotePlaybackCacheTask: Task<Void, Never>?
     private var remotePlaybackCacheToken: UUID?
     private var fetchRandomTrendingToken: UUID?
     private var cacheRecoverySongID: String?
@@ -376,14 +379,14 @@ final class AudioPlayerManager: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var artworkURL: URL?
     private var artworkTask: (any SDWebImageOperation)?
-    private var artworkProcessingTask: Task<Void, Never>?
+    @ObservationIgnored private var artworkProcessingTask: Task<Void, Never>?
     private var playerArtworkWarmupTasks: [String: any SDWebImageOperation] = [:]
     private var warmedPlayerArtworkAt: [String: Date] = [:]
     private var currentPlaybackURL: URL?
-    private var instrumentalTask: Task<Void, Never>?
-    private var preparedStemTask: Task<Void, Never>?
-    private var backgroundAnalysisRetryTask: Task<Void, Never>?
-    private var cacheCompressionTask: Task<Void, Never>?
+    @ObservationIgnored private var instrumentalTask: Task<Void, Never>?
+    @ObservationIgnored private var preparedStemTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundAnalysisRetryTask: Task<Void, Never>?
+    @ObservationIgnored private var cacheCompressionTask: Task<Void, Never>?
     // Set while a stem-switch load is in flight so its failure can drop the
     // broken stem cache. Must be cleared on every pause/stop/new-play path:
     // those bump the engine's suppression token, the load completion then
@@ -398,7 +401,7 @@ final class AudioPlayerManager: ObservableObject {
     private var separationGeneration: UInt64 = 0
     private var transitionTimeoutGeneration: UInt64 = 0
     private var transitionStartGeneration: UInt64 = 0
-    private var transitionStartTask: Task<Void, Never>?
+    @ObservationIgnored private var transitionStartTask: Task<Void, Never>?
     private var activeCrossfadePlan: TransitionCoordinator.TransitionPlan?
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
@@ -408,8 +411,8 @@ final class AudioPlayerManager: ObservableObject {
 
     private let easterEggSongID = "73376790-47d2-4c17-a7fc-88d11dccd2f0"
     private var easterEggQueuedForCurrentSong = false
-    private var easterEggLyricsTask: Task<Void, Never>?
-    private var easterEggSongTask: Task<Void, Never>?
+    @ObservationIgnored private var easterEggLyricsTask: Task<Void, Never>?
+    @ObservationIgnored private var easterEggSongTask: Task<Void, Never>?
 
     #if canImport(UIKit)
         private var trackTransitionTaskID: UIBackgroundTaskIdentifier = .invalid
@@ -626,10 +629,12 @@ final class AudioPlayerManager: ObservableObject {
             self?.upcomingSong = song
         }
 
-        FallbackArtProvider.shared.objectWillChange
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+        // The former `FallbackArtProvider.objectWillChange -> objectWillChange`
+        // forwarding is gone: it existed only to invalidate views that derive
+        // artwork URLs through `Song`, and `@Observable` has no blanket
+        // invalidation. Those views now read `FallbackArtRevision.shared`
+        // directly, which is both narrower and no longer re-renders every
+        // observer of the player.
         // AVAudioSession posts these off the main thread (route changes are
         // documented as arriving on a secondary thread). Under Swift 6 these
         // sink closures are main-actor-isolated, so delivering them on the
@@ -3356,7 +3361,9 @@ final class AudioPlayerManager: ObservableObject {
                 pathSegments: ["api", "songs", "playCount", songID]
             ) else { return }
             req.httpMethod = "PUT"
-            let _ = try? await KaraokeAPIClient.data(for: req)
+            // Fire and forget: the result is discarded, so a retry only costs
+            // requests. One skipped song used to cost 3 of these.
+            let _ = try? await KaraokeAPIClient.data(for: req, allowsRetry: false)
         }
     }
 

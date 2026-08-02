@@ -19,8 +19,8 @@ import SwiftUI
     }
 
     struct ShimejiSpriteView: View {
-        @ObservedObject var instance: ShimejiInstance
-        @ObservedObject private var resources = ShimejiResourceManager.shared
+        let instance: ShimejiInstance
+        private let resources = ShimejiResourceManager.shared
         @GestureState private var dragTranslation: CGSize = .zero
 
         private let displaySize: CGFloat = 84

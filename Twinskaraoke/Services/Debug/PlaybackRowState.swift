@@ -1,42 +1,55 @@
 import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-final class PlaybackRowState: ObservableObject {
+@Observable
+final class PlaybackRowState {
     static let shared = PlaybackRowState()
 
-    @Published private(set) var currentSongID: String?
-    @Published private(set) var isPlaying = false
-    @Published private(set) var isRadioMode = false
-    @Published private(set) var radioArtworkURL: URL?
+    private(set) var currentSongID: String?
+    private(set) var isPlaying = false
+    private(set) var isRadioMode = false
+    private(set) var radioArtworkURL: URL?
 
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var observation: ObservationToken?
 
     private init() {
+        observation = observeContinuously({
+            let manager = AudioPlayerManager.shared
+            _ = manager.currentSong
+            _ = manager.isPlaying
+            _ = manager.isRadioMode
+            _ = manager.radioArtworkURL
+        }, onChange: { [weak self] in
+            self?.syncFromPlayer()
+        })
+        syncFromPlayer()
+    }
+
+    /// Mirrors the player's state onto this row-facing projection.
+    ///
+    /// Each assignment is guarded because `@Observable` notifies on every
+    /// write, including writes of an identical value — the `removeDuplicates`
+    /// the former `$property.sink` pipelines carried. Without the guards, a
+    /// paused player still re-rendering every song row on each player change.
+    private func syncFromPlayer() {
         let manager = AudioPlayerManager.shared
-        manager.$currentSong
-            .map(\.?.id)
-            .removeDuplicates()
-            .sink { [weak self] in self?.currentSongID = $0 }
-            .store(in: &cancellables)
-
-        manager.$isPlaying
-            .removeDuplicates()
-            .sink { [weak self] in self?.isPlaying = $0 }
-            .store(in: &cancellables)
-
-        manager.$isRadioMode
-            .removeDuplicates()
-            .sink { [weak self] in self?.isRadioMode = $0 }
-            .store(in: &cancellables)
-
-        manager.$radioArtworkURL
-            .removeDuplicates()
-            .sink { [weak self] in self?.radioArtworkURL = $0 }
-            .store(in: &cancellables)
+        let songID = manager.currentSong?.id
+        if currentSongID != songID { currentSongID = songID }
+        if isPlaying != manager.isPlaying { isPlaying = manager.isPlaying }
+        if isRadioMode != manager.isRadioMode { isRadioMode = manager.isRadioMode }
+        if radioArtworkURL != manager.radioArtworkURL { radioArtworkURL = manager.radioArtworkURL }
     }
 
     func displayImageURL(for song: Song, variant: ArtworkImageVariant = .card) -> URL? {
+        // Song's artwork URLs fall back to FallbackArtProvider's pool, but `Song`
+        // is nonisolated and can't register that dependency itself. Rows and
+        // grid cards call this during body evaluation, so reading the revision
+        // here is what refreshes them when the pool loads. This used to come for
+        // free: FallbackArtProvider forwarded objectWillChange into
+        // AudioPlayerManager, invalidating every observer of the player.
+        _ = FallbackArtRevision.shared.revision
         if isRadioMode, currentSongID == song.id, let radioArtworkURL {
             return ArtworkURLBuilder.variantURL(from: radioArtworkURL, variant: variant) ?? radioArtworkURL
         }

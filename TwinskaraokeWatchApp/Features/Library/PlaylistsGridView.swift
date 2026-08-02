@@ -37,9 +37,9 @@ struct PlaylistRoute: Hashable {
 }
 
 struct PlaylistsGridView: View {
-    @StateObject var viewModel = PlaylistsViewModel()
-    @StateObject private var userViewModel = UserPlaylistsViewModel()
-    @ObservedObject private var auth = WatchAuthManager.shared
+    @State var viewModel = PlaylistsViewModel()
+    @State private var userViewModel = UserPlaylistsViewModel()
+    private let auth = WatchAuthManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     let columns = [

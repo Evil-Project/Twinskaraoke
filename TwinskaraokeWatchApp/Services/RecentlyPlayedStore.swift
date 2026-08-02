@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Songs played on this watch, most recent first.
 ///
@@ -8,10 +8,11 @@ import Foundation
 /// from the phone's recently-played playlists, and it stays useful while
 /// signed out.
 @MainActor
-final class RecentlyPlayedStore: ObservableObject {
+@Observable
+final class RecentlyPlayedStore {
     static let shared = RecentlyPlayedStore()
 
-    @Published private(set) var songs: [Song] = []
+    private(set) var songs: [Song] = []
 
     /// Small enough that the whole list stays a glance rather than a scroll,
     /// and that re-encoding it on every track change stays cheap.

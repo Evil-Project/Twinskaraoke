@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct NewView: View {
-    @EnvironmentObject var viewModel: HomeViewModel
-    @ObservedObject private var recentlyPlayed = RecentlyPlayedStore.shared
+    @Environment(HomeViewModel.self) var viewModel
+    private let recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var artworkPrefetchTracker = ArtworkPrefetchTracker()
@@ -40,6 +40,7 @@ struct NewView: View {
                 }
             }
             .refreshable { await viewModel.refreshHomeData() }
+            .task { viewModel.fetchHomeData() }
             .onChange(of: artworkPrefetchSignature) { _, _ in
                 prefetchVisibleArtworkIfNeeded()
             }

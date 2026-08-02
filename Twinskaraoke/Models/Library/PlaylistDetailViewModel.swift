@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 nonisolated enum PlaylistSongSearch {
     static func filter(_ songs: [Song], matching searchText: String) -> [Song] {
@@ -60,13 +60,14 @@ nonisolated struct PlaylistSearchRevealState: Equatable {
 }
 
 @MainActor
-class PlaylistDetailViewModel: ObservableObject {
-    @Published var songs: [Song]?
-    @Published var isLoading = false
-    @Published private(set) var hasAuthoritativeSongs = false
-    @Published private var loadFailed = false
+@Observable
+class PlaylistDetailViewModel {
+    var songs: [Song]?
+    var isLoading = false
+    private(set) var hasAuthoritativeSongs = false
+    private var loadFailed = false
     private var loadedID: String?
-    private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
     var emptyStateMessage: String {
         if loadFailed {
             return "The playlist couldn't be loaded. Check your connection and try again."

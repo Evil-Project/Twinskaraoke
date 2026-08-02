@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct AccountView: View {
-    @ObservedObject private var auth = WatchAuthManager.shared
+    private let auth = WatchAuthManager.shared
     /// Watched only for `cacheRevision`: a song that finishes downloading while
     /// this screen is open changes what "Downloaded Audio" should say, and
     /// leaving it to `onAppear` meant the listener had to navigate away and
     /// back before the figure — and whether "Clear Cache" is even enabled —
     /// caught up.
-    @ObservedObject private var audioManager = AudioManager.shared
+    private let audioManager = AudioManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue

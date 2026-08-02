@@ -1,45 +1,47 @@
 import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-private final class RadioPlaybackState: ObservableObject {
+@Observable
+private final class RadioPlaybackState {
     static let shared = RadioPlaybackState()
 
-    @Published private(set) var currentSongID: String?
-    @Published private(set) var isPlaying = false
-    @Published private(set) var isBuffering = false
-    @Published private(set) var isRadioMode = false
+    private(set) var currentSongID: String?
+    private(set) var isPlaying = false
+    private(set) var isBuffering = false
+    private(set) var isRadioMode = false
 
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var observation: ObservationToken?
 
     private init() {
+        observation = observeContinuously({
+            let manager = AudioPlayerManager.shared
+            _ = manager.currentSong
+            _ = manager.isPlaying
+            _ = manager.isBuffering
+            _ = manager.isRadioMode
+        }, onChange: { [weak self] in
+            self?.syncFromPlayer()
+        })
+        syncFromPlayer()
+    }
+
+    /// See `PlaybackRowState.syncFromPlayer`: the guards stand in for the
+    /// `removeDuplicates` the former `$property.sink` pipelines carried.
+    private func syncFromPlayer() {
         let manager = AudioPlayerManager.shared
-        manager.$currentSong
-            .map(\.?.id)
-            .removeDuplicates()
-            .sink { [weak self] in self?.currentSongID = $0 }
-            .store(in: &cancellables)
-
-        manager.$isPlaying
-            .removeDuplicates()
-            .sink { [weak self] in self?.isPlaying = $0 }
-            .store(in: &cancellables)
-
-        manager.$isBuffering
-            .removeDuplicates()
-            .sink { [weak self] in self?.isBuffering = $0 }
-            .store(in: &cancellables)
-
-        manager.$isRadioMode
-            .removeDuplicates()
-            .sink { [weak self] in self?.isRadioMode = $0 }
-            .store(in: &cancellables)
+        let songID = manager.currentSong?.id
+        if currentSongID != songID { currentSongID = songID }
+        if isPlaying != manager.isPlaying { isPlaying = manager.isPlaying }
+        if isBuffering != manager.isBuffering { isBuffering = manager.isBuffering }
+        if isRadioMode != manager.isRadioMode { isRadioMode = manager.isRadioMode }
     }
 }
 
 struct RadioView: View {
-    @ObservedObject private var radio = RadioController.shared
-    @ObservedObject private var playback = RadioPlaybackState.shared
+    private let radio = RadioController.shared
+    private let playback = RadioPlaybackState.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showingRadioSchedule = false

@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct RadioView: View {
-    @ObservedObject private var radio = RadioController.shared
-    @EnvironmentObject var audioManager: AudioManager
+    private var radio = RadioController.shared
+    @Environment(AudioManager.self) var audioManager
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
 

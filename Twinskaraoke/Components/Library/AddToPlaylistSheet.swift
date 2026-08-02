@@ -4,7 +4,7 @@ struct AddToPlaylistSheet: View {
     let song: Song
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
-    @ObservedObject private var manager = UserPlaylistsManager.shared
+    private let manager = UserPlaylistsManager.shared
 
     @State private var inFlight: Set<String> = []
     @State private var added: Set<String> = []

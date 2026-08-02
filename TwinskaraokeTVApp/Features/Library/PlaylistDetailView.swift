@@ -4,13 +4,13 @@ struct PlaylistDetailView: View {
     let playlist: Playlist
     let onPlay: (Song, [Song]) -> Void
 
-    @EnvironmentObject private var audioManager: AudioManager
-    @StateObject private var viewModel: PlaylistDetailViewModel
+    @Environment(AudioManager.self) private var audioManager
+    @State private var viewModel: PlaylistDetailViewModel
 
     init(playlist: Playlist, onPlay: @escaping (Song, [Song]) -> Void) {
         self.playlist = playlist
         self.onPlay = onPlay
-        _viewModel = StateObject(wrappedValue: PlaylistDetailViewModel(playlistID: playlist.id))
+        _viewModel = State(initialValue: PlaylistDetailViewModel(playlistID: playlist.id))
     }
 
     var body: some View {

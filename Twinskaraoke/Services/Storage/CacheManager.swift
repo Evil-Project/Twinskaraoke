@@ -1,9 +1,10 @@
-import Combine
 import Foundation
 import SDWebImageSwiftUI
+import Observation
 
 @MainActor
-final class CacheManager: ObservableObject {
+@Observable
+final class CacheManager {
     static let shared = CacheManager()
 
     nonisolated static let imageCacheLimit: UInt64 = 2 * 1024 * 1024 * 1024
@@ -12,12 +13,12 @@ final class CacheManager: ObservableObject {
     nonisolated static let lyricsCacheLimit: UInt64 = 64 * 1024 * 1024
     nonisolated static let maxCacheAge: TimeInterval = 6 * 30 * 24 * 3600
 
-    @Published private(set) var imageCacheSize: UInt64 = 0
-    @Published private(set) var musicCacheSize: UInt64 = 0
-    @Published private(set) var lyricsCacheSize: UInt64 = 0
+    private(set) var imageCacheSize: UInt64 = 0
+    private(set) var musicCacheSize: UInt64 = 0
+    private(set) var lyricsCacheSize: UInt64 = 0
 
     private let fm = FileManager.default
-    private var sizeRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var sizeRefreshTask: Task<Void, Never>?
 
     // Maintenance walks entire cache directories (music cache can hold
     // gigabytes across hundreds of folders). That file I/O must stay off the
@@ -29,11 +30,23 @@ final class CacheManager: ObservableObject {
     // Debounce state for the per-transition/per-save enforcement passes.
     // Only touched on the serial maintenanceQueue.
     private nonisolated static let enforcementDebounceInterval: TimeInterval = 60
-    private nonisolated(unsafe) var lastMusicEnforcementAt: Date?
+    // Written on the serial maintenance queue, never read by a view:
+    // observation-tracking these would route background writes through the
+    // registrar and break the nonisolated(unsafe) contract.
+    @ObservationIgnored private nonisolated(unsafe) var lastMusicEnforcementAt: Date?
     private nonisolated(unsafe) static var lastMusicCommitAt: Date?
-    private nonisolated(unsafe) var lastMusicCacheSize: UInt64?
-    private nonisolated(unsafe) var lastLyricsEnforcementAt: Date?
-    private nonisolated(unsafe) var lastLyricsCacheSize: UInt64?
+    // Written on the serial maintenance queue, never read by a view:
+    // observation-tracking these would route background writes through the
+    // registrar and break the nonisolated(unsafe) contract.
+    @ObservationIgnored private nonisolated(unsafe) var lastMusicCacheSize: UInt64?
+    // Written on the serial maintenance queue, never read by a view:
+    // observation-tracking these would route background writes through the
+    // registrar and break the nonisolated(unsafe) contract.
+    @ObservationIgnored private nonisolated(unsafe) var lastLyricsEnforcementAt: Date?
+    // Written on the serial maintenance queue, never read by a view:
+    // observation-tracking these would route background writes through the
+    // registrar and break the nonisolated(unsafe) contract.
+    @ObservationIgnored private nonisolated(unsafe) var lastLyricsCacheSize: UInt64?
 
     private init() {
         let directories = Self.directories

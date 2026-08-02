@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// Live station metadata for the watch.
 ///
@@ -7,18 +7,19 @@ import Foundation
 /// `AudioManager` is: the two targets drive completely different players. The
 /// wire format and the polling contract are shared through `RadioNowPlaying`.
 @MainActor
-final class RadioController: ObservableObject {
+@Observable
+final class RadioController {
     static let shared = RadioController()
 
-    @Published private(set) var nowPlaying: RadioNowPlaying?
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var refreshErrorMessage: String?
+    private(set) var nowPlaying: RadioNowPlaying?
+    private(set) var isRefreshing = false
+    private(set) var refreshErrorMessage: String?
 
     /// Polling is driven by the radio screen being on-wrist, not by a timer
     /// that outlives it: a watch that keeps hitting the network with the
     /// display off is a battery complaint.
-    private var pollTask: Task<Void, Never>?
-    private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
     private var lastMetadataSignature: String?
     private var isScreenVisible = false
     private let pollInterval: Duration = .seconds(15)

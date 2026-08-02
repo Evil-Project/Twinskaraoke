@@ -6,8 +6,8 @@ private struct DownloadedSongRowIdentity: Hashable {
 }
 
 struct DownloadedSongsView: View {
-    @ObservedObject private var downloads = DownloadManager.shared
-    @ObservedObject private var recentlyPlayed = RecentlyPlayedStore.shared
+    private let downloads = DownloadManager.shared
+    private let recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var localSongs: [Song] = []
     @State private var refreshTask: Task<Void, Never>?
@@ -410,7 +410,7 @@ private struct DownloadedEmptyHintRow: View {
 private struct DownloadedSongMenuItems: View {
     let song: Song
     let onRemove: () -> Void
-    @ObservedObject private var favorites = FavoritesManager.shared
+    private let favorites = FavoritesManager.shared
 
     var body: some View {
         Button {

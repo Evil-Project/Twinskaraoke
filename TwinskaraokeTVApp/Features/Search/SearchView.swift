@@ -3,11 +3,14 @@ import SwiftUI
 struct SearchView: View {
     let onPlay: (Song, [Song]) -> Void
 
-    @EnvironmentObject private var audioManager: AudioManager
-    @StateObject private var viewModel = SearchViewModel()
+    @Environment(AudioManager.self) private var audioManager
+    @State private var viewModel = SearchViewModel()
 
     var body: some View {
-        NavigationStack {
+        // @Observable models expose bindings through @Bindable rather than the
+        // old $viewModel projection.
+        @Bindable var viewModel = viewModel
+        return NavigationStack {
             // See `LibraryView`: the tab bar labels this screen, and a tvOS nav
             // title floats over the scroll content instead of reserving space.
             content

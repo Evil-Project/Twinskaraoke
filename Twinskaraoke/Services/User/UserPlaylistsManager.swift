@@ -1,12 +1,13 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class UserPlaylistsManager: ObservableObject {
+@Observable
+final class UserPlaylistsManager {
     static let shared = UserPlaylistsManager()
 
-    @Published private(set) var playlists: [UserPlaylist] = []
-    @Published private(set) var isLoading = false
+    private(set) var playlists: [UserPlaylist] = []
+    private(set) var isLoading = false
 
     private var loaded = false
     private var stateGeneration = 0

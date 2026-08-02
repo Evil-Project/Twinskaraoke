@@ -1,4 +1,3 @@
-import Combine
 import SwiftUI
 
 struct PlaylistListView: View {
@@ -6,7 +5,7 @@ struct PlaylistListView: View {
     let playlists: [Playlist]
     var apiURL: ((Int, Int) -> String)?
     let cols = AM.Layout.playlistGridColumns
-    @StateObject private var loader = PlaylistListLoader()
+    @State private var loader = PlaylistListLoader()
     @State private var searchText = ""
     private var allPlaylists: [Playlist] {
         loader.playlists.isEmpty ? playlists : loader.playlists

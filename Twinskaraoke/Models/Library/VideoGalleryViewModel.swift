@@ -1,16 +1,17 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class VideoGalleryViewModel: ObservableObject {
-    @Published var videos: [GalleryVideo] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    @Published var canLoadMore = true
+@Observable
+final class VideoGalleryViewModel {
+    var videos: [GalleryVideo] = []
+    var isLoading = false
+    var errorMessage: String?
+    var canLoadMore = true
     private var page = 1
     private let pageSize = 25
     private var loadGeneration = 0
-    private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     func fetchInitial() {
         guard videos.isEmpty, !isLoading else { return }
@@ -127,9 +128,10 @@ final class VideoGalleryViewModel: ObservableObject {
 }
 
 @MainActor
-final class SimilarVideosViewModel: ObservableObject {
-    @Published var videos: [GalleryVideo] = []
-    @Published var isLoading = false
+@Observable
+final class SimilarVideosViewModel {
+    var videos: [GalleryVideo] = []
+    var isLoading = false
 
     func fetch(excluding currentID: String) {
         guard videos.isEmpty, !isLoading else { return }

@@ -1,12 +1,13 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class HomeViewModel: ObservableObject {
-    @Published var trending: [Song] = []
-    @Published var latest: [Song] = []
-    @Published var isLoading = false
-    @Published var loadError: String?
+@Observable
+final class HomeViewModel {
+    var trending: [Song] = []
+    var latest: [Song] = []
+    var isLoading = false
+    var loadError: String?
 
     func fetch() {
         guard !isLoading, trending.isEmpty else { return }

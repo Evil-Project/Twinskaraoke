@@ -1,33 +1,35 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class PlaylistsViewModel: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var favoriteSongs: [Song] = []
-    @Published var isLoading = false
-    @Published var isLoadingFavorites = false
+@Observable
+final class PlaylistsViewModel {
+    var playlists: [Playlist] = []
+    var favoriteSongs: [Song] = []
+    var isLoading = false
+    var isLoadingFavorites = false
     /// Server + saved + user playlists, merged and deduped once per source
     /// change instead of on every view body evaluation.
-    @Published private(set) var combinedPlaylists: [Playlist] = []
-    private var hasLoadedPlaylists = false
-    private var hasLoadedFavoriteSongs = false
-    private var cancellables = Set<AnyCancellable>()
+    private(set) var combinedPlaylists: [Playlist] = []
+    @ObservationIgnored private var hasLoadedPlaylists = false
+    @ObservationIgnored private var hasLoadedFavoriteSongs = false
+    @ObservationIgnored private var sourceObservation: ObservationToken?
 
     init() {
-        let sourceChanges = Publishers.Merge4(
-            $playlists.map { _ in },
-            $favoriteSongs.map { _ in },
-            SavedPlaylistsStore.shared.$playlists.map { _ in },
-            UserPlaylistsManager.shared.$playlists.map { _ in }
-        )
-        .merge(with: FavoritesManager.shared.$favoriteIDs.map { _ in })
-        // @Published fires from willSet; hop one main-queue pass so the
-        // recompute below reads the already-updated values.
-        .receive(on: DispatchQueue.main)
-        sourceChanges
-            .sink { [weak self] in self?.recomputeCombinedPlaylists() }
-            .store(in: &cancellables)
+        // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
+        // and `$favoriteIDs`. `observeContinuously` already hops to the next
+        // main-actor turn before calling back, which is what the old
+        // `.receive(on: DispatchQueue.main)` was there for — observation fires
+        // from willSet, so the recompute must not read pre-write values.
+        sourceObservation = observeContinuously({
+            _ = self.playlists
+            _ = self.favoriteSongs
+            _ = SavedPlaylistsStore.shared.playlists
+            _ = UserPlaylistsManager.shared.playlists
+            _ = FavoritesManager.shared.favoriteIDs
+        }, onChange: { [weak self] in
+            self?.recomputeCombinedPlaylists()
+        })
         recomputeCombinedPlaylists()
     }
 
@@ -54,7 +56,14 @@ final class PlaylistsViewModel: ObservableObject {
         let uniqueUser = UserPlaylistsManager.shared.playlists
             .map { $0.asPlaylist() }
             .filter { !existingIDs.contains($0.id) }
-        combinedPlaylists = uniqueUser + all
+        let next = uniqueUser + all
+        // Guarded because @Observable publishes on every write, including one
+        // that stores an identical value, and `favoritesPlaylist` builds a fresh
+        // struct on each call — so an unguarded assignment re-renders the whole
+        // library on any unrelated source change. Combine's removeDuplicates
+        // used to absorb this.
+        guard next != combinedPlaylists else { return }
+        combinedPlaylists = next
     }
 
     func recentlyAddedPlaylists(saved: [Playlist]) -> [Playlist] {

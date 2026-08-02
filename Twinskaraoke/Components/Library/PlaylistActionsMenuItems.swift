@@ -3,8 +3,8 @@ import SwiftUI
 struct PlaylistActionsMenuItems: View {
     let playlist: Playlist
     let songs: [Song]
-    @ObservedObject private var savedStore = SavedPlaylistsStore.shared
-    @ObservedObject private var downloads = DownloadManager.shared
+    private let savedStore = SavedPlaylistsStore.shared
+    private let downloads = DownloadManager.shared
 
     private var isSaved: Bool {
         savedStore.isSaved(playlist)

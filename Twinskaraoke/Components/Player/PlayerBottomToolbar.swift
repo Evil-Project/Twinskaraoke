@@ -5,7 +5,7 @@ import SwiftUI
 #endif
 
 struct PlayerBottomToolbar: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
+    @Environment(AudioPlayerManager.self) var audioManager
     @Binding var showingQueue: Bool
     let song: Song
     let onLyricsToggle: () -> Void

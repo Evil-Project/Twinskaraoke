@@ -1,10 +1,11 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class HomeViewModel: ObservableObject {
-    @Published var trending: [Song] = []
-    @Published var isLoading = false
+@Observable
+final class HomeViewModel {
+    var trending: [Song] = []
+    var isLoading = false
 
     func fetchTrending() {
         if AppRuntime.isUITestMode {

@@ -1,14 +1,15 @@
-import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-final class ScrollPerformanceState: ObservableObject {
+@Observable
+final class ScrollPerformanceState {
     static let shared = ScrollPerformanceState()
 
-    @Published private(set) var isScrolling = false
+    private(set) var isScrolling = false
 
     private var activeScrollIDs = Set<UUID>()
-    private var scrollEndTask: Task<Void, Never>?
+    @ObservationIgnored private var scrollEndTask: Task<Void, Never>?
     private var scrollEndGeneration: UInt = 0
 
     private init() {}

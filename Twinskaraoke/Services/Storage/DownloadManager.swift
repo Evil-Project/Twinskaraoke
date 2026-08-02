@@ -1,7 +1,7 @@
-import Combine
 import Foundation
 import Network
 import SwiftUI
+import Observation
 
 // Called from URLSession completion handlers off the main actor; NSLock-guarded.
 private nonisolated final class DownloadTaskRegistry: @unchecked Sendable {
@@ -88,7 +88,8 @@ struct SongCollectionDownloadStatus: Equatable, Sendable {
 }
 
 @MainActor
-final class DownloadManager: ObservableObject {
+@Observable
+final class DownloadManager {
     private struct PublishedState: Equatable {
         var downloadedIDs = Set<String>()
         var inProgress = Set<String>()
@@ -116,12 +117,12 @@ final class DownloadManager: ObservableObject {
     }
 
     static let shared = DownloadManager()
-    @Published private var publishedState = PublishedState()
+    private var publishedState = PublishedState()
     var downloadedIDs: Set<String> { publishedState.downloadedIDs }
     var inProgress: Set<String> { publishedState.inProgress }
     private let cacheDir: URL
     private var tasks: [String: URLSessionDownloadTask] = [:]
-    private var cachePromotionTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var cachePromotionTasks: [String: Task<Void, Never>] = [:]
     // Song IDs that already used their one resume-data retry for the current
     // download attempt; a second interruption fails normally.
     private var resumeRetriedSongIDs: Set<String> = []
@@ -343,19 +344,6 @@ final class DownloadManager: ObservableObject {
             inProgress: inProgress,
             songs: songs
         )
-    }
-
-    func statusPublisher(for songID: String) -> AnyPublisher<SongDownloadStatus, Never> {
-        $publishedState
-            .map { state in
-                SongDownloadStatus.make(
-                    downloadedIDs: state.downloadedIDs,
-                    inProgress: state.inProgress,
-                    songID: songID
-                )
-            }
-            .removeDuplicates()
-            .eraseToAnyPublisher()
     }
 
     private func updatePublishedState(_ update: (inout PublishedState) -> Void) {
@@ -774,6 +762,21 @@ final class DownloadManager: ObservableObject {
                 )
             )
             completedInCurrentQueue += 1
+            // A downloaded song should never need the network again — but the
+            // audio was the only thing being persisted, so its artwork was
+            // still fetched on demand and showed a placeholder offline. Warm
+            // the row and card variants into the (2 GB, 90-day) image cache so
+            // the whole row renders from disk.
+            ArtworkPrefetcher.shared.warmCollection(
+                songs: [song],
+                reason: "downloaded artwork \(songID)",
+                variant: .row
+            )
+            ArtworkPrefetcher.shared.warmCollection(
+                songs: [song],
+                reason: "downloaded artwork card \(songID)",
+                variant: .card
+            )
         } else {
             failedInCurrentQueue += 1
             DebugLogger.log("Download failed: \(songID)", category: .network)

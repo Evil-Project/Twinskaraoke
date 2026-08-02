@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// A search result paired with its playable Song, resolved once per results
 /// change so rows don't re-run `toSong()` on every body evaluation.
@@ -10,38 +10,47 @@ struct TVSearchResult: Identifiable {
 }
 
 @MainActor
-final class SearchViewModel: ObservableObject {
-    @Published var results: [SearchSongItem] = [] {
+@Observable
+final class SearchViewModel {
+    var results: [SearchSongItem] = [] {
         didSet {
             resolvedResults = results.map { TVSearchResult(item: $0, song: $0.toSong()) }
             playableSongs = resolvedResults.compactMap(\.song)
         }
     }
-    @Published private(set) var resolvedResults: [TVSearchResult] = []
-    @Published private(set) var playableSongs: [Song] = []
-    @Published var isLoading = false
-    @Published var searchText = ""
-    @Published var loadError: String?
+    private(set) var resolvedResults: [TVSearchResult] = []
+    private(set) var playableSongs: [Song] = []
+    var isLoading = false
+    var searchText = "" {
+        didSet { scheduleSearch() }
+    }
 
-    private var cancellables = Set<AnyCancellable>()
-    private var queryToken = 0
+    var loadError: String?
 
-    init() {
-        $searchText
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .debounce(for: .milliseconds(400), scheduler: RunLoop.main)
-            .removeDuplicates()
-            .sink { [weak self] text in
-                if !text.isEmpty {
-                    self?.performSearch(query: text)
-                } else {
-                    self?.queryToken += 1
-                    self?.results = []
-                    self?.isLoading = false
-                    self?.loadError = nil
-                }
+    @ObservationIgnored private var queryToken = 0
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var lastDispatchedQuery = ""
+
+    /// Replaces the former `$searchText.debounce().removeDuplicates()` pipeline:
+    /// `@Observable` has no publisher projection, so the 400ms coalescing and
+    /// the duplicate-query suppression are done here instead.
+    private func scheduleSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text != lastDispatchedQuery else { return }
+            lastDispatchedQuery = text
+            if text.isEmpty {
+                queryToken += 1
+                results = []
+                isLoading = false
+                loadError = nil
+            } else {
+                performSearch(query: text)
             }
-            .store(in: &cancellables)
+        }
     }
 
     func performSearch(query: String) {

@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct KaraokeRightDock: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
-    @ObservedObject private var vocalSeparator = VocalSeparator.shared
+    @Environment(AudioPlayerManager.self) var audioManager
+    private let vocalSeparator = VocalSeparator.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showKaraokeControls: Bool
 

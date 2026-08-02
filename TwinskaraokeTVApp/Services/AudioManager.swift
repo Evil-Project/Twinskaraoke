@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import MediaPlayer
 import SwiftUI
+import Observation
 
 enum PlaybackMode {
     case listLoop
@@ -21,26 +22,27 @@ enum PlaybackMode {
 /// downloading to a local cache first. It still drives the queue, Now Playing
 /// info, and the Siri Remote / Control Center transport commands.
 @MainActor
-final class AudioManager: ObservableObject {
+@Observable
+final class AudioManager {
     static let shared = AudioManager()
 
-    @Published var currentSong: Song? {
+    var currentSong: Song? {
         didSet { refreshUpNext() }
     }
-    @Published var isPlaying = false
-    @Published var isLoading = false
-    @Published private(set) var playbackError: String?
-    @Published var currentTime: Double = 0
-    @Published var duration: Double = 0
-    @Published var queue: [Song] = [] {
+    var isPlaying = false
+    var isLoading = false
+    private(set) var playbackError: String?
+    var currentTime: Double = 0
+    var duration: Double = 0
+    var queue: [Song] = [] {
         didSet { refreshUpNext() }
     }
-    @Published var currentIndex: Int = 0 {
+    var currentIndex: Int = 0 {
         didSet { refreshUpNext() }
     }
-    @Published private(set) var upNextSongs: [Song] = []
-    @Published var playbackMode: PlaybackMode = .listLoop
-    @Published var isShuffleOn = false
+    private(set) var upNextSongs: [Song] = []
+    var playbackMode: PlaybackMode = .listLoop
+    var isShuffleOn = false
 
     private var player: AVPlayer?
     private var timeObserver: Any?

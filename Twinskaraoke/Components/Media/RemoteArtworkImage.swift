@@ -1,6 +1,6 @@
-import Combine
 import SDWebImageSwiftUI
 import SwiftUI
+import Observation
 
 struct RemoteArtworkImage: View {
     let url: URL?
@@ -11,15 +11,21 @@ struct RemoteArtworkImage: View {
     var fullResolution: Bool = false
 
     var fixedDisplaySize: CGSize?
-    @ObservedObject private var scrollState = ScrollPerformanceState.shared
+    private let scrollState = ScrollPerformanceState.shared
     // Observed so a view composed during a failure-backoff window re-evaluates
     // isBlocked when the window ends instead of showing the placeholder forever.
-    @ObservedObject private var failureBackoff = ArtworkFailureBackoff.shared
+    private let failureBackoff = ArtworkFailureBackoff.shared
     @State private var fullLoaded: Bool = false
     @State private var loadFailed: Bool = false
     @State private var renderedFullURL: URL?
     var body: some View {
-        Group {
+        // Load-bearing read: `isBlocked(url)` below is a method call over
+        // NSLock-guarded storage and registers nothing with observation.
+        // `generation` is the publish signal, so reading it here is what
+        // recomposes this view when a backoff window ends. Under
+        // @ObservedObject merely holding `failureBackoff` was enough.
+        let _ = failureBackoff.generation
+        return Group {
             if let fixedDisplaySize {
                 imageContent(size: fixedDisplaySize)
                     .frame(width: fixedDisplaySize.width, height: fixedDisplaySize.height)
@@ -42,6 +48,26 @@ struct RemoteArtworkImage: View {
     private func imageContent(size: CGSize) -> some View {
         let displaySize = sanitizedDisplaySize(size)
         let context = fullResolution ? ImageCacheConfig.memoryAndDiskCacheContext : ImageCacheConfig.visibleImageContext
+        // Fast path: the bitmap is already in the memory cache, so paint it in
+        // this very body pass. `WebImage` cannot do this — it decides to show
+        // the placeholder before it starts the load — which costs one grey
+        // frame per row even on a hit. See `ArtworkMemoryCache`.
+        if let cached = ArtworkMemoryCache.image(for: url) {
+            cached
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
+                .frame(width: displaySize.width, height: displaySize.height)
+                .clipped()
+        } else {
+            asyncImageContent(displaySize: displaySize, context: context)
+        }
+    }
+
+    @ViewBuilder
+    private func asyncImageContent(
+        displaySize: CGSize,
+        context: [SDWebImageContextOption: Any]
+    ) -> some View {
         ZStack {
             if !transparentBackground {
                 MusicArtworkPlaceholder(cornerRadius: cornerRadius)
@@ -158,9 +184,20 @@ struct RemoteArtworkImage: View {
         !scrollState.isScrolling && shouldPreferProgressiveArtwork
     }
 
+    /// Whether to show the ~1 KB blurred preview while the real image loads.
+    ///
+    /// This used to require a display size over 96pt, which excluded song rows
+    /// (44–48pt) — precisely where fast scrolling leaves a flat grey
+    /// placeholder on screen the longest. A blurred preview is a far better
+    /// stand-in than grey, and at a few hundred bytes it arrives about as fast
+    /// as the network can answer at all.
+    ///
+    /// The floor stays low rather than disappearing: below ~24pt the preview is
+    /// too small to read as anything, so the extra image layer per row buys
+    /// nothing.
     private var shouldPreferProgressiveArtwork: Bool {
         guard let fixedDisplaySize else { return true }
-        return max(fixedDisplaySize.width, fixedDisplaySize.height) > 96
+        return max(fixedDisplaySize.width, fixedDisplaySize.height) >= 24
     }
 
     private var loadAnimation: Animation? {
@@ -189,17 +226,25 @@ struct RemoteArtworkImage: View {
 
 }
 
-final class ArtworkFailureBackoff: ObservableObject {
+@Observable
+final class ArtworkFailureBackoff {
     static let shared = ArtworkFailureBackoff()
 
     private let cooldown: TimeInterval = 300
     private let lock = NSLock()
-    private var blockedUntil: [URL: Date] = [:]
+    // MUST stay out of the observation graph. It is NSLock-guarded, written off
+    // the main actor, and mutated from `clear(_:)` on the render path. Observing
+    // it publishes on every `removeValue` — even one that removes nothing —
+    // which re-enters the SwiftUI graph synchronously and recurses forever
+    // (markRendered -> clear -> willSet -> flushTransactions -> body -> ...).
+    // `generation` below is the intended publish signal precisely because its
+    // bump is guarded by "did anything actually change".
+    @ObservationIgnored private var blockedUntil: [URL: Date] = [:]
 
     // Bumped whenever the blocked set changes so observing views re-evaluate
     // isBlocked. Never written from isBlocked itself — that runs during view
     // body evaluation, where publishing a change is illegal.
-    @Published private(set) var generation = 0
+    private(set) var generation = 0
 
     var cooldownNanoseconds: UInt64 {
         UInt64(cooldown * 1_000_000_000)
@@ -331,7 +376,7 @@ struct CenteredLoadingView: View {
 struct MusicSkeletonShimmer: ViewModifier {
     var isActive: Bool
     @Environment(\.appReduceMotion) private var reduceMotion
-    @ObservedObject private var scrollState = ScrollPerformanceState.shared
+    private let scrollState = ScrollPerformanceState.shared
     @State private var phase: CGFloat = -0.8
 
     func body(content: Content) -> some View {

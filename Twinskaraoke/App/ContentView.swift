@@ -1,13 +1,15 @@
 import Combine
 import LNPopupUI
 import SwiftUI
+import Observation
 
 #if canImport(UIKit)
     import UIKit
 #endif
 
 @MainActor
-private final class PopupPlaybackState: ObservableObject {
+@Observable
+private final class PopupPlaybackState {
     static let shared = PopupPlaybackState()
 
     var hasCurrentSong: Bool {
@@ -38,58 +40,37 @@ private final class PopupPlaybackState: ObservableObject {
         snapshot.isRadioMode
     }
 
-    @Published private var snapshot = PopupPlaybackSnapshot()
-    private var pendingSnapshot = PopupPlaybackSnapshot()
-    private var publishTask: Task<Void, Never>?
-    private var cancellables = Set<AnyCancellable>()
+    private var snapshot = PopupPlaybackSnapshot()
+    @ObservationIgnored private var pendingSnapshot = PopupPlaybackSnapshot()
+    @ObservationIgnored private var publishTask: Task<Void, Never>?
+    @ObservationIgnored private var observation: ObservationToken?
 
     private init() {
-        let manager = AudioPlayerManager.shared
-        manager.$currentSong
-            .removeDuplicates(by: {
-                $0?.id == $1?.id
-                    && $0?.title == $1?.title
-                    && $0?.displayArtist == $1?.displayArtist
-            })
-            .sink { [weak self] song in
-                self?.updatePendingSnapshot { snapshot in
-                    snapshot.id = song?.id
-                    snapshot.title = song?.title ?? ""
-                    snapshot.subtitle = song?.displayArtist ?? ""
-                }
-            }
-            .store(in: &cancellables)
-
-        manager.$nowPlayingArtwork
-            .removeDuplicates(by: { $0 === $1 })
-            .sink { [weak self] artwork in
-                self?.updatePendingSnapshot { snapshot in
-                    snapshot.artwork = artwork
-                }
-            }
-            .store(in: &cancellables)
-
-        manager.$isPlaying
-            .removeDuplicates()
-            .sink { [weak self] isPlaying in
-                self?.updatePendingSnapshot { snapshot in
-                    snapshot.isPlaying = isPlaying
-                }
-            }
-            .store(in: &cancellables)
-
-        manager.$isRadioMode
-            .removeDuplicates()
-            .sink { [weak self] isRadioMode in
-                self?.updatePendingSnapshot { snapshot in
-                    snapshot.isRadioMode = isRadioMode
-                }
-            }
-            .store(in: &cancellables)
+        // Replaces four `$property.sink` pipelines. The per-property
+        // `removeDuplicates` they carried is redundant here: `scheduleSnapshotPublish`
+        // already drops a rebuild that `matches` the published snapshot, so
+        // rebuilding all four fields on any change is equivalent.
+        observation = observeContinuously({
+            let manager = AudioPlayerManager.shared
+            _ = manager.currentSong
+            _ = manager.nowPlayingArtwork
+            _ = manager.isPlaying
+            _ = manager.isRadioMode
+        }, onChange: { [weak self] in
+            self?.rebuildPendingSnapshot()
+        })
+        rebuildPendingSnapshot()
     }
 
-    private func updatePendingSnapshot(_ update: (inout PopupPlaybackSnapshot) -> Void) {
-        update(&pendingSnapshot)
+    private func rebuildPendingSnapshot() {
+        let manager = AudioPlayerManager.shared
+        let song = manager.currentSong
+        pendingSnapshot.id = song?.id
+        pendingSnapshot.title = song?.title ?? ""
+        pendingSnapshot.subtitle = song?.displayArtist ?? ""
+        pendingSnapshot.artwork = manager.nowPlayingArtwork
+        pendingSnapshot.isPlaying = manager.isPlaying
+        pendingSnapshot.isRadioMode = manager.isRadioMode
         scheduleSnapshotPublish()
     }
 
@@ -128,14 +109,14 @@ private struct PopupPlaybackSnapshot {
 struct ContentView: View {
     var body: some View {
         PopupHostView()
-            .environmentObject(AudioPlayerManager.shared)
+            .environment(AudioPlayerManager.shared)
     }
 }
 
 private struct PopupHostView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
-    @StateObject private var homeViewModel = HomeViewModel()
+    @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
 
@@ -145,7 +126,7 @@ private struct PopupHostView: View {
 
     var body: some View {
         rootShell
-            .environmentObject(homeViewModel)
+            .environment(homeViewModel)
             .modifier(PopupModifier())
             .onAppear {
                 configureTabBarAppearance()
@@ -404,7 +385,7 @@ private struct SidebarSectionRow: View {
 }
 
 private struct SidebarNowPlayingHint: View {
-    @ObservedObject private var popupState = PopupPlaybackState.shared
+    private let popupState = PopupPlaybackState.shared
 
     var body: some View {
         Group {
@@ -479,8 +460,8 @@ private extension RootSection {
 }
 
 private struct PopupModifier: ViewModifier {
-    @ObservedObject private var popupState = PopupPlaybackState.shared
-    @ObservedObject private var presentationState = PopupPresentationState.shared
+    private let popupState = PopupPlaybackState.shared
+    private let presentationState = PopupPresentationState.shared
 
     func body(content: Content) -> some View {
         content
@@ -524,7 +505,7 @@ private struct PopupModifier: ViewModifier {
 }
 
 private struct PopupContent: View {
-    @ObservedObject private var popupState: PopupPlaybackState
+    private let popupState: PopupPlaybackState
 
     init(popupState: PopupPlaybackState) {
         self.popupState = popupState
@@ -532,7 +513,7 @@ private struct PopupContent: View {
 
     var body: some View {
         FullScreenPlayerView()
-            .environmentObject(AudioPlayerManager.shared)
+            .environment(AudioPlayerManager.shared)
             .popupItem {
                 PopupItem(
                     id: popupState.id,

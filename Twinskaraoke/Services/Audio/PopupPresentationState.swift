@@ -1,11 +1,12 @@
-import Combine
 import SwiftUI
+import Observation
 
 @MainActor
-final class PopupPresentationState: ObservableObject {
+@Observable
+final class PopupPresentationState {
     static let shared = PopupPresentationState()
 
-    @Published private(set) var isExpanded = false
+    private(set) var isExpanded = false
 
     private init() {}
 

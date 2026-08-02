@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RandomSongsView: View {
-    @StateObject private var viewModel = RandomSongsViewModel()
+    @State private var viewModel = RandomSongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 

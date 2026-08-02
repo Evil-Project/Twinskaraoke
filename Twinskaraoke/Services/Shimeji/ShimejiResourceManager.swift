@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 #if canImport(UIKit)
     import UIKit
@@ -10,7 +10,8 @@ import Foundation
 /// characters/actions can ship without an app update — see manifest.json's
 /// `formatVersion` for the on-disk contract this expects.
 @MainActor
-final class ShimejiResourceManager: NSObject, ObservableObject {
+@Observable
+final class ShimejiResourceManager: NSObject {
     static let shared = ShimejiResourceManager()
 
     static let packURL = URL(string: "https://sb.sillyprootsoda.com/shimeji_nwero.zip")!
@@ -23,15 +24,15 @@ final class ShimejiResourceManager: NSObject, ObservableObject {
         case failed(String)
     }
 
-    @Published private(set) var state: State = .notDownloaded
-    @Published private(set) var manifest: ShimejiManifest?
+    private(set) var state: State = .notDownloaded
+    private(set) var manifest: ShimejiManifest?
 
     private var downloadTask: URLSessionDownloadTask?
     private var progressObservation: NSKeyValueObservation?
-    private var installationTask: Task<Void, Never>?
+    @ObservationIgnored private var installationTask: Task<Void, Never>?
     private var operationGeneration: UInt = 0
 
-    private lazy var packDirectory: URL = {
+    @ObservationIgnored private lazy var packDirectory: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("ShimejiPack", isDirectory: true)
     }()

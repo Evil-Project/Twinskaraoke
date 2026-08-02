@@ -1,9 +1,8 @@
-import Combine
 import Foundation
 import SwiftUI
 
 struct ArtistsView: View {
-    @StateObject private var viewModel = ArtistsViewModel()
+    @State private var viewModel = ArtistsViewModel()
     @State private var searchText = ""
 
 
@@ -154,7 +153,7 @@ private struct ArtistAvatarPlaceholder: View {
 
 struct ArtistDetailView: View {
     let artist: Artist
-    @StateObject private var loader = ArtistDetailViewModel()
+    @State private var loader = ArtistDetailViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showsCollapsedTitle = false
     private var current: Artist {

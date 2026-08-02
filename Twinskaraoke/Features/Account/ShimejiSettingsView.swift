@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ShimejiSettingsView: View {
-    @ObservedObject private var resources = ShimejiResourceManager.shared
+    private let resources = ShimejiResourceManager.shared
     @State private var spawnSettings = ShimejiSpawnSettings.load()
     @AppStorage("nk.shimeji.canClimb") private var canClimb: Bool = true
 

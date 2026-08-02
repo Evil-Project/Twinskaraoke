@@ -6,7 +6,7 @@ struct QueueRow: View {
     let isPlayingNext: Bool
     let onPlay: () -> Void
     let onRemove: () -> Void
-    @EnvironmentObject private var audioManager: AudioPlayerManager
+    @Environment(AudioPlayerManager.self) private var audioManager
     @State private var showAddToPlaylist = false
 
     var body: some View {
@@ -58,7 +58,7 @@ struct QueueRow: View {
                 }
             } preview: {
                 SongContextPreview(song: song)
-                    .environmentObject(audioManager)
+                    .environment(audioManager)
             }
             .accessibilityLabel("\(position). \(song.title), \(song.displayArtist)")
             .accessibilityValue(isPlayingNext ? "Playing next" : "Queued")

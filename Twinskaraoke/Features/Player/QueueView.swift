@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct QueueView: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
+    @Environment(AudioPlayerManager.self) var audioManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCurrentAddToPlaylist = false
@@ -248,7 +248,7 @@ struct QueueView: View {
             }
         } preview: {
             SongContextPreview(song: current)
-                .environmentObject(audioManager)
+                .environment(audioManager)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Now Playing")

@@ -28,7 +28,7 @@ import SwiftUI
 #endif
 
 struct VideoGalleryView: View {
-    @StateObject private var viewModel = VideoGalleryViewModel()
+    @State private var viewModel = VideoGalleryViewModel()
     private let cols = AM.Layout.adaptiveGridColumns(minimum: 164, spacing: 16)
     var body: some View {
         ScrollView {
@@ -390,7 +390,7 @@ struct VideoPlayerScreen: View {
     let video: GalleryVideo
     @State private var player: AVPlayer?
     @State private var appeared = false
-    @StateObject private var similar = SimilarVideosViewModel()
+    @State private var similar = SimilarVideosViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     private let audioWillPlay = NotificationCenter.default.publisher(
         for: MediaPlaybackCoordinator.audioWillPlay

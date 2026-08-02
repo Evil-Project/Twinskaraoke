@@ -109,7 +109,7 @@ import SwiftUI
     }
 
     private struct ShimejiOverlayRootView: View {
-        @ObservedObject private var engine = ShimejiEngine.shared
+        private let engine = ShimejiEngine.shared
 
         var body: some View {
             GeometryReader { proxy in

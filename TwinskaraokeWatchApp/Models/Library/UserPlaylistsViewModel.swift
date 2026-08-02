@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 /// The signed-in listener's own playlists.
 ///
@@ -8,12 +8,13 @@ import Foundation
 /// are mapped to `Playlist` so the existing watch grid and detail views work
 /// unchanged.
 @MainActor
-final class UserPlaylistsViewModel: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var isLoading = false
+@Observable
+final class UserPlaylistsViewModel {
+    var playlists: [Playlist] = []
+    var isLoading = false
     /// Set when the initial load fails so the view can offer a retry instead
     /// of showing a misleading empty state.
-    @Published var loadError: String?
+    var loadError: String?
 
     func fetch(force: Bool = false) {
         guard !isLoading else { return }

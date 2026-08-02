@@ -1,16 +1,17 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class ArtistsViewModel: ObservableObject {
-    @Published var artists: [Artist] = []
-    @Published var isLoading = false
-    @Published var canLoadMore = true
-    @Published private(set) var loadFailed = false
+@Observable
+final class ArtistsViewModel {
+    var artists: [Artist] = []
+    var isLoading = false
+    var canLoadMore = true
+    private(set) var loadFailed = false
     private var page = 0
     private let pageSize = 25
     private var loadGeneration = 0
-    private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
     func fetchInitial() {
         guard artists.isEmpty, !isLoading else { return }
         page = 0
@@ -98,14 +99,15 @@ final class ArtistsViewModel: ObservableObject {
 }
 
 @MainActor
-final class ArtistDetailViewModel: ObservableObject {
-    @Published var artist: Artist?
-    @Published var isLoading = false
-    @Published private(set) var hasLoadedDetail = false
-    @Published var errorMessage: String?
+@Observable
+final class ArtistDetailViewModel {
+    var artist: Artist?
+    var isLoading = false
+    private(set) var hasLoadedDetail = false
+    var errorMessage: String?
     private var loadedID: String?
     private var loadGeneration = 0
-    private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     func load(id: String, fallback: Artist?, force: Bool = false) {
         if !force, loadedID == id, hasLoadedDetail { return }

@@ -75,7 +75,7 @@ struct PlaylistArtworkContent: View {
 private struct PlaylistCoverWithLoader: View {
     let playlist: Playlist
     let cornerRadius: CGFloat
-    @StateObject private var loader = PlaylistCoverLoader()
+    @State private var loader = PlaylistCoverLoader()
 
     var body: some View {
         PlaylistArtworkContent(

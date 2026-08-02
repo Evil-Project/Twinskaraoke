@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ArtGalleryView: View {
-    @StateObject private var viewModel = ArtGalleryViewModel()
+    @State private var viewModel = ArtGalleryViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
 
     var body: some View {

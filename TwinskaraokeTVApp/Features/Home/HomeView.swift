@@ -3,8 +3,8 @@ import SwiftUI
 struct HomeView: View {
     let onPlay: (Song, [Song]) -> Void
 
-    @EnvironmentObject private var audioManager: AudioManager
-    @StateObject private var viewModel = HomeViewModel()
+    @Environment(AudioManager.self) private var audioManager
+    @State private var viewModel = HomeViewModel()
 
     var body: some View {
         Group {

@@ -1,13 +1,14 @@
-import Combine
 import Foundation
 import SwiftUI
+import Observation
 
 @MainActor
-final class RecentlyPlayedStore: ObservableObject {
+@Observable
+final class RecentlyPlayedStore {
     static let shared = RecentlyPlayedStore()
     private static let storageKey = "nk.recentlyPlayed.playlists.v1"
     private static let limit = 20
-    @Published private(set) var playlists: [Playlist] = []
+    private(set) var playlists: [Playlist] = []
     private init() {
         load()
     }

@@ -1,4 +1,3 @@
-import Combine
 import SDWebImageSwiftUI
 import SwiftUI
 
@@ -378,7 +377,7 @@ func withOptionalAnimation<Result>(
 }
 
 private struct BottomChromeScrollTrackingModifier: ViewModifier {
-    @ObservedObject private var chromeState = BottomChromeState.shared
+    private let chromeState = BottomChromeState.shared
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {

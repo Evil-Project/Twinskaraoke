@@ -1,11 +1,12 @@
-import Combine
 import Foundation
 import SwiftUI
+import Observation
 
 @MainActor
-final class FavoritesManager: ObservableObject {
+@Observable
+final class FavoritesManager {
     static let shared = FavoritesManager()
-    @Published private(set) var favoriteIDs: Set<String> = []
+    private(set) var favoriteIDs: Set<String> = []
     private var inFlight: Set<String> = []
     private var loaded = false
     private var isLoading = false

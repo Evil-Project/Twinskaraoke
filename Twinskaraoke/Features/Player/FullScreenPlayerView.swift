@@ -235,7 +235,7 @@ private struct PlayerFavoriteButton: View {
     var size: CGFloat = 44
     var showsChrome: Bool = true
 
-    @ObservedObject private var favorites = FavoritesManager.shared
+    private let favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -298,9 +298,9 @@ private struct PlayerMoreMenu: View {
 }
 
 struct FullScreenPlayerView: View {
-    @EnvironmentObject var audioManager: AudioPlayerManager
-    @ObservedObject private var popupPresentation = PopupPresentationState.shared
-    @ObservedObject private var favorites = FavoritesManager.shared
+    @Environment(AudioPlayerManager.self) var audioManager
+    private let popupPresentation = PopupPresentationState.shared
+    private let favorites = FavoritesManager.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
@@ -317,8 +317,8 @@ struct FullScreenPlayerView: View {
     @State private var easterEggArtistLink: String?
     @State private var coverArtArtistName: String?
     @State private var coverArtArtistLink: String?
-    @StateObject private var lyricsViewModel = LyricsViewModel()
-    @StateObject private var upcomingLyricsViewModel = LyricsViewModel()
+    @State private var lyricsViewModel = LyricsViewModel()
+    @State private var upcomingLyricsViewModel = LyricsViewModel()
 
     var body: some View {
         let song = audioManager.currentSong
@@ -381,10 +381,10 @@ struct FullScreenPlayerView: View {
             Group {
                 if audioManager.isRadioMode {
                     RadioQueueView()
-                        .environmentObject(audioManager)
+                        .environment(audioManager)
                 } else {
                     QueueView()
-                        .environmentObject(audioManager)
+                        .environment(audioManager)
                 }
             }
             .presentationDetents([.medium, .large])
@@ -944,8 +944,8 @@ struct FullScreenPlayerView: View {
 
     private struct PlayerProgressSection: View {
         let metrics: PlayerLayoutMetrics
-        @EnvironmentObject private var audioManager: AudioPlayerManager
-        @ObservedObject private var clock = PlaybackClock.shared
+        @Environment(AudioPlayerManager.self) private var audioManager
+        private let clock = PlaybackClock.shared
         @Environment(\.appReduceMotion) private var reduceMotion
 
         private func formattedTime(_ seconds: Double) -> String {
@@ -954,9 +954,11 @@ struct FullScreenPlayerView: View {
         }
 
         var body: some View {
+            @Bindable var clock = clock
+            @Bindable var audioManager = audioManager
             let duration = max(audioManager.playbackDuration, 0)
             let elapsed = min(max(audioManager.playbackTime, 0), duration)
-            VStack(spacing: 0) {
+            return VStack(spacing: 0) {
                 AppleMusicProgressBar(
                     progress: $clock.progress,
                     isScrubbing: $audioManager.isEditingProgress,
@@ -995,10 +997,17 @@ struct FullScreenPlayerView: View {
         var hasNoLyrics: Bool = false
         let onSeek: (TimeInterval) -> Void
         var onRetry: (() -> Void)?
-        @ObservedObject private var clock = PlaybackClock.shared
-        @EnvironmentObject private var audioManager: AudioPlayerManager
+        private let clock = PlaybackClock.shared
+        @Environment(AudioPlayerManager.self) private var audioManager
 
         var body: some View {
+            // This read is load-bearing. `audioManager.playbackTime` is a
+            // computed property over the AVPlayer, so it registers nothing with
+            // observation — reading `clock.progress`, which ticks with playback,
+            // is what re-evaluates this view and advances the highlighted line.
+            // Under @ObservedObject merely holding `clock` subscribed the view;
+            // @Observable only tracks properties that are actually read.
+            let _ = clock.progress
             LyricsView(
                 lyrics: lyrics,
                 currentTime: audioManager.playbackTime,

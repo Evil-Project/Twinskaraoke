@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct RadioQueueView: View {
-    @ObservedObject var radio = RadioController.shared
-    @EnvironmentObject var audioManager: AudioPlayerManager
+    let radio = RadioController.shared
+    @Environment(AudioPlayerManager.self) var audioManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
 

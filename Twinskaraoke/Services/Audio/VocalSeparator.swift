@@ -1,8 +1,8 @@
 import AVFoundation
-import Combine
 import CoreML
 import Foundation
 import Spleeter
+import Observation
 
 extension Notification.Name {
     static let vocalSeparatorDidCacheStems = Notification.Name("VocalSeparatorDidCacheStems")
@@ -141,7 +141,8 @@ struct SeparationJobOwnership {
 }
 
 @MainActor
-final class VocalSeparator: ObservableObject {
+@Observable
+final class VocalSeparator {
     static let shared = VocalSeparator()
 
     private enum SeparationTaskKind {
@@ -149,20 +150,20 @@ final class VocalSeparator: ObservableObject {
         case background
     }
 
-    @Published private(set) var processingSongID: String?
-    @Published private(set) var progressFraction: Float = 0
+    private(set) var processingSongID: String?
+    private(set) var progressFraction: Float = 0
     // progressFraction fans out to the whole player tree; only publish >=1%
     // deltas (plus exact completion) so minute-long analyses don't publish
     // hundreds of times.
     private var lastPublishedProgressFraction: Float = -1
-    @Published private(set) var isBackgroundAnalyzing: Bool = false
+    private(set) var isBackgroundAnalyzing: Bool = false
 
     let isAvailable: Bool
     private let modelURL: URL?
-    private var activeTask: Task<URL, Error>?
+    @ObservationIgnored private var activeTask: Task<URL, Error>?
     private var activeTaskKind: SeparationTaskKind?
-    private var backgroundAnalysisTask: Task<Void, Never>?
-    private var realtimeCleanupTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundAnalysisTask: Task<Void, Never>?
+    @ObservationIgnored private var realtimeCleanupTask: Task<Void, Never>?
     private var jobOwnership = SeparationJobOwnership()
 
     private nonisolated static var realtimeTempDir: URL {

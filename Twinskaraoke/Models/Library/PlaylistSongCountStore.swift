@@ -1,11 +1,12 @@
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class PlaylistSongCountStore: ObservableObject {
+@Observable
+final class PlaylistSongCountStore {
     static let shared = PlaylistSongCountStore()
 
-    @Published private var resolvedCounts: [String: Int] = [:]
+    private var resolvedCounts: [String: Int] = [:]
     private var loadingIDs: Set<String> = []
     private var generations: [String: UInt64] = [:]
 

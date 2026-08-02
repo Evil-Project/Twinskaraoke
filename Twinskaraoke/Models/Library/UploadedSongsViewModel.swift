@@ -1,34 +1,44 @@
 import AVFoundation
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class UploadedSongsViewModel: ObservableObject {
-    @Published private(set) var songs: [Song] = [] {
+@Observable
+final class UploadedSongsViewModel {
+    private(set) var songs: [Song] = [] {
         didSet { songsGeneration &+= 1 }
     }
-    @Published private(set) var displayedSongs: [Song] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var requiresSignIn = false
-    @Published private(set) var loadFailed = false
-    @Published var sort: LibrarySongSort = .recentlyAdded {
+    private(set) var displayedSongs: [Song] = []
+    private(set) var isLoading = false
+    private(set) var requiresSignIn = false
+    private(set) var loadFailed = false
+    var sort: LibrarySongSort = .recentlyAdded {
         didSet { rebuildDisplayedSongs() }
     }
-    @Published var searchText = ""
+    var searchText = "" {
+        didSet { scheduleDisplayedSongsRebuild() }
+    }
 
     private var hasLoaded = false
-    private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
     private var requestGeneration = 0
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var lastRebuiltSearchText = ""
     private var songsGeneration: UInt64 = 0
     private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
 
-    init() {
-        $searchText
-            .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
-            .removeDuplicates()
-            .sink { [weak self] _ in self?.rebuildDisplayedSongs() }
-            .store(in: &cancellables)
+    /// Replaces `$searchText.debounce(200ms).removeDuplicates()`. Filtering a
+    /// large library runs localized comparisons per song, so keystrokes must
+    /// still coalesce.
+    private func scheduleDisplayedSongsRebuild() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, let self else { return }
+            guard searchText != lastRebuiltSearchText else { return }
+            lastRebuiltSearchText = searchText
+            rebuildDisplayedSongs()
+        }
     }
 
     func loadIfNeeded() {
@@ -153,7 +163,7 @@ actor UploadedSongDurationResolver {
     static let shared = UploadedSongDurationResolver()
 
     private var resolvedDurations: [String: Int] = [:]
-    private var lookupTasks: [String: Task<Int?, Never>] = [:]
+    @ObservationIgnored private var lookupTasks: [String: Task<Int?, Never>] = [:]
 
     func fillingMissingDurations(
         in songs: [Song],
