@@ -160,6 +160,25 @@ class PlaylistDetailViewModel {
         }
     }
 
+    /// Drops a song from the list immediately so the row disappears under the
+    /// finger instead of after the round trip, and returns a closure that puts
+    /// it back at its original index if the server rejects the delete.
+    ///
+    /// Only the first match is removed: a playlist may legitimately hold the
+    /// same song twice, and the API removes one membership per call.
+    func removeSongOptimistically(_ song: Song) -> (() -> Void)? {
+        guard var current = songs,
+              let index = current.firstIndex(where: { $0.id == song.id })
+        else { return nil }
+        current.remove(at: index)
+        songs = current
+        return { [weak self] in
+            guard let self, var restored = songs else { return }
+            restored.insert(song, at: min(index, restored.count))
+            songs = restored
+        }
+    }
+
     deinit {
         loadTask?.cancel()
     }

@@ -321,6 +321,9 @@ struct SongActionsMenuItems: View {
     private let isDownloaded: Bool
     private let isDownloading: Bool
     private let favorites = FavoritesManager.shared
+    // Non-nil only inside an editable playlist the user owns; see
+    // PlaylistSongRemoval.swift.
+    @Environment(\.playlistSongRemoval) private var playlistRemoval
 
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {
         self.song = song
@@ -344,6 +347,15 @@ struct SongActionsMenuItems: View {
             onAddToPlaylist()
         } label: {
             Label("Add to Playlist", systemImage: "plus.circle")
+        }
+
+        if let playlistRemoval {
+            Button(role: .destructive) {
+                AppHaptic.warning.play()
+                playlistRemoval.remove(song)
+            } label: {
+                Label("Remove from Playlist", systemImage: "minus.circle")
+            }
         }
 
         Button {

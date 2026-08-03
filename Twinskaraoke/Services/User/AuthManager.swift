@@ -138,6 +138,11 @@ final class AuthManager: NSObject {
         isLoggedIn = true
         isLoading = false
         errorMessage = nil
+        // Repopulate what clearAccountScopedState() wipes, so the first song
+        // context menu after signing in already knows what is favorited and
+        // which playlists are the user's own.
+        FavoritesManager.shared.reload()
+        UserPlaylistsManager.shared.fetchPlaylists(force: true)
         NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
     }
 
