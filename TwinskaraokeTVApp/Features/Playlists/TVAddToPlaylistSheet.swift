@@ -55,7 +55,7 @@ struct TVAddToPlaylistSheet: View {
     @ViewBuilder
     private var content: some View {
         if !manager.isSignedIn {
-            message("Sign in from the Account tab to add songs to your playlists.")
+            message(String(localized: "Sign in from the Account tab to add songs to your playlists."))
         } else if manager.playlists.isEmpty && manager.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 200)
@@ -68,7 +68,7 @@ struct TVAddToPlaylistSheet: View {
             }
         } else if manager.playlists.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
-                message("You don’t have any playlists yet.")
+                message(String(localized: "You don’t have any playlists yet."))
                 TVActionButton(title: "New Playlist", systemImage: "plus") {
                     isCreating = true
                 }
@@ -114,7 +114,11 @@ struct TVAddToPlaylistSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(addingPlaylistID != nil)
+        // Only this row locks out, not the whole list: with every row disabled
+        // the tvOS focus engine has no valid target and the remote stops
+        // responding until the request lands. `add(to:)` still guards against a
+        // second submission.
+        .disabled(addingPlaylistID == playlist.id)
         .accessibilityLabel(display.name)
         .accessibilityValue(display.songCountText)
     }
@@ -137,7 +141,11 @@ struct TVAddToPlaylistSheet: View {
             if added {
                 dismiss()
             } else {
-                errorMessage = "Couldn’t add the song to “\(playlist.name)”. Try again."
+                // Interpolated inside String(localized:) so the catalog gets a
+                // format key rather than a pre-built string, and named from the
+                // same value the row displays.
+                let name = playlist.asPlaylist().name
+                errorMessage = String(localized: "Couldn’t add the song to “\(name)”. Try again.")
             }
         }
     }

@@ -37,7 +37,6 @@ final class PlaylistDetailViewModel {
     func removeSong(at index: Int) {
         guard songs.indices.contains(index) else { return }
         let song = songs[index]
-        let previousSongs = songs
         songs.remove(at: index)
 
         Task { [weak self] in
@@ -47,8 +46,12 @@ final class PlaylistDetailViewModel {
                 from: playlistID
             )
             guard removed else {
-                songs = previousSongs
-                actionError = "Couldn’t remove “\(song.title)”. Try again."
+                // Re-insert just this song rather than restoring a snapshot of
+                // the whole list: a second removal may have started and
+                // finished while this one was in flight, and a snapshot taken
+                // before either would undo its work too.
+                songs.insert(song, at: min(index, songs.count))
+                actionError = String(localized: "Couldn’t remove “\(song.title)”. Try again.")
                 return
             }
             // A playlist may legitimately list the same song twice, and the

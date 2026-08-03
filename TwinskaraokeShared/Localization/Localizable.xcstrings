@@ -2030,6 +2030,9 @@
     "Add songs to it from any of your devices." : {
 
     },
+    "Add songs to this playlist from the Twinskaraoke app on your phone, tablet, or the web." : {
+
+    },
     "Add songs to your library when you add them to playlists or favorite them. Sync keeps library changes available across this app on your devices." : {
       "localizations" : {
         "de" : {
@@ -3936,6 +3939,9 @@
     "Check this code matches the one on your phone before approving." : {
 
     },
+    "Check your connection and try again." : {
+
+    },
     "Checking Camera Access" : {
       "localizations" : {
         "de" : {
@@ -4797,6 +4803,12 @@
     "Couldn't load lyrics" : {
 
     },
+    "Couldn’t add the song to “%@”. Try again." : {
+
+    },
+    "Couldn’t create the playlist. Try again." : {
+
+    },
     "Couldn’t remove song" : {
 
     },
@@ -4813,6 +4825,9 @@
           }
         }
       }
+    },
+    "Couldn’t remove “%@”. Try again." : {
+
     },
     "Cover by %@" : {
       "localizations" : {
@@ -11461,6 +11476,9 @@
         }
       }
     },
+    "No songs yet" : {
+
+    },
     "Not signed in" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12095,6 +12113,9 @@
           }
         }
       }
+    },
+    "Open the Account tab and pair this Apple TV with your phone to get your playlists here." : {
+
     },
     "Open Twinskaraoke on your iPhone, go to Account → Sign in on web, and scan the code to sign in here." : {
 
@@ -18777,6 +18798,9 @@
         }
       }
     },
+    "Sign in from the Account tab to add songs to your playlists." : {
+
+    },
     "Sign in on web" : {
       "localizations" : {
         "de" : {
@@ -18984,6 +19008,9 @@
           }
         }
       }
+    },
+    "Sign in to see your playlists" : {
+
     },
     "Sign in to Twinskaraoke" : {
       "localizations" : {
@@ -19950,6 +19977,9 @@
         }
       }
     },
+    "Start a playlist" : {
+
+    },
     "Starts playback." : {
       "localizations" : {
         "de" : {
@@ -20432,6 +20462,9 @@
           }
         }
       }
+    },
+    "Switches between private and public." : {
+
     },
     "Sync" : {
       "extractionState" : "stale",
@@ -22657,6 +22690,9 @@
           }
         }
       }
+    },
+    "You don’t have any playlists yet." : {
+
     },
     "You haven’t made a playlist yet. Create one here, then add songs to it from any of your devices." : {
 

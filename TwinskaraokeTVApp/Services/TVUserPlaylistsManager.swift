@@ -85,7 +85,11 @@ final class TVUserPlaylistsManager {
                 self.loadedToken = token
             } catch {
                 guard self.generation == generation else { return }
-                self.loadError = "Check your connection and try again."
+                DebugLogger.log(
+                    "User playlists load failed: \(String(describing: error))",
+                    category: .network
+                )
+                self.loadError = String(localized: "Check your connection and try again.")
             }
         }
     }
@@ -108,6 +112,10 @@ final class TVUserPlaylistsManager {
             let request = try KaraokeAPIClient.jsonRequest(path: "/api/playlist/save", body: body)
             _ = try await KaraokeAPIClient.data(for: request)
         } catch {
+            DebugLogger.log(
+                "Playlist create failed: \(String(describing: error))",
+                category: .network
+            )
             return false
         }
 
@@ -128,6 +136,10 @@ final class TVUserPlaylistsManager {
             request.httpMethod = "PUT"
             _ = try await KaraokeAPIClient.data(for: request)
         } catch {
+            DebugLogger.log(
+                "Add song \(songID) to playlist \(playlistID) failed: \(String(describing: error))",
+                category: .network
+            )
             return false
         }
 
@@ -160,6 +172,10 @@ final class TVUserPlaylistsManager {
             // failure there would put the row back behind an error alert
             // despite the song being gone server-side.
         } catch {
+            DebugLogger.log(
+                "Remove song \(songID) from playlist \(playlistID) failed: \(String(describing: error))",
+                category: .network
+            )
             return false
         }
 

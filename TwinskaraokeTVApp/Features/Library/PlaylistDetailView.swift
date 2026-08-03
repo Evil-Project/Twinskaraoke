@@ -136,12 +136,17 @@ struct PlaylistDetailView: View {
                 }
             }
         }
-        .accessibilityAction(named: "Add to Playlist") {
-            songToAdd = song
-        }
-        .accessibilityAction(named: "Remove from Playlist") {
-            guard canRemoveSongs else { return }
-            viewModel.removeSong(at: index)
+        // Built as one set so the removal action is *absent* on a playlist the
+        // user can't edit, rather than present and silently doing nothing.
+        .accessibilityActions {
+            Button("Add to Playlist") {
+                songToAdd = song
+            }
+            if canRemoveSongs {
+                Button("Remove from Playlist") {
+                    viewModel.removeSong(at: index)
+                }
+            }
         }
     }
 

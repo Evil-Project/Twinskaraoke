@@ -117,6 +117,10 @@ struct TVCreatePlaylistSheet: View {
             .disabled(isSaving)
             .accessibilityLabel("Playlist privacy")
             .accessibilityValue(isPublic ? "Public" : "Private")
+            // The label replaces the composed children, so without a hint the
+            // announcement is "Playlist privacy, Private, button" — nothing
+            // says that activating it switches the setting.
+            .accessibilityHint("Switches between private and public.")
 
             Text("Public playlists can be discovered by other users.")
                 .font(.body)
@@ -124,26 +128,27 @@ struct TVCreatePlaylistSheet: View {
         }
     }
 
+    /// Cancel stays enabled and the create button stays in place while saving,
+    /// rather than being disabled and swapped for a bare progress view: tvOS
+    /// moves focus off a control that becomes unfocusable, and with every
+    /// control in the sheet disabled the focus engine has nowhere to go — the
+    /// remote goes dead until the request lands.
     private var actions: some View {
         HStack(spacing: 20) {
             TVActionButton(title: "Cancel", systemImage: "xmark") {
                 dismiss()
             }
-            .disabled(isSaving)
+
+            TVActionButton(
+                title: isSaving ? "Creating…" : "Create Playlist",
+                systemImage: "plus"
+            ) {
+                save()
+            }
+            .disabled(!canSave)
 
             if isSaving {
-                HStack(spacing: 16) {
-                    ProgressView()
-                    Text("Creating…")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 20)
-            } else {
-                TVActionButton(title: "Create Playlist", systemImage: "plus") {
-                    save()
-                }
-                .disabled(!canSave)
+                ProgressView()
             }
         }
         .padding(.top, 8)
@@ -165,7 +170,11 @@ struct TVCreatePlaylistSheet: View {
             if created {
                 dismiss()
             } else {
-                errorMessage = "Couldn’t create the playlist. Try again."
+                // String(localized:) rather than a bare literal: this is stored
+                // in a String and rendered through `Label(_:systemImage:)`,
+                // which picks the non-localizing StringProtocol overload, so an
+                // unwrapped literal would never reach the catalog.
+                errorMessage = String(localized: "Couldn’t create the playlist. Try again.")
             }
         }
     }
