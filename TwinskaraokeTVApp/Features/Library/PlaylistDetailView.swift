@@ -6,6 +6,7 @@ struct PlaylistDetailView: View {
 
     @Environment(AudioManager.self) private var audioManager
     @State private var viewModel: PlaylistDetailViewModel
+    @State private var songToAdd: Song?
 
     init(playlist: Playlist, onPlay: @escaping (Song, [Song]) -> Void) {
         self.playlist = playlist
@@ -27,6 +28,18 @@ struct PlaylistDetailView: View {
         // twice, with the nav-bar copy sliding around during the push
         // transition and on scroll.
         .onAppear { viewModel.fetchSongs() }
+        .addToPlaylistSheet(song: $songToAdd)
+        .alert(
+            "Couldn’t remove song",
+            isPresented: Binding(
+                get: { viewModel.actionError != nil },
+                set: { if !$0 { viewModel.actionError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.actionError ?? "")
+        }
     }
 
     private var header: some View {
@@ -68,6 +81,15 @@ struct PlaylistDetailView: View {
         } else if viewModel.songs.isEmpty && viewModel.isLoading {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 400)
+        } else if viewModel.songs.isEmpty {
+            // A playlist created on this Apple TV starts empty, so this is a
+            // state users reach immediately rather than an edge case.
+            TVEmptyState(
+                systemImage: "music.note.list",
+                title: "No songs yet",
+                message: "Add songs to this playlist from the Twinskaraoke app on your phone, tablet, or the web."
+            )
+            .frame(height: 400)
         } else {
             // Enough gap for the focus pill, which scales slightly past the
             // row's own bounds — at a tighter spacing it laps onto the artwork
@@ -77,17 +99,42 @@ struct PlaylistDetailView: View {
                 // list the same song twice, and duplicate SwiftUI identities
                 // drop or mis-animate rows.
                 ForEach(Array(viewModel.songs.enumerated()), id: \.offset) { index, song in
-                    let isCurrent = audioManager.currentSong?.id == song.id
-                    TVSongRow(
-                        index: index + 1,
-                        song: song,
-                        isCurrent: isCurrent,
-                        isPlaying: isCurrent && audioManager.isPlaying
-                    ) {
-                        onPlay(song, viewModel.songs)
-                    }
+                    row(for: song, at: index)
                 }
             }
+        }
+    }
+
+    /// Long-pressing the remote's select button opens the context menu. Adding
+    /// to another playlist works anywhere; removing is offered only on the
+    /// user's own playlists — a curated one isn't theirs to edit.
+    private func row(for song: Song, at index: Int) -> some View {
+        let isCurrent = audioManager.currentSong?.id == song.id
+        return TVSongRow(
+            index: index + 1,
+            song: song,
+            isCurrent: isCurrent,
+            isPlaying: isCurrent && audioManager.isPlaying
+        ) {
+            onPlay(song, viewModel.songs)
+        }
+        .contextMenu {
+            TVAddToPlaylistMenuButton(song: song, selection: $songToAdd)
+
+            if playlist.isPersonal {
+                Button(role: .destructive) {
+                    viewModel.removeSong(at: index)
+                } label: {
+                    Label("Remove from Playlist", systemImage: "minus.circle")
+                }
+            }
+        }
+        .accessibilityAction(named: "Add to Playlist") {
+            songToAdd = song
+        }
+        .accessibilityAction(named: "Remove from Playlist") {
+            guard playlist.isPersonal else { return }
+            viewModel.removeSong(at: index)
         }
     }
 }

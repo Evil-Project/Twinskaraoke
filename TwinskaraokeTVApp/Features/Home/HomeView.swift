@@ -5,6 +5,7 @@ struct HomeView: View {
 
     @Environment(AudioManager.self) private var audioManager
     @State private var viewModel = HomeViewModel()
+    @State private var songToAdd: Song?
 
     var body: some View {
         Group {
@@ -18,6 +19,7 @@ struct HomeView: View {
             }
         }
         .onAppear { viewModel.fetch() }
+        .addToPlaylistSheet(song: $songToAdd)
     }
 
     private var content: some View {
@@ -47,6 +49,9 @@ struct HomeView: View {
                             isPlaying: isCurrent && audioManager.isPlaying
                         ) {
                             onPlay(song, songs)
+                        }
+                        .contextMenu {
+                            TVAddToPlaylistMenuButton(song: song, selection: $songToAdd)
                         }
                     }
                 }

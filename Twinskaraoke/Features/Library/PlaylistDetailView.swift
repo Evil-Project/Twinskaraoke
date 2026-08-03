@@ -149,6 +149,17 @@ struct PlaylistDetailView: View {
         // .transition(.opacity) modifiers still animate the swap cheaply.
         .scrollIndicators(.hidden)
         .musicScreenBackground()
+        .alert(
+            "Couldn't remove song",
+            isPresented: Binding(
+                get: { loader.removeError != nil },
+                set: { if !$0 { loader.removeError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(loader.removeError ?? "")
+        }
         .onAppear {
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             RecentlyPlayedStore.shared.record(playlist)
@@ -577,6 +588,9 @@ struct PlaylistDetailView: View {
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
                         .accessibilityIdentifier("PlaylistDetail.song.\(item.offset).\(item.song.id)")
+                        .modifier(RemoveFromPlaylistMenu(isEnabled: canEditSongs) {
+                            loader.removeSong(item.song, from: playlist.id)
+                        })
                         if item.offset < displayedSongs.count - 1 {
                             Divider().padding(.leading, rowHorizontalPadding + 60)
                         }
@@ -637,6 +651,35 @@ struct PlaylistDetailView: View {
     private func play(_ song: Song, context: [Song]) {
         AppHaptic.selection.play()
         AudioPlayerManager.shared.play(song: song, context: context)
+    }
+
+    /// Only the user's own playlists can lose songs — a curated or saved
+    /// playlist isn't theirs to edit, and Favourites is emptied by unfavouriting.
+    private var canEditSongs: Bool {
+        playlist.isPersonal && !playlist.isFavorites
+    }
+}
+
+/// Adds the remove action to a playlist row's long-press menu. A modifier
+/// rather than a plain `.contextMenu` so rows on playlists the user can't edit
+/// keep no menu at all, instead of opening an empty one.
+private struct RemoveFromPlaylistMenu: ViewModifier {
+    let isEnabled: Bool
+    let remove: () -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.contextMenu {
+                Button(role: .destructive) {
+                    AppHaptic.warning.play()
+                    remove()
+                } label: {
+                    Label("Remove from Playlist", systemImage: "minus.circle")
+                }
+            }
+        } else {
+            content
+        }
     }
 }
 

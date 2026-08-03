@@ -2017,6 +2017,9 @@
         }
       }
     },
+    "Add songs to it from any of your devices." : {
+
+    },
     "Add songs to your library when you add them to playlists or favorite them. Sync keeps library changes available across this app on your devices." : {
       "localizations" : {
         "de" : {
@@ -2643,6 +2646,9 @@
           }
         }
       }
+    },
+    "Anyone can find it" : {
+
     },
     "App Languages" : {
 
@@ -4778,6 +4784,12 @@
         }
       }
     },
+    "Couldn't load lyrics" : {
+
+    },
+    "Couldn’t remove song" : {
+
+    },
     "Couldn't save" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4957,6 +4969,9 @@
           }
         }
       }
+    },
+    "Creating…" : {
+
     },
     "Credits" : {
       "localizations" : {
@@ -5241,6 +5256,9 @@
       }
     },
     "Deletes songs saved on this watch. They download again when played." : {
+
+    },
+    "Description (optional)" : {
 
     },
     "Developer" : {
@@ -11115,6 +11133,9 @@
         }
       }
     },
+    "No lyrics for this song" : {
+
+    },
     "No Results" : {
       "localizations" : {
         "de" : {
@@ -11688,6 +11709,9 @@
         }
       }
     },
+    "OK" : {
+
+    },
     "On" : {
       "localizations" : {
         "de" : {
@@ -11899,6 +11923,9 @@
           }
         }
       }
+    },
+    "Only you can see it" : {
+
     },
     "Open %@" : {
       "localizations" : {
@@ -13611,6 +13638,9 @@
         }
       }
     },
+    "Playing" : {
+
+    },
     "Playing live" : {
 
     },
@@ -13769,6 +13799,12 @@
           }
         }
       }
+    },
+    "Playlist Name" : {
+
+    },
+    "Playlist privacy" : {
+
     },
     "Playlists" : {
       "localizations" : {
@@ -15433,9 +15469,6 @@
     "Refresh Playlist" : {
 
     },
-    "Refresh Profile" : {
-
-    },
     "Refresh radio metadata" : {
       "localizations" : {
         "de" : {
@@ -15750,9 +15783,6 @@
           }
         }
       }
-    },
-    "Refreshing…" : {
-
     },
     "Removal Level" : {
       "localizations" : {
@@ -16121,6 +16151,9 @@
           }
         }
       }
+    },
+    "Remove from Playlist" : {
+
     },
     "Remove from Queue" : {
       "localizations" : {
@@ -20755,6 +20788,9 @@
     "There's nothing loaded to play on this watch." : {
 
     },
+    "They'll show up here when they're available." : {
+
+    },
     "This result cannot be played on Apple Watch." : {
       "localizations" : {
         "de" : {
@@ -22602,6 +22638,9 @@
           }
         }
       }
+    },
+    "You haven’t made a playlist yet. Create one here, then add songs to it from any of your devices." : {
+
     },
     "You reached Level %lld" : {
       "localizations" : {

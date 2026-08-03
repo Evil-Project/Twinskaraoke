@@ -111,7 +111,7 @@ final class UserPlaylistsManager {
             req.httpMethod = "PUT"
             let ok = (try? await KaraokeAPIClient.data(for: req)) != nil
             if ok {
-                bumpSongCount(forPlaylist: playlistID)
+                adjustSongCount(forPlaylist: playlistID, by: 1)
                 PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
                 await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
             }
@@ -119,7 +119,35 @@ final class UserPlaylistsManager {
         }
     }
 
-    private func bumpSongCount(forPlaylist playlistID: String) {
+    func removeSong(
+        _ songID: String,
+        fromPlaylist playlistID: String,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        guard CredentialStore.isAuthenticated else {
+            completion?(false)
+            return
+        }
+
+        Task {
+            guard var req = try? KaraokeAPIClient.request(
+                pathSegments: ["api", "playlist", playlistID, "song", songID]
+            ) else {
+                completion?(false)
+                return
+            }
+            req.httpMethod = "DELETE"
+            let ok = (try? await KaraokeAPIClient.data(for: req)) != nil
+            if ok {
+                adjustSongCount(forPlaylist: playlistID, by: -1)
+                PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
+                await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
+            }
+            completion?(ok)
+        }
+    }
+
+    private func adjustSongCount(forPlaylist playlistID: String, by delta: Int) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         let playlist = playlists[index]
         playlists[index] = UserPlaylist(
@@ -132,7 +160,7 @@ final class UserPlaylistsManager {
             createdAt: playlist.createdAt,
             updatedAt: playlist.updatedAt,
             totalDuration: playlist.totalDuration,
-            songCount: playlist.songCount + 1,
+            songCount: max(0, playlist.songCount + delta),
             playCount: playlist.playCount,
             favoriteCount: playlist.favoriteCount,
             playlistType: playlist.playlistType,
