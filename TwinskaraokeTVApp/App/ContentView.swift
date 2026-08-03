@@ -4,6 +4,7 @@ enum TVTab: Hashable {
     case home
     case search
     case library
+    case playlists
     case account
     case nowPlaying
 }
@@ -26,13 +27,21 @@ struct ContentView: View {
                 .tabItem { Label("Library", systemImage: "music.note.list") }
                 .tag(TVTab.library)
 
+            PlaylistsView(onPlay: play)
+                .tabItem { Label("Playlists", systemImage: "list.bullet") }
+                .tag(TVTab.playlists)
+
             AccountView()
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
                 .tag(TVTab.account)
 
             PlayerView()
-                .tabItem { Label("Now Playing", systemImage: "play.circle.fill") }
+                // "Playing", not "Now Playing": the tvOS tab bar is a
+                // fixed-width pill, and a sixth tab pushes the last label past
+                // its right edge, where it renders half-faded at rest.
+                .tabItem { Label("Playing", systemImage: "play.circle.fill") }
                 .tag(TVTab.nowPlaying)
+                .accessibilityLabel("Now Playing")
         }
         .environment(audioManager)
         .tint(.appAccent)

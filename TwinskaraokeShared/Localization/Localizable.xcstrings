@@ -2027,6 +2027,12 @@
         }
       }
     },
+    "Add songs to it from any of your devices." : {
+
+    },
+    "Add songs to this playlist from the Twinskaraoke app on your phone, tablet, or the web." : {
+
+    },
     "Add songs to your library when you add them to playlists or favorite them. Sync keeps library changes available across this app on your devices." : {
       "localizations" : {
         "de" : {
@@ -2653,6 +2659,9 @@
           }
         }
       }
+    },
+    "Anyone can find it" : {
+
     },
     "App Languages" : {
 
@@ -3930,6 +3939,9 @@
     "Check this code matches the one on your phone before approving." : {
 
     },
+    "Check your connection and try again." : {
+
+    },
     "Checking Camera Access" : {
       "localizations" : {
         "de" : {
@@ -4788,6 +4800,18 @@
         }
       }
     },
+    "Couldn't load lyrics" : {
+
+    },
+    "Couldn’t add the song to “%@”. Try again." : {
+
+    },
+    "Couldn’t create the playlist. Try again." : {
+
+    },
+    "Couldn’t remove song" : {
+
+    },
     "Couldn't Remove Song" : {
 
     },
@@ -4801,6 +4825,9 @@
           }
         }
       }
+    },
+    "Couldn’t remove “%@”. Try again." : {
+
     },
     "Cover by %@" : {
       "localizations" : {
@@ -4970,6 +4997,9 @@
           }
         }
       }
+    },
+    "Creating…" : {
+
     },
     "Credits" : {
       "localizations" : {
@@ -5254,6 +5284,9 @@
       }
     },
     "Deletes songs saved on this watch. They download again when played." : {
+
+    },
+    "Description (optional)" : {
 
     },
     "Developer" : {
@@ -11128,6 +11161,9 @@
         }
       }
     },
+    "No lyrics for this song" : {
+
+    },
     "No Results" : {
       "localizations" : {
         "de" : {
@@ -11439,6 +11475,9 @@
           }
         }
       }
+    },
+    "No songs yet" : {
+
     },
     "Not signed in" : {
       "extractionState" : "stale",
@@ -11916,6 +11955,9 @@
         }
       }
     },
+    "Only you can see it" : {
+
+    },
     "Open %@" : {
       "localizations" : {
         "de" : {
@@ -12071,6 +12113,9 @@
           }
         }
       }
+    },
+    "Open the Account tab and pair this Apple TV with your phone to get your playlists here." : {
+
     },
     "Open Twinskaraoke on your iPhone, go to Account → Sign in on web, and scan the code to sign in here." : {
 
@@ -13627,6 +13672,9 @@
         }
       }
     },
+    "Playing" : {
+
+    },
     "Playing live" : {
 
     },
@@ -13785,6 +13833,12 @@
           }
         }
       }
+    },
+    "Playlist Name" : {
+
+    },
+    "Playlist privacy" : {
+
     },
     "Playlists" : {
       "localizations" : {
@@ -18744,6 +18798,9 @@
         }
       }
     },
+    "Sign in from the Account tab to add songs to your playlists." : {
+
+    },
     "Sign in on web" : {
       "localizations" : {
         "de" : {
@@ -18951,6 +19008,9 @@
           }
         }
       }
+    },
+    "Sign in to see your playlists" : {
+
     },
     "Sign in to Twinskaraoke" : {
       "localizations" : {
@@ -19917,6 +19977,9 @@
         }
       }
     },
+    "Start a playlist" : {
+
+    },
     "Starts playback." : {
       "localizations" : {
         "de" : {
@@ -20400,6 +20463,9 @@
         }
       }
     },
+    "Switches between private and public." : {
+
+    },
     "Sync" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20772,6 +20838,9 @@
       }
     },
     "There's nothing loaded to play on this watch." : {
+
+    },
+    "They'll show up here when they're available." : {
 
     },
     "This result cannot be played on Apple Watch." : {
@@ -22621,6 +22690,12 @@
           }
         }
       }
+    },
+    "You don’t have any playlists yet." : {
+
+    },
+    "You haven’t made a playlist yet. Create one here, then add songs to it from any of your devices." : {
+
     },
     "You reached Level %lld" : {
       "localizations" : {

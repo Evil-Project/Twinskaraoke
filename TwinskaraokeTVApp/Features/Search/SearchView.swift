@@ -5,6 +5,7 @@ struct SearchView: View {
 
     @Environment(AudioManager.self) private var audioManager
     @State private var viewModel = SearchViewModel()
+    @State private var songToAdd: Song?
 
     var body: some View {
         // @Observable models expose bindings through @Bindable rather than the
@@ -16,6 +17,7 @@ struct SearchView: View {
             content
                 .searchable(text: $viewModel.searchText, prompt: "Songs, artists")
         }
+        .addToPlaylistSheet(song: $songToAdd)
     }
 
     @ViewBuilder
@@ -64,6 +66,13 @@ struct SearchView: View {
                         onPlay(song, viewModel.playableSongs)
                     }
                     .disabled(song == nil)
+                    // Only real catalog songs: an unplayable oss-only result
+                    // has no song the server would accept into a playlist.
+                    .contextMenu {
+                        if let song {
+                            TVAddToPlaylistMenuButton(song: song, selection: $songToAdd)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 80)
