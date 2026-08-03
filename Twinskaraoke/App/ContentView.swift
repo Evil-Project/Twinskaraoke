@@ -130,6 +130,15 @@ private struct PopupHostView: View {
             .modifier(PopupModifier())
             .onAppear {
                 configureTabBarAppearance()
+                // Warm the account-scoped state that the shared song context
+                // menu reads. Both used to load only when Library (or the
+                // full-screen player) first appeared, so a long-press before
+                // that — or during the fetch — rendered "Favorite" for a song
+                // that was already favorited, and hid "Remove from Playlist".
+                // A context menu's contents are snapshotted when it opens, so a
+                // load landing mid-press cannot correct the label afterwards.
+                FavoritesManager.shared.loadIfNeeded()
+                UserPlaylistsManager.shared.loadIfNeeded()
                 if DeveloperMode.shouldTriggerEasterEgg() {
                     showCaptcha = true
                 }
