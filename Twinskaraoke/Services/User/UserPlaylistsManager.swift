@@ -119,6 +119,10 @@ final class UserPlaylistsManager {
         }
     }
 
+    /// Note the different route shape from `addSong`: adding is
+    /// `PUT /api/user/playlists/{id}?songId=`, but the only method that path
+    /// accepts is PUT — removal lives on `/api/playlist/{id}/song/{songId}`,
+    /// which accepts DELETE alone.
     func removeSong(
         _ songID: String,
         fromPlaylist playlistID: String,
@@ -137,7 +141,21 @@ final class UserPlaylistsManager {
                 return
             }
             req.httpMethod = "DELETE"
-            let ok = (try? await KaraokeAPIClient.data(for: req)) != nil
+            // A 404 means the membership isn't there — which is exactly what
+            // the caller asked for, so it counts as success. This is reachable:
+            // data(for:) classes DELETE as idempotent and retries it, so losing
+            // the response to a request the server did apply produces a second
+            // DELETE that 404s. Reporting failure there would restore the row
+            // behind an error alert despite the song being gone server-side.
+            let ok: Bool
+            do {
+                _ = try await KaraokeAPIClient.data(for: req)
+                ok = true
+            } catch KaraokeAPIClient.APIError.httpStatus(404) {
+                ok = true
+            } catch {
+                ok = false
+            }
             if ok {
                 adjustSongCount(forPlaylist: playlistID, by: -1)
                 PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)

@@ -25,6 +25,8 @@ struct PlaylistDetailView: View {
     @State private var filterTask: Task<Void, Never>?
     @State private var favoritesRefreshTask: Task<Void, Never>?
     @State private var prefetchedIDs: [String] = []
+    @State private var removalErrorSong: Song?
+    private let userPlaylists = UserPlaylistsManager.shared
     @FocusState private var isSearchFocused: Bool
 
     init(playlist: Playlist) {
@@ -150,18 +152,22 @@ struct PlaylistDetailView: View {
         .scrollIndicators(.hidden)
         .musicScreenBackground()
         .alert(
-            "Couldn't remove song",
+            "Couldn't Remove Song",
             isPresented: Binding(
-                get: { loader.removeError != nil },
-                set: { if !$0 { loader.removeError = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(loader.removeError ?? "")
+                get: { removalErrorSong != nil },
+                set: { if !$0 { removalErrorSong = nil } }
+            ),
+            presenting: removalErrorSong
+        ) { _ in
+            Button("OK", role: .cancel) { removalErrorSong = nil }
+        } message: { song in
+            Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
         .onAppear {
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
+            // The removal menu item is gated on this list; without the warm-up
+            // it stays hidden until something else happens to load it.
+            userPlaylists.loadIfNeeded()
             RecentlyPlayedStore.shared.record(playlist)
             prefetchedIDs = Array(displayedSongs.prefix(18)).map(\.id)
             prefetchArtwork(songs: displayedSongs)
@@ -588,15 +594,13 @@ struct PlaylistDetailView: View {
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
                         .accessibilityIdentifier("PlaylistDetail.song.\(item.offset).\(item.song.id)")
-                        .modifier(RemoveFromPlaylistMenu(isEnabled: canEditSongs) {
-                            loader.removeSong(item.song, from: playlist.id)
-                        })
                         if item.offset < displayedSongs.count - 1 {
                             Divider().padding(.leading, rowHorizontalPadding + 60)
                         }
                     }
                 }
             }
+            .environment(\.playlistSongRemoval, songRemovalContext)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         } else if loader.isLoading, songs.isEmpty {
             PlaylistLoadingRows(horizontalPadding: rowHorizontalPadding)
@@ -653,32 +657,33 @@ struct PlaylistDetailView: View {
         AudioPlayerManager.shared.play(song: song, context: context)
     }
 
-    /// Only the user's own playlists can lose songs — a curated or saved
-    /// playlist isn't theirs to edit, and Favourites is emptied by unfavouriting.
-    private var canEditSongs: Bool {
-        playlist.isPersonal && !playlist.isFavorites
+    /// Non-nil only for a playlist the signed-in user owns. Favorites is
+    /// excluded: its membership is owned by the star action, which the same
+    /// menu already offers.
+    private var songRemovalContext: PlaylistSongRemovalContext? {
+        // Membership in /api/user/playlists is the whole ownership test. The
+        // payload's `editable`/`deletable` flags are NOT usable here: the
+        // server returns false for both on playlists the signed-in user created
+        // themselves (verified on device), so gating on them hid the action
+        // everywhere. `isPersonal` is equally useless — the instance reaching
+        // this screen comes from /api/playlists, which leaves it false.
+        guard !playlist.isFavorites,
+              userPlaylists.playlists.contains(where: { $0.id == playlist.id })
+        else { return nil }
+        return PlaylistSongRemovalContext(
+            playlistID: playlist.id,
+            playlistName: playlist.name,
+            remove: { song in remove(song) }
+        )
     }
-}
 
-/// Adds the remove action to a playlist row's long-press menu. A modifier
-/// rather than a plain `.contextMenu` so rows on playlists the user can't edit
-/// keep no menu at all, instead of opening an empty one.
-private struct RemoveFromPlaylistMenu: ViewModifier {
-    let isEnabled: Bool
-    let remove: () -> Void
-
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content.contextMenu {
-                Button(role: .destructive) {
-                    AppHaptic.warning.play()
-                    remove()
-                } label: {
-                    Label("Remove from Playlist", systemImage: "minus.circle")
-                }
-            }
-        } else {
-            content
+    private func remove(_ song: Song) {
+        guard let restore = loader.removeSongOptimistically(song) else { return }
+        userPlaylists.removeSong(song.id, fromPlaylist: playlist.id) { success in
+            guard !success else { return }
+            AppHaptic.error.play()
+            restore()
+            removalErrorSong = song
         }
     }
 }

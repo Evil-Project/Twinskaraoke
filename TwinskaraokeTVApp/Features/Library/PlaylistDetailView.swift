@@ -7,6 +7,7 @@ struct PlaylistDetailView: View {
     @Environment(AudioManager.self) private var audioManager
     @State private var viewModel: PlaylistDetailViewModel
     @State private var songToAdd: Song?
+    private let userPlaylists = TVUserPlaylistsManager.shared
 
     init(playlist: Playlist, onPlay: @escaping (Song, [Song]) -> Void) {
         self.playlist = playlist
@@ -27,7 +28,13 @@ struct PlaylistDetailView: View {
         // the title for this screen, and setting both renders the playlist name
         // twice, with the nav-bar copy sliding around during the push
         // transition and on scroll.
-        .onAppear { viewModel.fetchSongs() }
+        .onAppear {
+            viewModel.fetchSongs()
+            // The removal item is gated on this list; without the warm-up it
+            // stays hidden when the playlist was opened from the Library tab
+            // rather than the Playlists tab.
+            userPlaylists.loadIfNeeded()
+        }
         .addToPlaylistSheet(song: $songToAdd)
         .alert(
             "Couldn’t remove song",
@@ -121,7 +128,7 @@ struct PlaylistDetailView: View {
         .contextMenu {
             TVAddToPlaylistMenuButton(song: song, selection: $songToAdd)
 
-            if playlist.isPersonal {
+            if canRemoveSongs {
                 Button(role: .destructive) {
                     viewModel.removeSong(at: index)
                 } label: {
@@ -133,8 +140,18 @@ struct PlaylistDetailView: View {
             songToAdd = song
         }
         .accessibilityAction(named: "Remove from Playlist") {
-            guard playlist.isPersonal else { return }
+            guard canRemoveSongs else { return }
             viewModel.removeSong(at: index)
         }
+    }
+
+    /// Membership in `/api/user/playlists` is the whole ownership test. The
+    /// payload's `editable`/`deletable` flags are not usable: the server
+    /// returns false for both even on playlists the signed-in user created.
+    /// `isPersonal` is only set on the instances `PlaylistsView` builds, so it
+    /// would hide the action on the same playlist opened from the Library tab.
+    private var canRemoveSongs: Bool {
+        guard playlist.id != Playlist.favoritesID else { return false }
+        return userPlaylists.playlists.contains { $0.id == playlist.id }
     }
 }

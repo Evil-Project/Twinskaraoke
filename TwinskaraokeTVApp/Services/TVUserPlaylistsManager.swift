@@ -138,6 +138,11 @@ final class TVUserPlaylistsManager {
 
     /// Removes one song from one of the user's playlists.
     /// Returns `false` if the server didn't accept the removal.
+    ///
+    /// Note the different route shape from `addSong`: adding is
+    /// `PUT /api/user/playlists/{id}?songId=`, the only method that path
+    /// accepts, while removal lives on `/api/playlist/{id}/song/{songId}` and
+    /// accepts DELETE alone.
     func removeSong(_ songID: String, from playlistID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
 
@@ -147,6 +152,13 @@ final class TVUserPlaylistsManager {
             )
             request.httpMethod = "DELETE"
             _ = try await KaraokeAPIClient.data(for: request)
+        } catch KaraokeAPIClient.APIError.httpStatus(404) {
+            // A 404 means the membership is already gone — exactly what the
+            // caller asked for. This is reachable: data(for:) classes DELETE as
+            // idempotent and retries it, so losing the response to a request the
+            // server did apply produces a second DELETE that 404s. Reporting
+            // failure there would put the row back behind an error alert
+            // despite the song being gone server-side.
         } catch {
             return false
         }

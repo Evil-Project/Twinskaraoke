@@ -64,9 +64,6 @@ nonisolated struct PlaylistSearchRevealState: Equatable {
 class PlaylistDetailViewModel {
     var songs: [Song]?
     var isLoading = false
-    /// Presented as an alert. Kept apart from `emptyStateMessage`: a failed
-    /// removal leaves a perfectly good song list on screen.
-    var removeError: String?
     private(set) var hasAuthoritativeSongs = false
     private var loadFailed = false
     private var loadedID: String?
@@ -76,35 +73,6 @@ class PlaylistDetailViewModel {
             return "The playlist couldn't be loaded. Check your connection and try again."
         }
         return "Tap refresh to check for new songs."
-    }
-
-    /// Takes a song out of one of the user's own playlists, dropping the row
-    /// straight away and putting it back if the server refuses. Keyed on song
-    /// ID rather than a row offset because the visible list may be filtered by
-    /// the search field while this runs.
-    func removeSong(_ song: Song, from playlistID: String) {
-        guard let index = songs?.firstIndex(where: { $0.id == song.id }) else { return }
-        let previousSongs = songs
-        songs?.remove(at: index)
-
-        UserPlaylistsManager.shared.removeSong(song.id, fromPlaylist: playlistID) { [weak self] ok in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard ok else {
-                    songs = previousSongs
-                    AppHaptic.error.play()
-                    removeError = String(
-                        localized: "Couldn't remove \(song.title). Please try again."
-                    )
-                    return
-                }
-                AppHaptic.success.play()
-                // A playlist can list the same song twice, and the server
-                // decides whether it drops one entry or both — re-read rather
-                // than trusting the local edit.
-                reload(playlistID: playlistID)
-            }
-        }
     }
 
     func reload(playlistID: String, fallback: [Song]? = nil) {
@@ -189,6 +157,25 @@ class PlaylistDetailViewModel {
                     isAuthoritative: false
                 )
             }
+        }
+    }
+
+    /// Drops a song from the list immediately so the row disappears under the
+    /// finger instead of after the round trip, and returns a closure that puts
+    /// it back at its original index if the server rejects the delete.
+    ///
+    /// Only the first match is removed: a playlist may legitimately hold the
+    /// same song twice, and the API removes one membership per call.
+    func removeSongOptimistically(_ song: Song) -> (() -> Void)? {
+        guard var current = songs,
+              let index = current.firstIndex(where: { $0.id == song.id })
+        else { return nil }
+        current.remove(at: index)
+        songs = current
+        return { [weak self] in
+            guard let self, var restored = songs else { return }
+            restored.insert(song, at: min(index, restored.count))
+            songs = restored
         }
     }
 
