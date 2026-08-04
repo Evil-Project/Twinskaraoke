@@ -304,11 +304,15 @@ final class TwinskaraokeUITests: XCTestCase {
     for title in ["Play", "Shuffle"] {
       XCTAssertTrue(app.buttons[title].exists, "Expected \(title) in the actions menu.")
     }
+    // Three titles rather than one: which download action appears depends on
+    // what the simulator already has on disk, and downloads outlive a launch.
+    // The in-flight "Downloading n…" state is deliberately not among them —
+    // nothing here starts a download, so accepting it would only have widened
+    // what counts as a pass.
     XCTAssertTrue(
       app.buttons["Download"].exists
         || app.buttons["Download Remaining"].exists
-        || app.buttons["Remove Downloads"].exists
-        || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Downloading'")).count > 0,
+        || app.buttons["Remove Downloads"].exists,
       "Expected a download action in the actions menu."
     )
   }
