@@ -35,13 +35,22 @@ struct PlaylistDetailView: View {
     @State private var prefetchedIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
-    /// Song rows ignore touches until the push has settled. The zoom
-    /// transition does not gate input, so a second tap aimed at the grid
-    /// tile lands on this screen as it arrives under the finger — and at
-    /// that same Y coordinate there is a song row, which started playing.
-    /// Scrolling, Back and the action buttons stay live throughout.
-    @State private var rowsAcceptTouches = false
+    /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
+    /// touches until the push has settled. The zoom transition does not gate
+    /// input, so a second tap aimed at the grid tile lands on this screen as it
+    /// arrives under the finger, and at that Y coordinate there is either a song
+    /// row or an action button. Both started playing; the buttons were exempt
+    /// from this gate until they were caught doing it. Scrolling and Back stay
+    /// live throughout.
+    ///
+    /// Two conditions, because neither covers the other: the transition itself
+    /// says when the zoom is done (measured at ~0.9s, far longer than the delay
+    /// below used to allow), and the delay covers the arrivals that have no
+    /// transition to ask — reduce motion, or coming back from a sub-screen.
+    @Environment(\.zoomPushIsArriving) private var isArriving
+    @State private var hasSettledAfterAppear = false
     @State private var rowArmingTask: Task<Void, Never>?
+    private var playbackTapsArmed: Bool { hasSettledAfterAppear && !isArriving }
     /// onAppear fires repeatedly for one visit — device logs show appeared and
     /// disappeared 1ms apart, over and over. Everything below it is one-shot
     /// work: reload cancels and restarts the network load, and record() writes
@@ -282,7 +291,7 @@ struct PlaylistDetailView: View {
             rowArmingTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
-                rowsAcceptTouches = true
+                hasSettledAfterAppear = true
             }
             schedulePrefetch()
 
@@ -367,7 +376,7 @@ struct PlaylistDetailView: View {
                 RecentlyPlayedStore.shared.record(playlist)
             }
             rowArmingTask?.cancel()
-            rowsAcceptTouches = false
+            hasSettledAfterAppear = false
             prefetchTask?.cancel()
             // Same class of post-teardown work as the prefetches below:
             // favoritesRefreshTask starts a network fetch after a one-second
@@ -618,7 +627,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
-                .allowsHitTesting(rowsAcceptTouches)
+                .allowsHitTesting(playbackTapsArmed)
             }
             .environment(\.playlistSongRemoval, songRemovalContext)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
@@ -670,6 +679,9 @@ struct PlaylistDetailView: View {
             .accessibilityLabel("Shuffle playlist")
         }
         .padding(.horizontal, horizontalPadding)
+        // Gated here rather than around the caller: the wide overview puts these
+        // buttons beside the artwork, outside `playlistSongsContent`.
+        .allowsHitTesting(playbackTapsArmed)
     }
 
     private func play(_ song: Song, context: [Song]) {

@@ -34,14 +34,16 @@ import SwiftUI
 /// Two further constraints, both learned on device — neither is cosmetic:
 ///
 /// - **Vertical pulls belong to the destination — but only while
-///   `ZoomPushDismissal` is in place.** A push's interactive dismissal is an
-///   *edge* pan, so a downward pull does not compete with it, which is what lets
+///   `ZoomPushDismissal` is in place.** A push is dismissed by a horizontal
+///   gesture, so a downward pull does not compete with it, which is what lets
 ///   `PlaylistDetailView` reveal its search field by pulling. That holds only
-///   because `zoomPushDismissal` suppresses the interactive pop entirely. If
-///   that workaround is ever deleted — and its own documentation says to delete
-///   it once Apple fixes the transition — re-check this: a restored interactive
-///   dismissal, or any move to a modal presentation, reintroduces a vertical
-///   drag-dismiss that will fight the pull and usually win.
+///   because `zoomPushDismissal` suppresses the system dismissal entirely — note
+///   that gesture is *not* edge-limited, so it covers the same content the pull
+///   does and merely disagrees about direction. If that workaround is ever
+///   deleted — and its own documentation says to delete it once Apple fixes the
+///   transition — re-check this: a restored interactive dismissal, or any move
+///   to a modal presentation, reintroduces a vertical drag-dismiss that will
+///   fight the pull and usually win.
 /// - **Mind the source screen's navigation bar.** Zoom deliberately leaves the
 ///   source on screen, so any bar difference between the two screens animates in
 ///   full view instead of being carried off by a slide. A large title has to
