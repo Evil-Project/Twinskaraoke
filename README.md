@@ -12,6 +12,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 - [@cosmii02](https://github.com/cosmii02) (cosmii02)
 
+**Full credits are maintained by Soul on the website: [twinskaraoke.com/about#credits](https://twinskaraoke.com/about#credits)**
 
 > **Update : We are officially live on TestFlight, see installation info below! Stay tuned for the App Store!**
 >
@@ -351,5 +352,30 @@ After 7 days, the app will crash immediately when you try to open it. **You do n
 
 ---
 
+## Art Credits
+
+The Shimeji sprites come from the **NeurolingsCE** mascot packs:
+
+```text
+Neuron, Weuron, and Eviling
+Artwork: Paccha
+Shimeji configuration: @promote. and @dalekcraft
+
+Vedaling and Tuteling
+Artwork: Moneka / monikaphobia
+Shimeji configuration: @promote. and @dalekcraft
+
+Cerber
+Artwork contributors: AnoWan / @AnoT0ki_銀髪赤い瞳好き, 于陌Wan / @于陌, 六水Wan / @六水hexa, 加斯科涅Wan / @DentalFlossPicks, and 士灰Wan / @士灰
+Shimeji configuration: qingchenyou / 轻尘呦
+
+Source: NeurolingsCE mascot packs
+License: GNU General Public License v3.0
+```
+
+**For a more complete credits list, see: [twinskaraoke.com/credits](https://twinskaraoke.com/about#credits)**
+
 ## License
 This project is licensed under the [Apache-2.0 License](LICENSE).
+
+The NeurolingsCE mascot packs described under [Art Credits](#art-credits) are licensed separately under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html) and are downloaded at runtime rather than bundled in this repository.
