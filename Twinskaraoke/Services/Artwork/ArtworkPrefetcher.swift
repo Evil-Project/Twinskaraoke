@@ -100,6 +100,9 @@ final class ArtworkPrefetcher {
     }()
 
     private var warmTokens: [String: SDWebImagePrefetchToken] = [:]
+    /// Bumped per `reason` on every warm request so a slower off-actor URL
+    /// derivation cannot install its token after a newer request superseded it.
+    private var warmRequests: [String: Int] = [:]
 
     private init() {
         prefetcher.maxConcurrentPrefetchCount = 3
@@ -117,31 +120,70 @@ final class ArtworkPrefetcher {
     /// MB against `CacheManager.imageCacheLimit` (2 GB). Unlike the windowed
     /// path this is deliberately *not* clamped by `adjustedLimit`; it runs at
     /// low priority with its own small concurrency budget instead.
+    ///
+    /// The URL derivation runs off the main actor. Building one URL per song,
+    /// rewriting each to the variant and deduping them is O(playlist) string
+    /// work, and it used to run on the main actor at exactly the moment a
+    /// playlist's song list arrived from the network — a device probe on
+    /// 2026-08-03 measured 58–100ms there, reproducibly, about 1.6s after every
+    /// playlist open. It touches only Sendable value types and the nonisolated
+    /// `ArtworkURLBuilder`, so only the prefetch kick-off needs the main actor.
     func warmCollection(
         songs: [Song],
         reason: String,
         variant: ArtworkImageVariant = .row
     ) {
-        warm(urls: Self.urls(for: songs, variant: variant), reason: reason, variant: variant)
+        let request = beginWarmRequest(reason: reason)
+        Task.detached(priority: .utility) {
+            let unique = Self.uniqueWarmURLs(for: songs, variant: variant)
+            await MainActor.run {
+                self.startWarm(urls: unique, reason: reason, request: request)
+            }
+        }
     }
 
+    /// Stays synchronous: a handful of playlists is nowhere near the cost that
+    /// made the song path worth moving, and hopping actors would only delay it.
     func warmCollection(
         playlists: [Playlist],
         reason: String,
         variant: ArtworkImageVariant = .thumbnail
     ) {
-        warm(urls: Self.urls(for: playlists, variant: variant), reason: reason, variant: variant)
-    }
-
-    private func warm(urls: [URL], reason: String, variant: ArtworkImageVariant) {
+        let request = beginWarmRequest(reason: reason)
         var seen = Set<String>()
-        let unique = urls
+        let unique = Self.urls(for: playlists, variant: variant)
             .map { ArtworkURLBuilder.variantURL(from: $0, variant: variant) ?? $0 }
             .filter { seen.insert($0.absoluteString).inserted }
-            .filter { !ArtworkFailureBackoff.shared.isBlocked($0) }
+        startWarm(urls: unique, reason: reason, request: request)
+    }
+
+    /// Cancels any warm already running for `reason` and claims the slot.
+    private func beginWarmRequest(reason: String) -> Int {
+        warmTokens.removeValue(forKey: reason)?.cancel()
+        let next = (warmRequests[reason] ?? 0) + 1
+        warmRequests[reason] = next
+        return next
+    }
+
+    nonisolated private static func uniqueWarmURLs(
+        for songs: [Song],
+        variant: ArtworkImageVariant
+    ) -> [URL] {
+        var seen = Set<String>()
+        return urls(for: songs, variant: variant)
+            .map { ArtworkURLBuilder.variantURL(from: $0, variant: variant) ?? $0 }
+            .filter { seen.insert($0.absoluteString).inserted }
+    }
+
+    private func startWarm(urls: [URL], reason: String, request: Int) {
+        // A newer warm for the same reason superseded this one while its URLs
+        // were being derived; installing a token now would leak past its cancel.
+        guard warmRequests[reason] == request else { return }
+        // Deliberately still on the main actor: ArtworkFailureBackoff is
+        // main-isolated, and these are dictionary lookups, not string building.
+        let unique = urls.filter { !ArtworkFailureBackoff.shared.isBlocked($0) }
         guard !unique.isEmpty else { return }
 
-        warmTokens.removeValue(forKey: reason)?.cancel()
         DebugLogger.log(
             "Warming \(unique.count) artwork images for \(reason)",
             category: .cache
@@ -164,6 +206,12 @@ final class ArtworkPrefetcher {
 
     func cancelWarm(reason: String) {
         warmTokens.removeValue(forKey: reason)?.cancel()
+        // Bump the generation too. Without this a derivation still running off
+        // the actor passes the `warmRequests[reason] == request` check in
+        // startWarm and installs a token *after* the cancel — so a pop-back
+        // during the 58-100ms derivation left the whole-playlist warm running
+        // past teardown, which is exactly what the cancel exists to prevent.
+        warmRequests[reason] = (warmRequests[reason] ?? 0) + 1
     }
 
     func prefetchSongs(
@@ -180,7 +228,9 @@ final class ArtworkPrefetcher {
         )
     }
 
-    fileprivate static func urls(
+    // nonisolated: pure derivation over Sendable value types, so warmCollection
+    // can run it off the main actor.
+    nonisolated fileprivate static func urls(
         for songs: [Song],
         variant: ArtworkImageVariant
     ) -> [URL] {

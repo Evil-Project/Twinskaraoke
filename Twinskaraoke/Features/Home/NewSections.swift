@@ -159,6 +159,7 @@ struct NewSongListPreview: View {
 }
 
 struct NewPlaylistRail: View {
+    @Namespace private var zoomNamespace
     let title: String
     let playlists: [Playlist]
 
@@ -170,7 +171,9 @@ struct NewPlaylistRail: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(playlists) { playlist in
-                            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                            ZoomNavigationLink(id: playlist.id, in: zoomNamespace) {
+                                PlaylistDetailView(playlist: playlist)
+                            } label: {
                                 PlaylistGridCell(playlist: playlist, width: tileWidth)
                             }
                             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))

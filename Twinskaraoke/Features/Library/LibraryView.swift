@@ -41,6 +41,13 @@ struct PlaylistSongCountLabel: View {
 }
 
 struct LibraryView: View {
+    /// Owned here, on the view that owns the NavigationStack, and passed down.
+    ///
+    /// Apple's guidance for the zoom transition is that the namespace belongs to
+    /// the stack root rather than to a pushed screen — see the discussion under
+    /// developer.apple.com/forums/thread/810944. It previously lived on
+    /// PlaylistsGridScreen, one level below the stack.
+    @Namespace private var zoomNamespace
     @State var viewModel = PlaylistsViewModel()
     @State private var recentSongsViewModel = LibrarySongsViewModel()
     private let savedStore = SavedPlaylistsStore.shared
@@ -196,7 +203,7 @@ struct LibraryView: View {
             libraryLink(
                 icon: "music.note.list",
                 title: "Playlists",
-                destination: PlaylistsGridScreen(viewModel: viewModel)
+                destination: PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
             )
             libraryLink(icon: "music.mic", title: "Artists", destination: ArtistsView())
             libraryLink(icon: "music.note", title: "Songs", destination: LibrarySongsView())
@@ -619,6 +626,8 @@ struct PlaylistListRow: View {
 
 struct PlaylistsGridScreen: View {
     let viewModel: PlaylistsViewModel
+    /// Supplied by LibraryView, which owns the NavigationStack.
+    let zoomNamespace: Namespace.ID
     private let userManager = UserPlaylistsManager.shared
     private let favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
@@ -654,7 +663,9 @@ struct PlaylistsGridScreen: View {
                 } else {
                     LazyVGrid(columns: cols, spacing: AM.Spacing.l) {
                         ForEach(displayed) { playlist in
-                            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                            ZoomNavigationLink(id: playlist.id, in: zoomNamespace) {
+                                PlaylistDetailView(playlist: playlist)
+                            } label: {
                                 PlaylistGridCell(
                                     playlist: playlist,
                                     prefersDetailCount: true
@@ -675,6 +686,13 @@ struct PlaylistsGridScreen: View {
         }
         .smoothScrolling()
         .navigationTitle("Playlists")
+        // Inline, matching PlaylistListView. A large title has to collapse into
+        // the bar when this screen pushes, and the zoom transition leaves the
+        // screen on display while that happens — so the title visibly slid up
+        // on open and sprang back on return. Nothing to collapse, nothing to
+        // animate. PlaylistListView pushes the same detail view and never
+        // showed the bounce, because it was already inline.
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),

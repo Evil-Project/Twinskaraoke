@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaylistCarousel: View {
+    @Namespace private var zoomNamespace
     let title: String
     let playlists: [Playlist]
     var isLoadingMore: Bool = false
@@ -19,7 +20,9 @@ struct PlaylistCarousel: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(playlists) { playlist in
-                            NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                            ZoomNavigationLink(id: playlist.id, in: zoomNamespace) {
+                                PlaylistDetailView(playlist: playlist)
+                            } label: {
                                 PlaylistGridCell(playlist: playlist, width: tileWidth)
                             }
                             .buttonStyle(PressableButtonStyle())

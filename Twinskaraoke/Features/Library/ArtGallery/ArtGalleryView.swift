@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ArtGalleryView: View {
+    @Namespace private var zoomNamespace
     @State private var viewModel = ArtGalleryViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
 
@@ -21,7 +22,7 @@ struct ArtGalleryView: View {
             } else {
                 VStack(alignment: .leading, spacing: 28) {
                     if let featured = featuredArt {
-                        NavigationLink {
+                        ZoomNavigationLink(id: featured.art.id, in: zoomNamespace) {
                             ArtDetailView(art: featured.art, artist: featured.artist)
                         } label: {
                             FeaturedArtCard(art: featured.art, artist: featured.artist)
@@ -54,7 +55,7 @@ struct ArtGalleryView: View {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: 14) {
                                     ForEach(topArtists) { artist in
-                                        NavigationLink {
+                                        ZoomNavigationLink(id: artist.id, in: zoomNamespace) {
                                             ArtistArtsView(artist: artist)
                                         } label: {
                                             ArtistCircleCard(artist: artist)

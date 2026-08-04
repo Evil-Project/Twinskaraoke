@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaylistListView: View {
+    @Namespace private var zoomNamespace
     let title: String
     let playlists: [Playlist]
     var apiURL: ((Int, Int) -> String)?
@@ -33,10 +34,11 @@ struct PlaylistListView: View {
             } else {
                 LazyVGrid(columns: cols, spacing: AM.Spacing.l) {
                     ForEach(displayedPlaylists) { playlist in
-                        NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                        ZoomNavigationLink(id: playlist.id, in: zoomNamespace) {
+                            PlaylistDetailView(playlist: playlist)
+                        } label: {
                             PlaylistGridCell(playlist: playlist)
                         }
-                        .id(playlist.id)
                         .buttonStyle(PressableButtonStyle())
                         .accessibilityIdentifier("PlaylistList.\(playlist.id)")
                         .contextMenu {
