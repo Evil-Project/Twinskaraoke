@@ -557,7 +557,9 @@ private struct QRScannerChrome: View {
     }
 }
 
-private struct QRScannerDimMask: Shape {
+// Nonisolated for the same reason as the bracket shape below: `Shape` refines
+// `Sendable`, so the conformance must not be main-actor isolated.
+private nonisolated struct QRScannerDimMask: Shape {
     let cutoutSide: CGFloat
     let cornerRadius: CGFloat
 
@@ -592,7 +594,11 @@ private struct QRCornerBrackets: View {
     }
 }
 
-private struct QRCornerBracketShape: Shape {
+// Nonisolated because `Shape` refines `Sendable`: under
+// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor this struct is otherwise implicitly
+// isolated, and SwiftUI calls `path(in:)` off the main actor. Xcode 27 rejects
+// the isolated conformance; 26.x accepts it silently.
+private nonisolated struct QRCornerBracketShape: Shape {
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
 
