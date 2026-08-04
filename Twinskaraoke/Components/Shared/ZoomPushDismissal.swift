@@ -52,6 +52,11 @@ struct ZoomPushDismissal: ViewModifier {
     /// tile arrives while this screen is still flying in, over whatever sits at
     /// that Y coordinate.
     @State private var isArriving = true
+    @State private var arrivalFallbackTask: Task<Void, Never>?
+
+    /// Long enough that it never pre-empts the ~0.9s transition, short enough
+    /// that a missing signal costs a moment rather than the screen.
+    private static let arrivalFallback = Duration.milliseconds(1500)
 
     func body(content: Content) -> some View {
         content
@@ -73,8 +78,20 @@ struct ZoomPushDismissal: ViewModifier {
             .onAppear {
                 isDismissing = false
                 suppressor.update()
+                // This flag gates playback, so it must clear on its own even if
+                // the arrival signal never comes — a screen whose rows silently
+                // stop working looks alive and is not.
+                arrivalFallbackTask?.cancel()
+                arrivalFallbackTask = Task { @MainActor in
+                    try? await Task.sleep(for: Self.arrivalFallback)
+                    guard !Task.isCancelled else { return }
+                    isArriving = false
+                }
             }
-            .onDisappear { suppressor.update() }
+            .onDisappear {
+                suppressor.update()
+                arrivalFallbackTask?.cancel()
+            }
     }
 }
 
@@ -113,6 +130,12 @@ final class InteractiveDismissalSuppressor {
     weak var navigationController: UINavigationController?
     /// The navigation controller's own child that hosts this screen. Identity is
     /// what tells a real pop apart from SwiftUI churn.
+    ///
+    /// Without it there is nothing to suppress *for*: the release condition
+    /// would never be met, so suppression would outlive the screen and take the
+    /// interactive pop away from every screen underneath it. And the replacement
+    /// gesture is installed on this same controller's view, so suppressing here
+    /// would leave a screen with no way to swipe back at all. Both fail open.
     weak var hostController: UIViewController?
     private var isHolding = false
 
@@ -134,10 +157,7 @@ final class InteractiveDismissalSuppressor {
     }
 
     private var isTopOfStack: Bool {
-        guard let navigationController else { return false }
-        // No host means the responder walk came up empty; assume this screen is
-        // the one on top rather than leaving it unprotected. `deinit` releases.
-        guard let hostController else { return true }
+        guard let navigationController, let hostController else { return false }
         return navigationController.topViewController === hostController
     }
 
@@ -191,6 +211,9 @@ final class NavigationDismissalSuppression {
     private var holders: Set<ObjectIdentifier> = []
     private var disabled: [UIGestureRecognizer] = []
     private var rescanTask: Task<Void, Never>?
+    /// Whether this suppression cycle ever matched anything. Nothing at all means
+    /// the names above no longer describe what iOS installs — see `apply()`.
+    private var hasMatchedDriver = false
 
     private init(navigationController: UINavigationController) {
         self.navigationController = navigationController
@@ -210,6 +233,14 @@ final class NavigationDismissalSuppression {
                 recogniser.isEnabled = true
             }
             disabled = []
+            // A whole visit to a zoom destination without a single match means
+            // matching by name has stopped working — a renamed class in a new
+            // iOS, most likely — and the interactive dismissal is live again
+            // along with the delay it causes. That is silent in every other way,
+            // so it trips here: the regression test pushes a zoom destination,
+            // which makes this a build-time failure rather than a bug report.
+            assert(hasMatchedDriver, "No interactive-dismissal recogniser matched \(Self.driverNames)")
+            hasMatchedDriver = false
             return
         }
         scan()
@@ -238,6 +269,7 @@ final class NavigationDismissalSuppression {
             recogniser.isEnabled = false
         }
         disabled.append(contentsOf: found)
+        hasMatchedDriver = true
     }
 
     private func collect(from view: UIView, into found: inout [UIGestureRecognizer]) {
@@ -321,6 +353,7 @@ private struct ZoomDismissalBridge: UIViewRepresentable {
                     }
                     suppressor.hostController = host
                     // onAppear may have run before the controller was known.
+                    // With no host this suppresses nothing, deliberately.
                     suppressor.update()
                     guard let host else {
                         onArrived?()
@@ -343,6 +376,10 @@ private struct ZoomDismissalBridge: UIViewRepresentable {
                 responder = current.next
                 hops += 1
             }
+            // No navigation controller in the chain, so no transition to wait
+            // for. Saying so matters: the flag this clears gates playback, and
+            // nothing else would ever clear it.
+            onArrived?()
         }
     }
 }
@@ -417,11 +454,16 @@ final class SwipeBackDriver: NSObject, UIGestureRecognizerDelegate {
     /// drag recognise its own tap and start playing: a pan cancels *touches* in
     /// its view, which does nothing to a competing gesture recogniser, so the
     /// only thing that stops the tap is refusing to share the touch with it.
+    ///
+    /// The scroll view's *own pan*, specifically, and not everything attached to
+    /// a scroll view: a tap or zoom recogniser added to one later would
+    /// otherwise inherit permission to run alongside this and undo the above.
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
     ) -> Bool {
-        other.view is UIScrollView
+        guard let scrollView = other.view as? UIScrollView else { return false }
+        return other === scrollView.panGestureRecognizer
     }
 
     /// Yield to anything that can genuinely scroll horizontally — a carousel in
