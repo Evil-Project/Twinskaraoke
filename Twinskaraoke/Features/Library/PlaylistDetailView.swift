@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct PlaylistDetailView: View {
-    private static let searchFieldHeight: CGFloat = 40
-
     let playlist: Playlist
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -11,28 +9,117 @@ struct PlaylistDetailView: View {
     // Rows derive artwork URLs through `Song`, which consults the fallback
     // pool; reading the revision in `body` re-renders them when it changes.
     private let fallbackArt = FallbackArtRevision.shared
-    @State private var showsCollapsedTitle = false
     @State private var searchText = ""
+    @State private var contentWidth: CGFloat = 390
+    @FocusState private var isSearchFocused: Bool
+    /// Height of `playlistSearchField` — 40pt capsule plus its bottom padding.
+    /// The scroll view starts exactly this far down, so the field sits just off
+    /// the top of the viewport and a pull brings it into view.
+    private static let searchFieldExtent: CGFloat = 52
+    /// How far the list must be scrolled down before the field is put away.
+    private static let searchDismissDistance: CGFloat = 40
+    /// Incidental overscroll below this reveals nothing at all.
+    private static let searchRevealDeadZone: CGFloat = 30
+    /// Below 1 so the field trails the finger — ~110pt of pull for a full reveal.
+    private static let searchRevealResistance: CGFloat = 0.65
+    @State private var searchRevealHeight: CGFloat = 0
+    /// Latched once the pull completes, so the field stays put instead of
+    /// collapsing the moment the finger lifts.
+    @State private var isSearchLatched = false
+
+    private static let searchAnchor = "playlist.search"
+    private static let contentAnchor = "playlist.content"
     @State private var filteredSongs: [Song]
-    @State private var isSearchVisible = false
-    @State private var isSearchModeActive = false
-    @State private var artworkPullOverride: CGFloat = 0
-    @State private var isArtworkPullOverridden = false
-    @State private var canAutoHideSearch = false
-    @State private var isActivelyPulling = false
-    @State private var shouldActivateSearchAfterPull = false
-    @State private var searchRevealState = PlaylistSearchRevealState()
     @State private var filterTask: Task<Void, Never>?
     @State private var favoritesRefreshTask: Task<Void, Never>?
     @State private var prefetchedIDs: [String] = []
+    @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
+    /// Song rows ignore touches until the push has settled. The zoom
+    /// transition does not gate input, so a second tap aimed at the grid
+    /// tile lands on this screen as it arrives under the finger — and at
+    /// that same Y coordinate there is a song row, which started playing.
+    /// Scrolling, Back and the action buttons stay live throughout.
+    @State private var rowsAcceptTouches = false
+    @State private var rowArmingTask: Task<Void, Never>?
+    /// onAppear fires repeatedly for one visit — device logs show appeared and
+    /// disappeared 1ms apart, over and over. Everything below it is one-shot
+    /// work: reload cancels and restarts the network load, and record() writes
+    /// UserDefaults *and* mutates an @Observable that HomeView and NewView both
+    /// read, so it re-renders two always-alive tab roots and every carousel in
+    /// them. Running that several times per navigation was pure churn.
+    @State private var hasStartedVisit = false
     private let userPlaylists = UserPlaylistsManager.shared
-    @FocusState private var isSearchFocused: Bool
 
     init(playlist: Playlist) {
         self.playlist = playlist
         // searchText starts empty, so the initial filtered list is the fallback.
         _filteredSongs = State(initialValue: playlist.songListDTOs ?? [])
+    }
+
+    private var playlistSearchField: some View {
+        HStack(spacing: AM.Spacing.s) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Find in Playlist", text: $searchText)
+                .focused($isSearchFocused)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityIdentifier("PlaylistDetail.searchField")
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    isSearchFocused = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear Search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(.thinMaterial, in: Capsule())
+        .padding(.horizontal, AM.Spacing.screenMargin)
+        .padding(.bottom, AM.Spacing.m)
+        .accessibilityIdentifier("PlaylistDetail.search")
+    }
+
+    /// Grows the field with the pull, latches it open once fully revealed, and
+    /// drops it again when the list is scrolled back down.
+    private func updateSearchReveal(pull: CGFloat) {
+        let extent = Self.searchFieldExtent
+        if isSearchLatched {
+            // Scrolling down past the top puts it away again.
+            if pull < -Self.searchDismissDistance, !isSearchFocused, searchText.isEmpty {
+                isSearchLatched = false
+                withOptionalAnimation(reduceMotion ? nil : AppMotion.quick) {
+                    searchRevealHeight = 0
+                }
+            } else if searchRevealHeight != extent {
+                searchRevealHeight = extent
+            }
+            return
+        }
+
+        // Deliberately resistant. Tracking the pull 1:1 from the first pixel made
+        // the field appear during ordinary scrolling; it should take a decided
+        // pull. The dead zone absorbs incidental overscroll, and the resistance
+        // means the field moves slower than the finger, so a full reveal needs
+        // roughly `deadZone + extent / resistance` points of travel.
+        let effective = max(0, pull - Self.searchRevealDeadZone) * Self.searchRevealResistance
+        let revealed = min(effective, extent)
+        if revealed >= extent {
+            isSearchLatched = true
+            AppHaptic.medium.play()
+            withOptionalAnimation(reduceMotion ? nil : AppMotion.snap) {
+                searchRevealHeight = extent
+            }
+        } else if searchRevealHeight != revealed {
+            searchRevealHeight = revealed
+        }
     }
 
     private func usesWideOverview(availableWidth: CGFloat) -> Bool {
@@ -54,101 +141,96 @@ struct PlaylistDetailView: View {
         // way to self-correct: if it was ever missed, the list stayed empty and
         // stayed empty. See the `onChange(of: loader.songs)` note below.
         let displayedSongs = isSearching ? filteredSongs : songs
-        GeometryReader { geo in
-            ScrollView {
+        // The ScrollView is a *direct* child of the navigation container, not
+        // wrapped in a GeometryReader.
+        //
+        // The wrapper broke the navigation bar's scroll-edge tracking, so it
+        // could not collapse the large title or tuck the search drawer away —
+        // the drawer sat pinned open instead of starting hidden and revealing on
+        // a pull, which is the whole behaviour we are after. Width is measured
+        // from the content instead, which needs no wrapper.
+        ScrollView {
+            VStack(spacing: 0) {
+                // Above the content, not in the navigation bar, and revealed by
+                // ordinary scrolling rather than a gesture.
+                //
+                // The nav-bar drawer cannot do what we want: with
+                // `hidesSearchBarWhenScrolling` it is *visible at scroll top* by
+                // definition and hides as you scroll down — the opposite of
+                // hidden-until-pulled. And the hand-rolled version this replaces
+                // read raw overscroll, which is the same drag the zoom uses to
+                // dismiss, so the two fought and the dismissal won.
+                //
+                // As the first row of content it is neither: `scrollTo` below
+                // parks the view just underneath it on appear, so pulling down
+                // simply scrolls it into view. No gesture, nothing to arbitrate.
+                playlistSearchField
+                    .frame(height: searchRevealHeight, alignment: .bottom)
+                    .opacity(searchRevealHeight / Self.searchFieldExtent)
+                    .clipped()
+                    // Above the hero regardless of what its visual effect does.
+                    .zIndex(1)
+                    .id(Self.searchAnchor)
                 playlistScrollContent(
                     songs: songs,
                     displayedSongs: displayedSongs,
                     isSearching: isSearching,
-                    width: geo.size.width
+                    width: contentWidth
                 )
-                    .padding(.bottom, 16)
-                    // Row changes (e.g. unfavouriting) used to animate via the
-                    // `filteredSongs` swap; now that the list is derived, the
-                    // animation attaches to the value instead. Same 300-row
-                    // guard: animating a large structural swap stalls the main
-                    // thread.
-                    .animation(
-                        reduceMotion || displayedSongs.count >= 300
-                            ? nil
-                            : AppMotion.quick,
-                        value: displayedSongs
-                    )
+                .id(Self.contentAnchor)
             }
-            .smoothScrolling()
-            .scrollDismissesKeyboard(.interactively)
-            .bottomChromeScrollTracking()
-            .collapsedNavigationTitle($showsCollapsedTitle)
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
-            } action: { _, scrollOffset in
-                // Defer out of the geometry-update pass: updateSearchInteraction
-                // toggles the search safe-area inset and hero pull override,
-                // which changes this geometry in the same frame — SwiftUI then
-                // logs "tried to update multiple times per frame" and drops
-                // the intermediate scroll events. main.async is enough here:
-                // lighter than a Task per scroll event and strictly FIFO.
-                //
-                // Coalescing these to one update per runloop turn *does* silence
-                // that log (and the `<width>x0` offscreen-buffer errors from the
-                // search field animating through zero height), but it visibly
-                // hurt fast-scroll feel: the pull/parallax logic needs the
-                // intermediate offsets, not just the newest one. The log noise
-                // is cosmetic; the scroll feel is not. Left as-is deliberately.
-                DispatchQueue.main.async {
-                    updateSearchInteraction(scrollOffset: scrollOffset)
+                .padding(.bottom, 16)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    guard width > 0, abs(width - contentWidth) > 0.5 else { return }
+                    contentWidth = width
                 }
-            }
-            .onScrollPhaseChange { _, phase in
-                let wasActivelyPulling = isActivelyPulling
-                isActivelyPulling = phase == .tracking || phase == .interacting
-                if wasActivelyPulling, !isActivelyPulling {
-                    if isArtworkPullOverridden {
-                        withAnimation(reduceMotion ? nil : AppMotion.easeOut(duration: 0.24)) {
-                            artworkPullOverride = 0
-                        } completion: {
-                            guard artworkPullOverride == 0 else { return }
-                            isArtworkPullOverridden = false
-                        }
-                    }
-                    activateSearchAfterPull()
-                }
-            }
-        }
-        .navigationTitle(showsCollapsedTitle && !isSearchModeActive ? playlist.name : "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                PlaylistMoreMenu(
-                    playlist: playlist,
-                    songs: songs,
-                    onRefresh: refresh
+                // Row changes (e.g. unfavouriting) used to animate via the
+                // `filteredSongs` swap; now that the list is derived, the
+                // animation attaches to the value instead. Same 300-row
+                // guard: animating a large structural swap stalls the main
+                // thread.
+                .animation(
+                    reduceMotion || displayedSongs.count >= 300
+                        ? nil
+                        : AppMotion.quick,
+                    value: displayedSongs
                 )
-            }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if isSearchVisible {
-                playlistSearchField
-                    .transition(
-                        reduceMotion
-                            ? .opacity
-                            : .move(edge: .top).combined(with: .opacity)
-                    )
-            }
+        .smoothScrolling()
+        .scrollDismissesKeyboard(.interactively)
+        .bottomChromeScrollTracking()
+        // Resting offset expressed as a raw point, which is what finally worked.
+        //
+        // Four earlier attempts all failed for the same underlying reason — they
+        // depended on something that is not ready at first layout:
+        // `ScrollViewReader.scrollTo` from `onAppear` (no laid-out content to
+        // scroll to), the same deferred past a yield (content not yet tall
+        // enough to be scrollable), `scrollPosition(id:)` (needs the target row
+        // measured), and before those the system nav-bar drawer, which is
+        // visible at scroll top by definition and so can never start hidden.
+        //
+        // A raw offset needs none of that: it is just where the scroll view
+        // starts, parking the search field exactly its own height above the
+        // viewport.
+        // Revealed by the pull itself, not by a resting scroll offset.
+        //
+        // Apple Music grows the field out of the overscroll: pull down, the
+        // background stretches, and the search bar expands into the gap between
+        // the toolbar and the title. Its height *is* the pull distance.
+        //
+        // Six attempts to instead park the scroll below a full-height field all
+        // failed, for the same reason each time — they needed something that is
+        // not settled at first layout (laid-out content, a measured row, or the
+        // top inset, which is `-107` here rather than 0, so absolute offsets are
+        // meaningless). Driving height from the live pull needs none of it.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            // Positive while pulled past the top.
+            -(geometry.contentOffset.y + geometry.contentInsets.top)
+        } action: { _, pull in
+            updateSearchReveal(pull: pull)
         }
-        .animation(
-            reduceMotion ? nil : AppMotion.quick,
-            value: showsCollapsedTitle
-        )
-        // No animation for isLoading / isSearchModeActive flips — neither a
-        // container .animation(value:) nor an explicit withAnimation at any
-        // mutation site (activateSearchAfterPull, the isSearchFocused change,
-        // dismissSearch, auto-hide; marked "Unanimated on purpose" below).
-        // Animating the whole scroll-content swap makes SwiftUI re-measure
-        // every row of a large playlist per frame and hangs the main thread
-        // (watchdog kill) on big playlists. The section-level
-        // .transition(.opacity) modifiers still animate the swap cheaply.
         .scrollIndicators(.hidden)
         .musicScreenBackground()
         .alert(
@@ -164,13 +246,32 @@ struct PlaylistDetailView: View {
             Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
         .onAppear {
+            guard !hasStartedVisit else { return }
+            hasStartedVisit = true
+            rowArmingTask?.cancel()
+            rowArmingTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled else { return }
+                rowsAcceptTouches = true
+            }
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             // The removal menu item is gated on this list; without the warm-up
             // it stays hidden until something else happens to load it.
             userPlaylists.loadIfNeeded()
-            RecentlyPlayedStore.shared.record(playlist)
-            prefetchedIDs = Array(displayedSongs.prefix(18)).map(\.id)
-            prefetchArtwork(songs: displayedSongs)
+            // Held back until the zoom transition has run. onAppear fires as the
+            // push begins, and warmCollection maps + dedupes a URL for every
+            // song in the playlist on the main actor — hundreds of them on a
+            // large one. Doing that inside the transition window competes with
+            // the animation, which is interactive and needs the main thread
+            // responsive to keep tracking the finger on a drag-back.
+            prefetchTask?.cancel()
+            prefetchTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                let songs = displayedSongs
+                prefetchedIDs = Array(songs.prefix(18)).map(\.id)
+                prefetchArtwork(songs: songs)
+            }
         }
         // Diffing on displayedSongs (Equatable) avoids allocating the prefix
         // id array on every body eval; it only builds when the list changes.
@@ -229,16 +330,26 @@ struct PlaylistDetailView: View {
                 loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             }
         }
-        .onChange(of: isSearchFocused) { _, isFocused in
-            guard isFocused, !isSearchModeActive else { return }
-            shouldActivateSearchAfterPull = false
-            isArtworkPullOverridden = false
-            // Unanimated on purpose (see "No animation" note above).
-            isSearchModeActive = true
-        }
         .onDisappear {
+            // Recorded on the way out, not the way in. This reorders the list
+            // that Home's "Recently Played" carousel is bound to, and doing that
+            // mid-navigation moved the very cell that had just been tapped.
+            // Under the cover presentation that broke outright — the cover lived
+            // on that cell, so the tap appeared to do nothing. Pushing is not as
+            // fragile, but reordering two always-alive tab roots while a
+            // transition runs is still wasted work at the worst moment.
+            RecentlyPlayedStore.shared.record(playlist)
+            rowArmingTask?.cancel()
+            rowsAcceptTouches = false
+            prefetchTask?.cancel()
             ArtworkPrefetcher.shared.cancel(reason: "playlist cover \(playlist.id)")
             ArtworkPrefetcher.shared.cancel(reason: "playlist songs \(playlist.id)")
+            // prefetchArtwork starts three prefetches and this cancelled two of
+            // them. The whole-playlist warm ran on regardless — hundreds of
+            // images still downloading and decoding after the screen was gone,
+            // and since each playlist warms under its own reason key, opening
+            // several in a row stacked them instead of replacing them.
+            ArtworkPrefetcher.shared.cancelWarm(reason: "playlist warm \(playlist.id)")
         }
     }
 
@@ -249,150 +360,22 @@ struct PlaylistDetailView: View {
         isSearching: Bool,
         width: CGFloat
     ) -> some View {
-        if isSearchModeActive {
-            playlistSongsContent(
-                songs: songs,
-                displayedSongs: displayedSongs,
-                isSearching: isSearching,
-                showsActionButtons: false
-            )
-            .padding(.top, AM.Spacing.xs)
-            .transition(
-                reduceMotion
-                    ? .opacity
-                    : .opacity.combined(with: .scale(scale: 0.98))
-            )
-            .accessibilityIdentifier("PlaylistDetail.SearchResults")
-        } else {
-            playlistOverview(
-                songs: songs,
-                displayedSongs: displayedSongs,
-                isSearching: isSearching,
-                width: width
-            )
-            .transition(
-                reduceMotion
-                    ? .opacity
-                    : .opacity.combined(with: .scale(scale: 0.98))
-            )
-        }
-    }
-
-    private var playlistSearchField: some View {
-        HStack(spacing: AM.Spacing.s) {
-            HStack(spacing: AM.Spacing.s) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Find in Playlist", text: $searchText)
-                    .focused($isSearchFocused)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .accessibilityIdentifier("PlaylistDetail.searchField")
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear Search")
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(height: Self.searchFieldHeight)
-            .background(.thinMaterial, in: Capsule())
-
-            if isSearchModeActive {
-                Button("Cancel") {
-                    dismissSearch()
-                }
-                .foregroundStyle(Color.appAccent)
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
-            }
-        }
-        .padding(.horizontal, AM.Spacing.screenMargin)
-        .padding(.top, AM.Spacing.s)
-        .padding(.bottom, AM.Spacing.m)
-        .animation(reduceMotion ? nil : AppMotion.quick, value: isSearchModeActive)
-        .accessibilityIdentifier("PlaylistDetail.search")
-    }
-
-    private func updateSearchInteraction(scrollOffset: CGFloat) {
-        let pullDistance = max(0, -scrollOffset)
-
-        if searchRevealState.update(
-            pullDistance: pullDistance,
-            isSearchVisible: isSearchVisible,
-            isActivelyPulling: isActivelyPulling
-        ) {
-            AppHaptic.medium.play()
-            canAutoHideSearch = false
-            artworkPullOverride = reduceMotion
-                ? 0
-                : min(pullDistance, PlaylistSearchRevealState.revealThreshold)
-            isArtworkPullOverridden = !reduceMotion
-            shouldActivateSearchAfterPull = true
-            withAnimation(reduceMotion ? nil : AppMotion.snap) {
-                isSearchVisible = true
-            }
-        }
-
-        guard isSearchVisible else { return }
-
-        if abs(scrollOffset) <= PlaylistSearchRevealState.resetThreshold {
-            canAutoHideSearch = true
-            return
-        }
-
-        guard PlaylistSearchRevealState.shouldAutoHide(
-            scrollOffset: scrollOffset,
-            isReady: canAutoHideSearch,
-            isActivelyScrolling: isActivelyPulling,
-            isSearchModeActive: isSearchModeActive
-        ) else { return }
-
-        isSearchFocused = false
-        searchText = ""
-        canAutoHideSearch = false
-        shouldActivateSearchAfterPull = false
-        // Unanimated on purpose (see "No animation" note above); only the
-        // search field inset and hero override animate.
-        isSearchModeActive = false
-        withAnimation(reduceMotion ? nil : AppMotion.quick) {
-            isSearchVisible = false
-            isArtworkPullOverridden = false
-        }
-    }
-
-    private func dismissSearch() {
-        isSearchFocused = false
-        searchText = ""
-        canAutoHideSearch = false
-        shouldActivateSearchAfterPull = false
-        searchRevealState.reset()
-        // Unanimated on purpose (see "No animation" note above); only the
-        // search field inset and hero override animate.
-        isSearchModeActive = false
-        withAnimation(reduceMotion ? nil : AppMotion.quick) {
-            isSearchVisible = false
-            isArtworkPullOverridden = false
-        }
-    }
-
-    private func activateSearchAfterPull() {
-        guard shouldActivateSearchAfterPull, isSearchVisible else { return }
-        shouldActivateSearchAfterPull = false
-
-        // Unanimated on purpose (see "No animation" note above).
-        isSearchModeActive = true
-        Task { @MainActor in
-            await Task.yield()
-            guard isSearchVisible, isSearchModeActive else { return }
-            isSearchFocused = true
-        }
+        // No separate search-results mode. The custom reveal swapped the whole
+        // screen for a bare list; the system drawer sits in the navigation bar
+        // instead, so the hero and action buttons stay put and a query just
+        // shortens the list underneath them — which is what Apple Music does.
+        playlistOverview(
+            songs: songs,
+            displayedSongs: displayedSongs,
+            isSearching: isSearching,
+            width: width
+        )
+        .transition(
+            reduceMotion
+                ? .opacity
+                : .opacity.combined(with: .scale(scale: 0.98))
+        )
+        .accessibilityIdentifier(isSearching ? "PlaylistDetail.SearchResults" : "PlaylistDetail.Overview")
     }
 
     private func refresh() {
@@ -534,7 +517,11 @@ struct PlaylistDetailView: View {
                 restingOffset: 12,
                 fadesWhenCollapsed: true,
                 reduceMotion: reduceMotion,
-                pullDownOverride: isArtworkPullOverridden ? artworkPullOverride : nil
+                // Zero, not nil: with `nil` the hero takes the pull for itself,
+                // scaling up and sliding *upward* over the search field growing
+                // above it — which is why the field appeared behind the artwork.
+                // Apple Music gives that space to the search bar instead.
+                pullDownOverride: 0
             )
             .padding(.top, 12)
     }
@@ -599,6 +586,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
+                .allowsHitTesting(rowsAcceptTouches)
             }
             .environment(\.playlistSongRemoval, songRemovalContext)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
@@ -805,3 +793,4 @@ private struct PlaylistMoreMenu: View {
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.65, haptic: .selection))
     }
 }
+
