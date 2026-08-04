@@ -39,7 +39,6 @@ struct PlaylistListView: View {
                         } label: {
                             PlaylistGridCell(playlist: playlist)
                         }
-                        .id(playlist.id)
                         .buttonStyle(PressableButtonStyle())
                         .accessibilityIdentifier("PlaylistList.\(playlist.id)")
                         .contextMenu {

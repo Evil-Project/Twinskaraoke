@@ -206,6 +206,12 @@ final class ArtworkPrefetcher {
 
     func cancelWarm(reason: String) {
         warmTokens.removeValue(forKey: reason)?.cancel()
+        // Bump the generation too. Without this a derivation still running off
+        // the actor passes the `warmRequests[reason] == request` check in
+        // startWarm and installs a token *after* the cancel — so a pop-back
+        // during the 58-100ms derivation left the whole-playlist warm running
+        // past teardown, which is exactly what the cancel exists to prevent.
+        warmRequests[reason] = (warmRequests[reason] ?? 0) + 1
     }
 
     func prefetchSongs(

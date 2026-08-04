@@ -49,6 +49,7 @@ struct PlaylistDetailView: View {
     /// read, so it re-renders two always-alive tab roots and every carousel in
     /// them. Running that several times per navigation was pure churn.
     @State private var hasStartedVisit = false
+    @State private var hasRecordedVisit = false
     private let userPlaylists = UserPlaylistsManager.shared
 
     init(playlist: Playlist) {
@@ -122,6 +123,27 @@ struct PlaylistDetailView: View {
         }
     }
 
+    /// Held back until the transition has run: warmCollection derives a URL for
+    /// every song, and doing that inside the transition window competes with the
+    /// animation.
+    ///
+    /// The list is read when the task fires, not when it is scheduled. Capturing
+    /// `displayedSongs` from `body` snapshotted the `songListDTOs` fallback,
+    /// because `loader.songs` is still nil at that point — so if the fetch landed
+    /// inside the delay, this overwrote the authoritative warm with the stale one
+    /// under the same reason key, and clobbered `prefetchedIDs` with it.
+    private func schedulePrefetch() {
+        prefetchTask?.cancel()
+        prefetchTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            let songs = loader.songs ?? playlist.songListDTOs ?? []
+            guard !songs.isEmpty else { return }
+            prefetchedIDs = Array(songs.prefix(18)).map(\.id)
+            prefetchArtwork(songs: songs)
+        }
+    }
+
     private func usesWideOverview(availableWidth: CGFloat) -> Bool {
         AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
@@ -168,6 +190,12 @@ struct PlaylistDetailView: View {
                     .frame(height: searchRevealHeight, alignment: .bottom)
                     .opacity(searchRevealHeight / Self.searchFieldExtent)
                     .clipped()
+                    // Neither opacity nor clipping removes a view from the
+                    // accessibility tree, so while collapsed the field could
+                    // still take VoiceOver or hardware-keyboard focus and raise
+                    // the keyboard with nothing visible to type into.
+                    .allowsHitTesting(searchRevealHeight > 0)
+                    .accessibilityHidden(searchRevealHeight <= 0)
                     // Above the hero regardless of what its visual effect does.
                     .zIndex(1)
                     .id(Self.searchAnchor)
@@ -246,32 +274,24 @@ struct PlaylistDetailView: View {
             Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
         .onAppear {
-            guard !hasStartedVisit else { return }
-            hasStartedVisit = true
+            // Per-appear, deliberately outside the one-shot guard below.
+            // onDisappear disarms the rows, so gating this on `hasStartedVisit`
+            // left them permanently untappable after any re-appear — pushing a
+            // sub-screen and coming back was enough.
             rowArmingTask?.cancel()
             rowArmingTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
                 rowsAcceptTouches = true
             }
+            schedulePrefetch()
+
+            guard !hasStartedVisit else { return }
+            hasStartedVisit = true
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             // The removal menu item is gated on this list; without the warm-up
             // it stays hidden until something else happens to load it.
             userPlaylists.loadIfNeeded()
-            // Held back until the zoom transition has run. onAppear fires as the
-            // push begins, and warmCollection maps + dedupes a URL for every
-            // song in the playlist on the main actor — hundreds of them on a
-            // large one. Doing that inside the transition window competes with
-            // the animation, which is interactive and needs the main thread
-            // responsive to keep tracking the finger on a drag-back.
-            prefetchTask?.cancel()
-            prefetchTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(400))
-                guard !Task.isCancelled else { return }
-                let songs = displayedSongs
-                prefetchedIDs = Array(songs.prefix(18)).map(\.id)
-                prefetchArtwork(songs: songs)
-            }
         }
         // Diffing on displayedSongs (Equatable) avoids allocating the prefix
         // id array on every body eval; it only builds when the list changes.
@@ -338,10 +358,22 @@ struct PlaylistDetailView: View {
             // on that cell, so the tap appeared to do nothing. Pushing is not as
             // fragile, but reordering two always-alive tab roots while a
             // transition runs is still wasted work at the worst moment.
-            RecentlyPlayedStore.shared.record(playlist)
+            // Latched: onDisappear fires repeatedly for a single visit, and
+            // record() writes UserDefaults and mutates an @Observable that two
+            // always-alive tab roots read. Without this the churn was relocated
+            // from appear to disappear rather than removed.
+            if !hasRecordedVisit {
+                hasRecordedVisit = true
+                RecentlyPlayedStore.shared.record(playlist)
+            }
             rowArmingTask?.cancel()
             rowsAcceptTouches = false
             prefetchTask?.cancel()
+            // Same class of post-teardown work as the prefetches below:
+            // favoritesRefreshTask starts a network fetch after a one-second
+            // sleep, and filterTask writes state after 200ms.
+            filterTask?.cancel()
+            favoritesRefreshTask?.cancel()
             ArtworkPrefetcher.shared.cancel(reason: "playlist cover \(playlist.id)")
             ArtworkPrefetcher.shared.cancel(reason: "playlist songs \(playlist.id)")
             // prefetchArtwork starts three prefetches and this cancelled two of

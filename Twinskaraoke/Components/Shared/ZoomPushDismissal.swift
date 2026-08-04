@@ -80,11 +80,20 @@ private struct ZoomPushDismissalGate: ViewModifier {
 
 @MainActor
 final class TransitionPanSuppressor {
+    /// Single switch for the private-API dependency below.
+    ///
+    /// Everything here hangs off matching `_UIParallaxTransitionPanGestureRecognizer`
+    /// by type name. Turning this off restores stock behaviour — the interactive
+    /// pop comes back, and with it the iOS 26 delay — without touching any call
+    /// site. Flip it if a future iOS renames the class, or if the dependency is
+    /// ever considered a submission risk.
+    static let isEnabled = true
+
     weak var navigationController: UINavigationController?
     private var suppressed: [UIGestureRecognizer] = []
 
     func suppress() {
-        guard suppressed.isEmpty, let nav = navigationController else { return }
+        guard Self.isEnabled, suppressed.isEmpty, let nav = navigationController else { return }
         // Both instances, not just `interactivePopGestureRecognizer`: the zoom
         // installs a second recogniser of the same private class, and only the
         // first is reachable through that property. Matching on the type name is

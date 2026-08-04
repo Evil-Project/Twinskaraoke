@@ -10,15 +10,22 @@ import SwiftUI
 /// correctly but cannot be dragged back, so its dismissal reads as a canned
 /// reverse instead of direct manipulation.
 ///
-/// **The namespace must be declared on the enclosing screen, not here.** An
-/// earlier version owned a private `@Namespace` per link, which reads as tidier
-/// and is wrong: the namespace then lives inside the lazy grid cell, so when
-/// that cell is rebuilt or discarded while the detail view is open, the source
-/// registration dies with it. UIKit then logs "Dismissing a zoom transition to a
-/// view not in the view hierarchy will trigger a fallback transition" and
-/// returns with the wrong animation. A screen-level namespace outlives the
-/// cells. Uniqueness is the *ID's* job — pass the model's id, and scope it
-/// further if one screen can show the same model twice.
+/// **The namespace must outlive the cells that use it.** An earlier version
+/// owned a private `@Namespace` per link, which reads as tidier and is wrong:
+/// the namespace then lives inside the lazy grid cell, so when that cell is
+/// rebuilt or discarded while the detail view is open, the source registration
+/// dies with it. UIKit then logs "Dismissing a zoom transition to a view not in
+/// the view hierarchy will trigger a fallback transition" and returns with the
+/// wrong animation.
+///
+/// In practice that means declaring it on the view that owns the `ForEach`, not
+/// inside the row. Declaring it on the view that owns the `NavigationStack` and
+/// threading it down — as `LibraryView` does for `PlaylistsGridScreen` — is
+/// stricter and safer still, and is the pattern to prefer for anything that
+/// might be reused in a lazily-rebuilt context.
+///
+/// Uniqueness is the *ID's* job — pass the model's id, and scope it further if
+/// one screen can show the same model twice.
 ///
 /// Use this only where the label and the destination share a piece of artwork.
 /// Zooming out of a chevron or a text row has nothing to morph and reads worse
@@ -26,14 +33,15 @@ import SwiftUI
 ///
 /// Two further constraints, both learned on device — neither is cosmetic:
 ///
-/// - **The destination must not hand-roll a downward pull gesture.** The
-///   interactive dismissal arms on a drag down from the top of the scroll view.
-///   A custom reveal that measures raw overscroll competes for that same drag
-///   with nothing arbitrating, so the screen sometimes closes instead. The fix
-///   is the system search drawer — `.searchable(placement: .navigationBarDrawer
-///   (displayMode: .automatic))` — which UIKit reveals through the navigation
-///   controller's own overscroll handling, already coordinated with the zoom
-///   dismissal. That combination is how Apple Music has both on one screen.
+/// - **Vertical pulls belong to the destination — but only while
+///   `ZoomPushDismissal` is in place.** A push's interactive dismissal is an
+///   *edge* pan, so a downward pull does not compete with it, which is what lets
+///   `PlaylistDetailView` reveal its search field by pulling. That holds only
+///   because `zoomPushDismissal` suppresses the interactive pop entirely. If
+///   that workaround is ever deleted — and its own documentation says to delete
+///   it once Apple fixes the transition — re-check this: a restored interactive
+///   dismissal, or any move to a modal presentation, reintroduces a vertical
+///   drag-dismiss that will fight the pull and usually win.
 /// - **Mind the source screen's navigation bar.** Zoom deliberately leaves the
 ///   source on screen, so any bar difference between the two screens animates in
 ///   full view instead of being carried off by a slide. A large title has to
