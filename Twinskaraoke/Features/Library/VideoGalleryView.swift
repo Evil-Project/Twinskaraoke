@@ -28,6 +28,7 @@ import SwiftUI
 #endif
 
 struct VideoGalleryView: View {
+    @Namespace private var zoomNamespace
     @State private var viewModel = VideoGalleryViewModel()
     private let cols = AM.Layout.adaptiveGridColumns(minimum: 164, spacing: 16)
     var body: some View {
@@ -55,7 +56,7 @@ struct VideoGalleryView: View {
                 .frame(maxWidth: .infinity, minHeight: 420)
             } else if let featured = viewModel.videos.first {
                 VStack(alignment: .leading, spacing: 24) {
-                    NavigationLink {
+                    ZoomNavigationLink(id: featured.id, in: zoomNamespace) {
                         VideoPlayerScreen(video: featured)
                     } label: {
                         FeaturedVideoCard(video: featured)
@@ -77,7 +78,7 @@ struct VideoGalleryView: View {
                             .padding(.horizontal, 16)
                             LazyVGrid(columns: cols, spacing: 20) {
                                 ForEach(viewModel.videos.dropFirst()) { video in
-                                    NavigationLink {
+                                    ZoomNavigationLink(id: video.id, in: zoomNamespace) {
                                         VideoPlayerScreen(video: video)
                                     } label: {
                                         VideoGalleryCell(video: video)
@@ -387,6 +388,7 @@ private struct VideoContextPreview: View {
 }
 
 struct VideoPlayerScreen: View {
+    @Namespace private var zoomNamespace
     let video: GalleryVideo
     @State private var player: AVPlayer?
     @State private var appeared = false
@@ -454,7 +456,7 @@ struct VideoPlayerScreen: View {
                         .padding(.horizontal, 16)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(similar.videos.enumerated()), id: \.element.id) { idx, item in
-                                NavigationLink {
+                                ZoomNavigationLink(id: item.id, in: zoomNamespace) {
                                     VideoPlayerScreen(video: item)
                                 } label: {
                                     SimilarVideoRow(video: item)

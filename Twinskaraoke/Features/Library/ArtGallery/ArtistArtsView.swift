@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ArtistArtsView: View {
+    @Namespace private var zoomNamespace
     let artist: GalleryArtist
     @Environment(\.appReduceMotion) private var reduceMotion
     private let cols = AM.Layout.adaptiveGridColumns(minimum: 148, spacing: 10)
@@ -40,7 +41,7 @@ struct ArtistArtsView: View {
 
                     LazyVGrid(columns: cols, spacing: 8) {
                         ForEach(arts) { art in
-                            NavigationLink {
+                            ZoomNavigationLink(id: art.id, in: zoomNamespace) {
                                 ArtDetailView(art: art, artist: artist)
                             } label: {
                                 ArtThumbnail(art: art)
