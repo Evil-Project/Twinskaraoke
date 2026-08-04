@@ -23,6 +23,10 @@ struct PlaylistDetailView: View {
     /// Below 1 so the field trails the finger — ~110pt of pull for a full reveal.
     private static let searchRevealResistance: CGFloat = 0.65
     @State private var searchRevealHeight: CGFloat = 0
+    /// Drives the navigation bar's title and background. The old search field
+    /// hid the title while it was active, because it lived in the bar area; the
+    /// pull-revealed field is content, so the title only follows the scroll.
+    @State private var showsCollapsedTitle = false
     /// Latched once the pull completes, so the field stays put instead of
     /// collapsing the moment the finger lifts.
     @State private var isSearchLatched = false
@@ -269,7 +273,20 @@ struct PlaylistDetailView: View {
             updateSearchReveal(pull: pull)
         }
         .scrollIndicators(.hidden)
+        // Same threshold and wiring as BrowseSongCollectionView, ArtistsView and
+        // DownloadedSongsView: the name belongs in the bar once its own heading
+        // has scrolled away, and the bar stays transparent over the artwork until
+        // then. Inline, never large — the zoom leaves the source screen on
+        // display, so a large title collapsing on push is animated in full view.
+        .collapsedNavigationTitle($showsCollapsedTitle)
         .musicScreenBackground()
+        .navigationTitle(showsCollapsedTitle ? playlist.name : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .animation(
+            reduceMotion ? nil : AppMotion.quick,
+            value: showsCollapsedTitle
+        )
         // Add to Library, Download / Remove Downloads and Refresh Playlist live
         // here and nowhere else on this screen. They were reachable only by
         // long-pressing the artwork between the pull-to-reveal search landing and
