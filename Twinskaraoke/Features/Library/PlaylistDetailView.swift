@@ -270,6 +270,19 @@ struct PlaylistDetailView: View {
         }
         .scrollIndicators(.hidden)
         .musicScreenBackground()
+        // Add to Library, Download / Remove Downloads and Refresh Playlist live
+        // here and nowhere else on this screen. They were reachable only by
+        // long-pressing the artwork between the pull-to-reveal search landing and
+        // this — a context menu is a shortcut to actions, never their only home.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                PlaylistMoreMenu(
+                    playlist: playlist,
+                    songs: songs,
+                    onRefresh: refresh
+                )
+            }
+        }
         .alert(
             "Couldn't Remove Song",
             isPresented: Binding(
@@ -835,6 +848,7 @@ private struct PlaylistMoreMenu: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.65, haptic: .selection))
+        .accessibilityIdentifier("PlaylistDetail.moreActions")
     }
 }
 

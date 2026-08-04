@@ -272,6 +272,47 @@ final class TwinskaraokeUITests: XCTestCase {
     return false
   }
 
+  /// The playlist actions must have a home of their own in the toolbar.
+  ///
+  /// They were lost with the navigation-bar block when pull-to-reveal search
+  /// replaced the old search field, leaving `PlaylistMoreMenu` defined but
+  /// unreferenced — which no compiler warning catches for a private type.
+  func testPlaylistDetailToolbarExposesPlaylistActions() throws {
+    let app = launchApp(initialSection: "search")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    openVisibleItem(
+      "Karaoke Essentials",
+      identifier: "PlaylistList.ui-search-playlist-essentials",
+      in: app
+    )
+
+    let moreActions = app.buttons["PlaylistDetail.moreActions"]
+    XCTAssertTrue(
+      moreActions.waitForExistence(timeout: 8),
+      "Expected the playlist actions menu in the navigation bar."
+    )
+    moreActions.tap()
+
+    // The download entry's title depends on what is already downloaded, and
+    // "Add to Library" is absent for a playlist you own, so assert on the menu
+    // having opened with the actions in it rather than on one exact title.
+    XCTAssertTrue(
+      app.buttons["Refresh Playlist"].waitForExistence(timeout: 5),
+      "Expected the actions menu to open."
+    )
+    for title in ["Play", "Shuffle"] {
+      XCTAssertTrue(app.buttons[title].exists, "Expected \(title) in the actions menu.")
+    }
+    XCTAssertTrue(
+      app.buttons["Download"].exists
+        || app.buttons["Download Remaining"].exists
+        || app.buttons["Remove Downloads"].exists
+        || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Downloading'")).count > 0,
+      "Expected a download action in the actions menu."
+    )
+  }
+
   func testAdaptiveMusicShellShowsSidebarOrTabs() throws {
     // In portrait the balanced split view collapses the sidebar out of the
     // hierarchy, so an iPad would fall through to the compact tab assertions
