@@ -207,6 +207,12 @@ private struct PopupHostView: View {
             }
         }
         .tint(.appAccent)
+        // Replaces the hand-rolled scroll-collapse that BottomChromeState was
+        // built for and never wired up. Worth re-checking on device if the
+        // mini player ever looks misplaced: LNPopupController floats its bar
+        // above the tab bar, and ShimejiFloorRegistry rests idle instances on
+        // the live UITabBar's top edge, both of which move as the bar minimizes.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var sidebarShell: some View {
