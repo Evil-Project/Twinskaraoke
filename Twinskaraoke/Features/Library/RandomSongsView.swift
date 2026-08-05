@@ -24,7 +24,6 @@ struct RandomSongsView: View {
                     .padding(.bottom, 28)
             }
             .smoothScrolling()
-            .bottomChromeScrollTracking()
         }
         .scrollIndicators(.hidden)
         .musicScreenBackground()
