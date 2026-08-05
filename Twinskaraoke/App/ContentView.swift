@@ -129,7 +129,6 @@ private struct PopupHostView: View {
             .environment(homeViewModel)
             .modifier(PopupModifier())
             .onAppear {
-                configureTabBarAppearance()
                 // Warm the account-scoped state that the shared song context
                 // menu reads. Both used to load only when Library (or the
                 // full-screen player) first appeared, so a long-press before
@@ -256,19 +255,6 @@ private struct PopupHostView: View {
 
     private var shellAnimation: Animation? {
         reduceMotion ? nil : AppMotion.snap
-    }
-
-    private func configureTabBarAppearance() {
-        #if canImport(UIKit)
-            let appearance = UITabBarAppearance()
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = nil
-            appearance.backgroundColor = .clear
-            appearance.shadowColor = .clear
-            UITabBar.appearance().isTranslucent = true
-            UITabBar.appearance().standardAppearance = appearance
-            UITabBar.appearance().scrollEdgeAppearance = appearance
-        #endif
     }
 
     private static var initialSection: RootSection {
