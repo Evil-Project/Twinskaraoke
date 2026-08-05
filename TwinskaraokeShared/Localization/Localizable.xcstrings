@@ -59,16 +59,6 @@
     "@%@" : {
 
     },
-    "%@ %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$lld"
-          }
-        }
-      }
-    },
     "%@ artwork" : {
       "localizations" : {
         "de" : {
@@ -2146,6 +2136,12 @@
           }
         }
       }
+    },
+    "Add to favourites" : {
+
+    },
+    "Add to Favourites" : {
+
     },
     "Add to Library" : {
       "localizations" : {
@@ -4810,19 +4806,22 @@
         }
       }
     },
-    "Couldn't load lyrics" : {
-
-    },
     "Couldn’t add the song to “%@”. Try again." : {
 
     },
     "Couldn’t create the playlist. Try again." : {
 
     },
-    "Couldn’t remove song" : {
+    "Couldn't load lyrics" : {
+
+    },
+    "Couldn’t remove “%@”. Try again." : {
 
     },
     "Couldn't Remove Song" : {
+
+    },
+    "Couldn’t remove song" : {
 
     },
     "Couldn't save" : {
@@ -4835,9 +4834,6 @@
           }
         }
       }
-    },
-    "Couldn’t remove “%@”. Try again." : {
-
     },
     "Cover by %@" : {
       "localizations" : {
@@ -7048,6 +7044,9 @@
           }
         }
       }
+    },
+    "Favourites" : {
+
     },
     "Featured" : {
       "localizations" : {
@@ -10908,6 +10907,9 @@
         }
       }
     },
+    "Next" : {
+
+    },
     "NEXT" : {
       "localizations" : {
         "de" : {
@@ -12783,6 +12785,9 @@
     "Opens your playlist." : {
 
     },
+    "or" : {
+
+    },
     "OR" : {
       "localizations" : {
         "de" : {
@@ -14332,6 +14337,9 @@
         }
       }
     },
+    "Previous" : {
+
+    },
     "Previous track" : {
       "localizations" : {
         "de" : {
@@ -15406,6 +15414,9 @@
     "Recently Played" : {
 
     },
+    "Refresh" : {
+
+    },
     "Refresh Library" : {
       "localizations" : {
         "de" : {
@@ -15511,6 +15522,9 @@
       }
     },
     "Refresh Playlist" : {
+
+    },
+    "Refresh playlists" : {
 
     },
     "Refresh Profile" : {
@@ -16150,6 +16164,12 @@
         }
       }
     },
+    "Remove from favourites" : {
+
+    },
+    "Remove from Favourites" : {
+
+    },
     "Remove from Library" : {
       "localizations" : {
         "de" : {
@@ -16415,6 +16435,9 @@
           }
         }
       }
+    },
+    "Repeat Mode" : {
+
     },
     "Repeat One" : {
       "localizations" : {
@@ -17526,6 +17549,9 @@
           }
         }
       }
+    },
+    "Search songs or artists" : {
+
     },
     "Search unavailable" : {
       "localizations" : {
@@ -19073,6 +19099,9 @@
           }
         }
       }
+    },
+    "Sign in with Discord" : {
+
     },
     "Sign in with your Twinskaraoke username and password to see your profile, badges, and upload limits." : {
 
@@ -22918,13 +22947,13 @@
         }
       }
     },
+    "Your favourites and playlists follow your account." : {
+
+    },
     "Your karaoke profile,\nright on Apple TV." : {
 
     },
     "Yours" : {
-
-    },
-    "Zoom Test" : {
 
     }
   },

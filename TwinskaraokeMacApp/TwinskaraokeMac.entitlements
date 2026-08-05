@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mac App Store requires the sandbox. Deliberately does NOT carry
+	     com.apple.developer.carplay-audio from the iOS entitlements: that is an
+	     iOS-only entitlement and a Mac provisioning profile cannot vend it. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Outgoing only: the app talks to the Twinskaraoke API and CDN. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

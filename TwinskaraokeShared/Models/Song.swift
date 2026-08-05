@@ -263,7 +263,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   private static let neuroArtistNames: Set<String> = ["Neuro", "Neuro v1", "Neuro v2"]
 
   private var neuroFallbackImageURL: URL? {
-    #if os(watchOS) || os(tvOS)
+    #if os(watchOS) || os(tvOS) || os(macOS)
     return nil
     #else
     let artists = coverArtists ?? []
@@ -274,7 +274,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var fallbackArtCredit: String? {
-    #if os(watchOS) || os(tvOS)
+    #if os(watchOS) || os(tvOS) || os(macOS)
     return nil
     #else
     guard !hasOwnArtwork else { return nil }

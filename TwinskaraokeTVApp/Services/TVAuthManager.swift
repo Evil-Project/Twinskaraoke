@@ -1,68 +1,6 @@
 import Foundation
 import Observation
 
-struct TVProfileResponse: Decodable, Sendable {
-    let profile: TVProfile
-    let badges: [TVBadge]?
-}
-
-struct TVProfile: Decodable, Sendable {
-    let displayName: String
-    let avatarUrl: String?
-    let level: Int?
-    let levelTitle: String?
-    let totalXP: Int?
-    let totalBadges: Int?
-    let unlockedBadges: Int?
-    let levelProgress: Double?
-    let xpToNextLevel: Int?
-
-    var avatarURL: URL? {
-        Self.remoteURL(from: avatarUrl)
-    }
-
-    private static func remoteURL(from value: String?) -> URL? {
-        guard let value, !value.isEmpty else { return nil }
-        if let url = URL(string: value), url.scheme != nil {
-            return url
-        }
-        return URL(string: "\(StorageHost.base)\(ArtworkURLBuilder.normalizedPath(value))")
-    }
-}
-
-struct TVBadge: Decodable, Identifiable, Sendable {
-    let id: String
-    let name: String
-    let description: String?
-    let rarity: Int
-    let unlocked: Bool
-    let currentProgress: Int
-    let conditionValue: Int
-    let media: TVBadgeMedia?
-
-    var iconURL: URL? {
-        ArtworkURLBuilder.imageURL(
-            cloudflareID: media?.cloudflareId,
-            path: nil,
-            variant: .thumbnail
-        )
-    }
-}
-
-struct TVBadgeMedia: Decodable, Sendable {
-    let cloudflareId: String?
-}
-
-struct TVUploadLimits: Decodable, Sendable {
-    let maxSongs: Int
-    let maxStorageBytes: Int64
-    let usedStorageBytes: Int64
-    let currentSongCount: Int
-    let currentPlaylistCount: Int
-    let playlistLimit: Int
-    let songPerPlaylistLimit: Int
-}
-
 @MainActor
 @Observable
 final class TVAuthManager {
@@ -70,15 +8,15 @@ final class TVAuthManager {
     private(set) var currentUsername: String?
     private(set) var currentUserId: String?
     private(set) var currentAvatar: String?
-    private(set) var profile: TVProfile?
-    private(set) var badges: [TVBadge] = []
-    private(set) var uploadLimits: TVUploadLimits?
+    private(set) var profile: UserProfile?
+    private(set) var badges: [AccountBadge] = []
+    private(set) var uploadLimits: UploadLimits?
     private(set) var isAuthenticating = false
     private(set) var isRefreshing = false
     private(set) var authError: String?
     private(set) var profileError: String?
 
-    private(set) var qrSession: TVQRSignIn.Session?
+    private(set) var qrSession: QRSignIn.Session?
     private(set) var qrPhase: QRPhase = .idle
     private(set) var qrError: String?
 
@@ -217,9 +155,9 @@ final class TVAuthManager {
     }
 
     private func runQRSignIn() async {
-        var session: TVQRSignIn.Session
+        var session: QRSignIn.Session
         do {
-            session = try await TVQRSignIn.createSession()
+            session = try await QRSignIn.createSession()
         } catch {
             guard !Task.isCancelled else { return }
             qrError = friendlyMessage(for: error)
@@ -248,7 +186,7 @@ final class TVAuthManager {
             guard !Task.isCancelled else { return }
 
             do {
-                let poll = try await TVQRSignIn.status(of: session.id)
+                let poll = try await QRSignIn.status(of: session.id)
                 guard !Task.isCancelled, qrSession?.id == session.id else { return }
                 // The server owns the deadline; the value from `createSession`
                 // is only a placeholder until the first poll lands.
@@ -318,7 +256,7 @@ final class TVAuthManager {
         var didFail = false
         if let profileData {
             do {
-                let response = try JSONDecoder().decode(TVProfileResponse.self, from: profileData)
+                let response = try JSONDecoder().decode(ProfileResponse.self, from: profileData)
                 profile = response.profile
                 badges = response.badges ?? []
                 persistAvatar(response.profile.avatarUrl)
@@ -331,7 +269,7 @@ final class TVAuthManager {
 
         if let limitsData {
             do {
-                uploadLimits = try JSONDecoder().decode(TVUploadLimits.self, from: limitsData)
+                uploadLimits = try JSONDecoder().decode(UploadLimits.self, from: limitsData)
             } catch {
                 didFail = true
             }
@@ -482,7 +420,7 @@ final class TVAuthManager {
         // `ServiceError` already phrases its own cases for this screen — most
         // usefully the 429 rate-limit text, which the generic fallback below
         // would otherwise flatten into a connection problem.
-        if let serviceError = error as? TVQRSignIn.ServiceError,
+        if let serviceError = error as? QRSignIn.ServiceError,
            let description = serviceError.errorDescription
         {
             return description

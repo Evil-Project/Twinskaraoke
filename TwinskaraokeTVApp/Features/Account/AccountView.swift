@@ -257,7 +257,7 @@ struct AccountView: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 28))
     }
 
-    private func limitsSection(_ limits: TVUploadLimits) -> some View {
+    private func limitsSection(_ limits: UploadLimits) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             TVSectionHeader(
                 title: "Account Usage",
@@ -304,7 +304,7 @@ struct AccountView: View {
                 spacing: 32
             ) {
                 ForEach(auth.badges) { badge in
-                    TVBadgeCard(badge: badge)
+                    AccountBadgeCardView(badge: badge)
                 }
             }
         }
@@ -388,8 +388,8 @@ private struct TVAccountMetric: View {
     }
 }
 
-private struct TVBadgeCard: View {
-    let badge: TVBadge
+private struct AccountBadgeCardView: View {
+    let badge: AccountBadge
 
     @FocusState private var isFocused: Bool
 
