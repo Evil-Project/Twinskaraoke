@@ -45,7 +45,7 @@ final class PublicPlaylistsViewModel {
     private var hasLoaded = false
     private var requestToken = 0
     private let pageSize = 25
-    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private let refreshTracker = RefreshTracker()
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -68,7 +68,7 @@ final class PublicPlaylistsViewModel {
     /// until the playlists have actually finished loading.
     func refreshPublicPlaylists() async {
         refresh()
-        await activeTask?.value
+        await refreshTracker.wait()
     }
 
     func loadMoreIfNeeded(current: Playlist) {
@@ -125,7 +125,9 @@ final class PublicPlaylistsViewModel {
         }
         // Only the replacing fetch is what pull-to-refresh waits on; tracking a
         // load-more here would make a refresh return as soon as pagination did.
-        if replace { activeTask = task }
+        // Safe to cancel what it supersedes: both the success and failure paths
+        // below bail unless they still own `requestToken`.
+        if replace { refreshTracker.track(task, cancellingPrevious: true) }
     }
 
     private func applyUITestFixture() {
@@ -176,7 +178,7 @@ final class TopChartViewModel {
     var weeklyTrending: [Song] = []
     private var hasLoaded = false
     private var requestToken = 0
-    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private let refreshTracker = RefreshTracker()
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -188,7 +190,9 @@ final class TopChartViewModel {
         hasLoaded = true
         requestToken += 1
         let token = requestToken
-        activeTask = Task { [weak self] in
+        // Safe to cancel what it supersedes: the response is dropped unless it
+        // still owns `requestToken`.
+        refreshTracker.track(Task { [weak self] in
             guard let self else { return }
             async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
             async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
@@ -197,7 +201,7 @@ final class TopChartViewModel {
             guard token == requestToken else { return }
             songs = allTimeSongs
             weeklyTrending = weeklySongs
-        }
+        }, cancellingPrevious: true)
     }
 
     func refresh() {
@@ -209,7 +213,7 @@ final class TopChartViewModel {
     /// until the charts have actually finished loading.
     func refreshTopChart() async {
         refresh()
-        await activeTask?.value
+        await refreshTracker.wait()
     }
 
     private func applyUITestFixture() {
@@ -260,7 +264,7 @@ final class GenresViewModel {
     @ObservationIgnored private var genresNeedingFallback = Set<String>()
     @ObservationIgnored private var memoryWarningCancellable: AnyCancellable?
     @ObservationIgnored private var fallbackObservation: ObservationToken?
-    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private let refreshTracker = RefreshTracker()
 
     init() {
         #if canImport(UIKit)
@@ -308,7 +312,7 @@ final class GenresViewModel {
     /// is awaited — per-genre detail requests stream in afterwards by design.
     func refreshGenres() async {
         refresh()
-        await activeTask?.value
+        await refreshTracker.wait()
     }
 
     func loadMoreIfNeeded(current: GenreSummary) {
@@ -378,7 +382,11 @@ final class GenresViewModel {
         }
         // Only the replacing fetch is what pull-to-refresh waits on; tracking a
         // load-more here would make a refresh return as soon as pagination did.
-        if replace { activeTask = task }
+        // Cancelling matters more here than elsewhere: `refresh()` deliberately
+        // clears `isLoading` to get past the guard above, so a repeated refresh
+        // really can start a second page fetch. The response is dropped unless
+        // it still owns `pageGeneration`.
+        if replace { refreshTracker.track(task, cancellingPrevious: true) }
     }
 
     private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool, generation: UInt64) {
@@ -520,7 +528,7 @@ final class SearchCategorySongsViewModel {
     private(set) var hasLoaded = false
     private let query: String
     private var requestToken = 0
-    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private let refreshTracker = RefreshTracker()
 
     init(query: String) {
         self.query = query
@@ -541,7 +549,7 @@ final class SearchCategorySongsViewModel {
     /// until the category songs have actually finished loading.
     func refreshCategory() async {
         refresh()
-        await activeTask?.value
+        await refreshTracker.wait()
     }
 
     var emptyStateMessage: String {
@@ -557,7 +565,9 @@ final class SearchCategorySongsViewModel {
         isLoading = true
         loadFailed = false
 
-        activeTask = Task { [weak self] in
+        // Safe to cancel what it supersedes: both `applyResponse` and
+        // `applyFailure` bail unless they still own `requestToken`.
+        refreshTracker.track(Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.searchSongs(query: query, pageSize: 100)
@@ -565,7 +575,7 @@ final class SearchCategorySongsViewModel {
             } catch {
                 applyFailure(token: token)
             }
-        }
+        }, cancellingPrevious: true)
     }
 
     private func applyResponse(_ loadedSongs: [Song], token: Int) {
