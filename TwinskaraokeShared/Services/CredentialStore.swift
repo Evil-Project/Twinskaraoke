@@ -120,14 +120,50 @@ nonisolated enum CredentialStore {
     ]
     #if os(macOS)
       // macOS defaults SecItem to the legacy file-based keychain, which ignores
-      // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and prompts the user
-      // on access. Opt into the data-protection keychain so the Mac app behaves
-      // like the iOS one. Must be set identically on every query for the same
-      // item, which is why it lives here rather than at the call sites.
-      query[kSecUseDataProtectionKeychain as String] = true
+      // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and can prompt on
+      // access. Prefer the data-protection keychain so the Mac app behaves like
+      // the iOS one — but only when this build can actually use it. Must be set
+      // identically on every query for the same item, which is why it lives
+      // here rather than at the call sites.
+      if usesDataProtectionKeychain {
+        query[kSecUseDataProtectionKeychain as String] = true
+      }
     #endif
     return query
   }
+
+  #if os(macOS)
+    /// The macOS data-protection keychain requires an `application-identifier`
+    /// or `keychain-access-groups` entitlement, which only a properly
+    /// team-signed build carries. Ad-hoc and unsigned local builds have
+    /// neither, and every SecItem call there fails with
+    /// `errSecMissingEntitlement (-34018)` — which reads to the user as
+    /// "couldn't save your sign-in".
+    ///
+    /// Probing once beats assuming: a shipping signed build gets the modern
+    /// keychain, and a developer's local build silently falls back to the
+    /// legacy one instead of being unable to sign in at all. Resolved a single
+    /// time per process so save, read and delete can never disagree about which
+    /// keychain holds the item.
+    private static let usesDataProtectionKeychain: Bool = {
+      var probe: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: service,
+        kSecAttrAccount as String: probeAccount,
+        kSecValueData as String: Data("probe".utf8),
+        kSecUseDataProtectionKeychain as String: true,
+      ]
+      let status = SecItemAdd(probe as CFDictionary, nil)
+      guard status == errSecSuccess || status == errSecDuplicateItem else {
+        return false
+      }
+      probe.removeValue(forKey: kSecValueData as String)
+      SecItemDelete(probe as CFDictionary)
+      return true
+    }()
+
+    private static let probeAccount = "nk.keychainProbe"
+  #endif
 
   private static func readTokenFromKeychain() -> String? {
     var query = baseQuery

@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "5DA46CA312C58DE7DB9D897B"
-               BuildableName = "Twinskaraoke Mac App.app"
+               BuildableName = "Twinskaraoke.app"
                BlueprintName = "Twinskaraoke Mac App"
                ReferencedContainer = "container:Twinskaraoke.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "5DA46CA312C58DE7DB9D897B"
-            BuildableName = "Twinskaraoke Mac App.app"
+            BuildableName = "Twinskaraoke.app"
             BlueprintName = "Twinskaraoke Mac App"
             ReferencedContainer = "container:Twinskaraoke.xcodeproj">
          </BuildableReference>
@@ -54,7 +54,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "5DA46CA312C58DE7DB9D897B"
-            BuildableName = "Twinskaraoke Mac App.app"
+            BuildableName = "Twinskaraoke.app"
             BlueprintName = "Twinskaraoke Mac App"
             ReferencedContainer = "container:Twinskaraoke.xcodeproj">
          </BuildableReference>
@@ -71,7 +71,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "5DA46CA312C58DE7DB9D897B"
-            BuildableName = "Twinskaraoke Mac App.app"
+            BuildableName = "Twinskaraoke.app"
             BlueprintName = "Twinskaraoke Mac App"
             ReferencedContainer = "container:Twinskaraoke.xcodeproj">
          </BuildableReference>

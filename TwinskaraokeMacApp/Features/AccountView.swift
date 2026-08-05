@@ -4,31 +4,66 @@ struct AccountView: View {
     @Environment(MacAuthManager.self) private var auth
     @State private var username = ""
     @State private var password = ""
+    /// QR pairing is the default: it's the fastest path in when the phone app
+    /// is already signed in, same reasoning as tvOS.
+    @State private var usePasswordSignIn = false
 
     var body: some View {
         Group {
             if auth.isLoggedIn {
                 signedIn
-            } else {
+            } else if usePasswordSignIn {
                 signInForm
+            } else {
+                QRSignInPanel(auth: auth) {
+                    usePasswordSignIn = true
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle("Account")
     }
 
     private var signedIn: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 54))
-                .foregroundStyle(Color.appAccent)
-            Text(auth.username ?? "Signed in")
-                .font(.title2.weight(.semibold))
-            Button("Sign Out", role: .destructive) {
-                auth.logout()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                ProfileHeader(auth: auth)
+
+                if let error = auth.profileError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+
+                if let limits = auth.uploadLimits {
+                    UploadLimitsSection(limits: limits)
+                }
+
+                if !auth.badges.isEmpty {
+                    BadgesSection(badges: auth.badges)
+                }
+
+                HStack {
+                    Button("Sign Out", role: .destructive) { auth.logout() }
+                    Spacer()
+                    Button {
+                        Task { await auth.refreshAccount() }
+                    } label: {
+                        if auth.isRefreshingProfile {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(auth.isRefreshingProfile)
+                }
+                .padding(.top, 4)
             }
-            .controlSize(.large)
+            .padding(24)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await auth.refreshAccount() }
     }
 
     private var signInForm: some View {
@@ -80,6 +115,12 @@ struct AccountView: View {
                     .frame(width: 200)
             }
             .controlSize(.large)
+            .disabled(auth.isLoading)
+
+            Button("Scan a code instead") {
+                usePasswordSignIn = false
+            }
+            .buttonStyle(.link)
             .disabled(auth.isLoading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

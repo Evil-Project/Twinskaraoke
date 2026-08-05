@@ -98,7 +98,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		33CB3DD4ECD8C15D69EDD6DE /* Twinskaraoke Mac App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke Mac App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		33CB3DD4ECD8C15D69EDD6DE /* Twinskaraoke Mac App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "Twinskaraoke Mac App.app"; path = Twinskaraoke.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B789992B5FC6B90FC2528F9 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		D0AA0000000000000000E00A /* Twinskaraoke TV App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke TV App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TwinskaraokeWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -159,8 +159,6 @@
 		};
 		D0A500002FBD000100000001 /* TwinskaraokeShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TwinskaraokeShared;
 			sourceTree = "<group>";
 		};
@@ -198,29 +196,21 @@
 		};
 		D1A000052FAD000100000005 /* TwinskaraokeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TwinskaraokeTests;
 			sourceTree = "<group>";
 		};
 		D1A000062FAD000100000006 /* TwinskaraokeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TwinskaraokeUITests;
 			sourceTree = "<group>";
 		};
 		D1A000072FAD000100000007 /* TwinskaraokeWatchAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TwinskaraokeWatchAppTests;
 			sourceTree = "<group>";
 		};
 		D1A000082FAD000100000008 /* TwinskaraokeWatchAppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = TwinskaraokeWatchAppUITests;
 			sourceTree = "<group>";
 		};
@@ -363,8 +353,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D0A500002FBD000100000001 /* TwinskaraokeShared */,
 				9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */,
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
 			);
 			name = "Twinskaraoke Mac App";
 			productName = "Twinskaraoke Mac App";

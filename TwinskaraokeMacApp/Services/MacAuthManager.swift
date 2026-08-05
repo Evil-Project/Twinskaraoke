@@ -45,6 +45,86 @@ final class MacAuthManager {
     private var webAuthSession: ASWebAuthenticationSession?
     private var webAuthContextProvider: WebAuthPresentationContextProvider?
 
+    // MARK: - Profile
+
+    private(set) var profile: UserProfile?
+    private(set) var badges: [AccountBadge] = []
+    private(set) var uploadLimits: UploadLimits?
+    private(set) var isRefreshingProfile = false
+    private(set) var profileError: String?
+
+    /// Fetches profile, badges and upload limits. Mirrors
+    /// `TVAuthManager.refreshAccount` — same endpoints, same partial-failure
+    /// handling, so one endpoint being down doesn't blank the whole screen.
+    func refreshAccount() async {
+        guard isLoggedIn, CredentialStore.token != nil, !isRefreshingProfile else { return }
+        isRefreshingProfile = true
+        profileError = nil
+        defer { isRefreshingProfile = false }
+
+        async let fetchedProfile = try? Self.authorizedData(path: "/api/badge/profile")
+        async let fetchedLimits = try? Self.authorizedData(path: "/api/user/upload-limits")
+        let (profileData, limitsData) = await (fetchedProfile, fetchedLimits)
+
+        var didFail = false
+        if let profileData {
+            do {
+                let response = try JSONDecoder().decode(ProfileResponse.self, from: profileData)
+                profile = response.profile
+                badges = response.badges ?? []
+                if let avatarUrl = response.profile.avatarUrl, !avatarUrl.isEmpty {
+                    avatar = avatarUrl
+                }
+            } catch {
+                didFail = true
+            }
+        } else {
+            didFail = true
+        }
+
+        if let limitsData {
+            do {
+                uploadLimits = try JSONDecoder().decode(UploadLimits.self, from: limitsData)
+            } catch {
+                didFail = true
+            }
+        } else {
+            didFail = true
+        }
+
+        if didFail {
+            profileError = "Some account details couldn't be refreshed. Try again."
+        }
+    }
+
+    private static func authorizedData(path: String) async throws -> Data {
+        let request = try KaraokeAPIClient.request(path: path)
+        return try await KaraokeAPIClient.data(for: request)
+    }
+
+    /// Resolved avatar for the toolbar button and profile header. Prefers the
+    /// profile payload, falling back to the JWT's Discord avatar claim.
+    var avatarURL: URL? {
+        if let profile, let url = profile.avatarURL { return url }
+        guard let avatar, !avatar.isEmpty else { return nil }
+        return URL(string: avatar)
+    }
+
+    // MARK: - QR pairing state
+
+    private(set) var qrSession: QRSignIn.Session?
+    private(set) var qrPhase: QRPhase = .idle
+    private(set) var qrError: String?
+    @ObservationIgnored private var qrTask: Task<Void, Never>?
+
+    enum QRPhase: Equatable {
+        case idle
+        case creating
+        case waiting
+        case completing
+        case expired
+    }
+
     private enum Endpoint {
         static var login: String { "\(StorageHost.api)/api/auth/login" }
         static var nkTokenExchange: String { "\(StorageHost.idk)/api/auth/discord-token" }
@@ -57,7 +137,9 @@ final class MacAuthManager {
         static let callbackScheme = "neurokaraoke"
     }
 
-    private enum AuthError: LocalizedError {
+    // nonisolated: referenced from the ASWebAuthenticationSession completion
+    // handler, which macOS invokes on a background XPC queue.
+    private nonisolated enum AuthError: LocalizedError {
         case http(Int, String)
         case parse
         case invalidCallback
@@ -188,15 +270,24 @@ final class MacAuthManager {
     }
 
     private func presentWebAuth(url: URL, anchor: ASPresentationAnchor) async throws -> URL {
-        try await withCheckedThrowingContinuation { continuation in
+        // Clearing the session here rather than inside the completion handler:
+        // control is back on the main actor once the continuation resumes, so
+        // the handler itself never has to touch isolated state.
+        defer {
+            webAuthSession = nil
+            webAuthContextProvider = nil
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(
                 url: url,
                 callbackURLScheme: Endpoint.callbackScheme
-            ) { [weak self] callbackURL, error in
-                Task { @MainActor [weak self] in
-                    self?.webAuthSession = nil
-                    self?.webAuthContextProvider = nil
-                }
+            ) { @Sendable callbackURL, error in
+                // macOS calls this on an XPC queue, not the main thread — iOS
+                // calls it on the main thread, which is why the iOS AuthManager
+                // gets away with the same shape. @Sendable forces the closure
+                // nonisolated, so Swift 6 doesn't insert a main-actor check
+                // that would trap here (EXC_BREAKPOINT).
                 if let error {
                     continuation.resume(throwing: error)
                     return
@@ -287,13 +378,145 @@ final class MacAuthManager {
     }
 
     func logout() {
+        // A live pairing code outliving sign-out could complete behind the
+        // user and silently sign them back in.
+        cancelQRSignIn()
         CredentialStore.deleteToken()
         isLoggedIn = false
         username = nil
         userID = nil
         avatar = nil
         errorMessage = nil
+        profile = nil
+        badges = []
+        uploadLimits = nil
+        profileError = nil
         FavoritesManager.shared.clear()
+    }
+
+    // MARK: - QR device pairing
+
+    /// Requests a pairing code and polls until a signed-in phone approves it.
+    /// Safe to call repeatedly; any in-flight attempt is replaced. Ported from
+    /// `TVAuthManager` — the Mac has a keyboard, but pairing from a phone that
+    /// is already signed in is still the fastest way in.
+    func startQRSignIn() {
+        qrTask?.cancel()
+        qrError = nil
+        qrSession = nil
+        qrPhase = .creating
+        qrTask = Task { [weak self] in
+            await self?.runQRSignIn()
+        }
+    }
+
+    func cancelQRSignIn() {
+        qrTask?.cancel()
+        qrTask = nil
+        qrSession = nil
+        qrPhase = .idle
+        qrError = nil
+    }
+
+    private func runQRSignIn() async {
+        var session: QRSignIn.Session
+        do {
+            session = try await QRSignIn.createSession()
+        } catch {
+            guard !Task.isCancelled else { return }
+            qrError = Self.friendlyMessage(for: error)
+            qrPhase = .idle
+            return
+        }
+
+        guard !Task.isCancelled else { return }
+        qrSession = session
+        qrPhase = .waiting
+
+        let start = Date()
+        // A single network blip shouldn't discard a code the user is already
+        // pointing a phone at; only give up after it keeps failing.
+        var consecutiveFailures = 0
+
+        while !Task.isCancelled {
+            if session.isExpired {
+                qrPhase = .expired
+                return
+            }
+
+            // Tight while the user is most likely mid-scan, slower after.
+            let interval: Double = Date().timeIntervalSince(start) < 30 ? 2 : 5
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+
+            do {
+                let poll = try await QRSignIn.status(of: session.id)
+                guard !Task.isCancelled, qrSession?.id == session.id else { return }
+                // The server owns the deadline; the value from createSession is
+                // only a placeholder until the first poll lands.
+                if let expiresAt = poll.expiresAt, expiresAt != session.expiresAt {
+                    session.expiresAt = expiresAt
+                    qrSession = session
+                }
+
+                switch poll.status {
+                case .pending:
+                    consecutiveFailures = 0
+                case .expired:
+                    qrPhase = .expired
+                    return
+                case let .approved(token):
+                    qrPhase = .completing
+                    completeQRSignIn(token: token)
+                    return
+                }
+            } catch {
+                guard !Task.isCancelled, qrSession?.id == session.id else { return }
+                consecutiveFailures += 1
+                if consecutiveFailures >= 3 {
+                    qrError = Self.friendlyMessage(for: error)
+                    qrPhase = .idle
+                    return
+                }
+            }
+        }
+    }
+
+    private func completeQRSignIn(token: String) {
+        // Without readable claims the session would persist with an empty
+        // username, so fail loudly rather than half-committing.
+        guard let claims = Self.parseJWT(token) else {
+            qrError = "That sign-in couldn't be completed. Try again."
+            qrPhase = .idle
+            return
+        }
+        do {
+            try CredentialStore.saveToken(token)
+        } catch {
+            // Include the OSStatus: a bare "couldn't save" gave no way to tell
+            // a Keychain entitlement problem from a transient failure.
+            if case CredentialStore.StoreError.keychain(let status) = error {
+                qrError = "Couldn't save your sign-in (Keychain error \(status))."
+            } else {
+                qrError = "Couldn't save your sign-in. Try again."
+            }
+            qrPhase = .idle
+            return
+        }
+        isLoggedIn = true
+        userID = claims.id
+        username = claims.username
+        avatar = claims.avatar
+        qrSession = nil
+        qrPhase = .idle
+        FavoritesManager.shared.reload()
+    }
+
+    private static func friendlyMessage(for error: Error) -> String {
+        if let serviceError = error as? QRSignIn.ServiceError {
+            return serviceError.errorDescription ?? "Something went wrong. Try again."
+        }
+        return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     // MARK: - Helpers

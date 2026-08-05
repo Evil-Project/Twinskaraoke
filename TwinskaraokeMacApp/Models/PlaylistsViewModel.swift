@@ -7,9 +7,59 @@ final class MacPlaylistsViewModel {
     private(set) var playlists: [Playlist] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
-    /// True when the list is public playlists rather than the user's own,
-    /// so callers can tell "signed out" apart from "you have no playlists".
-    private(set) var isShowingPublicFallback = false
+
+    private var hasLoaded = false
+
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        await reload()
+    }
+
+    /// The sidebar lists only the signed-in user's own playlists. Public
+    /// playlists used to fall back into this list, which buried the rest of the
+    /// sidebar under dozens of rows nobody asked for — they live in Library now.
+    func reload() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        guard CredentialStore.isAuthenticated else {
+            playlists = []
+            hasLoaded = true
+            return
+        }
+
+        do {
+            playlists = try await KaraokeAPIClient.playlists(
+                startIndex: 0,
+                pageSize: 60,
+                isSetlist: false,
+                sortDescending: true
+            )
+            hasLoaded = true
+        } catch is CancellationError {
+            return
+        } catch {
+            playlists = []
+            errorMessage = "Couldn't load your playlists."
+        }
+    }
+
+    /// Called when the signed-in user changes: their playlists are a different
+    /// set, so drop the cached load and fetch again.
+    func invalidate() {
+        hasLoaded = false
+    }
+}
+
+/// Public playlists, shown in Library. Available signed out, which is why it's
+/// separate from the user's own list rather than a fallback inside it.
+@MainActor
+@Observable
+final class MacLibraryViewModel {
+    private(set) var playlists: [Playlist] = []
+    private(set) var isLoading = false
+    private(set) var errorMessage: String?
 
     private var hasLoaded = false
 
@@ -22,44 +72,17 @@ final class MacPlaylistsViewModel {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
-
-        // /api/playlists is auth-only and 401s when signed out. Mirror
-        // HomeViewModel.fetchTopPicks: fall back to the public list so the
-        // always-visible sidebar has something browsable either way.
-        let own = try? await KaraokeAPIClient.playlists(
-            startIndex: 0,
-            pageSize: 60,
-            isSetlist: false,
-            sortDescending: true
-        )
-        if let own, !own.isEmpty {
-            playlists = own
-            isShowingPublicFallback = false
-            hasLoaded = true
-            return
-        }
-
         do {
             playlists = try await KaraokeAPIClient.publicPlaylists(
                 startIndex: 0,
-                pageSize: 60
+                pageSize: 100
             )
-            isShowingPublicFallback = true
             hasLoaded = true
         } catch is CancellationError {
             return
         } catch {
-            // Only surface an error if we have nothing at all to show.
-            playlists = []
-            errorMessage = "Couldn't load playlists."
+            errorMessage = "Couldn't load the library."
         }
-    }
-
-    /// Called when the signed-in user changes: their playlists are a different
-    /// set, so drop the cached load and fetch again.
-    func invalidate() {
-        hasLoaded = false
-        isShowingPublicFallback = false
     }
 }
 

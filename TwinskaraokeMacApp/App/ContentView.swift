@@ -3,6 +3,7 @@ import SwiftUI
 enum MacDestination: Hashable {
     case home
     case search
+    case library
     case favorites
     case playlist(id: String, name: String)
     case account
@@ -27,17 +28,35 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PlayerBar()
         }
+        // Account belongs in the window toolbar, not the sidebar list: the
+        // Playlists section grows without bound, and a sidebar row below it
+        // scrolls out of reach as soon as the user has a dozen playlists.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    selection = .account
+                } label: {
+                    AccountToolbarIcon(auth: auth)
+                }
+                .help(auth.isLoggedIn ? (auth.username ?? "Account") : "Sign in to Twinskaraoke")
+                .accessibilityLabel(auth.isLoggedIn ? (auth.username ?? "Account") : "Sign In")
+            }
+        }
         .environment(auth)
         .task {
             await playlists.loadIfNeeded()
             FavoritesManager.shared.loadIfNeeded()
+            await auth.refreshAccount()
         }
         // This .task runs once for the window's lifetime, so signing in or out
         // would otherwise leave the sidebar showing the previous user's
         // playlists (or the public fallback) until a manual refresh.
         .onChange(of: auth.isLoggedIn) { _, _ in
             playlists.invalidate()
-            Task { await playlists.reload() }
+            Task {
+                await playlists.reload()
+                await auth.refreshAccount()
+            }
         }
     }
 
@@ -48,13 +67,23 @@ struct ContentView: View {
                     .tag(MacDestination.home)
                 Label("Search", systemImage: "magnifyingglass")
                     .tag(MacDestination.search)
+                Label("Library", systemImage: "books.vertical")
+                    .tag(MacDestination.library)
                 Label("Favourites", systemImage: "heart")
                     .tag(MacDestination.favorites)
             }
 
             Section("Playlists") {
-                if playlists.isLoading && playlists.playlists.isEmpty {
+                if !auth.isLoggedIn {
+                    Text("Sign in to see your playlists")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if playlists.isLoading && playlists.playlists.isEmpty {
                     ProgressView().controlSize(.small)
+                } else if playlists.playlists.isEmpty, playlists.errorMessage == nil {
+                    Text("No playlists yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 } else if playlists.playlists.isEmpty, let error = playlists.errorMessage {
                     // Previously this section just rendered nothing, making a
                     // failed load indistinguishable from an empty account.
@@ -75,25 +104,17 @@ struct ContentView: View {
                         .tag(MacDestination.playlist(id: playlist.id, name: playlist.name))
                 }
             }
-
-            Section {
-                Label(auth.isLoggedIn ? (auth.username ?? "Account") : "Sign In",
-                      systemImage: "person.crop.circle")
-                    .tag(MacDestination.account)
+            // Refresh lives here rather than in the toolbar: macOS merges the
+            // sidebar and detail toolbars into one window toolbar, so a second
+            // arrow.clockwise button sat next to the detail view's own refresh.
+            .contextMenu {
+                Button("Refresh Playlists") {
+                    Task { await playlists.reload() }
+                }
             }
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    Task { await playlists.reload() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .help("Refresh playlists")
-            }
-        }
     }
 
     @ViewBuilder
@@ -103,6 +124,8 @@ struct ContentView: View {
             HomeView()
         case .search:
             SearchView()
+        case .library:
+            LibraryView(selection: $selection)
         case .favorites:
             FavoritesView()
         case .playlist(let id, let name):
