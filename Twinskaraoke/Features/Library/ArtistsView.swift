@@ -77,7 +77,6 @@ struct ArtistsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Artists"
         )
         .refreshable {

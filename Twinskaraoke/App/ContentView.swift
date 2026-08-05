@@ -178,24 +178,32 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
+        // Driven off `allCases` and `content` so the enum stays the only place
+        // a section is described — the sidebar already builds itself the same
+        // way, and listing the screens here too let the two drift apart.
+        //
+        // `systemImage` is the unfilled symbol: the tab bar fills it for the
+        // selected tab itself. Passing the filled variant is what made Home and
+        // New render filled even while unselected.
         TabView(selection: selectedTabBinding) {
-            HomeView()
-                .tabItem { Label(RootSection.home.title, systemImage: RootSection.home.selectedSystemImage) }
-                .tag(RootSection.home)
-            NewView()
-                .tabItem { Label(RootSection.new.title, systemImage: RootSection.new.selectedSystemImage) }
-                .tag(RootSection.new)
-            RadioView()
-                .tabItem { Label(RootSection.radio.title, systemImage: RootSection.radio.selectedSystemImage) }
-                .tag(RootSection.radio)
-            LibraryView()
-                .tabItem { Label(RootSection.library.title, systemImage: RootSection.library.selectedSystemImage) }
-                .tag(RootSection.library)
-            SearchView()
-                .tabItem { Label(RootSection.search.title, systemImage: RootSection.search.selectedSystemImage) }
-                .tag(RootSection.search)
+            ForEach(RootSection.allCases) { section in
+                Tab(
+                    section.title,
+                    systemImage: section.systemImage,
+                    value: section,
+                    role: section.tabRole
+                ) {
+                    section.content
+                }
+            }
         }
         .tint(.appAccent)
+        // Replaces the hand-rolled scroll-collapse that BottomChromeState was
+        // built for and never wired up. Worth re-checking on device if the
+        // mini player ever looks misplaced: LNPopupController floats its bar
+        // above the tab bar, and ShimejiFloorRegistry rests idle instances on
+        // the live UITabBar's top edge, both of which move as the bar minimizes.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var sidebarShell: some View {
@@ -304,14 +312,12 @@ private enum RootSection: String, CaseIterable, Identifiable {
         }
     }
 
-    var selectedSystemImage: String {
-        switch self {
-        case .home: "house.fill"
-        case .new: "square.grid.2x2.fill"
-        case .radio: "dot.radiowaves.left.and.right"
-        case .library: "music.note.list"
-        case .search: "magnifyingglass"
-        }
+    /// Search gets the system's search affordance on iOS 26 — separated from
+    /// the rest of the bar, and morphing into the search field rather than
+    /// pushing a screen that happens to contain one. Everything else is an
+    /// ordinary tab.
+    var tabRole: TabRole? {
+        self == .search ? .search : nil
     }
 
     @ViewBuilder
@@ -366,7 +372,7 @@ private struct SidebarSectionRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(section.sidebarTint.opacity(isSelected ? 1 : 0.14))
-                Image(systemName: isSelected ? section.selectedSystemImage : section.systemImage)
+                Image(systemName: isSelected ? section.sidebarSelectedSystemImage : section.systemImage)
                     .font(.caption.bold())
                     .foregroundStyle(isSelected ? Color.white : section.sidebarTint)
             }
@@ -438,6 +444,25 @@ private struct SidebarNowPlayingHint: View {
 }
 
 private extension RootSection {
+    /// Sidebar only, and deliberately scoped to this extension: the tab bar
+    /// fills the selected symbol for itself, and handing it the filled variant
+    /// is what previously made Home and New render filled while unselected.
+    ///
+    /// Radio, Library and Search repeat their unselected symbol because
+    /// `dot.radiowaves.left.and.right`, `music.note.list` and `magnifyingglass`
+    /// have no filled counterpart in SF Symbols. The sidebar still reads as
+    /// selected: `SidebarSectionRow` swaps the icon's tinted backing plate to
+    /// full opacity and its foreground to white.
+    var sidebarSelectedSystemImage: String {
+        switch self {
+        case .home: "house.fill"
+        case .new: "square.grid.2x2.fill"
+        case .radio: "dot.radiowaves.left.and.right"
+        case .library: "music.note.list"
+        case .search: "magnifyingglass"
+        }
+    }
+
     var sidebarTint: Color {
         switch self {
         case .home:

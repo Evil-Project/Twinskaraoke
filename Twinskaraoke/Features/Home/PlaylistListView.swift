@@ -70,7 +70,6 @@ struct PlaylistListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Playlists"
         )
         .onAppear {
