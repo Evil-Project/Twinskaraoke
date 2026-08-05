@@ -22,7 +22,7 @@ struct ArtistListRow: View {
                         .overlay(
                             Text(String(artist.name.first ?? "?").uppercased())
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.white)
                         )
                 }
             }
@@ -31,16 +31,16 @@ struct ArtistListRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(artist.name)
                     .scaledSystemFont(size: 16, weight: .medium)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text("\(artist.arts?.count ?? 0) artworks")
                     .scaledSystemFont(size: 13)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .scaledSystemFont(size: 13, weight: .semibold)
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundStyle(.secondary.opacity(0.6))
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())

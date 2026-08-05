@@ -132,7 +132,7 @@ private struct ArtistArtsHero: View {
                     if let social = artist.socialLink, !social.isEmpty {
                         Text(social)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
@@ -172,7 +172,7 @@ private struct HeroArtwork: View {
                     .overlay(
                         Text(initial(artistName))
                             .font(.system(size: 70, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                     )
             }
         }
