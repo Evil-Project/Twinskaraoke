@@ -112,7 +112,7 @@ struct VideoGalleryView: View {
         .navigationBarTitleDisplayMode(.large)
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refreshVideos()
         }
         .onAppear { viewModel.fetchInitial() }
     }

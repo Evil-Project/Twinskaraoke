@@ -45,6 +45,7 @@ final class PublicPlaylistsViewModel {
     private var hasLoaded = false
     private var requestToken = 0
     private let pageSize = 25
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -61,6 +62,13 @@ final class PublicPlaylistsViewModel {
         hasLoaded = false
         canLoadMore = true
         loadIfNeeded()
+    }
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the playlists have actually finished loading.
+    func refreshPublicPlaylists() async {
+        refresh()
+        await activeTask?.value
     }
 
     func loadMoreIfNeeded(current: Playlist) {
@@ -81,7 +89,7 @@ final class PublicPlaylistsViewModel {
             isLoadingMore = true
         }
         let token = requestToken
-        Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
             // defer, not a trailing statement: the token guards below return
             // from the whole closure, which would otherwise strand
@@ -115,6 +123,9 @@ final class PublicPlaylistsViewModel {
                 canLoadMore = false
             }
         }
+        // Only the replacing fetch is what pull-to-refresh waits on; tracking a
+        // load-more here would make a refresh return as soon as pagination did.
+        if replace { activeTask = task }
     }
 
     private func applyUITestFixture() {
@@ -165,6 +176,7 @@ final class TopChartViewModel {
     var weeklyTrending: [Song] = []
     private var hasLoaded = false
     private var requestToken = 0
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     func loadIfNeeded() {
         guard !hasLoaded else { return }
@@ -176,7 +188,7 @@ final class TopChartViewModel {
         hasLoaded = true
         requestToken += 1
         let token = requestToken
-        Task { [weak self] in
+        activeTask = Task { [weak self] in
             guard let self else { return }
             async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
             async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
@@ -191,6 +203,13 @@ final class TopChartViewModel {
     func refresh() {
         hasLoaded = false
         loadIfNeeded()
+    }
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the charts have actually finished loading.
+    func refreshTopChart() async {
+        refresh()
+        await activeTask?.value
     }
 
     private func applyUITestFixture() {
@@ -241,6 +260,7 @@ final class GenresViewModel {
     @ObservationIgnored private var genresNeedingFallback = Set<String>()
     @ObservationIgnored private var memoryWarningCancellable: AnyCancellable?
     @ObservationIgnored private var fallbackObservation: ObservationToken?
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     init() {
         #if canImport(UIKit)
@@ -281,6 +301,14 @@ final class GenresViewModel {
         // fetchPage invalidates the in-flight response.
         isLoading = false
         loadIfNeeded()
+    }
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the genre page has actually finished loading. Only the page fetch
+    /// is awaited — per-genre detail requests stream in afterwards by design.
+    func refreshGenres() async {
+        refresh()
+        await activeTask?.value
     }
 
     func loadMoreIfNeeded(current: GenreSummary) {
@@ -344,10 +372,13 @@ final class GenresViewModel {
             isLoadingMore = true
         }
         let generation = pageGeneration
-        Task { [weak self] in
+        let task = Task { [weak self] in
             let data = try? await KaraokeAPIClient.data(for: request)
             self?.applyGenrePageResponse(data, page: page, replace: replace, generation: generation)
         }
+        // Only the replacing fetch is what pull-to-refresh waits on; tracking a
+        // load-more here would make a refresh return as soon as pagination did.
+        if replace { activeTask = task }
     }
 
     private func applyGenrePageResponse(_ data: Data?, page: Int, replace: Bool, generation: UInt64) {
@@ -489,6 +520,7 @@ final class SearchCategorySongsViewModel {
     private(set) var hasLoaded = false
     private let query: String
     private var requestToken = 0
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
 
     init(query: String) {
         self.query = query
@@ -505,6 +537,13 @@ final class SearchCategorySongsViewModel {
         fetch()
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the category songs have actually finished loading.
+    func refreshCategory() async {
+        refresh()
+        await activeTask?.value
+    }
+
     var emptyStateMessage: String {
         if loadFailed {
             return "The category couldn’t be loaded. Check your connection and try again."
@@ -518,7 +557,7 @@ final class SearchCategorySongsViewModel {
         isLoading = true
         loadFailed = false
 
-        Task { [weak self] in
+        activeTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.searchSongs(query: query, pageSize: 100)

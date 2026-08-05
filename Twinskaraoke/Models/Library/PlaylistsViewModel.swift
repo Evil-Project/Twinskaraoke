@@ -14,6 +14,8 @@ final class PlaylistsViewModel {
     @ObservationIgnored private var hasLoadedPlaylists = false
     @ObservationIgnored private var hasLoadedFavoriteSongs = false
     @ObservationIgnored private var sourceObservation: ObservationToken?
+    @ObservationIgnored private var playlistsTask: Task<Void, Never>?
+    @ObservationIgnored private var favoriteSongsTask: Task<Void, Never>?
 
     init() {
         // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
@@ -76,11 +78,20 @@ final class PlaylistsViewModel {
         return [favoritesPlaylist] + combined
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until both the playlists and the favorite songs have finished loading.
+    func refreshAll() async {
+        fetchPlaylists(force: true)
+        fetchFavoriteSongs(force: true)
+        await playlistsTask?.value
+        await favoriteSongsTask?.value
+    }
+
     func fetchPlaylists(force: Bool = false) {
         guard !isLoading else { return }
         guard force || !hasLoadedPlaylists else { return }
         isLoading = true
-        Task { [weak self] in
+        playlistsTask = Task { [weak self] in
             guard let self else { return }
             defer { isLoading = false }
             do {
@@ -105,7 +116,7 @@ final class PlaylistsViewModel {
         guard !isLoadingFavorites else { return }
         guard force || !hasLoadedFavoriteSongs else { return }
         isLoadingFavorites = true
-        Task { [weak self] in
+        favoriteSongsTask = Task { [weak self] in
             guard let self else { return }
             defer { isLoadingFavorites = false }
             do {

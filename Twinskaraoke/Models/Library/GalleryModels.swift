@@ -49,6 +49,14 @@ final class ArtGalleryViewModel {
     var isLoading = false
     var loadFailed = false
     private var hasLoaded = false
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the gallery has actually finished loading.
+    func refreshGallery() async {
+        fetch(force: true)
+        await activeTask?.value
+    }
 
     func fetch(force: Bool = false) {
         guard !isLoading else { return }
@@ -59,7 +67,7 @@ final class ArtGalleryViewModel {
         ) else { return }
         loadFailed = false
         isLoading = true
-        Task { [weak self] in
+        activeTask = Task { [weak self] in
             let data = try? await KaraokeAPIClient.data(for: request)
             let filtered = data.flatMap { data -> [GalleryArtist]? in
                 guard let decoded = try? JSONDecoder().decode([GalleryArtist].self, from: data) else {
@@ -78,6 +86,7 @@ final class ArtGalleryViewModel {
                 loadFailed = artists.isEmpty
             }
             isLoading = false
+            activeTask = nil
         }
     }
 }

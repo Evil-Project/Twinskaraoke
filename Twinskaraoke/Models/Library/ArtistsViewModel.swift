@@ -29,6 +29,15 @@ final class ArtistsViewModel {
         load(reset: true)
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the artists have actually finished loading. Deliberately not an
+    /// `async` overload of `refresh()` — in an async context Swift would
+    /// prefer the async overload and recurse.
+    func refreshArtists() async {
+        refresh()
+        await activeTask?.value
+    }
+
     func loadMoreIfNeeded(current: Artist) {
         guard let idx = artists.firstIndex(of: current) else { return }
         if idx >= artists.count - 5, !isLoading, canLoadMore {
