@@ -113,11 +113,20 @@ nonisolated enum CredentialStore {
   }
 
   private static var baseQuery: [String: Any] {
-    [
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
       kSecAttrAccount as String: tokenAccount,
     ]
+    #if os(macOS)
+      // macOS defaults SecItem to the legacy file-based keychain, which ignores
+      // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and prompts the user
+      // on access. Opt into the data-protection keychain so the Mac app behaves
+      // like the iOS one. Must be set identically on every query for the same
+      // item, which is why it lives here rather than at the call sites.
+      query[kSecUseDataProtectionKeychain as String] = true
+    #endif
+    return query
   }
 
   private static func readTokenFromKeychain() -> String? {
