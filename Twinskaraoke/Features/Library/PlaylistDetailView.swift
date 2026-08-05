@@ -127,7 +127,7 @@ struct PlaylistDetailView: View {
         let revealed = min(effective, extent)
         if revealed >= extent {
             isSearchLatched = true
-            AppHaptic.medium.play()
+            AppHaptic.boundary.play()
             withOptionalAnimation(reduceMotion ? nil : AppMotion.snap) {
                 searchRevealHeight = extent
             }
@@ -240,6 +240,7 @@ struct PlaylistDetailView: View {
                 )
         }
         .smoothScrolling()
+        .scrollEdgeHaptic()
         .scrollDismissesKeyboard(.interactively)
         .bottomChromeScrollTracking()
         // Resting offset expressed as a raw point, which is what finally worked.

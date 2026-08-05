@@ -93,7 +93,7 @@ struct ArtDetailView: View {
     }
 
     private func openFullScreen() {
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         showFullScreen = true
     }
 

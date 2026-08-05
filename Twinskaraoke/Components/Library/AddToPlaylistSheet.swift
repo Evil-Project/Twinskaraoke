@@ -65,7 +65,7 @@ struct AddToPlaylistSheet: View {
             .safeAreaInset(edge: .bottom) {
                 if !manager.playlists.isEmpty {
                     Button {
-                        AppHaptic.selection.play()
+                        AppHaptic.commit.play()
                         showCreatePlaylist = true
                     } label: {
                         Label("New Playlist", systemImage: "plus")
@@ -75,7 +75,7 @@ struct AddToPlaylistSheet: View {
                             .padding(.vertical, 14)
                             .background(Color.appControlActiveFill, in: Capsule())
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78, haptic: .medium))
+                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78, haptic: nil))
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
                     .padding(.bottom, 10)
@@ -119,7 +119,7 @@ struct AddToPlaylistSheet: View {
                 message: "Create a playlist first to save this song."
             )
             Button {
-                AppHaptic.selection.play()
+                AppHaptic.commit.play()
                 showCreatePlaylist = true
             } label: {
                 Label("New Playlist", systemImage: "plus")
@@ -129,7 +129,7 @@ struct AddToPlaylistSheet: View {
                     .padding(.vertical, 12)
                     .background(Color.appControlActiveFill, in: Capsule())
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.95, dim: 0.78, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.95, dim: 0.78, haptic: nil))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)

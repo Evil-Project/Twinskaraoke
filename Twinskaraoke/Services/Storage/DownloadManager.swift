@@ -984,6 +984,12 @@ final class DownloadManager {
             "Download queue complete: completed=\(completedInCurrentQueue), failed=\(failedInCurrentQueue)",
             category: .network
         )
+        // A whole batch landing is worth a custom texture; a single song is
+        // not — every download entry point is an explicit user action, so the
+        // only thing separating "earned" from "noise" here is the batch size.
+        if completedInCurrentQueue > 1, failedInCurrentQueue == 0 {
+            AppHaptic.celebrate.play()
+        }
         isLoggingDownloadQueue = false
         completedInCurrentQueue = 0
         failedInCurrentQueue = 0

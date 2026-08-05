@@ -38,7 +38,7 @@ struct QRApproveView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        AppHaptic.light.play()
+                        AppHaptic.dismiss.play()
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
@@ -106,7 +106,7 @@ struct QRApproveView: View {
                 message: message,
                 retry: retryCameraCheck,
                 dismiss: {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     dismiss()
                 }
             )
@@ -189,7 +189,7 @@ struct QRApproveView: View {
 
             VStack(spacing: 10) {
                 Button {
-                    AppHaptic.medium.play()
+                    AppHaptic.commit.play()
                     Task { await approve(sessionId: sessionId) }
                 } label: {
                     QRActionLabel(title: "Approve", systemImage: "checkmark.circle.fill", isPrimary: true)
@@ -197,7 +197,7 @@ struct QRApproveView: View {
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
 
                 Button {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     withOptionalAnimation(phaseAnimation) {
                         phase = .scanning
                     }
@@ -249,7 +249,7 @@ struct QRApproveView: View {
                         phase = .scanning
                     }
                 } else {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     dismiss()
                 }
             } label: {

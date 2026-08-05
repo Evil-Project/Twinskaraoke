@@ -535,7 +535,7 @@ struct VideoPlayerScreen: View {
         )
         nextPlayer.play()
         player = nextPlayer
-        AppHaptic.light.play()
+        AppHaptic.commit.play()
     }
 }
 

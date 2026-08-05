@@ -186,7 +186,7 @@ struct BrowseSongCollectionView: View {
         HStack(spacing: AM.Spacing.m) {
             Button {
                 if let first = songs.first {
-                    AppHaptic.medium.play()
+                    AppHaptic.commit.play()
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {

@@ -125,6 +125,8 @@ struct RadioView: View {
         await radio.refresh()
         if radio.refreshErrorMessage != nil {
             AppHaptic.error.play()
+        } else {
+            AppHaptic.success.play()
         }
     }
 
@@ -220,7 +222,7 @@ struct RadioView: View {
     @ViewBuilder
     private var radioActions: some View {
         Button {
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             radio.playLiveStream()
         } label: {
             Label("Play Live Station", systemImage: "dot.radiowaves.left.and.right")
@@ -391,7 +393,7 @@ struct RadioView: View {
 
     private func radioPlayButton(isLivePlaying: Bool, accessibilityValue: String) -> some View {
         Button {
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             playOrPauseLiveStation()
         } label: {
             ZStack {

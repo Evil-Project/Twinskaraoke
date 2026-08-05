@@ -118,6 +118,7 @@ struct WideSongListPanel: View {
                     Spacer()
                 }
             }
+            .navigationTapHaptic()
             .buttonStyle(.plain)
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in

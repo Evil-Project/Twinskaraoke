@@ -269,7 +269,7 @@ struct MusicGridCard: View {
             .frame(width: width, alignment: .leading)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         }
-        .buttonStyle(PressableButtonStyle(scale: size == .regular ? 0.97 : 0.96, dim: 0.78, haptic: .selection))
+        .buttonStyle(PressableButtonStyle(scale: size == .regular ? 0.97 : 0.96, dim: 0.78, haptic: nil))
         .contextMenu {
             SongActionsMenuItems(song: song) {
                 showAddToPlaylist = true
@@ -522,7 +522,7 @@ private struct SongRowAccessibilityModifier: ViewModifier {
     private func performDownloadAction() {
         let downloads = DownloadManager.shared
         if downloadState.status.isDownloaded {
-            AppHaptic.warning.play()
+            AppHaptic.dismiss.play()
             downloads.remove(songID: song.id)
         } else if downloadState.status.isDownloading {
             AppHaptic.selection.play()

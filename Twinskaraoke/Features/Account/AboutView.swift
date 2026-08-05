@@ -81,6 +81,7 @@ struct AboutView: View {
                         subtitle: "Catalog, radio, galleries, games, and community tools"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     CreditsView()
                 } label: {
@@ -91,6 +92,7 @@ struct AboutView: View {
                         subtitle: "Artists, maintainers, testers, and contributors"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     LanguageSupportView()
                 } label: {
@@ -101,6 +103,7 @@ struct AboutView: View {
                         subtitle: "Available app languages and regional behavior"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     iOSAppDevelopmentView()
                 } label: {
@@ -111,6 +114,7 @@ struct AboutView: View {
                         subtitle: "Source code, stack, and contribution notes"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     ContactSupportView()
                 } label: {
@@ -121,6 +125,7 @@ struct AboutView: View {
                         subtitle: "Credit corrections and take-down requests"
                     )
                 }
+                .navigationTapHaptic()
             }
             Section("Resources") {
                 Link(destination: URL(string: "https://radio.twinskaraoke.com")!) {
@@ -155,6 +160,7 @@ struct AboutView: View {
                         subtitle: "Data storage, network services, and user choices"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     TermsOfServiceView()
                 } label: {
@@ -165,6 +171,7 @@ struct AboutView: View {
                         subtitle: "Community-use rules and legal disclaimers"
                     )
                 }
+                .navigationTapHaptic()
                 NavigationLink {
                     AcknowledgementsView()
                 } label: {
@@ -175,6 +182,7 @@ struct AboutView: View {
                         subtitle: "Third-party package acknowledgements"
                     )
                 }
+                .navigationTapHaptic()
             }
             Section {
                 Text("© 2026 Neuro & Evil Karaoke Web Player\nFan-made by Soul. Unofficial.")
@@ -346,6 +354,7 @@ private struct LanguageSupportView: View {
                         subtitle: "Change language, appearance, playback, and storage preferences"
                     )
                 }
+                .navigationTapHaptic()
             }
         }
         .navigationTitle("Language Support")

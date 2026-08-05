@@ -120,7 +120,7 @@ struct RadioPlayerLayout: View {
             .frame(width: 88, height: 88)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.6, haptic: .medium))
+        .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.6, haptic: .commit))
         .accessibilityLabel(audioManager.isPlaying ? "Stop live radio" : "Play live radio")
         .accessibilityValue(song.title)
         .accessibilityHint("Controls the live radio stream.")
@@ -129,7 +129,7 @@ struct RadioPlayerLayout: View {
     @ViewBuilder
     private var radioActions: some View {
         Button {
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             audioManager.togglePlayPause()
         } label: {
             Label(
