@@ -83,10 +83,6 @@ struct ZoomNavigationLink<Destination: View, Label: View>: View {
             label()
         }
         .zoomTransitionSource(id: id, in: namespace, isEnabled: !reduceMotion)
-        // A tap here is a navigation, and the zoom transition gives it no action
-        // closure to hang feedback on.  Safe next to the drag-driven dismissal
-        // documented above: a TapGesture needs a press with no travel.
-        .navigationTapHaptic()
     }
 }
 

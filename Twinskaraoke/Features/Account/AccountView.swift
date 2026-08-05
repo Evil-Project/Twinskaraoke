@@ -100,7 +100,6 @@ struct AccountView: View {
                         xpToNextLevel: profile?.xpToNextLevel
                     )
                 }
-                .navigationTapHaptic()
                 if !unlockedBadges.isEmpty {
                     UnlockedBadgesRow(
                         badges: unlockedBadges,
@@ -142,13 +141,11 @@ struct AccountView: View {
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }
-            .navigationTapHaptic()
             NavigationLink {
                 NotificationsView()
             } label: {
                 Label("Notifications", systemImage: "bell")
             }
-            .navigationTapHaptic()
             NavigationLink {
                 AboutView()
             } label: {

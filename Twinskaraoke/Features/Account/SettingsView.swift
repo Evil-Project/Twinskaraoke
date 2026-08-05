@@ -343,7 +343,6 @@ struct SettingsView: View {
                     } label: {
                         Text("Shimeji Characters")
                     }
-                    .navigationTapHaptic()
                 }
             }
         } header: {
@@ -379,7 +378,6 @@ struct SettingsView: View {
                 } label: {
                     Text("Developer")
                 }
-                .navigationTapHaptic()
             }
         }
     }

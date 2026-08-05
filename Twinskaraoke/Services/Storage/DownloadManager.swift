@@ -131,6 +131,7 @@ final class DownloadManager {
     private var isLoggingDownloadQueue = false
     private var completedInCurrentQueue = 0
     private var failedInCurrentQueue = 0
+    private var cancelledInCurrentQueue = 0
     private var pendingWiFiRepairs: [String: Song] = [:]
     private var validDownloadCache: [String: ValidDownloadCacheEntry] = [:]
     private var downloadedMetadata: [String: Song] = [:]
@@ -467,6 +468,7 @@ final class DownloadManager {
             isLoggingDownloadQueue = true
             completedInCurrentQueue = 0
             failedInCurrentQueue = 0
+            cancelledInCurrentQueue = 0
             DebugLogger.log("Download queue started", category: .network)
         }
         updatePublishedState { $0.inProgress = nextInProgress }
@@ -793,6 +795,10 @@ final class DownloadManager {
 
     func cancel(songID: String) {
         cancelWork(songID: songID)
+        // Counts as an incomplete batch: without this a queue where the user
+        // cancelled one song still satisfies `failedInCurrentQueue == 0` and
+        // celebrates as though everything landed.
+        cancelledInCurrentQueue += 1
         updatePublishedState { $0.inProgress.remove(songID) }
         startQueuedDownloadsIfPossible()
         logDownloadQueueCompletionIfNeeded()
@@ -937,6 +943,7 @@ final class DownloadManager {
         isLoggingDownloadQueue = false
         completedInCurrentQueue = 0
         failedInCurrentQueue = 0
+        cancelledInCurrentQueue = 0
         pendingWiFiRepairs.removeAll()
         validDownloadCache.removeAll()
         downloadedMetadata.removeAll()
@@ -987,12 +994,13 @@ final class DownloadManager {
         // A whole batch landing is worth a custom texture; a single song is
         // not — every download entry point is an explicit user action, so the
         // only thing separating "earned" from "noise" here is the batch size.
-        if completedInCurrentQueue > 1, failedInCurrentQueue == 0 {
+        if completedInCurrentQueue > 1, failedInCurrentQueue == 0, cancelledInCurrentQueue == 0 {
             AppHaptic.celebrate.play()
         }
         isLoggingDownloadQueue = false
         completedInCurrentQueue = 0
         failedInCurrentQueue = 0
+        cancelledInCurrentQueue = 0
     }
 
     /// The scan runs concurrently with live downloads. It only removes

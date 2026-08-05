@@ -131,21 +131,6 @@ extension View {
     HapticsInjector(content: self)
   }
 
-  /// Plays a tick for a tap that navigates.
-  ///
-  /// `NavigationLink` exposes no action closure to hang a haptic on, and a
-  /// custom `ButtonStyle` is *not* a reliable substitute: SwiftUI swaps in its
-  /// own style inside toolbars and some list contexts, which silently discards
-  /// the style's haptic along with it.  A simultaneous `TapGesture` runs
-  /// alongside the link's own recognizer without consuming the tap, so
-  /// navigation still happens.
-  ///
-  /// `TapGesture` only recognises a press with no travel, so this does not
-  /// compete with scrolling or with drag-driven transitions.
-  func navigationTapHaptic(_ haptic: AppHaptic = .selection) -> some View {
-    simultaneousGesture(TapGesture().onEnded { haptic.play() })
-  }
-
   /// Plays a flip whenever a bound `Bool` changes — for `Toggle`s built on a
   /// plain binding, which SwiftUI gives no action hook of their own.
   ///
@@ -333,6 +318,9 @@ enum AppHaptic {
 
     private var engine: CHHapticEngine?
     private var enginePrepared = false
+    /// Bumped whenever an engine is created or torn down, so a late
+    /// `stoppedHandler`/`resetHandler` can tell whether it still owns the engine.
+    private var engineGeneration = 0
 
     struct ImpactKey: Hashable {
       let haptic: AppHaptic
@@ -383,8 +371,19 @@ enum AppHaptic {
       // Every impact funnels through here, which makes this the one place the
       // shared 32Hz server budget can be enforced.  Roles that want to be
       // sparser than the floor (detents) pass their own spacing.
+      // `.commit` is exempt for the same reason the notification roles are: it is
+      // the confirmation that closes an interaction, and it *always* lands right
+      // behind another impact — a scrub's final detent, or the `.grab` from a
+      // tap-to-seek that resolves within a few milliseconds. Under the shared
+      // floor the most meaningful haptic in the gesture is the one most likely to
+      // be swallowed. It is discrete and hand-driven, so it cannot flood alone.
       let interval = max(minimumInterval ?? 0, Self.systemRateLimitInterval)
-      guard allowsImpact(minimumInterval: interval) else { return }
+      if haptic == .commit {
+        // Still stamps the clock, so whatever follows is spaced from here.
+        lastImpactTime = ProcessInfo.processInfo.systemUptime
+      } else {
+        guard allowsImpact(minimumInterval: interval) else { return }
+      }
       // `.detent` stays on the canned generator at *every* strength.
       // `UIImpactFeedbackGenerator` is the API built for rapid repeated feedback
       // and can be held armed between ticks (see the `prepare()` call below),
@@ -588,7 +587,18 @@ enum AppHaptic {
     func sleep() {
       // Players do not survive the engine stopping.
       impactPlayers.removeAll()
-      engine?.stop()
+      // Drop our reference *before* stopping, and hand `stop()` the local. The
+      // stop completes asynchronously and then fires `stoppedHandler`; if the
+      // scene became active again in the meantime, `wake()` will have built a
+      // new engine, and a handler still holding the old one would otherwise nil
+      // it out. That left `playCoreImpact` returning false for every call, so
+      // `.strong`/`.heavy` silently degraded to the canned generators until the
+      // next sleep/wake cycle happened to land in the other order.
+      let stopping = engine
+      engine = nil
+      enginePrepared = false
+      engineGeneration += 1
+      stopping?.stop()
     }
 
     // MARK: CoreHaptics
@@ -625,18 +635,29 @@ enum AppHaptic {
         // otherwise inherit @MainActor and trap at runtime when CoreHaptics
         // invokes them off the main queue — the same trap SDWebImage's
         // request modifiers and unguarded Combine sinks hit here before.
+        //
+        // Both are also generation-guarded. They arrive asynchronously, so a
+        // sleep/wake cycle can replace `engine` before the handler for the *old*
+        // one runs; without the guard that stale handler would invalidate the
+        // live engine. Comparing a captured generation is what keeps them from
+        // acting on an engine they no longer own — capturing the engine itself
+        // would retain it inside its own handler.
+        engineGeneration += 1
+        let generation = engineGeneration
         engine.stoppedHandler = { @Sendable [weak self] _ in
           Task { @MainActor in
-            self?.impactPlayers.removeAll()
-            self?.engine = nil
+            guard let self, self.engineGeneration == generation else { return }
+            self.impactPlayers.removeAll()
+            self.engine = nil
           }
         }
         engine.resetHandler = { @Sendable [weak self] in
           Task { @MainActor in
+            guard let self, self.engineGeneration == generation else { return }
             // Players are bound to the engine that built them and do not
             // survive a reset; Apple requires recreating them here.
-            self?.impactPlayers.removeAll()
-            try? self?.engine?.start()
+            self.impactPlayers.removeAll()
+            try? self.engine?.start()
           }
         }
         try engine.start()

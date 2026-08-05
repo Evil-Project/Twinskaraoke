@@ -98,8 +98,8 @@ struct LibraryView: View {
                     AccountToolbarButton()
                 }
             }
+            // `refreshLibrary()` plays the trigger tick itself.
             .refreshable {
-                AppHaptic.selection.play()
                 refreshLibrary()
             }
             .navigationDestination(for: Playlist.self) { playlist in

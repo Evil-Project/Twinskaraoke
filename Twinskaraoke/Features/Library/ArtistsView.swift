@@ -52,7 +52,6 @@ struct ArtistsView: View {
                         NavigationLink(destination: ArtistDetailView(artist: artist)) {
                             ArtistRow(artist: artist)
                         }
-                        .navigationTapHaptic()
                         .onAppear { viewModel.loadMoreIfNeeded(current: artist) }
                         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                         .listRowBackground(Color.clear)

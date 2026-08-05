@@ -444,12 +444,13 @@ struct AccountToolbarButton: View {
                 ToolbarIconLabel(systemImage: "person.fill")
             }
         }
-        // The style's own haptic is unreliable here: this lives in a
-        // `ToolbarItem`, and SwiftUI substitutes its own button style inside
-        // toolbars, discarding the custom style's feedback with it.  The
-        // explicit gesture is what actually fires.
-        .buttonStyle(PressableButtonStyle(scale: 0.92, dim: 0.78, haptic: nil))
-        .navigationTapHaptic()
+        // Note this may not fire: SwiftUI substitutes its own button style
+        // inside a `ToolbarItem` and discards the custom style's feedback with
+        // it. Declared anyway because it costs nothing and works wherever the
+        // style *is* honoured — a tap gesture here would be worse, since one
+        // attached to a NavigationLink can win arbitration and eat the
+        // navigation entirely.
+        .buttonStyle(PressableButtonStyle(scale: 0.92, dim: 0.78, haptic: .selection))
         .accessibilityIdentifier("AccountToolbarButton")
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("Opens account and settings.")
@@ -638,7 +639,6 @@ struct AMSectionHeader<Destination: View>: View {
                 NavigationLink(destination: destination) {
                     headerRow(showChevron: true)
                 }
-                .navigationTapHaptic()
                 .buttonStyle(.plain)
             } else {
                 headerRow(showChevron: false)

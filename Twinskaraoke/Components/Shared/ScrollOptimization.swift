@@ -83,8 +83,14 @@ private struct ScrollEdgeHapticModifier: ViewModifier {
                 + geometry.contentInsets.bottom
                 - geometry.containerSize.height
             guard travel > 0 else { return .notScrollable }
+            // `contentOffset` is not inset-normalised — at rest against the top it
+            // reads `-contentInsets.top`, not zero. Since `travel` includes the
+            // top inset, comparing it against the raw offset leaves `remaining`
+            // bottoming out at `contentInsets.top` instead of 0, so `.atEnd` was
+            // unreachable on any inset content and the thump never fired.
+            let offset = geometry.contentOffset.y + geometry.contentInsets.top
             // Remaining distance to the bottom; negative while overscrolled.
-            let remaining = travel - geometry.contentOffset.y
+            let remaining = travel - offset
             if remaining <= threshold { return .atEnd }
             return remaining > rearmDistance ? .away : .approaching
         } action: { _, zone in

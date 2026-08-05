@@ -141,6 +141,12 @@ struct AppleMusicProgressBar: View {
                 didHitEdge = true
                 AppHaptic.boundary.play()
             }
+            // Seed the notch index even though no detent plays here. Otherwise a
+            // drag that starts at an edge — or travels out to one and back —
+            // leaves this nil, and the `lastDetentIndex != nil` guard below eats
+            // the first interior notch. The guard is meant to fire once per
+            // gesture, not once per edge visit.
+            lastDetentIndex = Int(next * Double(Self.detentCount))
             return
         }
         didHitEdge = false

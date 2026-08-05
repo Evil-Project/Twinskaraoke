@@ -90,7 +90,13 @@ struct RadioQueueView: View {
                 .refreshable {
                     AppHaptic.selection.play()
                     await radio.refresh()
-                    AppHaptic.success.play()
+                    // Branch on the outcome rather than always claiming success,
+                    // matching `RadioView.retryRadioRefresh()`.
+                    if radio.refreshErrorMessage != nil {
+                        AppHaptic.error.play()
+                    } else {
+                        AppHaptic.success.play()
+                    }
                 }
             }
         }
