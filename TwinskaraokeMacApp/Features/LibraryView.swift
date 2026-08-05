@@ -58,30 +58,35 @@ struct PlaylistCard: View {
     @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack {
-                SongArtwork(url: playlist.imageURL, size: 150, cornerRadius: 8)
-                if isHovering {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.black.opacity(0.35))
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.white)
+        // A Button rather than onTapGesture: tap gestures are pointer-only, so
+        // the cards were unreachable by keyboard.
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack {
+                    SongArtwork(url: playlist.imageURL, size: 150, cornerRadius: 8)
+                    if isHovering {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.black.opacity(0.35))
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundStyle(.white)
+                    }
                 }
-            }
-            .frame(width: 150, height: 150)
+                .frame(width: 150, height: 150)
 
-            Text(playlist.name)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-            Text(playlist.songCountText)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                Text(playlist.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Text(playlist.songCountText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 150, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(width: 150, alignment: .leading)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .onTapGesture(perform: onOpen)
         .help(playlist.name)
+        .accessibilityLabel("\(playlist.name), \(playlist.songCountText)")
     }
 }

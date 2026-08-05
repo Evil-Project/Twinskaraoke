@@ -9,6 +9,11 @@ final class MacPlaylistsViewModel {
     private(set) var errorMessage: String?
 
     private var hasLoaded = false
+    /// Bumped by `invalidate()`. A response carrying a stale generation is
+    /// discarded rather than assigned — without this, a slow request issued for
+    /// the previous account could land after a switch and show one user's
+    /// private playlists to the next.
+    private var generation = 0
 
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
@@ -19,9 +24,12 @@ final class MacPlaylistsViewModel {
     /// playlists used to fall back into this list, which buried the rest of the
     /// sidebar under dozens of rows nobody asked for — they live in Library now.
     func reload() async {
+        let requestGeneration = generation
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if requestGeneration == generation { isLoading = false }
+        }
 
         guard CredentialStore.isAuthenticated else {
             playlists = []
@@ -30,25 +38,32 @@ final class MacPlaylistsViewModel {
         }
 
         do {
-            playlists = try await KaraokeAPIClient.playlists(
+            let loaded = try await KaraokeAPIClient.playlists(
                 startIndex: 0,
                 pageSize: 60,
                 isSetlist: false,
                 sortDescending: true
             )
+            guard requestGeneration == generation else { return }
+            playlists = loaded
             hasLoaded = true
         } catch is CancellationError {
             return
         } catch {
+            guard requestGeneration == generation else { return }
             playlists = []
             errorMessage = "Couldn't load your playlists."
         }
     }
 
     /// Called when the signed-in user changes: their playlists are a different
-    /// set, so drop the cached load and fetch again.
+    /// set, so drop the cached load, clear what's on screen, and reject any
+    /// response still in flight for the previous account.
     func invalidate() {
         hasLoaded = false
+        generation &+= 1
+        playlists = []
+        errorMessage = nil
     }
 }
 

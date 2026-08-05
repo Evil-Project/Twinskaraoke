@@ -7,7 +7,10 @@ struct SongRow: View {
     let context: [Song]
 
     @Environment(MacAudioManager.self) private var audio
-    @State private var favorites = FavoritesManager.shared
+    // A plain reference, not @State: FavoritesManager is @Observable, so
+    // SwiftUI tracks the properties this body reads. @State implied per-view
+    // ownership of a process-wide singleton, which reads as a local copy.
+    private let favorites = FavoritesManager.shared
     @State private var isHovering = false
 
     private var isCurrent: Bool { audio.currentSong?.id == song.id }
@@ -105,8 +108,6 @@ struct StateMessage: View {
 struct SongShelf: View {
     let title: String
     let songs: [Song]
-
-    @Environment(MacAudioManager.self) private var audio
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {

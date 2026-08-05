@@ -22,14 +22,15 @@ private final class WebAuthPresentationContextProvider:
     }
 }
 
-/// Username/password sign-in for the Mac app.
+/// Sign-in and account state for the Mac app.
 ///
-/// The tvOS target signs in by QR code because typing on a remote is painful;
-/// a Mac has a keyboard, so this mirrors the iOS `AuthManager.login` flow
-/// against the same `/api/auth/login` endpoint and the same Keychain-backed
-/// `CredentialStore`. Discord OAuth is intentionally left out of this first
-/// version — it needs an `ASWebAuthenticationSession` presentation anchor,
-/// which is a separate piece of AppKit wiring.
+/// Offers all three routes the other targets have between them:
+/// - QR device pairing (the default), ported from `TVAuthManager`
+/// - Username/password against `/api/auth/login`, as on iOS
+/// - Discord OAuth via `ASWebAuthenticationSession` with an `NSWindow` anchor
+///
+/// All three land on the same Keychain-backed `CredentialStore`, and the
+/// profile/badge/upload-limit fetch mirrors `TVAuthManager.refreshAccount`.
 @MainActor
 @Observable
 final class MacAuthManager {
@@ -103,11 +104,27 @@ final class MacAuthManager {
     }
 
     /// Resolved avatar for the toolbar button and profile header. Prefers the
-    /// profile payload, falling back to the JWT's Discord avatar claim.
+    /// profile payload, falling back to the stored avatar claim.
+    ///
+    /// The fallback cannot just be `URL(string:)`: `parseJWT` returns the raw
+    /// `urn:discord:avatar` claim, which is a bare hash or a storage-relative
+    /// path rather than an absolute URL. Only the Discord OAuth path stores a
+    /// full CDN URL, so password sign-in, QR sign-in and session restore all
+    /// showed the placeholder. Same resolution `UserProfile.avatarURL` uses.
     var avatarURL: URL? {
         if let profile, let url = profile.avatarURL { return url }
         guard let avatar, !avatar.isEmpty else { return nil }
-        return URL(string: avatar)
+        if let url = URL(string: avatar), url.scheme != nil { return url }
+        // A bare 32-hex Discord avatar hash needs the user id to form a CDN URL.
+        if let userID, Self.looksLikeDiscordAvatarHash(avatar) {
+            return URL(string: "https://cdn.discordapp.com/avatars/\(userID)/\(avatar).png")
+        }
+        return URL(string: "\(StorageHost.base)\(ArtworkURLBuilder.normalizedPath(avatar))")
+    }
+
+    private static func looksLikeDiscordAvatarHash(_ value: String) -> Bool {
+        let trimmed = value.hasPrefix("a_") ? String(value.dropFirst(2)) : value
+        return trimmed.count == 32 && trimmed.allSatisfy(\.isHexDigit)
     }
 
     // MARK: - QR pairing state
@@ -184,6 +201,10 @@ final class MacAuthManager {
             guard let url = URL(string: Endpoint.login) else { throw AuthError.parse }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            // Without this the request inherits URLSession's 60s default, so a
+            // stalled connection leaves the sign-in button spinning for a
+            // minute. Every other request in this file bounds itself.
+            request.timeoutInterval = Self.requestTimeout
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(
                 withJSONObject: ["username": trimmed, "password": password]
@@ -339,7 +360,11 @@ final class MacAuthManager {
     }
 
     private func exchangeForNKToken(_ discordToken: String) async throws -> String {
-        var request = URLRequest(url: URL(string: Endpoint.nkTokenExchange)!)
+        // nkTokenExchange interpolates StorageHost.idk, which is resolved at
+        // runtime — unlike the literal Discord endpoints, it can be malformed,
+        // and force-unwrapping it would crash rather than surface an error.
+        guard let url = URL(string: Endpoint.nkTokenExchange) else { throw AuthError.parse }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -509,6 +534,9 @@ final class MacAuthManager {
         avatar = claims.avatar
         qrSession = nil
         qrPhase = .idle
+        // A transient poll failure earlier in this run may have set qrError;
+        // leaving it would show a stale error beside a signed-in account.
+        qrError = nil
         FavoritesManager.shared.reload()
     }
 

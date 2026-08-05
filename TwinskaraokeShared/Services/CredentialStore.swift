@@ -145,6 +145,12 @@ nonisolated enum CredentialStore {
     /// legacy one instead of being unable to sign in at all. Resolved a single
     /// time per process so save, read and delete can never disagree about which
     /// keychain holds the item.
+    /// Only an entitlement-shaped failure counts as "this build cannot use the
+    /// data-protection keychain". Statuses like `errSecInteractionNotAllowed`
+    /// (keychain locked) or `errSecAuthFailed` are transient: treating those as
+    /// a negative would make this launch read the legacy keychain only, hide a
+    /// token a previous launch wrote to the data-protection one, sign the user
+    /// out, and then write a second divergent token on the next save.
     private static let usesDataProtectionKeychain: Bool = {
       var probe: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -154,12 +160,15 @@ nonisolated enum CredentialStore {
         kSecUseDataProtectionKeychain as String: true,
       ]
       let status = SecItemAdd(probe as CFDictionary, nil)
-      guard status == errSecSuccess || status == errSecDuplicateItem else {
-        return false
+      if status == errSecSuccess || status == errSecDuplicateItem {
+        probe.removeValue(forKey: kSecValueData as String)
+        SecItemDelete(probe as CFDictionary)
+        return true
       }
-      probe.removeValue(forKey: kSecValueData as String)
-      SecItemDelete(probe as CFDictionary)
-      return true
+      // errSecMissingEntitlement: ad-hoc/unsigned build with no
+      // application-identifier. errSecNotAvailable: no keychain available to
+      // this process at all. Anything else, keep the modern keychain.
+      return !(status == errSecMissingEntitlement || status == errSecNotAvailable)
     }()
 
     private static let probeAccount = "nk.keychainProbe"

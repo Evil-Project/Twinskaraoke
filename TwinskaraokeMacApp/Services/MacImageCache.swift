@@ -133,8 +133,22 @@ struct MacRemoteImage<Content: View, Placeholder: View>: View {
             }
         }
         .task(id: url) {
-            guard image == nil, let url else { return }
-            image = await MacImageCache.shared.image(for: url)
+            guard let url else {
+                image = nil
+                return
+            }
+            // Reset on URL change before the guard: `image` still holds the
+            // previous URL's artwork, and `image == nil` alone would skip the
+            // load. SwiftUI recycles row identity in List and LazyVGrid, so a
+            // scrolled row or an advancing player bar kept the old artwork.
+            let cached = MacImageCache.shared.cachedImage(for: url)
+            image = cached
+            guard cached == nil else { return }
+            let loaded = await MacImageCache.shared.image(for: url)
+            // The task is cancelled and restarted when `url` changes, so a late
+            // response here still belongs to the URL we were asked for.
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }
