@@ -13,7 +13,7 @@ struct GlassCircle: ViewModifier {
                 .overlay(Circle().stroke(Color.appDivider, lineWidth: contrast == .increased ? 1 : 0.5))
                 .clipShape(Circle())
                 .contentShape(Circle())
-        } else if #available(iOS 26.0, *) {
+        } else {
             content
                 .glassEffect(.regular.interactive(), in: Circle())
                 .overlay {
@@ -21,18 +21,6 @@ struct GlassCircle: ViewModifier {
                         Circle().stroke(Color.appDivider, lineWidth: 1)
                     }
                 }
-                .contentShape(Circle())
-        } else {
-            content
-                .background(
-                    Circle()
-                        .fill(Color.appGlassFill)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.appDivider.opacity(contrast == .increased ? 1 : 0.7), lineWidth: contrast == .increased ? 1 : 0.5)
-                )
-                .clipShape(Circle())
                 .contentShape(Circle())
         }
     }
@@ -54,15 +42,9 @@ struct GlassRoundedRect: ViewModifier {
                     }
                 }
                 .shadow(color: .appShadow, radius: 14, y: 6)
-        } else if #available(iOS 26.0, *) {
-            content
-                .glassEffect(in: shape)
-                .shadow(color: .appShadow, radius: 14, y: 6)
         } else {
             content
-                .background(
-                    shape.fill(Color.appGlassFill)
-                )
+                .glassEffect(in: shape)
                 .shadow(color: .appShadow, radius: 14, y: 6)
         }
     }

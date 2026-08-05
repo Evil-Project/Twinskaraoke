@@ -250,7 +250,7 @@ private struct PlayerFavoriteButton: View {
             }
         } label: {
             Group {
-                if #available(iOS 17.0, *), !reduceMotion {
+                if !reduceMotion {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .contentTransition(.symbolEffect(.replace))
                         .symbolEffect(.bounce, value: isFavorite)
@@ -1042,7 +1042,7 @@ struct FullScreenPlayerView: View {
                 audioManager.togglePlayPause()
             } label: {
                 Group {
-                    if #available(iOS 17.0, *), !reduceMotion {
+                    if !reduceMotion {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                             .contentTransition(.symbolEffect(.replace))
                     } else {

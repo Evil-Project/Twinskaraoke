@@ -484,16 +484,7 @@ private struct ToolbarAvatarLabel: View {
     let url: URL
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            avatarImage(diameter: 30)
-        } else {
-            ZStack {
-                ToolbarControlBackground()
-                avatarImage(diameter: 32)
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
-        }
+        avatarImage(diameter: 30)
     }
 
     private func avatarImage(diameter: CGFloat) -> some View {
@@ -518,17 +509,7 @@ private struct ToolbarIconLabel: View {
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            iconImage
-        } else {
-            ZStack {
-                ToolbarControlBackground()
-                iconImage
-                    .offset(x: iconHorizontalOffset)
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
-        }
+        iconImage
     }
 
     private var iconImage: some View {
@@ -536,66 +517,6 @@ private struct ToolbarIconLabel: View {
             .font(.headline)
             .symbolRenderingMode(.monochrome)
             .foregroundStyle(isEnabled ? foregroundColor : .secondary)
-    }
-
-    private var iconHorizontalOffset: CGFloat {
-        0
-    }
-}
-
-private struct ToolbarControlBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    private var backgroundStyle: AnyShapeStyle {
-        reduceTransparency ? AnyShapeStyle(Color.appSecondaryBackground) : AnyShapeStyle(Material.regular)
-    }
-
-    var body: some View {
-        Circle()
-            .fill(backgroundStyle)
-            .overlay {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: sheenColor, location: 0),
-                                .init(color: .clear, location: 0.55),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .overlay {
-                Circle()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [rimHighlight, rimShadow],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-            .shadow(color: shadowColor, radius: 3, x: 0, y: 1)
-            .padding(4)
-    }
-
-    private var sheenColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.55)
-    }
-
-    private var rimHighlight: Color {
-        colorScheme == .dark ? Color.white.opacity(0.24) : Color.white.opacity(0.90)
-    }
-
-    private var rimShadow: Color {
-        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.06)
-    }
-
-    private var shadowColor: Color {
-        colorScheme == .dark ? Color.black.opacity(0.28) : Color.black.opacity(0.10)
     }
 }
 

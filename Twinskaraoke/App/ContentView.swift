@@ -594,19 +594,12 @@ private struct PopupBarTrailingItems: View, Equatable {
     var body: some View {
         HStack(spacing: 16) {
             Button(action: onTogglePlayPause) {
-                Group {
-                    if #available(iOS 17.0, *) {
-                        Image(systemName: playPauseSymbol)
-                            .contentTransition(.symbolEffect(.replace))
-                    } else {
-                        Image(systemName: playPauseSymbol)
-                            .contentTransition(.opacity)
-                    }
-                }
-                .font(.title3.bold())
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                Image(systemName: playPauseSymbol)
+                    .contentTransition(.symbolEffect(.replace))
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .commit))
             .accessibilityLabel(playPauseAccessibilityLabel)
