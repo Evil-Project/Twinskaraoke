@@ -111,6 +111,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		00728E6A614F7CF94D24315C /* Exceptions for "TwinskaraokeMacApp" folder in "Twinskaraoke Mac App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5DA46CA312C58DE7DB9D897B /* Twinskaraoke Mac App */;
+		};
 		D01D91C82FA07A4100E300C5 /* Exceptions for "Twinskaraoke" folder in "Twinskaraoke" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -145,6 +152,7 @@
 		9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				00728E6A614F7CF94D24315C /* Exceptions for "TwinskaraokeMacApp" folder in "Twinskaraoke Mac App" target */,
 			);
 			path = TwinskaraokeMacApp;
 			sourceTree = "<group>";
@@ -797,6 +805,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TwinskaraokeMacApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -831,6 +840,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TwinskaraokeMacApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

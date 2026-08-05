@@ -65,6 +65,22 @@ struct AccountView: View {
             .keyboardShortcut(.defaultAction)
             .controlSize(.large)
             .disabled(auth.isLoading || username.isEmpty || password.isEmpty)
+
+            HStack(spacing: 8) {
+                VStack { Divider() }
+                Text("or").font(.caption).foregroundStyle(.secondary)
+                VStack { Divider() }
+            }
+            .frame(width: 280)
+
+            Button {
+                Task { await auth.loginWithDiscord() }
+            } label: {
+                Label("Sign in with Discord", systemImage: "bubble.left.and.bubble.right.fill")
+                    .frame(width: 200)
+            }
+            .controlSize(.large)
+            .disabled(auth.isLoading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)

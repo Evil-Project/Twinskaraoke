@@ -32,6 +32,13 @@ struct ContentView: View {
             await playlists.loadIfNeeded()
             FavoritesManager.shared.loadIfNeeded()
         }
+        // This .task runs once for the window's lifetime, so signing in or out
+        // would otherwise leave the sidebar showing the previous user's
+        // playlists (or the public fallback) until a manual refresh.
+        .onChange(of: auth.isLoggedIn) { _, _ in
+            playlists.invalidate()
+            Task { await playlists.reload() }
+        }
     }
 
     private var sidebar: some View {
@@ -48,6 +55,20 @@ struct ContentView: View {
             Section("Playlists") {
                 if playlists.isLoading && playlists.playlists.isEmpty {
                     ProgressView().controlSize(.small)
+                } else if playlists.playlists.isEmpty, let error = playlists.errorMessage {
+                    // Previously this section just rendered nothing, making a
+                    // failed load indistinguishable from an empty account.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Try Again") {
+                            Task { await playlists.reload() }
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
+                    .padding(.vertical, 2)
                 }
                 ForEach(playlists.playlists) { playlist in
                     Label(playlist.name, systemImage: "music.note.list")

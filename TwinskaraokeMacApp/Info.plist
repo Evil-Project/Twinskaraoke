@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Partial plist: GENERATE_INFOPLIST_FILE stays on and Xcode merges the
+	     generated keys over this base. Only keys with no INFOPLIST_KEY_ build
+	     setting equivalent belong here — CFBundleURLTypes is an array of
+	     dictionaries and cannot be expressed as a build setting. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>org.magnettileman.Twinskaraoke.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Discord OAuth redirects to neurokaraoke://auth. Without this
+				     registration ASWebAuthenticationSession never gets the
+				     callback and sign-in hangs on the consent screen. -->
+				<string>neurokaraoke</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
