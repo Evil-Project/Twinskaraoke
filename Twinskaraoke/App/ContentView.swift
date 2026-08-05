@@ -178,22 +178,33 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
+        // `systemImage:`, not `selectedSystemImage:` — the tab bar fills the
+        // symbol itself for the selected tab. Passing the filled variant here
+        // is what made Home and New render filled even while unselected.
         TabView(selection: selectedTabBinding) {
-            HomeView()
-                .tabItem { Label(RootSection.home.title, systemImage: RootSection.home.selectedSystemImage) }
-                .tag(RootSection.home)
-            NewView()
-                .tabItem { Label(RootSection.new.title, systemImage: RootSection.new.selectedSystemImage) }
-                .tag(RootSection.new)
-            RadioView()
-                .tabItem { Label(RootSection.radio.title, systemImage: RootSection.radio.selectedSystemImage) }
-                .tag(RootSection.radio)
-            LibraryView()
-                .tabItem { Label(RootSection.library.title, systemImage: RootSection.library.selectedSystemImage) }
-                .tag(RootSection.library)
-            SearchView()
-                .tabItem { Label(RootSection.search.title, systemImage: RootSection.search.selectedSystemImage) }
-                .tag(RootSection.search)
+            Tab(RootSection.home.title, systemImage: RootSection.home.systemImage, value: RootSection.home) {
+                HomeView()
+            }
+            Tab(RootSection.new.title, systemImage: RootSection.new.systemImage, value: RootSection.new) {
+                NewView()
+            }
+            Tab(RootSection.radio.title, systemImage: RootSection.radio.systemImage, value: RootSection.radio) {
+                RadioView()
+            }
+            Tab(RootSection.library.title, systemImage: RootSection.library.systemImage, value: RootSection.library) {
+                LibraryView()
+            }
+            // `role: .search` gives the tab its own affordance on iOS 26 —
+            // separated from the rest of the bar, and morphing into the search
+            // field rather than pushing a screen that happens to contain one.
+            Tab(
+                RootSection.search.title,
+                systemImage: RootSection.search.systemImage,
+                value: RootSection.search,
+                role: .search
+            ) {
+                SearchView()
+            }
         }
         .tint(.appAccent)
     }
@@ -304,6 +315,13 @@ private enum RootSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Sidebar only — the tab bar fills the selected symbol for itself.
+    ///
+    /// Radio, Library and Search repeat their unselected symbol because
+    /// `dot.radiowaves.left.and.right`, `music.note.list` and `magnifyingglass`
+    /// have no filled counterpart in SF Symbols. The sidebar still reads as
+    /// selected: `SidebarSectionRow` swaps the icon's tinted backing plate to
+    /// full opacity and its foreground to white.
     var selectedSystemImage: String {
         switch self {
         case .home: "house.fill"

@@ -96,7 +96,6 @@ struct SearchView: View {
             }
             .searchable(
                 text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "Songs, Artists, Lyrics, and More"
             )
             .onChange(of: playback.currentSongID) { _, currentSongID in

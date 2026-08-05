@@ -460,7 +460,6 @@ struct LibrarySongsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Songs"
         )
         .toolbar {
@@ -708,7 +707,6 @@ struct PlaylistsGridScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Playlists"
         )
         .toolbar {

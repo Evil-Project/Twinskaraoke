@@ -54,7 +54,6 @@ struct UploadedSongsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Uploads"
         )
         .toolbar {
