@@ -209,7 +209,7 @@ struct QRApproveView: View {
         }
         .padding(24)
         .frame(maxWidth: 390)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -263,7 +263,7 @@ struct QRApproveView: View {
         }
         .padding(24)
         .frame(maxWidth: 390)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -440,7 +440,7 @@ private struct QRPermissionLoadingView: View {
         }
         .padding(24)
         .frame(maxWidth: 360)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -482,7 +482,7 @@ private struct QRPermissionDeniedView: View {
         }
         .padding(24)
         .frame(maxWidth: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -524,7 +524,7 @@ private struct QRCameraUnavailableView: View {
         }
         .padding(24)
         .frame(maxWidth: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -671,7 +671,7 @@ private struct QRScannerInstructionPanel: View {
         }
         .padding(16)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.16), lineWidth: 1)

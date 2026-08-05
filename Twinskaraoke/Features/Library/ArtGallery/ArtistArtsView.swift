@@ -266,6 +266,6 @@ private struct ArtContextPreview: View {
         }
         .padding(14)
         .frame(width: 248, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

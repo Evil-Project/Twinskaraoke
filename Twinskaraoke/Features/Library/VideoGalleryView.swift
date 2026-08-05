@@ -383,7 +383,7 @@ private struct VideoContextPreview: View {
         }
         .padding(16)
         .frame(width: 284, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

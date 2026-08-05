@@ -95,7 +95,7 @@ struct PlaylistDetailView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
-        .background(.thinMaterial, in: Capsule())
+        .appGlassBackground(in: Capsule())
         .padding(.horizontal, AM.Spacing.screenMargin)
         .padding(.bottom, AM.Spacing.m)
         .accessibilityIdentifier("PlaylistDetail.search")

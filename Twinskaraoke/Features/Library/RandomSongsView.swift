@@ -127,7 +127,7 @@ struct RandomSongsView: View {
                     ProgressView()
                         .controlSize(.regular)
                         .padding(9)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .appGlassBackground(in: Circle())
                         .padding(10)
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale))
                 }
