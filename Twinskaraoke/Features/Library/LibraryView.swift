@@ -98,6 +98,7 @@ struct LibraryView: View {
                     AccountToolbarButton()
                 }
             }
+            // `refreshLibrary()` plays the trigger tick itself.
             .refreshable {
                 refreshLibrary()
             }
@@ -516,13 +517,13 @@ struct LibrarySongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
         }
     }
 

@@ -22,46 +22,6 @@ extension View {
   }
 }
 
-enum AppHaptic {
-  case light
-  case medium
-  case selection
-  case success
-  case warning
-  case error
-
-  func play() {
-    #if os(iOS)
-      switch self {
-      case .light:
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.prepare()
-        generator.impactOccurred()
-      case .medium:
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.prepare()
-        generator.impactOccurred()
-      case .selection:
-        let generator = UISelectionFeedbackGenerator()
-        generator.prepare()
-        generator.selectionChanged()
-      case .success:
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(.success)
-      case .warning:
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(.warning)
-      case .error:
-        let generator = UINotificationFeedbackGenerator()
-        generator.prepare()
-        generator.notificationOccurred(.error)
-      }
-    #endif
-  }
-}
-
 struct PressableButtonStyle: ButtonStyle {
   var scale: CGFloat = 0.97
   var dim: Double = 0.7

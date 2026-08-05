@@ -243,7 +243,7 @@ struct LoginSheet: View {
     private var discordButton: some View {
         Button {
             guard !auth.isLoading else { return }
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             Task { await auth.loginWithDiscord() }
         } label: {
             HStack(spacing: 10) {
@@ -279,7 +279,7 @@ struct LoginSheet: View {
             focus = trimmedUsername.isEmpty ? .username : .password
             return
         }
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         focus = nil
         Task { await auth.login(username: trimmedUsername, password: password) }
     }

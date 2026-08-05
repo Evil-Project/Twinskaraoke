@@ -75,6 +75,7 @@ struct DownloadedSongsView: View {
                 }
             }
             .smoothScrolling()
+            .scrollEdgeHaptic()
             .bottomChromeScrollTracking()
             .collapsedNavigationTitle($showsCollapsedTitle)
         }
@@ -188,14 +189,14 @@ struct DownloadedSongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Play downloaded songs")
             Button {
                 shuffle()
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Shuffle downloaded songs")
         }
     }
@@ -292,13 +293,13 @@ struct DownloadedSongsView: View {
     }
 
     private func removeDownload(_ song: Song) {
-        AppHaptic.warning.play()
+        AppHaptic.dismiss.play()
         downloads.remove(songID: song.id)
         refresh()
     }
 
     private func requestRemoveAllDownloads() {
-        AppHaptic.warning.play()
+        AppHaptic.selection.play()
         showRemoveAllConfirmation = true
     }
 
@@ -470,7 +471,6 @@ private struct DownloadedSongsMenu: View {
             Divider()
 
             Button(role: .destructive) {
-                AppHaptic.warning.play()
                 removeAll()
             } label: {
                 Label("Remove Downloads", systemImage: "trash")

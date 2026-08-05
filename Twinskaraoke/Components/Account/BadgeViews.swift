@@ -101,7 +101,7 @@ struct BadgeDetailSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Button {
-                AppHaptic.light.play()
+                AppHaptic.dismiss.play()
                 dismiss()
             } label: {
                 Image(systemName: "xmark")

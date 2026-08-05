@@ -86,7 +86,7 @@ struct CreatePlaylistSheet: View {
                     } label: {
                         CreatePlaylistSaveLabel(isSaving: isSaving)
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.8, haptic: canSave ? .medium : nil))
+                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.8, haptic: canSave ? .commit : nil))
                     .disabled(!canSave)
                     .accessibilityLabel("Create playlist")
                 }

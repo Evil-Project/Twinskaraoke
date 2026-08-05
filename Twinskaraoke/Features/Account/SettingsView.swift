@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
+    @AppStorage(AppHaptics.storageKey) private var hapticsEnabled: Bool = true
+    @AppStorage(AppHaptics.strengthStorageKey) private var hapticStrength: String = AppHapticStrength.default.rawValue
     @AppStorage("nk.experimentsEnabled") private var experimentsEnabled: Bool = false
     @AppStorage("nk.experimentalThemesEnabled") private var experimentalThemesEnabled: Bool = false
     @AppStorage("nk.experimentalShimejiEnabled") private var shimejiEnabled: Bool = false
@@ -110,6 +112,7 @@ struct SettingsView: View {
             }
             equalizerSection
             lyricsSection
+            hapticsSection
             appearanceSection
             storageSection
             developerSection
@@ -123,10 +126,13 @@ struct SettingsView: View {
     private var librarySection: some View {
         Section {
             Toggle("Add Playlist Songs", isOn: $addPlaylistSongsToLibrary)
+            .toggleHaptic(addPlaylistSongsToLibrary)
                 .tint(.appAccent)
             Toggle("Add Favorite Songs", isOn: $addFavoriteSongsToLibrary)
+            .toggleHaptic(addFavoriteSongsToLibrary)
                 .tint(.appAccent)
             Toggle("Sync Library", isOn: $syncLibrary)
+            .toggleHaptic(syncLibrary)
                 .tint(.appAccent)
         } header: {
             Text("Library")
@@ -152,8 +158,10 @@ struct SettingsView: View {
     private var audioSection: some View {
         Section {
             Toggle("Auto Mix", isOn: $audioManager.autoMixEnabled)
+            .toggleHaptic(audioManager.autoMixEnabled)
                 .tint(.appAccent)
             Toggle("Crossfade", isOn: $audioManager.crossfadeEnabled)
+            .toggleHaptic(audioManager.crossfadeEnabled)
                 .tint(.appAccent)
             if audioManager.crossfadeEnabled {
                 CrossfadeDurationRow(
@@ -170,12 +178,14 @@ struct SettingsView: View {
                     set: { _ in audioManager.toggleAutoplay() }
                 )
             )
+            .toggleHaptic(audioManager.autoplayEnabled)
             .tint(.appAccent)
             Picker("Audio Quality", selection: $streamingQuality) {
                 Text("High Efficiency").tag("low")
                 Text("High Quality").tag("medium")
                 Text("Lossless").tag("high")
             }
+            .selectionHaptic(streamingQuality)
         } header: {
             Text("Audio")
         } footer: {
@@ -186,6 +196,7 @@ struct SettingsView: View {
     private var downloadsSection: some View {
         Section {
             Toggle("Auto-Download Played Songs", isOn: $downloadOnPlay)
+            .toggleHaptic(downloadOnPlay)
                 .tint(.appAccent)
         } header: {
             Text("Downloads")
@@ -197,12 +208,63 @@ struct SettingsView: View {
     private var lyricsSection: some View {
         Section {
             Toggle("Respect Reduce Motion", isOn: $respectReducedMotion)
+            .toggleHaptic(respectReducedMotion)
                 .tint(.appAccent)
         } header: {
             Text("Lyrics")
         } footer: {
             Text("Animated lyrics and transitions follow your motion preference.")
         }
+    }
+
+    private var hapticsSection: some View {
+        Section {
+            Toggle("Haptic Feedback", isOn: hapticsToggleBinding)
+                .tint(.appAccent)
+            if hapticsEnabled {
+                Picker("Strength", selection: hapticStrengthBinding) {
+                    ForEach(AppHapticStrength.allCases) { strength in
+                        Text(strength.label).tag(strength)
+                    }
+                }
+            }
+        } header: {
+            Text("Haptics")
+        } footer: {
+            Text(hapticsEnabled
+                ? "Taps, swipes and controls answer back with a vibration. Strength sets how hard they land — each control keeps its own character at every level."
+                : "Taps, swipes and controls answer back with a vibration.")
+        }
+    }
+
+    /// Plays the chosen level as you pick it, so the setting is judged by feel
+    /// rather than by the word next to it.
+    private var hapticStrengthBinding: Binding<AppHapticStrength> {
+        Binding(
+            get: { AppHapticStrength(rawValue: hapticStrength) ?? .default },
+            set: { newValue in
+                hapticStrength = newValue.rawValue
+                AppHaptic.commit.play()
+            }
+        )
+    }
+
+    /// Fires the confirmation *before* writing the preference when switching
+    /// off, so the toggle's own haptic still plays — the user's last impression
+    /// of the feature is the feature working, not silence.
+    private var hapticsToggleBinding: Binding<Bool> {
+        Binding(
+            get: { hapticsEnabled },
+            set: { newValue in
+                if newValue {
+                    hapticsEnabled = true
+                    AppHaptic.success.play()
+                } else {
+                    AppHaptic.dismiss.play()
+                    hapticsEnabled = false
+                }
+            }
+        )
     }
 
     private var visibleAppearanceModes: [AppearanceMode] {
@@ -218,11 +280,13 @@ struct SettingsView: View {
                     Text(mode.label).tag(mode.rawValue)
                 }
             }
+            .selectionHaptic(appearanceMode)
             Picker("Language", selection: $languageMode) {
                 ForEach(AppLanguage.allCases) { language in
                     Text(language.displayName).tag(language.rawValue)
                 }
             }
+            .selectionHaptic(languageMode)
         }
     }
 
@@ -233,7 +297,7 @@ struct SettingsView: View {
                 if newValue {
                     showExperimentsAlert = true
                 } else {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     experimentsEnabled = false
                     experimentalThemesEnabled = false
                     shimejiEnabled = false
@@ -248,7 +312,7 @@ struct SettingsView: View {
             get: { experimentalThemesEnabled },
             set: { newValue in
                 experimentalThemesEnabled = newValue
-                newValue ? AppHaptic.success.play() : AppHaptic.light.play()
+                newValue ? AppHaptic.success.play() : AppHaptic.dismiss.play()
                 if !newValue {
                     resetThemeIfHiddenByExperiments()
                 }
@@ -297,7 +361,7 @@ struct SettingsView: View {
             get: { shimejiEnabled },
             set: { newValue in
                 shimejiEnabled = newValue
-                newValue ? AppHaptic.success.play() : AppHaptic.light.play()
+                newValue ? AppHaptic.success.play() : AppHaptic.dismiss.play()
                 if newValue, case .notDownloaded = ShimejiResourceManager.shared.state {
                     ShimejiResourceManager.shared.download()
                 }
@@ -344,6 +408,7 @@ struct SettingsView: View {
     private var equalizerSection: some View {
         Section {
             Toggle("Equalizer", isOn: $audioManager.eqEnabled)
+            .toggleHaptic(audioManager.eqEnabled)
                 .tint(.appAccent)
             if audioManager.eqEnabled {
                 Picker("Preset", selection: $audioManager.eqPreset) {
@@ -351,6 +416,7 @@ struct SettingsView: View {
                         Text(preset.rawValue).tag(preset)
                     }
                 }
+                .selectionHaptic(audioManager.eqPreset)
                 EqualizerBands(gainsDB: $audioManager.eqGainsDB)
                     .padding(.vertical, 8)
                 Button("Reset Equalizer") {
@@ -368,6 +434,7 @@ struct SettingsView: View {
     private var aiAudioSection: some View {
         Section {
             Toggle("AI Audio Processing", isOn: $audioManager.aiEnabled)
+            .toggleHaptic(audioManager.aiEnabled)
                 .tint(.appAccent)
 
             if audioManager.aiEnabled {
@@ -411,6 +478,7 @@ struct SettingsView: View {
                     set: { audioManager.karaokeMode = $0 }
                 )
             )
+            .toggleHaptic(audioManager.karaokeMode)
             .tint(.appAccent)
             .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.karaokeMode {
@@ -427,6 +495,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Bass Enhance", isOn: $audioManager.bassEnhanceMode)
+            .toggleHaptic(audioManager.bassEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.bassEnhanceMode {
@@ -443,6 +512,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Vocal Enhance", isOn: $audioManager.vocalEnhanceMode)
+            .toggleHaptic(audioManager.vocalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.vocalEnhanceMode {
@@ -459,6 +529,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Instrumental Enhance", isOn: $audioManager.instrumentalEnhanceMode)
+            .toggleHaptic(audioManager.instrumentalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.instrumentalEnhanceMode {
@@ -552,7 +623,7 @@ struct SettingsView: View {
     }
 
     private func request(_ action: SettingsDestructiveAction) {
-        AppHaptic.warning.play()
+        AppHaptic.selection.play()
         pendingAction = action
     }
 
@@ -823,7 +894,7 @@ private struct StrengthSlider: View {
         let feedbackStep = Int((value * 20).rounded())
         guard feedbackStep != lastFeedbackStep else { return }
         lastFeedbackStep = feedbackStep
-        AppHaptic.selection.play()
+        AppHaptic.detent.play()
     }
 
     private var sliderAnimation: Animation? {
@@ -1013,7 +1084,7 @@ private struct EqualizerBand: View {
         let feedbackStep = Int(value.rounded())
         guard feedbackStep != lastFeedbackStep else { return }
         lastFeedbackStep = feedbackStep
-        AppHaptic.selection.play()
+        AppHaptic.detent.play()
     }
 
     private var bandAnimation: Animation? {
@@ -1172,7 +1243,7 @@ private struct NotificationPreferenceToggle: View {
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "On" : "Off")
         .onChange(of: isOn) { _, enabled in
-            enabled ? AppHaptic.selection.play() : AppHaptic.light.play()
+            enabled ? AppHaptic.selection.play() : AppHaptic.dismiss.play()
         }
     }
 }

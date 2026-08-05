@@ -31,6 +31,7 @@ struct TwinskaraokeApp: App {
                 .preferredColorScheme(resolvedColorScheme)
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .injectReduceMotion()
+                .injectHaptics()
                 .tint(.appAccent)
                 .shimejiSession()
                 .onAppear {

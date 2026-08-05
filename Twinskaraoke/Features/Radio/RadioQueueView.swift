@@ -87,7 +87,17 @@ struct RadioQueueView: View {
                     .animation(scheduleAnimation(response: 0.28), value: currentSong?.displayTitle)
                 }
                 .smoothScrolling()
-                .refreshable { await radio.refresh() }
+                .refreshable {
+                    AppHaptic.selection.play()
+                    await radio.refresh()
+                    // Branch on the outcome rather than always claiming success,
+                    // matching `RadioView.retryRadioRefresh()`.
+                    if radio.refreshErrorMessage != nil {
+                        AppHaptic.error.play()
+                    } else {
+                        AppHaptic.success.play()
+                    }
+                }
             }
         }
     }
@@ -106,7 +116,7 @@ struct RadioQueueView: View {
             }
             Spacer()
             GlassXButton(action: {
-                AppHaptic.light.play()
+                AppHaptic.dismiss.play()
                 dismiss()
             })
             .accessibilityHint("Dismisses the radio queue.")
@@ -119,7 +129,7 @@ struct RadioQueueView: View {
     private var stationControls: some View {
         HStack(spacing: 12) {
             Button {
-                AppHaptic.medium.play()
+                AppHaptic.commit.play()
                 playOrPauseLiveStation()
             } label: {
                 LibraryActionButtonLabel(
@@ -174,7 +184,7 @@ struct RadioQueueView: View {
         .contentShape(Rectangle())
         .contextMenu {
             Button {
-                AppHaptic.medium.play()
+                AppHaptic.commit.play()
                 radio.playLiveStream()
             } label: {
                 Label("Play Live Station", systemImage: "dot.radiowaves.left.and.right")
@@ -194,7 +204,7 @@ struct RadioQueueView: View {
         .accessibilityValue("\(song.displayTitle), \(song.displayArtist)")
         .accessibilityHint("Shows actions for the live radio station.")
         .accessibilityAction(named: "Play Live Station") {
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             radio.playLiveStream()
         }
         .transition(rowTransition)

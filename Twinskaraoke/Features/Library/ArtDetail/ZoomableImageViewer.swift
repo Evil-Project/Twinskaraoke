@@ -51,7 +51,7 @@ struct ZoomableImageViewer: View {
                 VStack {
                     HStack {
                         GlassXButton(action: {
-                            AppHaptic.light.play()
+                            AppHaptic.dismiss.play()
                             dismiss()
                         })
                         Spacer()
@@ -118,7 +118,7 @@ struct ZoomableImageViewer: View {
     }
 
     private func toggleZoom() {
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         let update = {
             if scale > 1 {
                 scale = 1

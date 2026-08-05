@@ -288,7 +288,7 @@ struct ArtistDetailView: View {
                     text: "Play"
                 )
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
@@ -297,7 +297,7 @@ struct ArtistDetailView: View {
                     text: "Shuffle"
                 )
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
         }
         .padding(.horizontal)
     }
@@ -499,7 +499,7 @@ private struct ArtistActionsMenu: View {
                 Label("Downloading \(downloadingCount)...", systemImage: "arrow.down.circle")
             } else if allDownloaded {
                 Button(role: .destructive) {
-                    AppHaptic.warning.play()
+                    AppHaptic.dismiss.play()
                     DownloadManager.shared.remove(songIDs: songs.map(\.id))
                 } label: {
                     Label("Remove Downloads", systemImage: "trash")

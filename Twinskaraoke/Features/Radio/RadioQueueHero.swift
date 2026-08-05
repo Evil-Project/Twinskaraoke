@@ -46,7 +46,7 @@ struct RadioQueueHero: View {
             Spacer(minLength: 4)
 
             Button {
-                AppHaptic.medium.play()
+                AppHaptic.commit.play()
                 onPlayPause()
             } label: {
                 Label(isPlaying ? "Pause live station" : "Play live station", systemImage: isPlaying ? "pause.fill" : "play.fill")

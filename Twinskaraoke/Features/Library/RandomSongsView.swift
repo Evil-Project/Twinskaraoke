@@ -65,6 +65,7 @@ struct RandomSongsView: View {
         .refreshable {
             AppHaptic.selection.play()
             await viewModel.reload()
+            AppHaptic.success.play()
         }
         .task {
             await viewModel.loadIfNeeded()

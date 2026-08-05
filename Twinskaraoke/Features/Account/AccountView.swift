@@ -157,7 +157,7 @@ struct AccountView: View {
     private var signOutSection: some View {
         Section {
             Button(role: .destructive) {
-                AppHaptic.warning.play()
+                AppHaptic.selection.play()
                 showSignOutConfirm = true
             } label: {
                 HStack {
@@ -171,7 +171,7 @@ struct AccountView: View {
                 Button("Cancel", role: .cancel) {}
                     .tint(Color(uiColor: .systemBlue))
                 Button("Sign Out", role: .destructive) {
-                    AppHaptic.warning.play()
+                    AppHaptic.dismiss.play()
                     auth.logout()
                 }
             } message: {

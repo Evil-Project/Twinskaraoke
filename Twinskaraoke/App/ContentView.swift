@@ -489,7 +489,16 @@ private struct PopupModifier: ViewModifier {
                                 }
                             #endif
                         }
+                        // The mini player's own tap and its swipe-to-dismiss are
+                        // handled inside LNPopupController, so this binding is
+                        // the only place either surfaces to us.  Guarded on an
+                        // actual change: the suppression path above calls
+                        // `collapse()` on an already-collapsed popup.
+                        let wasExpanded = presentationState.isExpanded
                         presentationState.setExpanded(isOpen)
+                        if isOpen != wasExpanded {
+                            (isOpen ? AppHaptic.commit : AppHaptic.dismiss).play()
+                        }
                     }
                 )
             ) {
@@ -588,7 +597,7 @@ private struct PopupBarTrailingItems: View, Equatable {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .commit))
             .accessibilityLabel(playPauseAccessibilityLabel)
             .accessibilityHint(
                 isRadioMode ? "Controls the live radio stream." : "Controls the current song."
@@ -601,7 +610,7 @@ private struct PopupBarTrailingItems: View, Equatable {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .light))
+                .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .selection))
                 .accessibilityLabel("Next track")
                 .accessibilityHint("Skips to the next song.")
             }
