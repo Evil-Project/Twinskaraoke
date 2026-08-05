@@ -242,7 +242,6 @@ struct PlaylistDetailView: View {
         .smoothScrolling()
         .scrollEdgeHaptic()
         .scrollDismissesKeyboard(.interactively)
-        .bottomChromeScrollTracking()
         // Resting offset expressed as a raw point, which is what finally worked.
         //
         // Four earlier attempts all failed for the same underlying reason — they

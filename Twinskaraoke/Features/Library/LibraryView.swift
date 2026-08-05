@@ -98,9 +98,9 @@ struct LibraryView: View {
                     AccountToolbarButton()
                 }
             }
-            // `refreshLibrary()` plays the trigger tick itself.
+            // `refreshLibraryAndWait()` plays the trigger tick itself.
             .refreshable {
-                refreshLibrary()
+                await refreshLibraryAndWait()
             }
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistDetailView(playlist: playlist)
@@ -250,12 +250,24 @@ struct LibraryView: View {
         }
     }
 
+    /// Fire-and-forget variant for the toolbar button, which has no way to show
+    /// progress and so has nothing to wait on.
     private func refreshLibrary() {
         AppHaptic.selection.play()
         favorites.loadIfNeeded()
         viewModel.fetchPlaylists(force: true)
         viewModel.fetchFavoriteSongs(force: true)
         recentSongsViewModel.refresh()
+    }
+
+    /// Awaitable variant for pull-to-refresh; keeps the refresh spinner alive
+    /// until every library section has actually finished loading.
+    private func refreshLibraryAndWait() async {
+        AppHaptic.selection.play()
+        favorites.loadIfNeeded()
+        async let playlists: Void = viewModel.refreshAll()
+        async let recents: Void = recentSongsViewModel.refreshSongs()
+        _ = await (playlists, recents)
     }
 }
 
@@ -458,7 +470,7 @@ struct LibrarySongsView: View {
         }
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refreshSongs()
         }
         .task {
             viewModel.loadIfNeeded()

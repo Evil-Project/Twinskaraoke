@@ -76,7 +76,6 @@ struct DownloadedSongsView: View {
             }
             .smoothScrolling()
             .scrollEdgeHaptic()
-            .bottomChromeScrollTracking()
             .collapsedNavigationTitle($showsCollapsedTitle)
         }
         .navigationTitle(showsCollapsedTitle ? "Downloaded" : "")

@@ -348,10 +348,6 @@ extension View {
         background(ScreenBackgroundFill(style: .grouped))
     }
 
-    func bottomChromeScrollTracking() -> some View {
-        modifier(BottomChromeScrollTrackingModifier())
-    }
-
     func tabBarScrollInset() -> some View {
         modifier(TabBarScrollInsetModifier())
     }
@@ -373,23 +369,6 @@ func withOptionalAnimation<Result>(
         }
     } else {
         return try body()
-    }
-}
-
-private struct BottomChromeScrollTrackingModifier: ViewModifier {
-    private let chromeState = BottomChromeState.shared
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
-                } action: { _, offset in
-                    chromeState.updateScrollOffset(offset)
-                }
-        } else {
-            content
-        }
     }
 }
 

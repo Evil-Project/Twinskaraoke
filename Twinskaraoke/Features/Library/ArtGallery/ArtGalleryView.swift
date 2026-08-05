@@ -96,7 +96,7 @@ struct ArtGalleryView: View {
         .navigationBarTitleDisplayMode(.large)
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.fetch(force: true)
+            await viewModel.refreshGallery()
         }
         .onAppear { viewModel.fetch() }
     }

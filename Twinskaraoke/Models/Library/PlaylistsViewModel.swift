@@ -14,6 +14,8 @@ final class PlaylistsViewModel {
     @ObservationIgnored private var hasLoadedPlaylists = false
     @ObservationIgnored private var hasLoadedFavoriteSongs = false
     @ObservationIgnored private var sourceObservation: ObservationToken?
+    @ObservationIgnored private let playlistsRefresh = RefreshTracker()
+    @ObservationIgnored private let favoriteSongsRefresh = RefreshTracker()
 
     init() {
         // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
@@ -76,11 +78,26 @@ final class PlaylistsViewModel {
         return [favoritesPlaylist] + combined
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until both the playlists and the favorite songs have finished loading.
+    ///
+    /// Neither tracker cancels what it replaces, and both fetches bail while one
+    /// is already running, so a repeated refresh waits on the in-flight load
+    /// rather than starting a second. That is deliberate: the `catch` blocks
+    /// below are not token-guarded, so a cancelled forced fetch would fall into
+    /// them and clear `playlists` / `favoriteSongs` outright.
+    func refreshAll() async {
+        fetchPlaylists(force: true)
+        fetchFavoriteSongs(force: true)
+        await playlistsRefresh.wait()
+        await favoriteSongsRefresh.wait()
+    }
+
     func fetchPlaylists(force: Bool = false) {
         guard !isLoading else { return }
         guard force || !hasLoadedPlaylists else { return }
         isLoading = true
-        Task { [weak self] in
+        playlistsRefresh.track(Task { [weak self] in
             guard let self else { return }
             defer { isLoading = false }
             do {
@@ -98,14 +115,14 @@ final class PlaylistsViewModel {
                     playlists = []
                 }
             }
-        }
+        })
     }
 
     func fetchFavoriteSongs(force: Bool = false) {
         guard !isLoadingFavorites else { return }
         guard force || !hasLoadedFavoriteSongs else { return }
         isLoadingFavorites = true
-        Task { [weak self] in
+        favoriteSongsRefresh.track(Task { [weak self] in
             guard let self else { return }
             defer { isLoadingFavorites = false }
             do {
@@ -116,6 +133,6 @@ final class PlaylistsViewModel {
                     favoriteSongs = []
                 }
             }
-        }
+        })
     }
 }

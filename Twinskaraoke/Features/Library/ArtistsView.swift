@@ -82,7 +82,7 @@ struct ArtistsView: View {
         )
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refreshArtists()
         }
         .onAppear { viewModel.fetchInitial() }
     }
