@@ -39,7 +39,7 @@ struct LevelUpSheet: View {
                 Button("Keep Going") {
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(.appAccent)
             }
             .padding(.horizontal, 24)

@@ -20,7 +20,7 @@ struct ArtThumbnail: View {
             if let upvotes = art.upvotes, upvotes > 0 {
                 Label("\(upvotes)", systemImage: "heart.fill")
                     .scaledSystemFont(size: 11, weight: .bold)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 5)
                     .background(Color.black.opacity(0.45), in: Capsule())

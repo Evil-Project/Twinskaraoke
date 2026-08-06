@@ -81,7 +81,7 @@ struct RadioPlayerLayout: View {
                 } label: {
                     Group {
                         let isFav = favorites.isFavorite(songID)
-                        if #available(iOS 17.0, *), !reduceMotion {
+                        if !reduceMotion {
                             Image(systemName: isFav ? "star.fill" : "star")
                                 .contentTransition(.symbolEffect(.replace))
                         } else {
@@ -108,7 +108,7 @@ struct RadioPlayerLayout: View {
             audioManager.togglePlayPause()
         } label: {
             Group {
-                if #available(iOS 17.0, *), !reduceMotion {
+                if !reduceMotion {
                     Image(systemName: audioManager.isPlaying ? "stop.fill" : "play.fill")
                         .contentTransition(.symbolEffect(.replace))
                 } else {

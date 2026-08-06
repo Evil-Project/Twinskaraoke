@@ -29,16 +29,16 @@ struct FeaturedArtCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("FEATURED ART")
                     .scaledSystemFont(size: 11, weight: .bold)
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(0.85))
                     .tracking(0.6)
                 Text(artist.name)
                     .scaledSystemFont(size: 22, weight: .bold)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
                 if let upvotes = art.upvotes, upvotes > 0 {
                     Label("\(upvotes)", systemImage: "heart.fill")
                         .scaledSystemFont(size: 13, weight: .semibold)
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.9))
                         .padding(.top, 2)
                 }
             }

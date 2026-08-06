@@ -113,7 +113,7 @@ struct QueueModeButton: View {
     var body: some View {
         Button(action: action) {
             Group {
-                if #available(iOS 17.0, *), !reduceMotion {
+                if !reduceMotion {
                     Image(systemName: symbol)
                         .contentTransition(.symbolEffect(.replace))
                 } else {
@@ -136,17 +136,10 @@ struct QueueModeButton: View {
 struct QueueModeBackground: ViewModifier {
     let isActive: Bool
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            if isActive {
-                content.background(Capsule().fill(Color.appControlActiveFill))
-            } else {
-                content.glassEffect(in: Capsule())
-            }
+        if isActive {
+            content.background(Capsule().fill(Color.appControlActiveFill))
         } else {
-            content.background(
-                Capsule()
-                    .fill(isActive ? Color.appControlActiveFill : Color.appControlInactiveFill)
-            )
+            content.glassEffect(in: Capsule())
         }
     }
 }

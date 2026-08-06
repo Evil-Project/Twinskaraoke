@@ -90,9 +90,7 @@ struct LibraryView: View {
                     )
                 }
 
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
 
                 ToolbarItem(placement: .topBarTrailing) {
                     AccountToolbarButton()

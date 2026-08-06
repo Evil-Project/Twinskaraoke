@@ -74,14 +74,14 @@ struct ZoomableImageViewer: View {
                             if let title = visibleTitle {
                                 Text(title)
                                     .scaledSystemFont(size: 17, weight: .bold)
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.center)
                             }
                             if let subtitle = visibleSubtitle {
                                 Text(subtitle)
                                     .scaledSystemFont(size: 14)
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundStyle(.white.opacity(0.7))
                                     .lineLimit(1)
                             }
                         }

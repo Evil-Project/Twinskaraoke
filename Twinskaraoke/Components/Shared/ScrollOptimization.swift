@@ -119,16 +119,12 @@ private struct SmoothScrollingModifier: ViewModifier {
             .scrollBounceBehavior(bounceBehavior)
             .scrollDismissesKeyboard(.interactively)
 
-        if #available(iOS 18.0, *) {
-            configured
-                .onScrollPhaseChange { _, phase in
-                    ScrollPerformanceState.shared.update(id: scrollID, isScrolling: phase.isScrolling)
-                }
-                .onDisappear {
-                    ScrollPerformanceState.shared.update(id: scrollID, isScrolling: false)
-                }
-        } else {
-            configured
-        }
+        configured
+            .onScrollPhaseChange { _, phase in
+                ScrollPerformanceState.shared.update(id: scrollID, isScrolling: phase.isScrolling)
+            }
+            .onDisappear {
+                ScrollPerformanceState.shared.update(id: scrollID, isScrolling: false)
+            }
     }
 }

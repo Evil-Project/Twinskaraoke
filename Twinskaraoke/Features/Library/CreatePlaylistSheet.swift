@@ -167,7 +167,7 @@ private struct CreatePlaylistArtworkPreview: View {
         VStack(spacing: 6) {
             Text(name.isEmpty ? "New Playlist" : name)
                 .scaledSystemFont(size: 28, weight: .bold)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
@@ -217,7 +217,7 @@ private struct CreatePlaylistPrivacyLabel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(isPublic ? "Public" : "Private")
                     .scaledSystemFont(size: 16, weight: .semibold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text(isPublic ? "Visible to other listeners" : "Only you can edit this playlist")
                     .scaledSystemFont(size: 13)
                     .foregroundStyle(.secondary)
@@ -262,7 +262,7 @@ private struct CreatePlaylistSaveLabel: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 15)
-        .foregroundColor(.appControlActiveForeground)
+        .foregroundStyle(Color.appControlActiveForeground)
         .background(Color.appControlActiveFill, in: Capsule())
         .opacity(isSaving ? 0.72 : 1)
     }

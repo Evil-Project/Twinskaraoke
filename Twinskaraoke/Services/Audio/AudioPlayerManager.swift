@@ -2181,9 +2181,7 @@ final class AudioPlayerManager {
         activateAudioSession()
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
-        if #available(iOS 15.0, *) {
-            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-        }
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         player.automaticallyWaitsToMinimizeStalling = true
         player.allowsExternalPlayback = true
         player.volume = 1.0
@@ -2720,13 +2718,9 @@ final class AudioPlayerManager {
     private func configureAudioSessionCategory() {
         guard !audioSessionCategoryConfigured else { return }
         do {
-            if #available(iOS 13.0, *) {
-                try AVAudioSession.sharedInstance().setCategory(
-                    .playback, mode: .default, policy: .longFormAudio, options: []
-                )
-            } else {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            }
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, policy: .longFormAudio, options: []
+            )
             audioSessionCategoryConfigured = true
         } catch {
             DebugLogger.log("Audio session category configuration failed: \(error)", category: .playback)

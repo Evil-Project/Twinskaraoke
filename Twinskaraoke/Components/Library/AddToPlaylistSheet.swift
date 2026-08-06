@@ -79,7 +79,7 @@ struct AddToPlaylistSheet: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
                     .padding(.bottom, 10)
-                    .background(.regularMaterial)
+                    .appGlassBackground(in: Rectangle())
                 }
             }
             .navigationTitle("Add to Playlist")

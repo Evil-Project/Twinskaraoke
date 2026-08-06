@@ -147,18 +147,12 @@ struct LoginSheet: View {
                     AppHaptic.selection.play()
                     showPassword.toggle()
                 } label: {
-                    Group {
-                        if #available(iOS 17.0, *) {
-                            Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                                .contentTransition(.symbolEffect(.replace))
-                        } else {
-                            Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                        .contentTransition(.symbolEffect(.replace))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.72))
                 .accessibilityLabel(showPassword ? "Hide Password" : "Show Password")
