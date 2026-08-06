@@ -72,6 +72,9 @@ struct PlaylistListView: View {
             text: $searchText,
             prompt: "Search Playlists"
         )
+        // Collapses to a toolbar button until tapped, keeping the list the focus.
+        // The Search tab keeps its field expanded — searching is the point there.
+        .searchToolbarBehavior(.minimize)
         .onAppear {
             if let apiURL {
                 loader.bootstrap(initial: playlists, urlBuilder: apiURL)

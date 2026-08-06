@@ -33,7 +33,7 @@ struct BrowseSongCollectionView: View {
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? title : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .animation(
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle

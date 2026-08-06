@@ -56,6 +56,9 @@ struct UploadedSongsView: View {
             text: $viewModel.searchText,
             prompt: "Search Uploads"
         )
+        // Collapses to a toolbar button until tapped, keeping the list the focus.
+        // The Search tab keeps its field expanded — searching is the point there.
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu

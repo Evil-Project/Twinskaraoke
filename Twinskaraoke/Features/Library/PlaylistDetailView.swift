@@ -282,7 +282,7 @@ struct PlaylistDetailView: View {
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? playlist.name : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .animation(
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle

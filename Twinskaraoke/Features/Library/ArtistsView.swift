@@ -79,6 +79,9 @@ struct ArtistsView: View {
             text: $searchText,
             prompt: "Search Artists"
         )
+        // Collapses to a toolbar button until tapped, keeping the list the focus.
+        // The Search tab keeps its field expanded — searching is the point there.
+        .searchToolbarBehavior(.minimize)
         .refreshable {
             AppHaptic.selection.play()
             await viewModel.refreshArtists()
@@ -226,7 +229,7 @@ struct ArtistDetailView: View {
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? current.name : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             if !songs.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
