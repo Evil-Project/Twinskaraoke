@@ -153,15 +153,26 @@ final class FavoritesManager {
     /// `toggle` is not — see the note on `remove`.
     func add(songID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
+        // Refuses to overlap another mutation for the same song, exactly as
+        // `toggle` does. Both halves of the check below are unsafe while one is
+        // in flight: a removal leaves the ID in `favoriteIDs` until it lands, so
+        // the fast path would report success for a song about to disappear —
+        // and skipping the fast path is worse, because `send` is a PUT that
+        // *flips* membership and would remove the song rather than add it.
+        // Reporting failure lets the caller show it and retry.
+        guard !inFlight.contains(songID) else { return false }
         guard !favoriteIDs.contains(songID) else { return true }
 
         let generation = beginMutation(songID)
         defer { endMutation(songID, generation: generation) }
 
         guard await send(songID: songID) else { return false }
+        // Invalidated before the generation check, matching `toggle`: if
+        // `clear()` lands mid-request the cache still holds the pre-mutation
+        // list, and a later load would read it as current.
+        await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
         favoriteIDs.insert(songID)
-        await KaraokeAPIClient.invalidateFavoriteSongs()
         return true
     }
 
@@ -174,6 +185,8 @@ final class FavoritesManager {
     /// is unambiguous, and a 404 means the caller already got what it asked for.
     func remove(songID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
+        // Same non-overlap rule as `add` and `toggle`; see `add`.
+        guard !inFlight.contains(songID) else { return false }
         guard var req = try? KaraokeAPIClient.request(
             pathSegments: ["api", "user", "favorites", songID]
         ) else { return false }
@@ -191,9 +204,11 @@ final class FavoritesManager {
         } catch {
             ok = false
         }
-        guard ok, stateGeneration == generation else { return false }
-        favoriteIDs.remove(songID)
+        guard ok else { return false }
+        // Before the generation check, for the reason given in `add`.
         await KaraokeAPIClient.invalidateFavoriteSongs()
+        guard stateGeneration == generation else { return false }
+        favoriteIDs.remove(songID)
         return true
     }
 
