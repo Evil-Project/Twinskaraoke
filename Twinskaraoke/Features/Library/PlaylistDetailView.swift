@@ -39,6 +39,7 @@ struct PlaylistDetailView: View {
     @State private var prefetchedIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
+    @State private var isEditing = false
     /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
     /// touches until the push has settled. The zoom transition does not gate
     /// input, so a second tap aimed at the grid tile lands on this screen as it
@@ -166,6 +167,81 @@ struct PlaylistDetailView: View {
 
 
     var body: some View {
+        detailContent
+            // A cover, not a push. Pushed, the editor's bottom bar sits behind
+            // the tab bar, and hiding that is not enough on its own: the
+            // LNPopup mini player merges into the tab bar's metrics and would
+            // still float over the Delete button. A full-screen presentation is
+            // above both, which is also where Apple Music puts its editor.
+            .fullScreenCover(isPresented: $isEditing) {
+                if let editTarget {
+                    NavigationStack {
+                        PlaylistEditView(
+                            playlistName: playlist.name,
+                            songs: loader.songs ?? playlist.songListDTOs ?? [],
+                            target: editTarget
+                        ) { reordered in
+                            // Adopt the edited order straight away. The detail
+                            // route now returns it too — `saveSongOrder`
+                            // invalidates that cache — but refetching to learn
+                            // what we just did would flash the old order first.
+                            loader.songs = reordered
+                        }
+                    }
+                }
+            }
+    }
+
+    /// Non-nil only where editing can actually be written through: Favorites,
+    /// which owns its own order, or a playlist the signed-in user owns.
+    ///
+    /// Ownership is membership in `/api/user/playlists` for the same reason
+    /// `songRemovalContext` uses it — see the note there. `editable`/`deletable`
+    /// come back false on playlists the user created, and `isPersonal` is false
+    /// on the instance that reaches this screen.
+    private var editTarget: PlaylistEditTarget? {
+        if playlist.isFavorites { return .favorites }
+        guard userPlaylists.playlists.contains(where: { $0.id == playlist.id }) else {
+            return nil
+        }
+        return .playlist(id: playlist.id)
+    }
+
+    /// Spelled out as its own property with an explicit type on purpose. Inline
+    /// in the toolbar, the `nil`-or-closure ternary had to be resolved as part
+    /// of the `detailContent` chain, which was already close enough to the
+    /// type-checker's budget that the extra overload resolution tipped it over.
+    private var editAction: (() -> Void)? {
+        // Gated on an authoritative list, not just a target.
+        //
+        // The editor is seeded with a snapshot and hands its result back to
+        // `loader.songs` on finish. Opening it before the fetch lands would
+        // seed it from the `songListDTOs` fallback — or from nothing at all —
+        // and closing it would then overwrite a newer, complete list with that
+        // stale snapshot, or with an empty one.
+        guard editTarget != nil, loader.hasAuthoritativeSongs else { return nil }
+        return beginEditing
+    }
+
+    private func beginEditing() {
+        // The web client refuses to reorder under an active filter, and for the
+        // same reason: the indices the endpoint takes are positions in the whole
+        // playlist, so dragging within a filtered subset would write the wrong
+        // ones. Clearing the query sidesteps it rather than blocking the action.
+        searchText = ""
+        filteredSongs = loader.songs ?? playlist.songListDTOs ?? []
+        isSearchFocused = false
+        AppHaptic.selection.play()
+        isEditing = true
+    }
+
+    // @ViewBuilder is load-bearing, not decoration: `View.body` declares it
+    // implicitly, so extracting this out of `body` dropped it and turned the
+    // leading `let _ =` into a multi-statement closure the compiler had to infer
+    // as a whole — which it cannot do in reasonable time for an expression this
+    // size ("unable to type-check this expression in reasonable time").
+    @ViewBuilder
+    private var detailContent: some View {
         let _ = fallbackArt.revision
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -296,7 +372,8 @@ struct PlaylistDetailView: View {
                 PlaylistMoreMenu(
                     playlist: playlist,
                     songs: songs,
-                    onRefresh: refresh
+                    onRefresh: refresh,
+                    onEdit: editAction
                 )
             }
         }
@@ -847,8 +924,18 @@ private struct PlaylistMoreMenu: View {
     let playlist: Playlist
     let songs: [Song]
     let onRefresh: () -> Void
+    /// Nil on a playlist the signed-in user cannot edit, which hides the item.
+    var onEdit: (() -> Void)?
     var body: some View {
         Menu {
+            if let onEdit {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit Playlist", systemImage: "pencil")
+                }
+                Divider()
+            }
             PlaylistActionsMenuItems(playlist: playlist, songs: songs)
             Divider()
             Button {
