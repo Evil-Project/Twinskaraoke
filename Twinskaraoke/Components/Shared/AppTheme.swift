@@ -355,6 +355,16 @@ extension View {
     func tabBarBottomPadding() -> some View {
         modifier(TabBarBottomPaddingModifier())
     }
+
+    /// Search on a screen whose subject is the list, not the searching: the
+    /// field collapses to a toolbar button until tapped, so the content keeps
+    /// the room.
+    ///
+    /// The Search tab deliberately does not use this. Its field stays expanded,
+    /// because searching is the whole point of that screen.
+    func secondarySearchBehavior() -> some View {
+        searchToolbarBehavior(.minimize)
+    }
 }
 
 @MainActor
