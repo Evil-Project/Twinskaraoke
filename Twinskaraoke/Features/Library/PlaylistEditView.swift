@@ -145,6 +145,10 @@ struct PlaylistEditView: View {
     @State private var selection: Set<UUID> = []
     @State private var failureMessage: String?
     @State private var isAddingSongs = false
+    @State private var isFinishing = false
+    /// Set when a write fails, to stop queued work that was computed against
+    /// the now-rolled-back list. Cleared when the error is dismissed.
+    @State private var queueFailed = false
     /// Serialises the writes. Two moves dropped in quick succession would
     /// otherwise race, and the server applies them one membership at a time —
     /// the second must be computed against the list the first produced.
@@ -191,9 +195,14 @@ struct PlaylistEditView: View {
         .animation(reduceMotion ? nil : AppMotion.quick, value: songs)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Done") { finish() }
-                    .fontWeight(.semibold)
-                    .accessibilityIdentifier("PlaylistEdit.done")
+                if isFinishing {
+                    // Queued writes are still landing; see `finish()`.
+                    ProgressView()
+                } else {
+                    Button("Done") { finish() }
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("PlaylistEdit.done")
+                }
             }
         }
         // `safeAreaBar`, not a `.bottomBar` toolbar — the same choice
@@ -228,19 +237,31 @@ struct PlaylistEditView: View {
             "Couldn't Save Changes",
             isPresented: Binding(
                 get: { failureMessage != nil },
-                set: { if !$0 { failureMessage = nil } }
+                set: {
+                    if !$0 {
+                        failureMessage = nil
+                        // List and server agree again, so the queue can reopen.
+                        queueFailed = false
+                    }
+                }
             ),
             presenting: failureMessage
         ) { _ in
-            Button("OK", role: .cancel) { failureMessage = nil }
+            Button("OK", role: .cancel) {
+                failureMessage = nil
+                queueFailed = false
+            }
         } message: { message in
             Text(message)
         }
-        .onDisappear {
-            // Swipe-to-dismiss and the Back gesture both bypass `finish()`;
-            // without this the in-flight writes are cancelled mid-sequence.
-            pendingWork?.cancel()
-        }
+        // Deliberately no `onDisappear { pendingWork?.cancel() }`.
+        //
+        // This screen is presented full-screen, so Done is the only way out —
+        // and Done used to dismiss immediately, letting `onDisappear` cancel a
+        // reorder that had not finished being written. That lost the user's
+        // edit while showing it as applied. `finish()` now waits for the queue
+        // instead, and the writes are short enough that letting a torn-down
+        // session's last request complete is better than dropping it.
     }
 
     private var deleteButton: some View {
@@ -269,10 +290,21 @@ struct PlaylistEditView: View {
         .accessibilityIdentifier("PlaylistEdit.addSongs")
     }
 
+    /// Waits for queued writes before handing the list back.
+    ///
+    /// Dismissing immediately raced the write queue: the screen would close
+    /// with a reorder still in flight, and tearing the session down cancelled
+    /// it — the edit looked applied and silently was not.
     private func finish() {
+        guard !isFinishing else { return }
+        isFinishing = true
         AppHaptic.commit.play()
-        onFinish(songs.map(\.song))
-        dismiss()
+        let queued = pendingWork
+        Task { @MainActor in
+            _ = await queued?.result
+            onFinish(songs.map(\.song))
+            dismiss()
+        }
     }
 
     /// Applies the move locally first so the row settles under the finger, then
@@ -334,6 +366,7 @@ struct PlaylistEditView: View {
                 guard ok else {
                     AppHaptic.error.play()
                     songs = previous
+                    queueFailed = true
                     failureMessage = String(
                         localized: "The new order couldn't be saved. Check your connection and try again."
                     )
@@ -370,6 +403,7 @@ struct PlaylistEditView: View {
             }
 
             AppHaptic.error.play()
+            queueFailed = true
             // Put back only what actually failed, each at the index it held
             // before the delete, so a partial failure doesn't reshuffle the
             // rows that did come out.
@@ -387,11 +421,17 @@ struct PlaylistEditView: View {
     }
 
     /// Chains onto the previous write instead of racing it.
+    ///
+    /// A failed step stops the queue. Every step computes from the list its
+    /// predecessor left behind, so once a failure has rolled the list back,
+    /// anything still queued is working from a state that no longer exists and
+    /// would write nonsense. The queue reopens when the user dismisses the
+    /// error, by which point the list and the server agree again.
     private func enqueue(_ work: @escaping @MainActor () async -> Void) {
         let previousWork = pendingWork
         pendingWork = Task { @MainActor in
             _ = await previousWork?.result
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, !queueFailed else { return }
             await work()
         }
     }

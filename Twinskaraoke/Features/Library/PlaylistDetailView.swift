@@ -212,7 +212,14 @@ struct PlaylistDetailView: View {
     /// of the `detailContent` chain, which was already close enough to the
     /// type-checker's budget that the extra overload resolution tipped it over.
     private var editAction: (() -> Void)? {
-        guard editTarget != nil else { return nil }
+        // Gated on an authoritative list, not just a target.
+        //
+        // The editor is seeded with a snapshot and hands its result back to
+        // `loader.songs` on finish. Opening it before the fetch lands would
+        // seed it from the `songListDTOs` fallback — or from nothing at all —
+        // and closing it would then overwrite a newer, complete list with that
+        // stale snapshot, or with an empty one.
+        guard editTarget != nil, loader.hasAuthoritativeSongs else { return nil }
         return beginEditing
     }
 

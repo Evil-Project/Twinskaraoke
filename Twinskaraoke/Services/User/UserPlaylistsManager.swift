@@ -165,17 +165,16 @@ final class UserPlaylistsManager {
         }
     }
 
-    /// Writes the playlist's whole song order.
+    /// Moves one song from `oldOrder` to `newOrder`.
     ///
     /// A third route shape again: `POST /api/user/playlists/{id}/save-order`,
-    /// which is the only method that path accepts.
+    /// which is the only method that path accepts. The body is a single-element
+    /// array describing this one move — see `KaraokeAPIClient.songMovePayload`.
     ///
-    /// This takes the entire ordered list, not a single move. The server's own
-    /// rejection said so — "PlaylistId and songs must not be null" — and the
-    /// `{ songId, newOrder }` pair in the web client that suggested otherwise is
-    /// its SortableJS event args, not its request body. Whole-list is the better
-    /// contract anyway: one atomic call per drop, with no multi-call sequence
-    /// that can fail halfway and leave the order half-applied.
+    /// Both ends of the move are required. Posting the whole list with only
+    /// each song's `order` set is accepted with 204 and does nothing, because
+    /// every element then carries the default `oldOrder`/`newOrder` of 0. A 204
+    /// from this route means the request parsed, not that anything moved.
     func moveSong(
         _ songID: String,
         from oldOrder: Int,

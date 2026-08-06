@@ -26,6 +26,9 @@ struct AddSongsToPlaylistView: View {
     @State private var inFlight: Set<String> = []
     @State private var added: [Song] = []
     @State private var failed: Set<String> = []
+    /// `onDisappear` can fire more than once for a single dismissal; without
+    /// this the editor would append the same songs twice.
+    @State private var hasReported = false
 
     private var addedIDs: Set<String> { Set(added.map(\.id)) }
 
@@ -50,7 +53,22 @@ struct AddSongsToPlaylistView: View {
                 .onChange(of: query) { _, newValue in
                     scheduleSearch(for: newValue)
                 }
-                .onDisappear { searchTask?.cancel() }
+                // Completion hangs off dismissal, not off the Done button.
+                //
+                // This is a sheet, so it can also be swiped away — and songs
+                // added before that swipe are already on the server. Reporting
+                // them only from Done meant a swipe-dismiss left the editor
+                // showing a list that was missing them, which it would then
+                // hand back to the detail screen as if authoritative.
+                .onDisappear {
+                    searchTask?.cancel()
+                    guard !hasReported else { return }
+                    hasReported = true
+                    onFinish(added)
+                }
+                // Additions are in flight; leaving now would drop them from the
+                // report even though the server is applying them.
+                .interactiveDismissDisabled(!inFlight.isEmpty)
                 .animation(reduceMotion ? nil : AppMotion.quick, value: results)
                 .animation(reduceMotion ? nil : AppMotion.snap, value: inFlight)
         }
@@ -126,9 +144,10 @@ struct AddSongsToPlaylistView: View {
         }
     }
 
+    /// Only dismisses — `onDisappear` is the single completion path, so Done
+    /// and a swipe report the same thing exactly once.
     private func finish() {
         AppHaptic.commit.play()
-        onFinish(added)
         dismiss()
     }
 

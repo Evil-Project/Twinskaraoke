@@ -128,7 +128,7 @@ final class FavoritesManager {
         }
     }
 
-    /// Writes the whole favorites order.
+    /// Moves one favorite from `oldOrder` to `newOrder`.
     ///
     /// Favorites keep a user-defined order server-side even though this manager
     /// only tracks membership as an unordered `Set`: the ordered list is what
@@ -136,8 +136,8 @@ final class FavoritesManager {
     /// observed by invalidating that cache rather than by mutating state here.
     ///
     /// Unlike the per-song toggle this is a fixed path — `save-order` is the
-    /// literal last segment, not a song ID. Takes the entire ordered list for
-    /// the same reason the playlist route does; see `saveSongOrder`.
+    /// literal last segment, not a song ID. One move per call, carrying both
+    /// ends of it, for the same reason the playlist route does; see `moveSong`.
     func moveFavorite(songID: String, from oldOrder: Int, to newOrder: Int) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
         guard let req = try? KaraokeAPIClient.jsonArrayRequest(
@@ -154,7 +154,12 @@ final class FavoritesManager {
     func add(songID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
         guard !favoriteIDs.contains(songID) else { return true }
+
+        let generation = beginMutation(songID)
+        defer { endMutation(songID, generation: generation) }
+
         guard await send(songID: songID) else { return false }
+        guard stateGeneration == generation else { return false }
         favoriteIDs.insert(songID)
         await KaraokeAPIClient.invalidateFavoriteSongs()
         return true
@@ -174,6 +179,9 @@ final class FavoritesManager {
         ) else { return false }
         req.httpMethod = "DELETE"
 
+        let generation = beginMutation(songID)
+        defer { endMutation(songID, generation: generation) }
+
         let ok: Bool
         do {
             _ = try await KaraokeAPIClient.data(for: req)
@@ -183,10 +191,33 @@ final class FavoritesManager {
         } catch {
             ok = false
         }
-        guard ok else { return false }
+        guard ok, stateGeneration == generation else { return false }
         favoriteIDs.remove(songID)
         await KaraokeAPIClient.invalidateFavoriteSongs()
         return true
+    }
+
+    /// Registers a mutation *before* its request is awaited.
+    ///
+    /// `load()` only commits its result when `mutationRevision` is unchanged and
+    /// `inFlight` is empty. A mutation that is not registered satisfies both
+    /// conditions for the whole duration of its request, so a load already in
+    /// flight can finish afterwards and overwrite the change with the
+    /// pre-mutation list — silently un-adding or re-adding a song. `toggle`
+    /// has always done this; `add` and `remove` must too.
+    private func beginMutation(_ songID: String) -> Int {
+        inFlight.insert(songID)
+        mutationRevision &+= 1
+        if isLoading {
+            reloadAfterMutations = true
+        }
+        return stateGeneration
+    }
+
+    private func endMutation(_ songID: String, generation: Int) {
+        guard stateGeneration == generation else { return }
+        inFlight.remove(songID)
+        scheduleReloadAfterMutationsIfNeeded()
     }
 
     private func send(songID: String) async -> Bool {
