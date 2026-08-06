@@ -165,6 +165,35 @@ final class UserPlaylistsManager {
         }
     }
 
+    /// Writes the playlist's whole song order.
+    ///
+    /// A third route shape again: `POST /api/user/playlists/{id}/save-order`,
+    /// which is the only method that path accepts.
+    ///
+    /// This takes the entire ordered list, not a single move. The server's own
+    /// rejection said so — "PlaylistId and songs must not be null" — and the
+    /// `{ songId, newOrder }` pair in the web client that suggested otherwise is
+    /// its SortableJS event args, not its request body. Whole-list is the better
+    /// contract anyway: one atomic call per drop, with no multi-call sequence
+    /// that can fail halfway and leave the order half-applied.
+    func moveSong(
+        _ songID: String,
+        from oldOrder: Int,
+        to newOrder: Int,
+        inPlaylist playlistID: String
+    ) async -> Bool {
+        guard CredentialStore.isAuthenticated else { return false }
+        guard let req = try? KaraokeAPIClient.jsonArrayRequest(
+            pathSegments: ["api", "user", "playlists", playlistID, "save-order"],
+            body: KaraokeAPIClient.songMovePayload(songID: songID, from: oldOrder, to: newOrder)
+        ) else { return false }
+        guard (try? await KaraokeAPIClient.data(for: req)) != nil else { return false }
+        // The reordered list is what the detail route now returns; without this
+        // a re-entry to the screen restores the pre-move order from cache.
+        await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
+        return true
+    }
+
     private func adjustSongCount(forPlaylist playlistID: String, by delta: Int) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         let playlist = playlists[index]

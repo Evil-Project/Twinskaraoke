@@ -242,7 +242,11 @@ actor UploadedSongDurationResolver {
                 originalArtists: song.originalArtists,
                 coverArtists: song.coverArtists,
                 userUploaded: song.userUploaded,
-                oss: song.oss
+                oss: song.oss,
+                // Carried through: this rebuild runs over playlist songs, and
+                // losing `order` here silently reverted them to an unpositioned
+                // state that reordering then had to guess at.
+                order: song.order
             )
         }
     }

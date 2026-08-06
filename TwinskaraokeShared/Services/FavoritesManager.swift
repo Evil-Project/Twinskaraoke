@@ -128,6 +128,67 @@ final class FavoritesManager {
         }
     }
 
+    /// Writes the whole favorites order.
+    ///
+    /// Favorites keep a user-defined order server-side even though this manager
+    /// only tracks membership as an unordered `Set`: the ordered list is what
+    /// `KaraokeAPIClient.favoriteSongs()` returns, so a successful write is
+    /// observed by invalidating that cache rather than by mutating state here.
+    ///
+    /// Unlike the per-song toggle this is a fixed path — `save-order` is the
+    /// literal last segment, not a song ID. Takes the entire ordered list for
+    /// the same reason the playlist route does; see `saveSongOrder`.
+    func moveFavorite(songID: String, from oldOrder: Int, to newOrder: Int) async -> Bool {
+        guard CredentialStore.isAuthenticated else { return false }
+        guard let req = try? KaraokeAPIClient.jsonArrayRequest(
+            pathSegments: ["api", "user", "favorites", "save-order"],
+            body: KaraokeAPIClient.songMovePayload(songID: songID, from: oldOrder, to: newOrder)
+        ) else { return false }
+        guard (try? await KaraokeAPIClient.data(for: req)) != nil else { return false }
+        await KaraokeAPIClient.invalidateFavoriteSongs()
+        return true
+    }
+
+    /// Adds without flipping. Safe to call on a song already favourited, which
+    /// `toggle` is not — see the note on `remove`.
+    func add(songID: String) async -> Bool {
+        guard CredentialStore.isAuthenticated else { return false }
+        guard !favoriteIDs.contains(songID) else { return true }
+        guard await send(songID: songID) else { return false }
+        favoriteIDs.insert(songID)
+        await KaraokeAPIClient.invalidateFavoriteSongs()
+        return true
+    }
+
+    /// Unconditional removal, deliberately not routed through `toggle`.
+    ///
+    /// `toggle` sends PUT, which *flips* membership. For a multi-select delete
+    /// that is the wrong verb twice over: `data(for:)` retries idempotent
+    /// requests, so a lost response would re-add the song, and a song already
+    /// gone would come back rather than stay removed. DELETE on the same path
+    /// is unambiguous, and a 404 means the caller already got what it asked for.
+    func remove(songID: String) async -> Bool {
+        guard CredentialStore.isAuthenticated else { return false }
+        guard var req = try? KaraokeAPIClient.request(
+            pathSegments: ["api", "user", "favorites", songID]
+        ) else { return false }
+        req.httpMethod = "DELETE"
+
+        let ok: Bool
+        do {
+            _ = try await KaraokeAPIClient.data(for: req)
+            ok = true
+        } catch KaraokeAPIClient.APIError.httpStatus(404) {
+            ok = true
+        } catch {
+            ok = false
+        }
+        guard ok else { return false }
+        favoriteIDs.remove(songID)
+        await KaraokeAPIClient.invalidateFavoriteSongs()
+        return true
+    }
+
     private func send(songID: String) async -> Bool {
         guard var req = try? KaraokeAPIClient.request(
             pathSegments: ["api", "user", "favorites", songID]

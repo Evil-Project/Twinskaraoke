@@ -86,11 +86,20 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   let coverArtists: [String]?
   let userUploaded: Bool?
   let oss: String?
+  /// The song's position within the playlist or favorites list it came from.
+  ///
+  /// Carried per song rather than expressed by the array: `/api/playlist/{id}`
+  /// returns `songListDTOs` in insertion order and leaves the user's ordering
+  /// here, so it has to be applied on read — see
+  /// `KaraokeAPIClient.applyingPersistedOrder`. Nil for payloads that have no
+  /// ordering of their own (search results, uploads, catalog lookups).
+  let order: Int?
 
   enum CodingKeys: String, CodingKey {
     case id, title, duration, absolutePath, coverArt, originalArtists, coverArtists, userUploaded, oss
     case cloudflareId
     case cloudflareID
+    case order
   }
 
   init(
@@ -103,7 +112,8 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     originalArtists: [String]?,
     coverArtists: [String]?,
     userUploaded: Bool?,
-    oss: String? = nil
+    oss: String? = nil,
+    order: Int? = nil
   ) {
     self.id = id
     self.title = title
@@ -115,6 +125,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     self.coverArtists = coverArtists
     self.userUploaded = userUploaded
     self.oss = oss
+    self.order = order
   }
 
   init(from decoder: Decoder) throws {
@@ -147,6 +158,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     coverArtists = Self.decodeArtists(from: container, forKey: .coverArtists)
     userUploaded = Self.decodeBool(from: container, forKey: .userUploaded)
     oss = Self.decodeString(from: container, keys: [.oss])
+    order = try? container.decodeIfPresent(Int.self, forKey: .order)
   }
 
   func encode(to encoder: Encoder) throws {
@@ -161,6 +173,7 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     try container.encodeIfPresent(coverArtists, forKey: .coverArtists)
     try container.encodeIfPresent(userUploaded, forKey: .userUploaded)
     try container.encodeIfPresent(oss, forKey: .oss)
+    try container.encodeIfPresent(order, forKey: .order)
   }
 
   init(
@@ -184,6 +197,24 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
       originalArtists: originalArtists,
       coverArtists: coverArtists,
       userUploaded: userUploaded
+    )
+  }
+
+  /// A copy carrying a different position, for payloads that keep the ordering
+  /// beside the song rather than on it (see `FavoriteSongEnvelope`).
+  func settingOrder(_ order: Int?) -> Song {
+    Song(
+      id: id,
+      title: title,
+      duration: duration,
+      absolutePath: absolutePath,
+      cloudflareID: cloudflareID,
+      coverArt: coverArt,
+      originalArtists: originalArtists,
+      coverArtists: coverArtists,
+      userUploaded: userUploaded,
+      oss: oss,
+      order: order
     )
   }
 
@@ -244,7 +275,14 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
       originalArtists: Self.preferredArtists(originalArtists, fallback: canonical.originalArtists),
       coverArtists: Self.preferredArtists(coverArtists, fallback: canonical.coverArtists),
       userUploaded: userUploaded ?? canonical.userUploaded,
-      oss: Self.preferredString(oss, fallback: canonical.oss)
+      oss: Self.preferredString(oss, fallback: canonical.oss),
+      // Keep the position. `order` describes where this song sits in the list
+      // it arrived in, so the canonical copy — fetched from a different route
+      // with no such context — must not overwrite it, only fill it in.
+      // Dropping it here silently reverted every hydrated song to `nil` and
+      // made reordering fall back to row indices, which are only correct while
+      // the server's numbering happens to be dense.
+      order: order ?? canonical.order
     )
   }
 
@@ -792,19 +830,23 @@ nonisolated struct SearchResponseRoot: Codable, Sendable {
 nonisolated struct FavoriteSongEnvelope: Decodable, Sendable {
   let song: Song?
 
-  enum CodingKeys: String, CodingKey { case song, songData, songDTO }
+  enum CodingKeys: String, CodingKey { case song, songData, songDTO, order }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    if let decoded = try? container.decode(Song.self, forKey: .song) {
-      song = decoded
-    } else if let decoded = try? container.decode(Song.self, forKey: .songData) {
-      song = decoded
-    } else if let decoded = try? container.decode(Song.self, forKey: .songDTO) {
-      song = decoded
-    } else {
-      song = nil
-    }
+    let decodedSong =
+      (try? container.decode(Song.self, forKey: .song))
+      ?? (try? container.decode(Song.self, forKey: .songData))
+      ?? (try? container.decode(Song.self, forKey: .songDTO))
+
+    // The favorites ordering lives on the *envelope*, not on the song inside
+    // it. The nested song carries an `order` of its own that refers to some
+    // playlist it belongs to and is unrelated here — the first favorite in the
+    // list came back with a nested `order` of 0 while the envelope said 0, and
+    // further down the two diverge entirely. Lifting the envelope's value onto
+    // the song is what makes a favorite's position readable at all.
+    let envelopeOrder = try? container.decodeIfPresent(Int.self, forKey: .order)
+    song = decodedSong.map { $0.settingOrder(envelopeOrder) }
   }
 }
 
