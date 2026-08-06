@@ -44,6 +44,19 @@ enum PlaylistEditTarget {
         }
     }
 
+    /// The collection as the server currently has it, ordering included.
+    ///
+    /// Both mutating calls invalidate their cache first, so this reads through
+    /// to the network rather than returning the pre-mutation payload.
+    func currentSongs() async -> [Song]? {
+        switch self {
+        case .favorites:
+            try? await KaraokeAPIClient.favoriteSongs()
+        case let .playlist(id):
+            try? await KaraokeAPIClient.playlistSongs(id: id)
+        }
+    }
+
     func remove(songID: String) async -> Bool {
         switch self {
         case .favorites:
@@ -114,8 +127,13 @@ struct PlaylistEditSongRow: View {
 /// (so a selection keyed on them would follow the position instead of the row).
 /// A UUID minted once when the session opens is stable across both.
 private struct EditableSong: Identifiable, Equatable {
-    let id = UUID()
+    let id: UUID
     let song: Song
+
+    init(song: Song, id: UUID = UUID()) {
+        self.id = id
+        self.song = song
+    }
 
     static func == (lhs: EditableSong, rhs: EditableSong) -> Bool {
         lhs.id == rhs.id
@@ -322,47 +340,51 @@ struct PlaylistEditView: View {
         AppHaptic.grab.play()
 
         enqueue { [previous, updated] in
-            // The endpoint moves one song at a time, so the settled list is
-            // replayed as a sequence of single moves.
+            // The settled list is replayed as single moves, one per position
+            // that disagrees, walking left to right so each step fixes one slot
+            // without disturbing an earlier one. An ordinary one-row drag is a
+            // single call.
             //
-            // Walk left to right: wherever the current list disagrees with the
-            // target, pull the song that belongs at this index up from further
-            // down and send that one move. Each step fixes one position and
-            // never disturbs an earlier one, so an ordinary single-row drag
-            // produces exactly one call, and a multi-row drag produces the few
-            // it genuinely needs.
+            // `newOrder` is an `order` *value*, not a row position. Verified
+            // against the API: sending 12 gave the song `order: 12` and placed
+            // it above the song that held that value, not at row 12. So a
+            // destination is expressed as the value of whoever currently holds
+            // the slot; the server assigns it and shifts the rest.
             //
-            // Indices are tracked on the row identity rather than the song ID,
-            // since a playlist may hold the same song twice and `firstIndex`
-            // would then find the wrong copy.
-            var current = previous.map(\.id)
-            let songsByRow = Dictionary(
-                uniqueKeysWithValues: updated.map { ($0.id, $0.song) }
-            )
+            // On a densely numbered list this is exact in every direction, and
+            // stays dense — measured over consecutive drags to the top, the
+            // bottom and the middle, with no ties produced.
+            //
+            // A list carrying *duplicate* values is the one case this cannot
+            // place into: no integer sits between two songs sharing a value, so
+            // the slot between them is unreachable and a drop there lands
+            // beside it. Retrying makes it worse rather than better — it just
+            // alternates between the two neighbouring slots — so it is left to
+            // land adjacent, and `resync` makes sure the screen then shows
+            // where the song really is rather than where it was dropped.
+            let targetRows = updated.map(\.id)
+            // Server-side truth, which is still `previous` until a write lands.
+            //
+            // Deliberately *not* `songs`: that already holds the optimistic
+            // post-drag arrangement by this point, so comparing against it
+            // finds every row already in place and sends nothing at all — the
+            // drag then appears to work and silently reverts on the next fetch.
+            var serverRows = previous
 
-            for (targetIndex, rowID) in updated.map(\.id).enumerated() {
-                guard current[targetIndex] != rowID,
-                      let from = current.firstIndex(of: rowID),
-                      let moved = songsByRow[rowID]
+            for targetIndex in targetRows.indices {
+                let rowID = targetRows[targetIndex]
+                guard let currentIndex = serverRows.firstIndex(where: { $0.id == rowID }),
+                      currentIndex != targetIndex,
+                      targetIndex < serverRows.count
                 else { continue }
 
-                // `oldOrder`/`newOrder` are the server's *order values*, not row
-                // positions. The two coincide only while a list is numbered
-                // densely; these lists are not. One real favorites list ran
-                // 0…9 and then put twenty consecutive songs at 10 before
-                // jumping 14 → 17, so a drop at row 15 sent as an index landed
-                // past the whole tied block — the "moves a few rows lower than
-                // I put it" report.
-                //
-                // Sending the displaced song's own value puts the dragged song
-                // exactly where that song was. Where a list *is* dense this is
-                // numerically identical to the index, so it cannot regress the
-                // playlists that already work.
-                let displacedRow = current[targetIndex]
-                let oldOrder = moved.order ?? from
-                let newOrder = songsByRow[displacedRow]?.order ?? targetIndex
-
-                let ok = await target.move(songID: moved.id, from: oldOrder, to: newOrder)
+                let moved = serverRows[currentIndex]
+                let destination = serverRows[targetIndex]
+                let ok = await target.move(
+                    songID: moved.song.id,
+                    from: moved.song.order ?? currentIndex,
+                    to: destination.song.order ?? targetIndex
+                )
                 guard ok else {
                     AppHaptic.error.play()
                     songs = previous
@@ -372,8 +394,10 @@ struct PlaylistEditView: View {
                     )
                     return
                 }
-                current.remove(at: from)
-                current.insert(rowID, at: targetIndex)
+                // Each move renumbers part of the list, so the next step reads
+                // the server's values rather than assuming what they became.
+                await resync()
+                serverRows = songs
             }
             AppHaptic.commit.play()
         }
@@ -399,6 +423,7 @@ struct PlaylistEditView: View {
             }
             guard !failed.isEmpty else {
                 AppHaptic.success.play()
+                await resync()
                 return
             }
 
@@ -414,9 +439,42 @@ struct PlaylistEditView: View {
                 restored.insert(item, at: min(originalIndex, restored.count))
             }
             songs = restored
+            // Whatever *did* come out shifted the survivors, so take the
+            // server's word for where things are before reporting the failure.
+            await resync()
             failureMessage = failed.count == 1
                 ? String(localized: "\(failed[0].song.title) couldn't be removed. Check your connection and try again.")
                 : String(localized: "\(failed.count) songs couldn't be removed. Check your connection and try again.")
+        }
+    }
+
+    /// Adopts the server's ordering after a mutation.
+    ///
+    /// Moves are computed from each song's `order`, so those values have to be
+    /// the server's real ones. They cannot be predicted: the server renumbers
+    /// only the range a move touches and leaves ties and gaps elsewhere intact
+    /// — a 20-song playlist sat at `0…12` densely while rows below it stayed
+    /// tied on 13 and 18. Deriving them from row positions instead was wrong
+    /// wherever the numbering was not dense, which is exactly where reordering
+    /// was already hardest.
+    ///
+    /// Costs one read per drop, which is worth it for values every subsequent
+    /// move depends on. Row identity is carried across by pairing on song ID so
+    /// the `List` does not treat resynced rows as new ones, and so a selection
+    /// survives a reorder.
+    private func resync() async {
+        guard let fresh = await target.currentSongs(), !fresh.isEmpty else { return }
+        var identities: [String: [UUID]] = [:]
+        for item in songs {
+            identities[item.song.id, default: []].append(item.id)
+        }
+        songs = fresh.map { song in
+            guard var available = identities[song.id], !available.isEmpty else {
+                return EditableSong(song: song)
+            }
+            let id = available.removeFirst()
+            identities[song.id] = available
+            return EditableSong(song: song, id: id)
         }
     }
 
