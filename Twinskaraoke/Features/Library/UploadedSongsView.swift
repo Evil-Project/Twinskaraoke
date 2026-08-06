@@ -56,6 +56,7 @@ struct UploadedSongsView: View {
             text: $viewModel.searchText,
             prompt: "Search Uploads"
         )
+        .secondarySearchBehavior()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu

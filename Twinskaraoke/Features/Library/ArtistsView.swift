@@ -79,6 +79,7 @@ struct ArtistsView: View {
             text: $searchText,
             prompt: "Search Artists"
         )
+        .secondarySearchBehavior()
         .refreshable {
             AppHaptic.selection.play()
             await viewModel.refreshArtists()
@@ -226,7 +227,7 @@ struct ArtistDetailView: View {
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? current.name : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             if !songs.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {

@@ -460,6 +460,7 @@ struct LibrarySongsView: View {
             text: $viewModel.searchText,
             prompt: "Search Songs"
         )
+        .secondarySearchBehavior()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
@@ -707,6 +708,7 @@ struct PlaylistsGridScreen: View {
             text: $searchText,
             prompt: "Search Playlists"
         )
+        .secondarySearchBehavior()
         .toolbar {
             if isLoggedIn {
                 ToolbarItem(placement: .topBarTrailing) {

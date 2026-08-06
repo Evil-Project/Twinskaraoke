@@ -47,7 +47,7 @@ struct QRApproveView: View {
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         }
         .task { await checkPermission() }
         .animation(phaseAnimation, value: phaseKey)

@@ -80,7 +80,7 @@ struct DownloadedSongsView: View {
         }
         .navigationTitle(showsCollapsedTitle ? "Downloaded" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if !localSongs.isEmpty {

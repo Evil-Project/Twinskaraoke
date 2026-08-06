@@ -72,6 +72,7 @@ struct PlaylistListView: View {
             text: $searchText,
             prompt: "Search Playlists"
         )
+        .secondarySearchBehavior()
         .onAppear {
             if let apiURL {
                 loader.bootstrap(initial: playlists, urlBuilder: apiURL)

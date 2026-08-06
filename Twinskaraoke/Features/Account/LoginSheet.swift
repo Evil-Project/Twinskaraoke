@@ -46,11 +46,14 @@ struct LoginSheet: View {
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // GlassXButton carries its own glass, so the toolbar must not
+                // put its shared glass behind it as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: { dismiss() })
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .onChange(of: auth.isLoggedIn) { _, isLoggedIn in
                 if isLoggedIn { dismiss() }
             }

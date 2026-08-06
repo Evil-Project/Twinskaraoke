@@ -224,7 +224,10 @@ private struct PopupHostView: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Twinskaraoke")
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // `safeAreaBar`, not `safeAreaInset`: this is a bar, so it should
+            // get the bar treatment — glass and scroll-edge behaviour — rather
+            // than painting its own `.bar` background under a plain inset.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 SidebarNowPlayingHint()
             }
         } detail: {
@@ -413,12 +416,9 @@ private struct SidebarNowPlayingHint: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.bar)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.appDivider)
-                        .frame(height: 0.5)
-                }
+                // No background or hairline of its own — `safeAreaBar` gives the
+                // content the system bar treatment, and painting `.bar` plus a
+                // divider on top of that just doubles it.
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Now Playing")
                 .accessibilityValue(popupState.subtitle.isEmpty ? popupState.title : "\(popupState.title), \(popupState.subtitle)")
