@@ -515,7 +515,16 @@ private struct PopupModifier: ViewModifier {
             ) {
                 PopupContent(popupState: popupState)
             }
-            .popupBarStyle(.floating)
+            // `.floatingCompact` (48pt) rather than `.floating` (58pt): the bar
+            // has to match the tab bar's height to sit inline with it once the
+            // bar minimizes, the way Music's does. LNPopupController picks the
+            // height from the style alone — going inline does not shrink a
+            // `.floating` bar — so at 58pt it stayed visibly taller than the
+            // row it merged into.
+            //
+            // The artwork follows automatically: LNPopupBar sizes it as
+            // `barHeight - 18`, so it goes 40pt -> 30pt with the bar.
+            .popupBarStyle(.floatingCompact)
             .popupBarProgressViewStyle(.none)
             .popupCloseButtonStyle(.none)
             .popupInteractionStyle(.drag)
