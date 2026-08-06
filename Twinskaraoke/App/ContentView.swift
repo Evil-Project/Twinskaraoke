@@ -482,6 +482,7 @@ private extension RootSection {
 private struct PopupModifier: ViewModifier {
     private let popupState = PopupPlaybackState.shared
     private let presentationState = PopupPresentationState.shared
+    private let barEnvironment = PopupBarEnvironmentTracker.shared
 
     func body(content: Content) -> some View {
         content
@@ -515,16 +516,15 @@ private struct PopupModifier: ViewModifier {
             ) {
                 PopupContent(popupState: popupState)
             }
-            // `.floatingCompact` (48pt) rather than `.floating` (58pt): the bar
-            // has to match the tab bar's height to sit inline with it once the
-            // bar minimizes, the way Music's does. LNPopupController picks the
-            // height from the style alone — going inline does not shrink a
-            // `.floating` bar — so at 58pt it stayed visibly taller than the
-            // row it merged into.
+            // `.floating` (58pt) matches the full-size tab bar; `.floatingCompact`
+            // (48pt) matches the minimized row the bar merges into. The height
+            // comes from the style alone — LNPopupController does not shrink a
+            // bar when it goes inline — so the style has to follow the tab bar,
+            // which is what PopupBarEnvironmentTracker watches for.
             //
-            // The artwork follows automatically: LNPopupBar sizes it as
-            // `barHeight - 18`, so it goes 40pt -> 30pt with the bar.
-            .popupBarStyle(.floatingCompact)
+            // The artwork follows the height on its own: LNPopupBar sizes it as
+            // `barHeight - 18`, so it moves between 40pt and 30pt with the bar.
+            .popupBarStyle(barEnvironment.barStyle)
             .popupBarProgressViewStyle(.none)
             .popupCloseButtonStyle(.none)
             .popupInteractionStyle(.drag)
@@ -536,6 +536,7 @@ private struct PopupModifier: ViewModifier {
 
                 PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
                 #if canImport(UIKit)
+                    PopupBarEnvironmentTracker.shared.observe(popupBar)
                     ShimejiMiniPlayerTracker.shared.register(popupBar)
                 #endif
             }
