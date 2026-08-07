@@ -63,17 +63,25 @@ All credits go to the website creator "Soul". This is a companion app for the we
 </p>
 
 <p align="center">
-  <img src="readmeimages/artistpage.png" width="32%" title="Artist Page">
+  <img src="readmeimages/radio.png" width="32%" title="radio">
+  <img src="readmeimages/artistpage.png" width="32%" title="artist page">
+  <img src="readmeimages/search.png" width="32%" title="search">
+  <br>
+  <em>Live Radio &nbsp;&bull;&nbsp; See Artists &nbsp;&bull;&nbsp; Search Everything</em>
+</p>
+
+<p align="center">
+  <img src="readmeimages/saveart.png" width="32%" title="save art">
   <img src="readmeimages/art.png" width="32%" title="Art">
   <img src="readmeimages/ARTartist.png" width="32%" title="Art Artist">
   <br>
-  <em>Find Artists &nbsp;&bull;&nbsp; And Art</em>
+  <em>Find Art &nbsp;&bull;&nbsp; And Save It</em>
 </p>
 
 <p align="center">
   <img src="readmeimages/library.png" width="32%" title="Library">
   <img src="readmeimages/backgroundplaydemo.webp" width="32%" title="Background Play Demo">
-  <img src="readmeimages/videos.png" width="32%" title="videos">
+  <img src="readmeimages/video.png" width="32%" title="videos">
   <br>
   <em>Playlists, Upload New Songs & Watch Videos & More &nbsp;&bull;&nbsp; Full Background Play & System Controls</em>
 </p>
