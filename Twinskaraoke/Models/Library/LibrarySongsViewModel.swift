@@ -99,6 +99,15 @@ final class LibrarySongsViewModel {
         fetch(page: 1, replace: true)
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the songs have actually finished loading. Deliberately not an
+    /// `async` overload of `refresh()` — in an async context Swift would
+    /// prefer the async overload and recurse.
+    func refreshSongs() async {
+        refresh()
+        await activeTask?.value
+    }
+
     func loadMoreIfNeeded(current: Song) {
         guard canLoadMore, !isLoading, !isLoadingMore, !isReplacing else { return }
         guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

@@ -22,7 +22,7 @@ struct ArtistCircleCard: View {
                         .overlay(
                             Text(initials(artist.name))
                                 .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.white)
                         )
                 }
             }
@@ -30,7 +30,7 @@ struct ArtistCircleCard: View {
             .clipShape(Circle())
             Text(artist.name)
                 .scaledSystemFont(size: 13, weight: .medium)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .frame(width: 100)

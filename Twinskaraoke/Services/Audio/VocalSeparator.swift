@@ -10,11 +10,7 @@ extension Notification.Name {
 
 enum DeviceCapability {
     static var supportsKaraoke: Bool {
-        if #available(iOS 18.0, *) {
-            VocalSeparator.shared.isAvailable
-        } else {
-            false
-        }
+        VocalSeparator.shared.isAvailable
     }
 }
 
@@ -187,11 +183,7 @@ final class VocalSeparator {
     private init() {
         let url = Bundle.main.url(forResource: "Spleeter2Model", withExtension: "mlmodelc")
         modelURL = url
-        if #available(iOS 18.0, *) {
-            isAvailable = (url != nil)
-        } else {
-            isAvailable = false
-        }
+        isAvailable = (url != nil)
         DebugLogger.log(
             "VocalSeparator init — available: \(isAvailable), model: \(url?.lastPathComponent ?? "nil")",
             category: .separation
@@ -317,7 +309,6 @@ final class VocalSeparator {
             lastPublishedProgressFraction = -1
             jobOwnership.cancelCurrent()
         }
-        guard #available(iOS 18.0, *) else { throw VocalSeparatorError.unavailable }
         DebugLogger.log("Starting full separation for \(songID)", category: .separation)
         processingSongID = songID
         activeTaskKind = initiatedByBackground ? .background : .foreground
@@ -385,7 +376,6 @@ final class VocalSeparator {
         }
 
         try Task.checkCancellation()
-        guard #available(iOS 18.0, *) else { throw VocalSeparatorError.unavailable }
 
         let normalizedStart = max(0, fromTime)
         DebugLogger.log(
@@ -780,7 +770,6 @@ final class VocalSeparator {
         }
     }
 
-    @available(iOS 18.0, *)
     private static func runSeparation2(
         modelURL: URL,
         jobID: UUID,

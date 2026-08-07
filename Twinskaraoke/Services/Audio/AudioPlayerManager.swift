@@ -2181,9 +2181,7 @@ final class AudioPlayerManager {
         activateAudioSession()
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
-        if #available(iOS 15.0, *) {
-            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-        }
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         player.automaticallyWaitsToMinimizeStalling = true
         player.allowsExternalPlayback = true
         player.volume = 1.0
@@ -2720,13 +2718,9 @@ final class AudioPlayerManager {
     private func configureAudioSessionCategory() {
         guard !audioSessionCategoryConfigured else { return }
         do {
-            if #available(iOS 13.0, *) {
-                try AVAudioSession.sharedInstance().setCategory(
-                    .playback, mode: .default, policy: .longFormAudio, options: []
-                )
-            } else {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            }
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, policy: .longFormAudio, options: []
+            )
             audioSessionCategoryConfigured = true
         } catch {
             DebugLogger.log("Audio session category configuration failed: \(error)", category: .playback)
@@ -2910,7 +2904,14 @@ final class AudioPlayerManager {
                     self.updateNowPlayingInfo(reloadArtwork: false)
                     return .success
                 }
-                return self.resumeCurrentPlayback(source: "remote.play") ? .success : .commandFailed
+                let resumed = self.resumeCurrentPlayback(source: "remote.play")
+                // In-app play/pause buttons carry their own `.commit`; the
+                // remote surfaces had none. iOS suppresses haptics while
+                // backgrounded, so in practice this is felt when the app is
+                // foreground and the command comes from headphones or
+                // Control Center.
+                if resumed { AppHaptic.commit.play() }
+                return resumed ? .success : .commandFailed
             }
         }
         cc.pauseCommand.addTarget { [weak self] _ in
@@ -2924,16 +2925,22 @@ final class AudioPlayerManager {
                     // fallback made lock-screen/control state diverge in device
                     // testing, so this intentionally preserves the working
                     // system-integration behavior over strict command semantics.
-                    return self.resumeCurrentPlayback(source: "remote.pauseAsPlay") ? .success : .commandFailed
+                    let resumed = self.resumeCurrentPlayback(source: "remote.pauseAsPlay")
+                    if resumed { AppHaptic.commit.play() }
+                    return resumed ? .success : .commandFailed
                 }
-                return self.pauseCurrentPlayback(source: "remote.pause") ? .success : .commandFailed
+                let paused = self.pauseCurrentPlayback(source: "remote.pause")
+                if paused { AppHaptic.commit.play() }
+                return paused ? .success : .commandFailed
             }
         }
         cc.togglePlayPauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 DebugLogger.log("Remote toggle command received", category: .playback)
-                return self.togglePlayPause(source: "remote.toggle") ? .success : .commandFailed
+                let toggled = self.togglePlayPause(source: "remote.toggle")
+                if toggled { AppHaptic.commit.play() }
+                return toggled ? .success : .commandFailed
             }
         }
         cc.nextTrackCommand.addTarget { [weak self] _ in

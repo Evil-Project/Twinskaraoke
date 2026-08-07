@@ -54,9 +54,9 @@ struct UploadedSongsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Uploads"
         )
+        .secondarySearchBehavior()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
@@ -65,6 +65,7 @@ struct UploadedSongsView: View {
         .refreshable {
             AppHaptic.selection.play()
             await viewModel.refresh()
+            AppHaptic.success.play()
         }
         .task {
             viewModel.loadIfNeeded()
@@ -124,7 +125,7 @@ struct UploadedSongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Play uploaded songs")
 
             Button {
@@ -132,7 +133,7 @@ struct UploadedSongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Shuffle uploaded songs")
         }
     }

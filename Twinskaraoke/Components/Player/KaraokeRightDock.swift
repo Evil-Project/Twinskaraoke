@@ -75,7 +75,7 @@ struct KaraokeRightDock: View {
                 showKaraokeControls = false
             } else {
                 guard canActivateKaraoke else { return }
-                AppHaptic.medium.play()
+                AppHaptic.commit.play()
                 audioManager.karaokeMode = true
                 showKaraokeControls = true
             }

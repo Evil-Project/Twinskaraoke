@@ -180,6 +180,143 @@ final class TwinskaraokeUITests: XCTestCase {
     )
   }
 
+  /// Swiping a zoom-pushed screen away must not start playback.
+  ///
+  /// Two ways it did, both measured on iOS 26.5 before `ZoomPushDismissal`
+  /// disabled `_UIContentSwipeDismissGestureRecognizer`: the outgoing screen kept
+  /// hit testing for the ~0.9s the interactive dismissal ran, so a tap aimed at
+  /// the list behind it landed on a song row; and once that recogniser was gone,
+  /// a sideways drag over a row was delivered as a plain tap on the row.
+  func testSwipingBackFromPlaylistDetailStartsNoPlayback() throws {
+    let app = launchApp(initialSection: "search")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    XCTAssertTrue(app.staticTexts["Karaoke Essentials"].waitForExistence(timeout: 8))
+
+    let tile = element(identifier: "PlaylistList.ui-search-playlist-essentials", in: app)
+    XCTAssertTrue(tile.waitForExistence(timeout: 8))
+    tile.tap()
+    scrollToVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "PlaylistDetail.song.0.ui-search-song-1",
+      in: app
+    )
+    let songRow = element(identifier: "PlaylistDetail.song.0.ui-search-song-1", in: app)
+    XCTAssertTrue(
+      songRow.waitForExistence(timeout: 8),
+      "Expected a song row on screen, so the swipe below crosses one."
+    )
+
+    // Deliberately across the song row rather than along the leading edge: the
+    // gesture this replaces was never edge-limited.
+    let swipeY = songRow.frame.midY
+    let origin = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+    origin.withOffset(CGVector(dx: 34, dy: swipeY)).press(
+      forDuration: 0.05,
+      thenDragTo: origin.withOffset(CGVector(dx: 170, dy: swipeY + 5)),
+      withVelocity: 250,
+      thenHoldForDuration: 0
+    )
+
+    // Immediately, while the screen is still shrinking, and at the row's own Y:
+    // that is where the outgoing screen used to claim the touch. Once it is gone
+    // the same point is the playlist list, where a tap opens a playlist and
+    // starts nothing.
+    origin.withOffset(CGVector(dx: 200, dy: swipeY)).tap()
+
+    XCTAssertFalse(
+      app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 3),
+      "Neither the swipe nor a tap during the shrink may start playback."
+    )
+
+    // Keeps the assertion above honest: a deliberate tap on a row still plays,
+    // so its absence means the swipe was ignored rather than playback being
+    // unobservable here. Relaunched because the tap above may have opened a
+    // playlist of its own.
+    app.terminate()
+    app.launch()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    openVisibleItem(
+      "Karaoke Essentials",
+      identifier: "PlaylistList.ui-search-playlist-essentials",
+      in: app
+    )
+    scrollToVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "PlaylistDetail.song.0.ui-search-song-1",
+      in: app
+    )
+    let firstSong = element(identifier: "PlaylistDetail.song.0.ui-search-song-1", in: app)
+    XCTAssertTrue(firstSong.waitForExistence(timeout: 8))
+    // The arriving screen holds playback taps back until the zoom finishes.
+    XCTAssertTrue(
+      waitUntil(timeout: 5) { firstSong.isHittable && self.tapStartsPlayback(firstSong, in: app) },
+      "A deliberate tap on a song row must start playback."
+    )
+  }
+
+  /// Taps and reports whether the mini player showed up, so the caller can retry
+  /// while the screen is still arriving.
+  private func tapStartsPlayback(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    element.tap()
+    return app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 1.5)
+  }
+
+  private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+      if condition() { return true }
+      Thread.sleep(forTimeInterval: 0.25)
+    }
+    return false
+  }
+
+  /// The playlist actions must have a home of their own in the toolbar.
+  ///
+  /// They were lost with the navigation-bar block when pull-to-reveal search
+  /// replaced the old search field, leaving `PlaylistMoreMenu` defined but
+  /// unreferenced — which no compiler warning catches for a private type.
+  func testPlaylistDetailToolbarExposesPlaylistActions() throws {
+    let app = launchApp(initialSection: "search")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    openVisibleItem(
+      "Karaoke Essentials",
+      identifier: "PlaylistList.ui-search-playlist-essentials",
+      in: app
+    )
+
+    let moreActions = app.buttons["PlaylistDetail.moreActions"]
+    XCTAssertTrue(
+      moreActions.waitForExistence(timeout: 8),
+      "Expected the playlist actions menu in the navigation bar."
+    )
+    moreActions.tap()
+
+    // The download entry's title depends on what is already downloaded, and
+    // "Add to Library" is absent for a playlist you own, so assert on the menu
+    // having opened with the actions in it rather than on one exact title.
+    XCTAssertTrue(
+      app.buttons["Refresh Playlist"].waitForExistence(timeout: 5),
+      "Expected the actions menu to open."
+    )
+    for title in ["Play", "Shuffle"] {
+      XCTAssertTrue(app.buttons[title].exists, "Expected \(title) in the actions menu.")
+    }
+    // Three titles rather than one: which download action appears depends on
+    // what the simulator already has on disk, and downloads outlive a launch.
+    // The in-flight "Downloading n…" state is deliberately not among them —
+    // nothing here starts a download, so accepting it would only have widened
+    // what counts as a pass.
+    XCTAssertTrue(
+      app.buttons["Download"].exists
+        || app.buttons["Download Remaining"].exists
+        || app.buttons["Remove Downloads"].exists,
+      "Expected a download action in the actions menu."
+    )
+  }
+
   func testAdaptiveMusicShellShowsSidebarOrTabs() throws {
     // In portrait the balanced split view collapses the sidebar out of the
     // hierarchy, so an iPad would fall through to the compact tab assertions

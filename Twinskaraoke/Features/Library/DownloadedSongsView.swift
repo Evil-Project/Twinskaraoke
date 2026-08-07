@@ -35,7 +35,7 @@ struct DownloadedSongsView: View {
                                 .font(.title2.bold())
                             Text(downloadedSubtitle)
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         actionButtons
                             .padding(.horizontal)
@@ -75,12 +75,12 @@ struct DownloadedSongsView: View {
                 }
             }
             .smoothScrolling()
-            .bottomChromeScrollTracking()
+            .scrollEdgeHaptic()
             .collapsedNavigationTitle($showsCollapsedTitle)
         }
         .navigationTitle(showsCollapsedTitle ? "Downloaded" : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if !localSongs.isEmpty {
@@ -176,7 +176,7 @@ struct DownloadedSongsView: View {
             .overlay(
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 64, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(0.85))
             )
         }
     }
@@ -188,14 +188,14 @@ struct DownloadedSongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Play downloaded songs")
             Button {
                 shuffle()
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Shuffle downloaded songs")
         }
     }
@@ -292,13 +292,13 @@ struct DownloadedSongsView: View {
     }
 
     private func removeDownload(_ song: Song) {
-        AppHaptic.warning.play()
+        AppHaptic.dismiss.play()
         downloads.remove(songID: song.id)
         refresh()
     }
 
     private func requestRemoveAllDownloads() {
-        AppHaptic.warning.play()
+        AppHaptic.selection.play()
         showRemoveAllConfirmation = true
     }
 
@@ -326,10 +326,10 @@ private struct DownloadedEmptyStateView: View {
             VStack(spacing: AM.Spacing.s) {
                 Text("No Downloads")
                     .scaledSystemFont(size: 23, weight: .bold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text("Save songs from any song menu and they will appear here for offline playback.")
                     .scaledSystemFont(size: 15)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
             }
@@ -393,10 +393,10 @@ private struct DownloadedEmptyHintRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .scaledSystemFont(size: 14, weight: .semibold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text(message)
                     .scaledSystemFont(size: 13)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
@@ -470,7 +470,6 @@ private struct DownloadedSongsMenu: View {
             Divider()
 
             Button(role: .destructive) {
-                AppHaptic.warning.play()
                 removeAll()
             } label: {
                 Label("Remove Downloads", systemImage: "trash")
@@ -478,7 +477,7 @@ private struct DownloadedSongsMenu: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.appAccent)
+                .foregroundStyle(Color.appAccent)
                 .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }

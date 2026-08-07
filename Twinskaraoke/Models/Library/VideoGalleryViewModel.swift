@@ -29,6 +29,15 @@ final class VideoGalleryViewModel {
         load(reset: true)
     }
 
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the videos have actually finished loading. Deliberately not an
+    /// `async` overload of `refresh()` — in an async context Swift would
+    /// prefer the async overload and recurse.
+    func refreshVideos() async {
+        refresh()
+        await activeTask?.value
+    }
+
     func loadMoreIfNeeded(current: GalleryVideo) {
         guard let idx = videos.firstIndex(of: current) else { return }
         if idx >= videos.count - 5, !isLoading, canLoadMore {

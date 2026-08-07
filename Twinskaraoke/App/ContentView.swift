@@ -129,7 +129,6 @@ private struct PopupHostView: View {
             .environment(homeViewModel)
             .modifier(PopupModifier())
             .onAppear {
-                configureTabBarAppearance()
                 // Warm the account-scoped state that the shared song context
                 // menu reads. Both used to load only when Library (or the
                 // full-screen player) first appeared, so a long-press before
@@ -179,24 +178,32 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
+        // Driven off `allCases` and `content` so the enum stays the only place
+        // a section is described — the sidebar already builds itself the same
+        // way, and listing the screens here too let the two drift apart.
+        //
+        // `systemImage` is the unfilled symbol: the tab bar fills it for the
+        // selected tab itself. Passing the filled variant is what made Home and
+        // New render filled even while unselected.
         TabView(selection: selectedTabBinding) {
-            HomeView()
-                .tabItem { Label(RootSection.home.title, systemImage: RootSection.home.selectedSystemImage) }
-                .tag(RootSection.home)
-            NewView()
-                .tabItem { Label(RootSection.new.title, systemImage: RootSection.new.selectedSystemImage) }
-                .tag(RootSection.new)
-            RadioView()
-                .tabItem { Label(RootSection.radio.title, systemImage: RootSection.radio.selectedSystemImage) }
-                .tag(RootSection.radio)
-            LibraryView()
-                .tabItem { Label(RootSection.library.title, systemImage: RootSection.library.selectedSystemImage) }
-                .tag(RootSection.library)
-            SearchView()
-                .tabItem { Label(RootSection.search.title, systemImage: RootSection.search.selectedSystemImage) }
-                .tag(RootSection.search)
+            ForEach(RootSection.allCases) { section in
+                Tab(
+                    section.title,
+                    systemImage: section.systemImage,
+                    value: section,
+                    role: section.tabRole
+                ) {
+                    section.content
+                }
+            }
         }
         .tint(.appAccent)
+        // Replaces the hand-rolled scroll-collapse that BottomChromeState was
+        // built for and never wired up. Worth re-checking on device if the
+        // mini player ever looks misplaced: LNPopupController floats its bar
+        // above the tab bar, and ShimejiFloorRegistry rests idle instances on
+        // the live UITabBar's top edge, both of which move as the bar minimizes.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var sidebarShell: some View {
@@ -217,7 +224,10 @@ private struct PopupHostView: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Twinskaraoke")
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            // `safeAreaBar`, not `safeAreaInset`: this is a bar, so it should
+            // get the bar treatment — glass and scroll-edge behaviour — rather
+            // than painting its own `.bar` background under a plain inset.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
                 SidebarNowPlayingHint()
             }
         } detail: {
@@ -256,19 +266,6 @@ private struct PopupHostView: View {
 
     private var shellAnimation: Animation? {
         reduceMotion ? nil : AppMotion.snap
-    }
-
-    private func configureTabBarAppearance() {
-        #if canImport(UIKit)
-            let appearance = UITabBarAppearance()
-            appearance.configureWithTransparentBackground()
-            appearance.backgroundEffect = nil
-            appearance.backgroundColor = .clear
-            appearance.shadowColor = .clear
-            UITabBar.appearance().isTranslucent = true
-            UITabBar.appearance().standardAppearance = appearance
-            UITabBar.appearance().scrollEdgeAppearance = appearance
-        #endif
     }
 
     private static var initialSection: RootSection {
@@ -318,14 +315,12 @@ private enum RootSection: String, CaseIterable, Identifiable {
         }
     }
 
-    var selectedSystemImage: String {
-        switch self {
-        case .home: "house.fill"
-        case .new: "square.grid.2x2.fill"
-        case .radio: "dot.radiowaves.left.and.right"
-        case .library: "music.note.list"
-        case .search: "magnifyingglass"
-        }
+    /// Search gets the system's search affordance on iOS 26 — separated from
+    /// the rest of the bar, and morphing into the search field rather than
+    /// pushing a screen that happens to contain one. Everything else is an
+    /// ordinary tab.
+    var tabRole: TabRole? {
+        self == .search ? .search : nil
     }
 
     @ViewBuilder
@@ -380,7 +375,7 @@ private struct SidebarSectionRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(section.sidebarTint.opacity(isSelected ? 1 : 0.14))
-                Image(systemName: isSelected ? section.selectedSystemImage : section.systemImage)
+                Image(systemName: isSelected ? section.sidebarSelectedSystemImage : section.systemImage)
                     .font(.caption.bold())
                     .foregroundStyle(isSelected ? Color.white : section.sidebarTint)
             }
@@ -421,12 +416,9 @@ private struct SidebarNowPlayingHint: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.bar)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.appDivider)
-                        .frame(height: 0.5)
-                }
+                // No background or hairline of its own — `safeAreaBar` gives the
+                // content the system bar treatment, and painting `.bar` plus a
+                // divider on top of that just doubles it.
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Now Playing")
                 .accessibilityValue(popupState.subtitle.isEmpty ? popupState.title : "\(popupState.title), \(popupState.subtitle)")
@@ -452,6 +444,25 @@ private struct SidebarNowPlayingHint: View {
 }
 
 private extension RootSection {
+    /// Sidebar only, and deliberately scoped to this extension: the tab bar
+    /// fills the selected symbol for itself, and handing it the filled variant
+    /// is what previously made Home and New render filled while unselected.
+    ///
+    /// Radio, Library and Search repeat their unselected symbol because
+    /// `dot.radiowaves.left.and.right`, `music.note.list` and `magnifyingglass`
+    /// have no filled counterpart in SF Symbols. The sidebar still reads as
+    /// selected: `SidebarSectionRow` swaps the icon's tinted backing plate to
+    /// full opacity and its foreground to white.
+    var sidebarSelectedSystemImage: String {
+        switch self {
+        case .home: "house.fill"
+        case .new: "square.grid.2x2.fill"
+        case .radio: "dot.radiowaves.left.and.right"
+        case .library: "music.note.list"
+        case .search: "magnifyingglass"
+        }
+    }
+
     var sidebarTint: Color {
         switch self {
         case .home:
@@ -471,6 +482,7 @@ private extension RootSection {
 private struct PopupModifier: ViewModifier {
     private let popupState = PopupPlaybackState.shared
     private let presentationState = PopupPresentationState.shared
+    private let barEnvironment = PopupBarEnvironmentTracker.shared
 
     func body(content: Content) -> some View {
         content
@@ -489,13 +501,30 @@ private struct PopupModifier: ViewModifier {
                                 }
                             #endif
                         }
+                        // The mini player's own tap and its swipe-to-dismiss are
+                        // handled inside LNPopupController, so this binding is
+                        // the only place either surfaces to us.  Guarded on an
+                        // actual change: the suppression path above calls
+                        // `collapse()` on an already-collapsed popup.
+                        let wasExpanded = presentationState.isExpanded
                         presentationState.setExpanded(isOpen)
+                        if isOpen != wasExpanded {
+                            (isOpen ? AppHaptic.commit : AppHaptic.dismiss).play()
+                        }
                     }
                 )
             ) {
                 PopupContent(popupState: popupState)
             }
-            .popupBarStyle(.floating)
+            // `.floating` (58pt) matches the full-size tab bar; `.floatingCompact`
+            // (48pt) matches the minimized row the bar merges into. The height
+            // comes from the style alone — LNPopupController does not shrink a
+            // bar when it goes inline — so the style has to follow the tab bar,
+            // which is what PopupBarEnvironmentTracker watches for.
+            //
+            // The artwork follows the height on its own: LNPopupBar sizes it as
+            // `barHeight - 18`, so it moves between 40pt and 30pt with the bar.
+            .popupBarStyle(barEnvironment.barStyle)
             .popupBarProgressViewStyle(.none)
             .popupCloseButtonStyle(.none)
             .popupInteractionStyle(.drag)
@@ -507,6 +536,7 @@ private struct PopupModifier: ViewModifier {
 
                 PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
                 #if canImport(UIKit)
+                    PopupBarEnvironmentTracker.shared.observe(popupBar)
                     ShimejiMiniPlayerTracker.shared.register(popupBar)
                 #endif
             }
@@ -574,21 +604,14 @@ private struct PopupBarTrailingItems: View, Equatable {
     var body: some View {
         HStack(spacing: 16) {
             Button(action: onTogglePlayPause) {
-                Group {
-                    if #available(iOS 17.0, *) {
-                        Image(systemName: playPauseSymbol)
-                            .contentTransition(.symbolEffect(.replace))
-                    } else {
-                        Image(systemName: playPauseSymbol)
-                            .contentTransition(.opacity)
-                    }
-                }
-                .font(.title3.bold())
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                Image(systemName: playPauseSymbol)
+                    .contentTransition(.symbolEffect(.replace))
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .commit))
             .accessibilityLabel(playPauseAccessibilityLabel)
             .accessibilityHint(
                 isRadioMode ? "Controls the live radio stream." : "Controls the current song."
@@ -601,7 +624,7 @@ private struct PopupBarTrailingItems: View, Equatable {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .light))
+                .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .selection))
                 .accessibilityLabel("Next track")
                 .accessibilityHint("Skips to the next song.")
             }

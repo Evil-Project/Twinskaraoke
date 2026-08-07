@@ -165,6 +165,34 @@ final class UserPlaylistsManager {
         }
     }
 
+    /// Moves one song from `oldOrder` to `newOrder`.
+    ///
+    /// A third route shape again: `POST /api/user/playlists/{id}/save-order`,
+    /// which is the only method that path accepts. The body is a single-element
+    /// array describing this one move — see `KaraokeAPIClient.songMovePayload`.
+    ///
+    /// Both ends of the move are required. Posting the whole list with only
+    /// each song's `order` set is accepted with 204 and does nothing, because
+    /// every element then carries the default `oldOrder`/`newOrder` of 0. A 204
+    /// from this route means the request parsed, not that anything moved.
+    func moveSong(
+        _ songID: String,
+        from oldOrder: Int,
+        to newOrder: Int,
+        inPlaylist playlistID: String
+    ) async -> Bool {
+        guard CredentialStore.isAuthenticated else { return false }
+        guard let req = try? KaraokeAPIClient.jsonArrayRequest(
+            pathSegments: ["api", "user", "playlists", playlistID, "save-order"],
+            body: KaraokeAPIClient.songMovePayload(songID: songID, from: oldOrder, to: newOrder)
+        ) else { return false }
+        guard (try? await KaraokeAPIClient.data(for: req)) != nil else { return false }
+        // The reordered list is what the detail route now returns; without this
+        // a re-entry to the screen restores the pre-move order from cache.
+        await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
+        return true
+    }
+
     private func adjustSongCount(forPlaylist playlistID: String, by delta: Int) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         let playlist = playlists[index]

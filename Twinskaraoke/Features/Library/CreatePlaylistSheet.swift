@@ -86,7 +86,7 @@ struct CreatePlaylistSheet: View {
                     } label: {
                         CreatePlaylistSaveLabel(isSaving: isSaving)
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.8, haptic: canSave ? .medium : nil))
+                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.8, haptic: canSave ? .commit : nil))
                     .disabled(!canSave)
                     .accessibilityLabel("Create playlist")
                 }
@@ -98,12 +98,15 @@ struct CreatePlaylistSheet: View {
             .navigationTitle("New Playlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // These carry their own glass, so the toolbar must not put its
+                // shared glass behind them as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: {
                         AppHaptic.selection.play()
                         dismiss()
                     })
                 }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
                         ProgressView()
@@ -115,8 +118,9 @@ struct CreatePlaylistSheet: View {
                         )
                     }
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .interactiveDismissDisabled(isSaving)
             .onAppear {
                 focusedField = .name
@@ -167,7 +171,7 @@ private struct CreatePlaylistArtworkPreview: View {
         VStack(spacing: 6) {
             Text(name.isEmpty ? "New Playlist" : name)
                 .scaledSystemFont(size: 28, weight: .bold)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
 
@@ -217,7 +221,7 @@ private struct CreatePlaylistPrivacyLabel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(isPublic ? "Public" : "Private")
                     .scaledSystemFont(size: 16, weight: .semibold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text(isPublic ? "Visible to other listeners" : "Only you can edit this playlist")
                     .scaledSystemFont(size: 13)
                     .foregroundStyle(.secondary)
@@ -262,7 +266,7 @@ private struct CreatePlaylistSaveLabel: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 15)
-        .foregroundColor(.appControlActiveForeground)
+        .foregroundStyle(Color.appControlActiveForeground)
         .background(Color.appControlActiveFill, in: Capsule())
         .opacity(isSaving ? 0.72 : 1)
     }

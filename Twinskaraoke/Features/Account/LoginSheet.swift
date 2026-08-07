@@ -46,11 +46,14 @@ struct LoginSheet: View {
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // GlassXButton carries its own glass, so the toolbar must not
+                // put its shared glass behind it as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: { dismiss() })
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .onChange(of: auth.isLoggedIn) { _, isLoggedIn in
                 if isLoggedIn { dismiss() }
             }
@@ -147,18 +150,12 @@ struct LoginSheet: View {
                     AppHaptic.selection.play()
                     showPassword.toggle()
                 } label: {
-                    Group {
-                        if #available(iOS 17.0, *) {
-                            Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                                .contentTransition(.symbolEffect(.replace))
-                        } else {
-                            Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                    Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                        .contentTransition(.symbolEffect(.replace))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.72))
                 .accessibilityLabel(showPassword ? "Hide Password" : "Show Password")
@@ -243,7 +240,7 @@ struct LoginSheet: View {
     private var discordButton: some View {
         Button {
             guard !auth.isLoading else { return }
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             Task { await auth.loginWithDiscord() }
         } label: {
             HStack(spacing: 10) {
@@ -279,7 +276,7 @@ struct LoginSheet: View {
             focus = trimmedUsername.isEmpty ? .username : .password
             return
         }
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         focus = nil
         Task { await auth.login(username: trimmedUsername, password: password) }
     }
@@ -299,7 +296,14 @@ private struct DiscordIcon: View {
     }
 }
 
-private struct DiscordShape: Shape {
+// Nonisolated because `Shape` refines `Sendable`: with
+// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor this struct would otherwise be
+// implicitly main-actor isolated, and an isolated conformance to a Sendable
+// protocol is unsound — SwiftUI evaluates `path(in:)` off the main actor. The
+// Xcode 27 compiler rejects it outright ("conformance … crosses into main
+// actor-isolated code"); 26.x accepts it silently. Pure geometry over `let`
+// constants, so there is nothing here that wants isolation.
+private nonisolated struct DiscordShape: Shape {
     func path(in rect: CGRect) -> Path {
         let w = rect.width
         let h = rect.height

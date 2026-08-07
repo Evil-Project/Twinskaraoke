@@ -15,6 +15,21 @@
     struct SystemVolumeBridge: UIViewRepresentable {
         @Binding var volume: Double
         @Binding var isUserScrubbing: Bool
+
+        /// Holds the throttle clock across the struct's many re-creations —
+        /// SwiftUI rebuilds the representable on every update, so this cannot
+        /// live in the struct itself.
+        final class Coordinator {
+            var lastPushTime: TimeInterval = 0
+            var wasScrubbing = false
+        }
+
+        func makeCoordinator() -> Coordinator { Coordinator() }
+
+        /// 20Hz is indistinguishable to a hand moving a volume slider, so pushing
+        /// any faster is pure waste.
+        private static let pushInterval: TimeInterval = 1.0 / 20.0
+
         func makeUIView(context _: Context) -> MPVolumeView {
             let view = MPVolumeView(frame: .zero)
             view.alpha = 0.0001
@@ -22,8 +37,26 @@
             return view
         }
 
-        func updateUIView(_ uiView: MPVolumeView, context _: Context) {
-            guard isUserScrubbing else { return }
+        func updateUIView(_ uiView: MPVolumeView, context: Context) {
+            let coordinator = context.coordinator
+            // The frame the drag ends on must always be pushed. Throttling alone
+            // would discard whatever travel happened since the last accepted
+            // push, leaving the system volume short of where the finger let go —
+            // worst on a fast flick to 0 or 1.
+            let didFinishScrubbing = coordinator.wasScrubbing && !isUserScrubbing
+            coordinator.wasScrubbing = isUserScrubbing
+            guard isUserScrubbing || didFinishScrubbing else { return }
+
+            // SwiftUI calls this at display rate (up to 120Hz) while a drag is
+            // live, and every `sendActions` below crosses into the system volume
+            // server.  The value guard alone does not help: during a drag
+            // the target moves every frame, so it passes every time.
+            let now = ProcessInfo.processInfo.systemUptime
+            if !didFinishScrubbing {
+                guard now - coordinator.lastPushTime >= Self.pushInterval else { return }
+            }
+            coordinator.lastPushTime = now
+
             DispatchQueue.main.async {
                 guard let slider = uiView.subviews.compactMap({ $0 as? UISlider }).first else { return }
                 let target = Float(max(0, min(1, volume)))

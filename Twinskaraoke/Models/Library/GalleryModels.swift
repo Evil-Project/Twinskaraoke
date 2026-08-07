@@ -49,6 +49,18 @@ final class ArtGalleryViewModel {
     var isLoading = false
     var loadFailed = false
     private var hasLoaded = false
+    @ObservationIgnored private let refreshTracker = RefreshTracker()
+
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the gallery has actually finished loading.
+    ///
+    /// No `cancellingPrevious`: `fetch` bails while a load is already running,
+    /// so a second refresh never starts a competing task — it just waits on the
+    /// one in flight.
+    func refreshGallery() async {
+        fetch(force: true)
+        await refreshTracker.wait()
+    }
 
     func fetch(force: Bool = false) {
         guard !isLoading else { return }
@@ -59,7 +71,7 @@ final class ArtGalleryViewModel {
         ) else { return }
         loadFailed = false
         isLoading = true
-        Task { [weak self] in
+        refreshTracker.track(Task { [weak self] in
             let data = try? await KaraokeAPIClient.data(for: request)
             let filtered = data.flatMap { data -> [GalleryArtist]? in
                 guard let decoded = try? JSONDecoder().decode([GalleryArtist].self, from: data) else {
@@ -78,6 +90,6 @@ final class ArtGalleryViewModel {
                 loadFailed = artists.isEmpty
             }
             isLoading = false
-        }
+        })
     }
 }

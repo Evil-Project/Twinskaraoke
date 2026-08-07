@@ -13,20 +13,12 @@ struct ArtworkViewerLiquidGlassCircle: ViewModifier {
                 .overlay(glassStroke(lineWidth: strokeWidth))
                 .clipShape(Circle())
                 .contentShape(Circle())
-        } else if #available(iOS 26.0, *) {
+        } else {
             content
                 .glassEffect(.regular.interactive(), in: Circle())
                 .overlay(glassStroke(lineWidth: strokeWidth))
                 .overlay(specularHighlight)
                 .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
-                .contentShape(Circle())
-        } else {
-            content
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(glassStroke(lineWidth: strokeWidth))
-                .overlay(specularHighlight)
-                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
-                .clipShape(Circle())
                 .contentShape(Circle())
         }
     }

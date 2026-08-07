@@ -77,12 +77,12 @@ struct ArtistsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Artists"
         )
+        .secondarySearchBehavior()
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refreshArtists()
         }
         .onAppear { viewModel.fetchInitial() }
     }
@@ -108,7 +108,7 @@ private struct ArtistRow: View {
                 if let count = artist.songCount, count > 0 {
                     Text("\(count) songs")
                         .font(AM.Font.rowSubtitle)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer()
@@ -141,7 +141,7 @@ private struct ArtistAvatarPlaceholder: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: side * 0.55, height: side * 0.55)
-                    .foregroundColor(Color.appPlaceholderPrimary)
+                    .foregroundStyle(Color.appPlaceholderPrimary)
                     .offset(y: side * 0.06)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -177,11 +177,11 @@ struct ArtistDetailView: View {
                         if let count = current.songCount, count > 0 {
                             Text("\(count) songs")
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         } else if !songs.isEmpty {
                             Text("\(songs.count) songs")
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.horizontal)
@@ -227,7 +227,7 @@ struct ArtistDetailView: View {
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? current.name : "")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
         .toolbar {
             if !songs.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -236,7 +236,7 @@ struct ArtistDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.appAccent)
+                            .foregroundStyle(Color.appAccent)
                             .frame(width: 32, height: 32)
                             .contentShape(Rectangle())
                     }
@@ -288,7 +288,7 @@ struct ArtistDetailView: View {
                     text: "Play"
                 )
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
@@ -297,7 +297,7 @@ struct ArtistDetailView: View {
                     text: "Shuffle"
                 )
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
         }
         .padding(.horizontal)
     }
@@ -310,7 +310,7 @@ struct ArtistDetailView: View {
                     .scaledSystemFont(size: 18, weight: .bold)
                 Text(summary)
                     .scaledSystemFont(size: 14)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -364,11 +364,11 @@ private struct ArtistDetailStateView: View {
             VStack(spacing: AM.Spacing.s) {
                 Text(title)
                     .scaledSystemFont(size: 23, weight: .bold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 Text(message)
                     .scaledSystemFont(size: 15)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
             }
@@ -437,10 +437,10 @@ private struct ArtistDetailHintRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .scaledSystemFont(size: 14, weight: .semibold)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                 Text(message)
                     .scaledSystemFont(size: 13)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
@@ -499,7 +499,7 @@ private struct ArtistActionsMenu: View {
                 Label("Downloading \(downloadingCount)...", systemImage: "arrow.down.circle")
             } else if allDownloaded {
                 Button(role: .destructive) {
-                    AppHaptic.warning.play()
+                    AppHaptic.dismiss.play()
                     DownloadManager.shared.remove(songIDs: songs.map(\.id))
                 } label: {
                     Label("Remove Downloads", systemImage: "trash")

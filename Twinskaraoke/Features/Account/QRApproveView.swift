@@ -38,7 +38,7 @@ struct QRApproveView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        AppHaptic.light.play()
+                        AppHaptic.dismiss.play()
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
@@ -47,7 +47,7 @@ struct QRApproveView: View {
                     }
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         }
         .task { await checkPermission() }
         .animation(phaseAnimation, value: phaseKey)
@@ -106,7 +106,7 @@ struct QRApproveView: View {
                 message: message,
                 retry: retryCameraCheck,
                 dismiss: {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     dismiss()
                 }
             )
@@ -189,7 +189,7 @@ struct QRApproveView: View {
 
             VStack(spacing: 10) {
                 Button {
-                    AppHaptic.medium.play()
+                    AppHaptic.commit.play()
                     Task { await approve(sessionId: sessionId) }
                 } label: {
                     QRActionLabel(title: "Approve", systemImage: "checkmark.circle.fill", isPrimary: true)
@@ -197,7 +197,7 @@ struct QRApproveView: View {
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
 
                 Button {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     withOptionalAnimation(phaseAnimation) {
                         phase = .scanning
                     }
@@ -209,7 +209,7 @@ struct QRApproveView: View {
         }
         .padding(24)
         .frame(maxWidth: 390)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -249,7 +249,7 @@ struct QRApproveView: View {
                         phase = .scanning
                     }
                 } else {
-                    AppHaptic.light.play()
+                    AppHaptic.dismiss.play()
                     dismiss()
                 }
             } label: {
@@ -263,7 +263,7 @@ struct QRApproveView: View {
         }
         .padding(24)
         .frame(maxWidth: 390)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -440,7 +440,7 @@ private struct QRPermissionLoadingView: View {
         }
         .padding(24)
         .frame(maxWidth: 360)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -482,7 +482,7 @@ private struct QRPermissionDeniedView: View {
         }
         .padding(24)
         .frame(maxWidth: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -524,7 +524,7 @@ private struct QRCameraUnavailableView: View {
         }
         .padding(24)
         .frame(maxWidth: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(Color.appDivider, lineWidth: 1)
@@ -557,7 +557,9 @@ private struct QRScannerChrome: View {
     }
 }
 
-private struct QRScannerDimMask: Shape {
+// Nonisolated for the same reason as the bracket shape below: `Shape` refines
+// `Sendable`, so the conformance must not be main-actor isolated.
+private nonisolated struct QRScannerDimMask: Shape {
     let cutoutSide: CGFloat
     let cornerRadius: CGFloat
 
@@ -592,7 +594,11 @@ private struct QRCornerBrackets: View {
     }
 }
 
-private struct QRCornerBracketShape: Shape {
+// Nonisolated because `Shape` refines `Sendable`: under
+// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor this struct is otherwise implicitly
+// isolated, and SwiftUI calls `path(in:)` off the main actor. Xcode 27 rejects
+// the isolated conformance; 26.x accepts it silently.
+private nonisolated struct QRCornerBracketShape: Shape {
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
 
@@ -665,7 +671,7 @@ private struct QRScannerInstructionPanel: View {
         }
         .padding(16)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.16), lineWidth: 1)

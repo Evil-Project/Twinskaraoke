@@ -81,7 +81,7 @@ struct RadioPlayerLayout: View {
                 } label: {
                     Group {
                         let isFav = favorites.isFavorite(songID)
-                        if #available(iOS 17.0, *), !reduceMotion {
+                        if !reduceMotion {
                             Image(systemName: isFav ? "star.fill" : "star")
                                 .contentTransition(.symbolEffect(.replace))
                         } else {
@@ -108,7 +108,7 @@ struct RadioPlayerLayout: View {
             audioManager.togglePlayPause()
         } label: {
             Group {
-                if #available(iOS 17.0, *), !reduceMotion {
+                if !reduceMotion {
                     Image(systemName: audioManager.isPlaying ? "stop.fill" : "play.fill")
                         .contentTransition(.symbolEffect(.replace))
                 } else {
@@ -120,7 +120,7 @@ struct RadioPlayerLayout: View {
             .frame(width: 88, height: 88)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.6, haptic: .medium))
+        .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.6, haptic: .commit))
         .accessibilityLabel(audioManager.isPlaying ? "Stop live radio" : "Play live radio")
         .accessibilityValue(song.title)
         .accessibilityHint("Controls the live radio stream.")
@@ -129,7 +129,7 @@ struct RadioPlayerLayout: View {
     @ViewBuilder
     private var radioActions: some View {
         Button {
-            AppHaptic.medium.play()
+            AppHaptic.commit.play()
             audioManager.togglePlayPause()
         } label: {
             Label(

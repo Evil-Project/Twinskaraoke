@@ -30,6 +30,7 @@ struct HomeView: View {
                     .padding(.bottom, AM.Spacing.l)
                 }
                 .smoothScrolling()
+                .scrollEdgeHaptic()
                 .tabBarScrollInset()
                 .musicScreenBackground()
             }
@@ -40,7 +41,11 @@ struct HomeView: View {
                     AccountToolbarButton()
                 }
             }
-            .refreshable { await viewModel.refreshHomeData() }
+            .refreshable {
+                AppHaptic.selection.play()
+                await viewModel.refreshHomeData()
+                AppHaptic.success.play()
+            }
             .task { viewModel.fetchHomeData() }
             .onChange(of: artworkPrefetchSignature) { _, _ in
                 prefetchVisibleArtworkIfNeeded()

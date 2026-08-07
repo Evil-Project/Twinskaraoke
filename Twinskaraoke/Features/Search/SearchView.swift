@@ -96,7 +96,6 @@ struct SearchView: View {
             }
             .searchable(
                 text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "Songs, Artists, Lyrics, and More"
             )
             .onChange(of: playback.currentSongID) { _, currentSongID in
@@ -285,15 +284,18 @@ private struct BrowseCategoriesView: View {
             .padding(.bottom, AM.Spacing.l)
         }
         .smoothScrolling()
-        .bottomChromeScrollTracking()
         .musicScreenBackground()
         .scrollIndicators(.hidden)
         .tabBarScrollInset()
         .refreshable {
             AppHaptic.selection.play()
-            genresVM.refresh()
-            topChartVM.refresh()
-            publicPlaylistsVM.refresh()
+            // `async let` so the three shelves reload concurrently; awaiting
+            // them in sequence would make the spinner sit through three
+            // round trips instead of one.
+            async let genres: Void = genresVM.refreshGenres()
+            async let topChart: Void = topChartVM.refreshTopChart()
+            async let playlists: Void = publicPlaylistsVM.refreshPublicPlaylists()
+            _ = await (genres, topChart, playlists)
         }
         .onAppear {
             genresVM.loadIfNeeded()
@@ -549,7 +551,6 @@ private struct GenreDetailLoadingView: View {
             .padding(.bottom, AM.Spacing.l)
         }
         .smoothScrolling()
-        .bottomChromeScrollTracking()
         .tabBarScrollInset()
         .accessibilityLabel("Loading \(genre.name) songs")
     }
@@ -594,7 +595,7 @@ struct SearchCategorySongCollectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             AppHaptic.selection.play()
-            loader.refresh()
+            await loader.refreshCategory()
         }
         .task {
             loader.loadIfNeeded()
@@ -822,7 +823,6 @@ private struct SearchCategoryLoadingView: View {
             .padding(.bottom, AM.Spacing.l)
         }
         .smoothScrolling()
-        .bottomChromeScrollTracking()
         .tabBarScrollInset()
         .accessibilityLabel("Loading \(title) songs")
     }

@@ -76,7 +76,7 @@ struct ShimejiSettingsView: View {
         if resources.manifest != nil {
             Section {
                 Button("Remove Downloaded Pack", role: .destructive) {
-                    AppHaptic.warning.play()
+                    AppHaptic.dismiss.play()
                     resources.deleteDownloadedPack()
                 }
             }

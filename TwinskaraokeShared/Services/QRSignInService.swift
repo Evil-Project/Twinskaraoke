@@ -33,7 +33,7 @@ import Foundation
 /// accepts as a subdomain of the first-party host `neurokaraoke.com`
 /// (`QRApproveView.trustedQRHosts`). Rebuilding it here would risk drifting out
 /// of that allowlist.
-nonisolated enum TVQRSignIn {
+nonisolated enum QRSignIn {
     // MARK: - Contract
 
     enum Route {

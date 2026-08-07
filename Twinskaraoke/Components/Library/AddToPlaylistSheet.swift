@@ -62,10 +62,14 @@ struct AddToPlaylistSheet: View {
             }
             .smoothScrolling()
             .musicScreenBackground()
-            .safeAreaInset(edge: .bottom) {
+            // `safeAreaBar`, not `safeAreaInset`: this is a bar, so the system
+            // supplies its background and scroll-edge behaviour. That replaces
+            // the hand-applied glass this used to carry, which never sat right
+            // — glass suits a floating shape, and this is flush and full-width.
+            .safeAreaBar(edge: .bottom) {
                 if !manager.playlists.isEmpty {
                     Button {
-                        AppHaptic.selection.play()
+                        AppHaptic.commit.play()
                         showCreatePlaylist = true
                     } label: {
                         Label("New Playlist", systemImage: "plus")
@@ -75,22 +79,24 @@ struct AddToPlaylistSheet: View {
                             .padding(.vertical, 14)
                             .background(Color.appControlActiveFill, in: Capsule())
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78, haptic: .medium))
+                    .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.78, haptic: nil))
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
                     .padding(.bottom, 10)
-                    .background(.regularMaterial)
                 }
             }
             .navigationTitle("Add to Playlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // These carry their own glass, so the toolbar must not put its
+                // shared glass behind them as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: {
                         AppHaptic.selection.play()
                         dismiss()
                     })
                 }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
                     GlassCheckmarkButton(
                         action: {
@@ -100,8 +106,9 @@ struct AddToPlaylistSheet: View {
                         isEnabled: !added.isEmpty
                     )
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .task { manager.loadIfNeeded() }
             .sheet(isPresented: $showCreatePlaylist) {
                 CreatePlaylistSheet()
@@ -119,7 +126,7 @@ struct AddToPlaylistSheet: View {
                 message: "Create a playlist first to save this song."
             )
             Button {
-                AppHaptic.selection.play()
+                AppHaptic.commit.play()
                 showCreatePlaylist = true
             } label: {
                 Label("New Playlist", systemImage: "plus")
@@ -129,7 +136,7 @@ struct AddToPlaylistSheet: View {
                     .padding(.vertical, 12)
                     .background(Color.appControlActiveFill, in: Capsule())
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.95, dim: 0.78, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.95, dim: 0.78, haptic: nil))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)

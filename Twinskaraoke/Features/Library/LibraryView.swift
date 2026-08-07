@@ -90,16 +90,15 @@ struct LibraryView: View {
                     )
                 }
 
-                if #available(iOS 26.0, *) {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
 
                 ToolbarItem(placement: .topBarTrailing) {
                     AccountToolbarButton()
                 }
             }
+            // `refreshLibraryAndWait()` plays the trigger tick itself.
             .refreshable {
-                refreshLibrary()
+                await refreshLibraryAndWait()
             }
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistDetailView(playlist: playlist)
@@ -249,12 +248,24 @@ struct LibraryView: View {
         }
     }
 
+    /// Fire-and-forget variant for the toolbar button, which has no way to show
+    /// progress and so has nothing to wait on.
     private func refreshLibrary() {
         AppHaptic.selection.play()
         favorites.loadIfNeeded()
         viewModel.fetchPlaylists(force: true)
         viewModel.fetchFavoriteSongs(force: true)
         recentSongsViewModel.refresh()
+    }
+
+    /// Awaitable variant for pull-to-refresh; keeps the refresh spinner alive
+    /// until every library section has actually finished loading.
+    private func refreshLibraryAndWait() async {
+        AppHaptic.selection.play()
+        favorites.loadIfNeeded()
+        async let playlists: Void = viewModel.refreshAll()
+        async let recents: Void = recentSongsViewModel.refreshSongs()
+        _ = await (playlists, recents)
     }
 }
 
@@ -447,9 +458,9 @@ struct LibrarySongsView: View {
         .navigationBarTitleDisplayMode(.large)
         .searchable(
             text: $viewModel.searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Songs"
         )
+        .secondarySearchBehavior()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
@@ -457,7 +468,7 @@ struct LibrarySongsView: View {
         }
         .refreshable {
             AppHaptic.selection.play()
-            viewModel.refresh()
+            await viewModel.refreshSongs()
         }
         .task {
             viewModel.loadIfNeeded()
@@ -516,13 +527,13 @@ struct LibrarySongsView: View {
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
         }
     }
 
@@ -695,9 +706,9 @@ struct PlaylistsGridScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Playlists"
         )
+        .secondarySearchBehavior()
         .toolbar {
             if isLoggedIn {
                 ToolbarItem(placement: .topBarTrailing) {

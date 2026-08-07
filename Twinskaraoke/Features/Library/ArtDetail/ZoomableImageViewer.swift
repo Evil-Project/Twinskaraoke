@@ -49,23 +49,30 @@ struct ZoomableImageViewer: View {
             }
             if showOverlay {
                 VStack {
-                    HStack {
-                        GlassXButton(action: {
-                            AppHaptic.light.play()
-                            dismiss()
-                        })
-                        Spacer()
-                        GlassActionButton(
-                            action: {
-                                AppHaptic.selection.play()
-                                onSave()
-                            },
-                            systemImage: saveIconName,
-                            foregroundColor: saveIconColor,
-                            isLoading: saveStatus == .saving,
-                            accessibilityLabel: saveAccessibilityLabel
-                        )
-                        .disabled(saveStatus.isSaving)
+                    // The only place two glass elements share a layer. A
+                    // container renders them in one pass rather than compositing
+                    // each separately; they sit at opposite edges so nothing
+                    // merges visually, but the grouping is still what the
+                    // effect expects.
+                    GlassEffectContainer {
+                        HStack {
+                            GlassXButton(action: {
+                                AppHaptic.dismiss.play()
+                                dismiss()
+                            })
+                            Spacer()
+                            GlassActionButton(
+                                action: {
+                                    AppHaptic.selection.play()
+                                    onSave()
+                                },
+                                systemImage: saveIconName,
+                                foregroundColor: saveIconColor,
+                                isLoading: saveStatus == .saving,
+                                accessibilityLabel: saveAccessibilityLabel
+                            )
+                            .disabled(saveStatus.isSaving)
+                        }
                     }
                     .padding()
                     Spacer()
@@ -74,14 +81,14 @@ struct ZoomableImageViewer: View {
                             if let title = visibleTitle {
                                 Text(title)
                                     .scaledSystemFont(size: 17, weight: .bold)
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.center)
                             }
                             if let subtitle = visibleSubtitle {
                                 Text(subtitle)
                                     .scaledSystemFont(size: 14)
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundStyle(.white.opacity(0.7))
                                     .lineLimit(1)
                             }
                         }
@@ -118,7 +125,7 @@ struct ZoomableImageViewer: View {
     }
 
     private func toggleZoom() {
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         let update = {
             if scale > 1 {
                 scale = 1

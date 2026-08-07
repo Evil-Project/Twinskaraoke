@@ -23,6 +23,10 @@ struct PlaylistDetailView: View {
     /// Below 1 so the field trails the finger — ~110pt of pull for a full reveal.
     private static let searchRevealResistance: CGFloat = 0.65
     @State private var searchRevealHeight: CGFloat = 0
+    /// Drives the navigation bar's title and background. The old search field
+    /// hid the title while it was active, because it lived in the bar area; the
+    /// pull-revealed field is content, so the title only follows the scroll.
+    @State private var showsCollapsedTitle = false
     /// Latched once the pull completes, so the field stays put instead of
     /// collapsing the moment the finger lifts.
     @State private var isSearchLatched = false
@@ -35,13 +39,23 @@ struct PlaylistDetailView: View {
     @State private var prefetchedIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
-    /// Song rows ignore touches until the push has settled. The zoom
-    /// transition does not gate input, so a second tap aimed at the grid
-    /// tile lands on this screen as it arrives under the finger — and at
-    /// that same Y coordinate there is a song row, which started playing.
-    /// Scrolling, Back and the action buttons stay live throughout.
-    @State private var rowsAcceptTouches = false
+    @State private var isEditing = false
+    /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
+    /// touches until the push has settled. The zoom transition does not gate
+    /// input, so a second tap aimed at the grid tile lands on this screen as it
+    /// arrives under the finger, and at that Y coordinate there is either a song
+    /// row or an action button. Both started playing; the buttons were exempt
+    /// from this gate until they were caught doing it. Scrolling and Back stay
+    /// live throughout.
+    ///
+    /// Two conditions, because neither covers the other: the transition itself
+    /// says when the zoom is done (measured at ~0.9s, far longer than the delay
+    /// below used to allow), and the delay covers the arrivals that have no
+    /// transition to ask — reduce motion, or coming back from a sub-screen.
+    @Environment(\.zoomPushIsArriving) private var isArriving
+    @State private var hasSettledAfterAppear = false
     @State private var rowArmingTask: Task<Void, Never>?
+    private var playbackTapsArmed: Bool { hasSettledAfterAppear && !isArriving }
     /// onAppear fires repeatedly for one visit — device logs show appeared and
     /// disappeared 1ms apart, over and over. Everything below it is one-shot
     /// work: reload cancels and restarts the network load, and record() writes
@@ -82,7 +96,7 @@ struct PlaylistDetailView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
-        .background(.thinMaterial, in: Capsule())
+        .appGlassBackground(in: Capsule())
         .padding(.horizontal, AM.Spacing.screenMargin)
         .padding(.bottom, AM.Spacing.m)
         .accessibilityIdentifier("PlaylistDetail.search")
@@ -114,7 +128,7 @@ struct PlaylistDetailView: View {
         let revealed = min(effective, extent)
         if revealed >= extent {
             isSearchLatched = true
-            AppHaptic.medium.play()
+            AppHaptic.boundary.play()
             withOptionalAnimation(reduceMotion ? nil : AppMotion.snap) {
                 searchRevealHeight = extent
             }
@@ -153,6 +167,81 @@ struct PlaylistDetailView: View {
 
 
     var body: some View {
+        detailContent
+            // A cover, not a push. Pushed, the editor's bottom bar sits behind
+            // the tab bar, and hiding that is not enough on its own: the
+            // LNPopup mini player merges into the tab bar's metrics and would
+            // still float over the Delete button. A full-screen presentation is
+            // above both, which is also where Apple Music puts its editor.
+            .fullScreenCover(isPresented: $isEditing) {
+                if let editTarget {
+                    NavigationStack {
+                        PlaylistEditView(
+                            playlistName: playlist.name,
+                            songs: loader.songs ?? playlist.songListDTOs ?? [],
+                            target: editTarget
+                        ) { reordered in
+                            // Adopt the edited order straight away. The detail
+                            // route now returns it too — `saveSongOrder`
+                            // invalidates that cache — but refetching to learn
+                            // what we just did would flash the old order first.
+                            loader.songs = reordered
+                        }
+                    }
+                }
+            }
+    }
+
+    /// Non-nil only where editing can actually be written through: Favorites,
+    /// which owns its own order, or a playlist the signed-in user owns.
+    ///
+    /// Ownership is membership in `/api/user/playlists` for the same reason
+    /// `songRemovalContext` uses it — see the note there. `editable`/`deletable`
+    /// come back false on playlists the user created, and `isPersonal` is false
+    /// on the instance that reaches this screen.
+    private var editTarget: PlaylistEditTarget? {
+        if playlist.isFavorites { return .favorites }
+        guard userPlaylists.playlists.contains(where: { $0.id == playlist.id }) else {
+            return nil
+        }
+        return .playlist(id: playlist.id)
+    }
+
+    /// Spelled out as its own property with an explicit type on purpose. Inline
+    /// in the toolbar, the `nil`-or-closure ternary had to be resolved as part
+    /// of the `detailContent` chain, which was already close enough to the
+    /// type-checker's budget that the extra overload resolution tipped it over.
+    private var editAction: (() -> Void)? {
+        // Gated on an authoritative list, not just a target.
+        //
+        // The editor is seeded with a snapshot and hands its result back to
+        // `loader.songs` on finish. Opening it before the fetch lands would
+        // seed it from the `songListDTOs` fallback — or from nothing at all —
+        // and closing it would then overwrite a newer, complete list with that
+        // stale snapshot, or with an empty one.
+        guard editTarget != nil, loader.hasAuthoritativeSongs else { return nil }
+        return beginEditing
+    }
+
+    private func beginEditing() {
+        // The web client refuses to reorder under an active filter, and for the
+        // same reason: the indices the endpoint takes are positions in the whole
+        // playlist, so dragging within a filtered subset would write the wrong
+        // ones. Clearing the query sidesteps it rather than blocking the action.
+        searchText = ""
+        filteredSongs = loader.songs ?? playlist.songListDTOs ?? []
+        isSearchFocused = false
+        AppHaptic.selection.play()
+        isEditing = true
+    }
+
+    // @ViewBuilder is load-bearing, not decoration: `View.body` declares it
+    // implicitly, so extracting this out of `body` dropped it and turned the
+    // leading `let _ =` into a multi-statement closure the compiler had to infer
+    // as a whole — which it cannot do in reasonable time for an expression this
+    // size ("unable to type-check this expression in reasonable time").
+    @ViewBuilder
+    private var detailContent: some View {
         let _ = fallbackArt.revision
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -227,8 +316,8 @@ struct PlaylistDetailView: View {
                 )
         }
         .smoothScrolling()
+        .scrollEdgeHaptic()
         .scrollDismissesKeyboard(.interactively)
-        .bottomChromeScrollTracking()
         // Resting offset expressed as a raw point, which is what finally worked.
         //
         // Four earlier attempts all failed for the same underlying reason — they
@@ -260,7 +349,34 @@ struct PlaylistDetailView: View {
             updateSearchReveal(pull: pull)
         }
         .scrollIndicators(.hidden)
+        // Same threshold and wiring as BrowseSongCollectionView, ArtistsView and
+        // DownloadedSongsView: the name belongs in the bar once its own heading
+        // has scrolled away, and the bar stays transparent over the artwork until
+        // then. Inline, never large — the zoom leaves the source screen on
+        // display, so a large title collapsing on push is animated in full view.
+        .collapsedNavigationTitle($showsCollapsedTitle)
         .musicScreenBackground()
+        .navigationTitle(showsCollapsedTitle ? playlist.name : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackgroundVisibility(showsCollapsedTitle ? .visible : .hidden, for: .navigationBar)
+        .animation(
+            reduceMotion ? nil : AppMotion.quick,
+            value: showsCollapsedTitle
+        )
+        // Add to Library, Download / Remove Downloads and Refresh Playlist live
+        // here and nowhere else on this screen. They were reachable only by
+        // long-pressing the artwork between the pull-to-reveal search landing and
+        // this — a context menu is a shortcut to actions, never their only home.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                PlaylistMoreMenu(
+                    playlist: playlist,
+                    songs: songs,
+                    onRefresh: refresh,
+                    onEdit: editAction
+                )
+            }
+        }
         .alert(
             "Couldn't Remove Song",
             isPresented: Binding(
@@ -282,7 +398,7 @@ struct PlaylistDetailView: View {
             rowArmingTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
-                rowsAcceptTouches = true
+                hasSettledAfterAppear = true
             }
             schedulePrefetch()
 
@@ -367,7 +483,7 @@ struct PlaylistDetailView: View {
                 RecentlyPlayedStore.shared.record(playlist)
             }
             rowArmingTask?.cancel()
-            rowsAcceptTouches = false
+            hasSettledAfterAppear = false
             prefetchTask?.cancel()
             // Same class of post-teardown work as the prefetches below:
             // favoritesRefreshTask starts a network fetch after a one-second
@@ -618,7 +734,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
-                .allowsHitTesting(rowsAcceptTouches)
+                .allowsHitTesting(playbackTapsArmed)
             }
             .environment(\.playlistSongRemoval, songRemovalContext)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
@@ -670,6 +786,9 @@ struct PlaylistDetailView: View {
             .accessibilityLabel("Shuffle playlist")
         }
         .padding(.horizontal, horizontalPadding)
+        // Gated here rather than around the caller: the wide overview puts these
+        // buttons beside the artwork, outside `playlistSongsContent`.
+        .allowsHitTesting(playbackTapsArmed)
     }
 
     private func play(_ song: Song, context: [Song]) {
@@ -805,8 +924,18 @@ private struct PlaylistMoreMenu: View {
     let playlist: Playlist
     let songs: [Song]
     let onRefresh: () -> Void
+    /// Nil on a playlist the signed-in user cannot edit, which hides the item.
+    var onEdit: (() -> Void)?
     var body: some View {
         Menu {
+            if let onEdit {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit Playlist", systemImage: "pencil")
+                }
+                Divider()
+            }
             PlaylistActionsMenuItems(playlist: playlist, songs: songs)
             Divider()
             Button {
@@ -823,6 +952,7 @@ private struct PlaylistMoreMenu: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.65, haptic: .selection))
+        .accessibilityIdentifier("PlaylistDetail.moreActions")
     }
 }
 

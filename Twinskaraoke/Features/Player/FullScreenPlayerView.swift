@@ -250,7 +250,7 @@ private struct PlayerFavoriteButton: View {
             }
         } label: {
             Group {
-                if #available(iOS 17.0, *), !reduceMotion {
+                if !reduceMotion {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .contentTransition(.symbolEffect(.replace))
                         .symbolEffect(.bounce, value: isFavorite)
@@ -807,7 +807,7 @@ struct FullScreenPlayerView: View {
 
     private var dismissBar: some View {
         Button {
-            AppHaptic.light.play()
+            AppHaptic.dismiss.play()
             popupPresentation.collapse()
         } label: {
             Capsule()
@@ -815,7 +815,7 @@ struct FullScreenPlayerView: View {
                 .frame(width: 40, height: 5)
                 .frame(width: 44, height: 44)
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.7, haptic: .light))
+        .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.7, haptic: nil))
         .accessibilityLabel("Dismiss player")
         .accessibilityHint("Collapses the full-screen player.")
     }
@@ -1035,14 +1035,14 @@ struct FullScreenPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: rowHeight)
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .light))
+            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Previous track")
             .accessibilityHint("Skips to the previous song.")
             Button {
                 audioManager.togglePlayPause()
             } label: {
                 Group {
-                    if #available(iOS 17.0, *), !reduceMotion {
+                    if !reduceMotion {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                             .contentTransition(.symbolEffect(.replace))
                     } else {
@@ -1054,7 +1054,7 @@ struct FullScreenPlayerView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: rowHeight)
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .medium))
+            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .commit))
             .accessibilityLabel(audioManager.isPlaying ? "Pause" : "Play")
             .accessibilityValue(audioManager.currentSong?.title ?? "Current song")
             Button {
@@ -1066,7 +1066,7 @@ struct FullScreenPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: rowHeight)
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .light))
+            .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Next track")
             .accessibilityHint("Skips to the next song.")
         }
@@ -1124,7 +1124,7 @@ struct FullScreenPlayerView: View {
                 AppHaptic.selection.play()
                 showTranslatedLyrics.toggle()
             } else {
-                AppHaptic.light.play()
+                AppHaptic.boundary.play()
                 lyricsViewModel.requestTranslation()
             }
         } label: {

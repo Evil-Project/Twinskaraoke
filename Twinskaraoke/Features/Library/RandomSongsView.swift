@@ -24,7 +24,6 @@ struct RandomSongsView: View {
                     .padding(.bottom, 28)
             }
             .smoothScrolling()
-            .bottomChromeScrollTracking()
         }
         .scrollIndicators(.hidden)
         .musicScreenBackground()
@@ -43,9 +42,7 @@ struct RandomSongsView: View {
                 .accessibilityHint("Loads a new random set.")
             }
 
-            if #available(iOS 26.0, *) {
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -65,6 +62,7 @@ struct RandomSongsView: View {
         .refreshable {
             AppHaptic.selection.play()
             await viewModel.reload()
+            AppHaptic.success.play()
         }
         .task {
             await viewModel.loadIfNeeded()
@@ -129,7 +127,7 @@ struct RandomSongsView: View {
                     ProgressView()
                         .controlSize(.regular)
                         .padding(9)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .appGlassBackground(in: Circle())
                         .padding(10)
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale))
                 }
@@ -291,21 +289,7 @@ private struct RandomSongsToolbarButtonLabel: View {
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            iconImage
-        } else {
-            ZStack {
-                Circle()
-                    .fill(.regularMaterial)
-                    .overlay {
-                        Circle()
-                            .stroke(Color.appDivider.opacity(0.7), lineWidth: 0.5)
-                    }
-                iconImage
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
-        }
+        iconImage
     }
 
     private var iconImage: some View {

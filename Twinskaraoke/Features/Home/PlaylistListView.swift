@@ -70,9 +70,9 @@ struct PlaylistListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search Playlists"
         )
+        .secondarySearchBehavior()
         .onAppear {
             if let apiURL {
                 loader.bootstrap(initial: playlists, urlBuilder: apiURL)

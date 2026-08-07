@@ -117,7 +117,7 @@ struct QueueView: View {
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 Button {
-                                    AppHaptic.selection.play()
+                                    AppHaptic.commit.play()
                                     audioManager.playNext(song: entry.song)
                                 } label: {
                                     Label("Play Next", systemImage: "text.insert")
@@ -127,7 +127,7 @@ struct QueueView: View {
                             .transition(rowTransition)
                         }
                         .onMove { source, destination in
-                            AppHaptic.selection.play()
+                            AppHaptic.commit.play()
                             withOptionalAnimation(queueMutationAnimation) {
                                 audioManager.moveInUpNext(from: source, to: destination)
                             }
@@ -175,7 +175,7 @@ struct QueueView: View {
             Spacer()
             if upNextCount > 0 {
                 Button(role: .destructive) {
-                    AppHaptic.warning.play()
+                    AppHaptic.dismiss.play()
                     withOptionalAnimation(queueMutationAnimation) {
                         audioManager.removeFromUpNext(at: IndexSet(integersIn: 0 ..< upNextCount))
                     }
@@ -194,7 +194,7 @@ struct QueueView: View {
                 .transition(clearButtonTransition)
             }
             GlassXButton(action: {
-                AppHaptic.light.play()
+                AppHaptic.dismiss.play()
                 dismiss()
             })
             .accessibilityHint("Dismisses Playing Next.")
@@ -207,7 +207,7 @@ struct QueueView: View {
 
     private func currentSongRow(_ current: Song) -> some View {
         Button {
-            AppHaptic.light.play()
+            AppHaptic.selection.play()
             dismiss()
         } label: {
             HStack(spacing: 12) {
@@ -256,7 +256,7 @@ struct QueueView: View {
         .accessibilityHint("Double tap to return to the player. More actions are available.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Return to Player") {
-            AppHaptic.light.play()
+            AppHaptic.selection.play()
             dismiss()
         }
         .accessibilityAction(named: "Add to Playlist") {
@@ -278,14 +278,14 @@ struct QueueView: View {
     }
 
     private func removeUpNextSongs(at indices: IndexSet) {
-        AppHaptic.warning.play()
+        AppHaptic.dismiss.play()
         withOptionalAnimation(queueMutationAnimation) {
             audioManager.removeFromUpNext(at: indices)
         }
     }
 
     private func playQueuedSong(_ song: Song) {
-        AppHaptic.medium.play()
+        AppHaptic.commit.play()
         audioManager.play(song: song, context: audioManager.queue)
     }
 

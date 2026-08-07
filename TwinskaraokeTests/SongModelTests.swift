@@ -794,6 +794,101 @@ struct SongModelTests {
         )
     }
 
+    /// Hydration rebuilds `Song` values field by field, and `order` defaults to
+    /// nil when omitted — so forgetting it there is silent. It reverted every
+    /// hydrated song to "unpositioned", which made reordering fall back to row
+    /// indices; those match the server's numbering only while it happens to be
+    /// dense, so drags landed correctly near the top of a list and drifted
+    /// several rows further down.
+    @Test("Metadata hydration keeps a song's position")
+    func hydrationPreservesOrder() {
+        func song(_ id: String, order: Int?, duration: Int) -> Song {
+            Song(
+                id: id,
+                title: id,
+                duration: duration,
+                absolutePath: nil,
+                cloudflareID: nil,
+                coverArt: nil,
+                originalArtists: nil,
+                coverArtists: nil,
+                userUploaded: false,
+                oss: nil,
+                order: order
+            )
+        }
+
+        // The canonical copy comes from a route with no list context, so it has
+        // no position of its own and must not clear the one we already have.
+        let positioned = song("a", order: 7, duration: 0)
+        let canonical = song("a", order: nil, duration: 210)
+        let hydrated = positioned.fillingMissingMetadata(from: canonical)
+
+        #expect(hydrated.order == 7)
+        #expect(hydrated.duration == 210)
+    }
+
+    /// `/api/playlist/{id}` returns songs in insertion order and carries the
+    /// user's ordering on each song's `order`, so it has to be applied on read.
+    @Test("Persisted order is applied to playlist songs")
+    func persistedOrderIsApplied() {
+        func song(_ id: String, order: Int?) -> Song {
+            Song(
+                id: id,
+                title: id,
+                duration: 180,
+                absolutePath: nil,
+                cloudflareID: nil,
+                coverArt: nil,
+                originalArtists: nil,
+                coverArtists: nil,
+                userUploaded: false,
+                oss: nil,
+                order: order
+            )
+        }
+
+        let sorted = KaraokeAPIClient.applyingPersistedOrder([
+            song("c", order: 3),
+            song("a", order: 0),
+            song("b", order: 1),
+        ])
+        #expect(sorted.map(\.id) == ["a", "b", "c"])
+    }
+
+    /// Ties are routine here, not a corner case — a real playlist had a dozen
+    /// songs sharing `order: 3`. `sorted(by:)` is not stable, so without the
+    /// offset tie-break those would be permuted arbitrarily on every fetch and
+    /// the list would reshuffle in front of the user.
+    @Test("Songs sharing an order keep the order the server sent")
+    func persistedOrderIsStableAcrossTies() {
+        func song(_ id: String, order: Int?) -> Song {
+            Song(
+                id: id,
+                title: id,
+                duration: 180,
+                absolutePath: nil,
+                cloudflareID: nil,
+                coverArt: nil,
+                originalArtists: nil,
+                coverArtists: nil,
+                userUploaded: false,
+                oss: nil,
+                order: order
+            )
+        }
+
+        let sorted = KaraokeAPIClient.applyingPersistedOrder([
+            song("tie1", order: 3),
+            song("first", order: 0),
+            song("tie2", order: 3),
+            song("noOrder", order: nil),
+            song("tie3", order: 3),
+        ])
+        // Ties hold their arrival order, and an absent `order` sorts last.
+        #expect(sorted.map(\.id) == ["first", "tie1", "tie2", "tie3", "noOrder"])
+    }
+
     @Test("Playlist search trims its query and preserves order")
     func playlistSearchTrimsQueryAndPreservesOrder() {
         let first = Song(

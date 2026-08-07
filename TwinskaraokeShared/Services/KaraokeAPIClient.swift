@@ -376,7 +376,7 @@ nonisolated enum KaraokeAPIClient {
     if id == Playlist.favoritesID {
       return try await favoriteSongs()
     }
-    let songs = try await playlistDetail(id: id).songListDTOs
+    let songs = applyingPersistedOrder(try await playlistDetail(id: id).songListDTOs)
     return try await hydratePlaylistUploadedSongs(songs)
   }
 
@@ -422,7 +422,14 @@ nonisolated enum KaraokeAPIClient {
       guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
         throw APIError.decodeFailed
       }
-      return try await hydrateFavoriteSongs(songs)
+      // Belt and braces: this route already returns favorites sorted, unlike
+      // the playlist one, so today this is a no-op. It is applied anyway
+      // because the reorder path now derives `oldOrder` from each song's
+      // position — if the route ever stopped sorting, the list would look right
+      // for a moment and then move songs to wrong places, which is a far worse
+      // failure than a redundant sort. Stable, so the server's arrangement of
+      // any tied entries is preserved exactly.
+      return try await hydrateFavoriteSongs(applyingPersistedOrder(songs))
     }
   }
 
@@ -602,7 +609,9 @@ nonisolated enum KaraokeAPIClient {
       coverArt: coverArt,
       originalArtists: originalArtists,
       coverArtists: coverArtists,
-      userUploaded: userUploaded
+      userUploaded: userUploaded,
+      oss: dict["oss"] as? String,
+      order: dict["order"] as? Int
     )
   }
 
@@ -730,6 +739,92 @@ nonisolated enum KaraokeAPIClient {
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
     return request
   }
+
+  /// Same as `jsonRequest(path:body:)` but with a **top-level JSON array** body
+  /// and the path built from segments, so an ID interpolated into it is
+  /// percent-encoded rather than able to inject extra path components.
+  ///
+  /// Separate from `jsonRequest` because that one takes a `[String: Any]` and so
+  /// can only ever produce a JSON object.
+  static func jsonArrayRequest(
+    pathSegments: [String],
+    body: [[String: Any]]
+  ) throws -> URLRequest {
+    guard JSONSerialization.isValidJSONObject(body) else {
+      throw APIError.invalidBody
+    }
+    var request = try request(pathSegments: pathSegments)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    return request
+  }
+
+  /// The body both `save-order` routes take: a **single-element array**
+  /// describing one song's move, verified against the reference client's own
+  /// request.
+  ///
+  /// It moves one song per call and needs *both* ends of the move — `oldOrder`
+  /// and `newOrder`. Sending the whole list with only `order` set is accepted
+  /// (204) and does nothing, because every element then carries the default
+  /// `oldOrder`/`newOrder` of 0, i.e. "move from 0 to 0". That silent no-op is
+  /// what made this look like a payload-shape problem for several rounds.
+  ///
+  /// An array, not an object — the playlist comes from the route. The server
+  /// rejects an object body with "PlaylistId and songs must not be null", which
+  /// reads like field names but is prose for one combined guard.
+  ///
+  /// camelCase because the reference client posts with `PostAsJsonAsync`, whose
+  /// web defaults are camelCase. Note this is the opposite of `/api/playlist/save`,
+  /// which takes PascalCase keys — the casing is per-route, not global.
+  /// Puts a playlist's songs into the user's saved order.
+  ///
+  /// `/api/playlist/{id}` returns `songListDTOs` in insertion order and carries
+  /// the ordering on each song's `order` field instead of applying it to the
+  /// array — so a reorder round-trips correctly and still looks discarded
+  /// unless it is applied here. The reference client does the same thing
+  /// (`SongTrackComponent` keeps a `_sortOrder`).
+  ///
+  /// Applied before hydration, because hydration rebuilds `Song` values and
+  /// need not carry `order` through; once the array is sorted, every later step
+  /// preserves it by mapping in place.
+  ///
+  /// **Stable by construction.** Songs routinely share an `order` — ties are
+  /// normal, not a corner case (a playlist can have a dozen at the same value),
+  /// and `sorted(by:)` is not a stable sort, so ties would otherwise be
+  /// permuted arbitrarily on every fetch and the list would visibly reshuffle.
+  /// Comparing the original offset on ties pins them to the order the server
+  /// sent. Songs with no `order` sort last, keeping their relative order.
+  static func applyingPersistedOrder(_ songs: [Song]) -> [Song] {
+    songs.enumerated()
+      .sorted { lhs, rhs in
+        let left = lhs.element.order ?? Int.max
+        let right = rhs.element.order ?? Int.max
+        return left == right ? lhs.offset < rhs.offset : left < right
+      }
+      .map(\.element)
+  }
+
+  static func songMovePayload(
+    songID: String,
+    from oldOrder: Int,
+    to newOrder: Int
+  ) -> [[String: Any]] {
+    [
+      [
+        "songId": songID,
+        // Explicitly null, as the reference client sends it. Present in the DTO
+        // for uploaded songs; the web client leaves it null even for those.
+        "userAudioId": NSNull(),
+        // Position within *this* payload, not within the playlist — always 0
+        // for the single-element array below.
+        "order": 0,
+        "oldOrder": oldOrder,
+        "newOrder": newOrder,
+      ]
+    ]
+  }
+
 
   static func request(
     path: String,

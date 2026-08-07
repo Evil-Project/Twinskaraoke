@@ -46,7 +46,7 @@ struct RadioQueueHero: View {
             Spacer(minLength: 4)
 
             Button {
-                AppHaptic.medium.play()
+                AppHaptic.commit.play()
                 onPlayPause()
             } label: {
                 Label(isPlaying ? "Pause live station" : "Play live station", systemImage: isPlaying ? "pause.fill" : "play.fill")
@@ -61,10 +61,7 @@ struct RadioQueueHero: View {
             .accessibilityLabel(isPlaying ? "Pause live station" : "Play live station")
         }
         .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
-        )
+        .appGlassBackground(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.appDivider.opacity(0.8), lineWidth: 0.5)

@@ -20,6 +20,13 @@ struct AppleMusicProgressBar: View {
     @ScaledMetric(relativeTo: .caption) private var scaledBubbleHeight: CGFloat = 22
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var didBeginScrubbing = false
+    @State private var lastDetentIndex: Int?
+    @State private var didHitEdge = false
+
+    /// Notches across the full bar.  40 puts them ~2.5% apart, which on a
+    /// typical song is a few seconds per tick — dense enough to feel like
+    /// texture under the thumb, sparse enough that each tick stays distinct.
+    private static let detentCount = 40
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -88,16 +95,21 @@ struct AppleMusicProgressBar: View {
                         }
                         if !didBeginScrubbing {
                             didBeginScrubbing = true
-                            AppHaptic.selection.play()
+                            AppHaptic.detent.prepare()
+                            AppHaptic.grab.play()
                         }
-                        progress = max(0, min(1, value.location.x / width))
+                        let next = max(0, min(1, value.location.x / width))
+                        playScrubFeedback(at: next)
+                        progress = next
                     }
                     .onEnded { _ in
                         let finalProgress = clampedProgress
                         onSeekEnd(finalProgress)
                         isScrubbing = false
                         didBeginScrubbing = false
-                        AppHaptic.light.play()
+                        lastDetentIndex = nil
+                        didHitEdge = false
+                        AppHaptic.commit.play()
                     }
             )
             .animation(scrubAnimation, value: isScrubbing)
@@ -120,11 +132,40 @@ struct AppleMusicProgressBar: View {
         }
     }
 
+    /// Ticks once per notch crossed, and thumps once when travel stops against
+    /// either end.  The edge flag latches so holding a finger past the end
+    /// doesn't repeat the thump every frame.
+    private func playScrubFeedback(at next: Double) {
+        if next <= 0 || next >= 1 {
+            if !didHitEdge {
+                didHitEdge = true
+                AppHaptic.boundary.play()
+            }
+            // Seed the notch index even though no detent plays here. Otherwise a
+            // drag that starts at an edge — or travels out to one and back —
+            // leaves this nil, and the `lastDetentIndex != nil` guard below eats
+            // the first interior notch. The guard is meant to fire once per
+            // gesture, not once per edge visit.
+            lastDetentIndex = Int(next * Double(Self.detentCount))
+            return
+        }
+        didHitEdge = false
+
+        let index = Int(next * Double(Self.detentCount))
+        guard index != lastDetentIndex else { return }
+        // Skip the very first comparison so picking the thumb up doesn't tick
+        // on top of the `.grab` that just played.
+        if lastDetentIndex != nil {
+            AppHaptic.detent.play()
+        }
+        lastDetentIndex = index
+    }
+
     private func adjustProgress(by delta: Double) {
         let nextProgress = min(max(progress + delta, 0), 1)
         progress = nextProgress
         onSeekEnd(nextProgress)
-        AppHaptic.selection.play()
+        AppHaptic.detent.play()
     }
 
     private var scrubAnimation: Animation? {
