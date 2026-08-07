@@ -12,7 +12,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 - [@cosmii02](https://github.com/cosmii02) (cosmii02)
 
-**Full credits are maintained by Soul on the website: [twinskaraoke.com/about#credits](https://twinskaraoke.com/about#credits)**
+**Full credits are maintained by Soul on the website: [twinskaraoke.com/credits](https://twinskaraoke.com/about#credits)**
 
 > **Update : We are officially live on TestFlight, see installation info below! Stay tuned for the App Store!**
 >
@@ -43,45 +43,45 @@ All credits go to the website creator "Soul". This is a companion app for the we
 <br>
 
 <p align="center">
-  <img src="readmeimages/homescreen.png" width="32%" title="Home Screen">
-  <img src="readmeimages/playingscreen.png" width="32%" title="Now Playing">
-  <img src="readmeimages/lyrics.png" width="32%" title="Lyrics View">
+  <img src="readmeimages/homescreen.png" width="32%" alt="App homescreen" title="Home Screen">
+  <img src="readmeimages/playingscreen.png" width="32%" alt="Currently Playing screen" title="Now Playing">
+  <img src="readmeimages/lyrics.png" width="32%" alt="lyrics view" title="Lyrics View">
 </p>
 
 <p align="center">
-  <img src="readmeimages/accountpage.png" width="32%" title="Account & Settings">
-  <img src="readmeimages/playingnext.png" width="32%" title="Up Next Queue">
-  <img src="readmeimages/new.png" width="32%" title="Instrumental Lyrics">
+  <img src="readmeimages/accountpage.png" width="32%" alt="account page" title="Account & Settings">
+  <img src="readmeimages/playingnext.png" width="32%" alt="Queue page" title="Up Next Queue">
+  <img src="readmeimages/new.png" width="32%" alt="new songs page" title="new">
 </p>
 
 <p align="center">
-  <img src="readmeimages/EQ.png" width="32%" title="EQ">
-  <img src="readmeimages/downloadoption.png" width="32%" title="Download Option">
-  <img src="readmeimages/downloaded.png" width="32%" title="Downloaded">
+  <img src="readmeimages/EQ.png" width="32%" alt="EQ settings page" title="EQ">
+  <img src="readmeimages/downloadoption.png" width="32%" alt="download songs menu" title="Download Option">
+  <img src="readmeimages/downloaded.png" width="32%" alt="list of downloaded songs" title="Downloaded">
   <br>
   <em>Built In EQ &nbsp;&bull;&nbsp; Download Songs &nbsp;&bull;&nbsp; Play Offline</em>
 </p>
 
 <p align="center">
-  <img src="readmeimages/radio.png" width="32%" title="radio">
-  <img src="readmeimages/artistpage.png" width="32%" title="artist page">
-  <img src="readmeimages/search.png" width="32%" title="search">
+  <img src="readmeimages/radio.png" width="32%" alt="Radio Page" title="radio">
+  <img src="readmeimages/artistpage.png" width="32%" alt="Artist Page" title="artist page">
+  <img src="readmeimages/search.png" width="32%" alt="view of search page" title="search">
   <br>
   <em>Live Radio &nbsp;&bull;&nbsp; See Artists &nbsp;&bull;&nbsp; Search Everything</em>
 </p>
 
 <p align="center">
-  <img src="readmeimages/saveart.png" width="32%" title="save art">
-  <img src="readmeimages/art.png" width="32%" title="Art">
-  <img src="readmeimages/ARTartist.png" width="32%" title="Art Artist">
+  <img src="readmeimages/saveart.png" width="32%" alt="downloading art" title="save art">
+  <img src="readmeimages/art.png" width="32%" alt="Featured Art Gallery" title="Art">
+  <img src="readmeimages/ARTartist.png" width="32%" alt="Artist Page within Art Gallery" title="Art Artist">
   <br>
   <em>Find Art &nbsp;&bull;&nbsp; And Save It</em>
 </p>
 
 <p align="center">
-  <img src="readmeimages/library.png" width="32%" title="Library">
-  <img src="readmeimages/backgroundplaydemo.webp" width="32%" title="Background Play Demo">
-  <img src="readmeimages/video.png" width="32%" title="videos">
+  <img src="readmeimages/library.png" width="32%" alt="Personal Library Screen" title="Library">
+  <img src="readmeimages/backgroundplaydemo.webp" width="32%" alt="Demo of Background Play" title="Background Play Demo">
+  <img src="readmeimages/video.png" width="32%" alt="Video watchalong page" title="video">
   <br>
   <em>Playlists, Upload New Songs & Watch Videos & More &nbsp;&bull;&nbsp; Full Background Play & System Controls</em>
 </p>
