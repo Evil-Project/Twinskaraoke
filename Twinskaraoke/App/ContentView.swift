@@ -483,11 +483,15 @@ private struct PopupModifier: ViewModifier {
     private let popupState = PopupPlaybackState.shared
     private let presentationState = PopupPresentationState.shared
     private let barEnvironment = PopupBarEnvironmentTracker.shared
+    // LNPopupController floats the mini player above the tab bar and every
+    // pushed screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
+    // full-screen video has to withdraw the bar here instead.
+    private let videoFullScreen = VideoFullScreenState.shared
 
     func body(content: Content) -> some View {
         content
             .popup(
-                isBarPresented: .constant(popupState.hasCurrentSong),
+                isBarPresented: .constant(popupState.hasCurrentSong && !videoFullScreen.isActive),
                 isPopupOpen: Binding(
                     get: { presentationState.isExpanded },
                     set: { isOpen in

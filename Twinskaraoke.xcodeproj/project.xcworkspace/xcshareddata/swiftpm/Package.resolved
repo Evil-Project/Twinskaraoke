@@ -1,6 +1,51 @@
 {
-  "originHash" : "c37c9123500fe5b8e02c6f135b510cbb4ee3c07ea3545d5bf21f64cf4d6e0f24",
+  "originHash" : "b91f30ca381502445d02c4ca15afb766e790a384074ce407503ae746cbe4115e",
   "pins" : [
+    {
+      "identity" : "comscore-swift-package-manager",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/comScore/Comscore-Swift-Package-Manager.git",
+      "state" : {
+        "revision" : "966992952a84510ac3a086d745f1681302b5cb26",
+        "version" : "6.17.0"
+      }
+    },
+    {
+      "identity" : "cwlcatchexception",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattgallagher/CwlCatchException.git",
+      "state" : {
+        "revision" : "07b2ba21d361c223e25e3c1e924288742923f08c",
+        "version" : "2.2.1"
+      }
+    },
+    {
+      "identity" : "cwlpreconditiontesting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattgallagher/CwlPreconditionTesting.git",
+      "state" : {
+        "revision" : "0139c665ebb45e6a9fbdb68aabfd7c39f3fe0071",
+        "version" : "2.2.2"
+      }
+    },
+    {
+      "identity" : "difference",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzysztofzablocki/Difference.git",
+      "state" : {
+        "revision" : "02fe1111edc8318c4f8a0da96336fcbcc201f38b",
+        "version" : "1.0.1"
+      }
+    },
+    {
+      "identity" : "iosv5-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/CommandersAct/iOSV5-spm.git",
+      "state" : {
+        "revision" : "e28f6bcb00d15d9ca113d45074bab27ddb853e1e",
+        "version" : "5.5.1"
+      }
+    },
     {
       "identity" : "lnpopupcontroller",
       "kind" : "remoteSourceControl",
@@ -38,6 +83,24 @@
       }
     },
     {
+      "identity" : "nimble",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Quick/Nimble.git",
+      "state" : {
+        "revision" : "cc945f7bdf3b485adedc315e18685c065059b4ca",
+        "version" : "13.8.0"
+      }
+    },
+    {
+      "identity" : "pillarbox-apple",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SRGSSR/pillarbox-apple",
+      "state" : {
+        "revision" : "e75dba7925e089dc0899fc731f36e52fc0dbd6e5",
+        "version" : "19.0.0"
+      }
+    },
+    {
       "identity" : "sdwebimage",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SDWebImage/SDWebImage.git",
@@ -53,6 +116,15 @@
       "state" : {
         "revision" : "0e331457ca9af2f0b08bcaa138a91ffb907b004f",
         "version" : "3.1.4"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
+        "version" : "1.6.0"
       }
     },
     {

@@ -38,6 +38,16 @@ final class VideoGalleryViewModel {
         await activeTask?.value
     }
 
+    /// Pulls the next page regardless of scroll position.
+    ///
+    /// Needed by the Watchalongs filter: watchalongs are a handful of items in
+    /// a ~1400-video catalogue, so the filtered list can be empty (and therefore
+    /// have nothing to trigger `loadMoreIfNeeded`) while pages remain unread.
+    func loadMore() {
+        guard canLoadMore, !isLoading else { return }
+        load(reset: false)
+    }
+
     func loadMoreIfNeeded(current: GalleryVideo) {
         guard let idx = videos.firstIndex(of: current) else { return }
         if idx >= videos.count - 5, !isLoading, canLoadMore {
@@ -136,37 +146,89 @@ final class VideoGalleryViewModel {
     }
 }
 
+/// Videos related to the one being watched.
+///
+/// `/api/videos` ignores `songId`, `createdBy` and `isWatchalong` as filters —
+/// passing them returns the unfiltered catalogue — so relatedness is expressed
+/// through the two parameters the endpoint actually honours: `search`, which
+/// matches title, description and uploader, and `category`.
 @MainActor
 @Observable
 final class SimilarVideosViewModel {
     var videos: [GalleryVideo] = []
     var isLoading = false
+    @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var loadedForID: String?
 
-    func fetch(excluding currentID: String) {
-        guard videos.isEmpty, !isLoading else { return }
-        guard let request = try? KaraokeAPIClient.request(
-            path: "/api/videos",
-            queryItems: [
-                URLQueryItem(name: "startIndex", value: "0"),
-                URLQueryItem(name: "pageSize", value: "20"),
-                URLQueryItem(name: "sortBy", value: "CreatedAt"),
-                URLQueryItem(name: "sortDescending", value: "true"),
-            ]
-        ) else { return }
+    private static let resultLimit = 20
+
+    func fetch(like video: GalleryVideo) {
+        guard loadedForID != video.id else { return }
+        loadedForID = video.id
+        activeTask?.cancel()
         isLoading = true
-        Task { [weak self] in
-            let data = try? await KaraokeAPIClient.data(for: request)
-            self?.applySimilarVideosResponse(data, excluding: currentID)
+
+        activeTask = Task { [weak self] in
+            var collected: [GalleryVideo] = []
+            var seen: Set<String> = [video.id]
+
+            for query in Self.queries(for: video) {
+                guard !Task.isCancelled else { return }
+                let batch = await Self.load(query)
+                collected += batch.filter { seen.insert($0.id).inserted }
+                if collected.count >= Self.resultLimit { break }
+            }
+
+            guard !Task.isCancelled else { return }
+            self?.apply(Array(collected.prefix(Self.resultLimit)))
         }
     }
 
-    private func applySimilarVideosResponse(_ data: Data?, excluding currentID: String) {
-        defer { isLoading = false }
+    /// Progressively weaker notions of "similar", most specific first.
+    private static func queries(for video: GalleryVideo) -> [[URLQueryItem]] {
+        var queries: [[URLQueryItem]] = []
 
-        guard let data, let decoded = try? JSONDecoder().decode(VideosResponse.self, from: data) else {
-            return
+        if video.isWatchalongVideo {
+            queries.append([URLQueryItem(name: "category", value: "2")])
         }
+        // Other performances of the same song.
+        if let songTitle = video.songTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !songTitle.isEmpty
+        {
+            queries.append([URLQueryItem(name: "search", value: songTitle)])
+        }
+        // More from the same uploader.
+        if let creator = video.createdBy?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !creator.isEmpty
+        {
+            queries.append([URLQueryItem(name: "search", value: creator)])
+        }
+        // Last resort so the shelf is never empty.
+        queries.append([])
+        return queries
+    }
 
-        videos = decoded.items.filter { $0.id != currentID }
+    private static func load(_ queryItems: [URLQueryItem]) async -> [GalleryVideo] {
+        let items = queryItems + [
+            URLQueryItem(name: "page", value: "1"),
+            URLQueryItem(name: "pageSize", value: String(resultLimit)),
+            URLQueryItem(name: "sortBy", value: "UploadedAt"),
+            URLQueryItem(name: "sortDescending", value: "True"),
+        ]
+        guard let request = try? KaraokeAPIClient.request(path: "/api/videos", queryItems: items),
+              let data = try? await KaraokeAPIClient.data(for: request),
+              let decoded = try? JSONDecoder().decode(VideosResponse.self, from: data)
+        else { return [] }
+        return decoded.items
+    }
+
+    private func apply(_ videos: [GalleryVideo]) {
+        self.videos = videos
+        isLoading = false
+        activeTask = nil
+    }
+
+    deinit {
+        activeTask?.cancel()
     }
 }
