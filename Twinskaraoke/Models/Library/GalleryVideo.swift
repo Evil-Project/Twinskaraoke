@@ -199,12 +199,24 @@ nonisolated struct GalleryVideo: Codable, Identifiable, Equatable, Sendable {
     /// rather than "zero length" and simply omit the badge.
     var formattedRuntime: String? {
         guard let duration, duration > 0 else { return nil }
-        let hours = duration / 3600
-        let minutes = (duration % 3600) / 60
-        let seconds = duration % 60
+        return VideoTimecodeFormatter.string(fromSeconds: duration)
+    }
+}
+
+/// Formats a media position or runtime as `m:ss`, widening to `h:mm:ss` only
+/// when there are hours to show.
+///
+/// Shared by the gallery's duration badges and the player's transport timecodes
+/// so the two cannot drift apart.
+nonisolated enum VideoTimecodeFormatter {
+    static func string(fromSeconds totalSeconds: Int) -> String {
+        let seconds = max(0, totalSeconds)
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let remainder = seconds % 60
         return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            : String(format: "%d:%02d", minutes, seconds)
+            ? String(format: "%d:%02d:%02d", hours, minutes, remainder)
+            : String(format: "%d:%02d", minutes, remainder)
     }
 }
 

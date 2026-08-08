@@ -126,13 +126,18 @@ struct VideoPlayerOverlay: View {
     }
 
     private var elapsedText: String {
-        VideoTimecodeFormatter.string(from: progressTracker.time)
+        Self.timecode(progressTracker.time)
     }
 
     private var remainingText: String {
         let remaining = progressTracker.timeRange.end - progressTracker.time
         guard remaining.isNumeric else { return "--:--" }
-        return "-\(VideoTimecodeFormatter.string(from: remaining))"
+        return "-\(Self.timecode(remaining))"
+    }
+
+    private static func timecode(_ time: CMTime) -> String {
+        guard time.isNumeric else { return "--:--" }
+        return VideoTimecodeFormatter.string(fromSeconds: Int(time.seconds.rounded()))
     }
 }
 
@@ -159,16 +164,3 @@ private extension View {
     }
 }
 
-nonisolated enum VideoTimecodeFormatter {
-    static func string(from time: CMTime) -> String {
-        guard time.isNumeric else { return "--:--" }
-        let total = Int(time.seconds.rounded())
-        guard total >= 0 else { return "--:--" }
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            : String(format: "%d:%02d", minutes, seconds)
-    }
-}

@@ -88,15 +88,33 @@ struct VideoGalleryView: View {
                             } preview: {
                                 VideoContextPreview(video: video)
                             }
-                            .onAppear { viewModel.loadMoreIfNeeded(current: video) }
+                            // `loadMoreIfNeeded` measures against the unfiltered
+                            // catalogue, so under a filter its "within 5 of the
+                            // end" test almost never fires — watchalongs are
+                            // scattered thinly through ~1400 items. Paging off
+                            // the last *displayed* row keeps both filters going.
+                            .onAppear {
+                                if video.id == videos.last?.id {
+                                    viewModel.loadMore()
+                                } else {
+                                    viewModel.loadMoreIfNeeded(current: video)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, AM.Spacing.screenMargin)
                 }
-            } else if filter == .watchalongs {
-                // The catalogue holds only a handful of watchalongs, and none
-                // may have loaded yet while paging through recent uploads.
-                VideoGalleryFilterEmptyState(isLoading: viewModel.isLoading) {
+            }
+
+            // Kept available for the whole filtered feed, not just an empty one:
+            // watchalongs are sparse enough that the automatic trigger can stall
+            // with results already on screen, and pull-to-refresh resets to page
+            // one rather than continuing.
+            if filter == .watchalongs, viewModel.canLoadMore {
+                VideoGalleryLoadMoreFooter(
+                    isLoading: viewModel.isLoading,
+                    hasResults: videos.count > 1
+                ) {
                     viewModel.loadMore()
                 }
                 .padding(.horizontal, AM.Spacing.screenMargin)
@@ -121,17 +139,23 @@ enum VideoGalleryFilter: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    // `String(localized:)` rather than a bare literal: `Text(someString)`
+    // renders verbatim, so these segment labels and section headers were never
+    // translated. Returning `LocalizedStringKey` would localize at runtime but
+    // the keys would never be extracted into the catalogue — the extractor only
+    // sees literals at localizable call sites, not ones handed back from a
+    // computed property — so nobody could author a translation.
     var title: String {
         switch self {
-        case .all: "All Videos"
-        case .watchalongs: "Watchalongs"
+        case .all: String(localized: "All Videos")
+        case .watchalongs: String(localized: "Watchalongs")
         }
     }
 
     var sectionTitle: String {
         switch self {
-        case .all: "Recent Videos"
-        case .watchalongs: "More Watchalongs"
+        case .all: String(localized: "Recent Videos")
+        case .watchalongs: String(localized: "More Watchalongs")
         }
     }
 
@@ -159,15 +183,18 @@ private struct VideoGalleryFilterBar: View {
     }
 }
 
-private struct VideoGalleryFilterEmptyState: View {
+private struct VideoGalleryLoadMoreFooter: View {
     let isLoading: Bool
+    let hasResults: Bool
     let onLoadMore: () -> Void
 
     var body: some View {
         VStack(spacing: AM.Spacing.m) {
-            Text("No watchalongs loaded yet")
-                .scaledSystemFont(size: 15, weight: .semibold)
-                .foregroundStyle(.primary)
+            if !hasResults {
+                Text("No watchalongs loaded yet")
+                    .scaledSystemFont(size: 15, weight: .semibold)
+                    .foregroundStyle(.primary)
+            }
             Text("Watchalongs are rare in the feed. Load more of the catalogue to find them.")
                 .scaledSystemFont(size: 13)
                 .foregroundStyle(.secondary)
