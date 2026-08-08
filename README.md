@@ -12,6 +12,7 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 - [@cosmii02](https://github.com/cosmii02) (cosmii02)
 
+**Full credits are maintained by Soul on the website: [twinskaraoke.com/credits](https://twinskaraoke.com/about#credits)**
 
 > **Update : We are officially live on TestFlight, see installation info below! Stay tuned for the App Store!**
 >
@@ -42,37 +43,45 @@ All credits go to the website creator "Soul". This is a companion app for the we
 <br>
 
 <p align="center">
-  <img src="readmeimages/homescreen.png" width="32%" title="Home Screen">
-  <img src="readmeimages/playingscreen.png" width="32%" title="Now Playing">
-  <img src="readmeimages/lyrics.png" width="32%" title="Lyrics View">
+  <img src="readmeimages/homescreen.png" width="32%" alt="App homescreen" title="Home Screen">
+  <img src="readmeimages/playingscreen.png" width="32%" alt="Currently Playing screen" title="Now Playing">
+  <img src="readmeimages/lyrics.png" width="32%" alt="lyrics view" title="Lyrics View">
 </p>
 
 <p align="center">
-  <img src="readmeimages/accountpage.png" width="32%" title="Account & Settings">
-  <img src="readmeimages/playingnext.png" width="32%" title="Up Next Queue">
-  <img src="readmeimages/new.png" width="32%" title="Instrumental Lyrics">
+  <img src="readmeimages/accountpage.png" width="32%" alt="account page" title="Account & Settings">
+  <img src="readmeimages/playingnext.png" width="32%" alt="Queue page" title="Up Next Queue">
+  <img src="readmeimages/new.png" width="32%" alt="new songs page" title="new">
 </p>
 
 <p align="center">
-  <img src="readmeimages/EQ.png" width="32%" title="EQ">
-  <img src="readmeimages/downloadoption.png" width="32%" title="Download Option">
-  <img src="readmeimages/downloaded.png" width="32%" title="Downloaded">
+  <img src="readmeimages/EQ.png" width="32%" alt="EQ settings page" title="EQ">
+  <img src="readmeimages/downloadoption.png" width="32%" alt="download songs menu" title="Download Option">
+  <img src="readmeimages/downloaded.png" width="32%" alt="list of downloaded songs" title="Downloaded">
   <br>
   <em>Built In EQ &nbsp;&bull;&nbsp; Download Songs &nbsp;&bull;&nbsp; Play Offline</em>
 </p>
 
 <p align="center">
-  <img src="readmeimages/artistpage.png" width="32%" title="Artist Page">
-  <img src="readmeimages/art.png" width="32%" title="Art">
-  <img src="readmeimages/ARTartist.png" width="32%" title="Art Artist">
+  <img src="readmeimages/radio.png" width="32%" alt="Radio Page" title="radio">
+  <img src="readmeimages/artistpage.png" width="32%" alt="Artist Page" title="artist page">
+  <img src="readmeimages/search.png" width="32%" alt="view of search page" title="search">
   <br>
-  <em>Find Artists &nbsp;&bull;&nbsp; And Art</em>
+  <em>Live Radio &nbsp;&bull;&nbsp; See Artists &nbsp;&bull;&nbsp; Search Everything</em>
 </p>
 
 <p align="center">
-  <img src="readmeimages/library.png" width="32%" title="Library">
-  <img src="readmeimages/backgroundplaydemo.webp" width="32%" title="Background Play Demo">
-  <img src="readmeimages/videos.png" width="32%" title="videos">
+  <img src="readmeimages/saveart.png" width="32%" alt="downloading art" title="save art">
+  <img src="readmeimages/art.png" width="32%" alt="Featured Art Gallery" title="Art">
+  <img src="readmeimages/ARTartist.png" width="32%" alt="Artist Page within Art Gallery" title="Art Artist">
+  <br>
+  <em>Find Art &nbsp;&bull;&nbsp; And Save It</em>
+</p>
+
+<p align="center">
+  <img src="readmeimages/library.png" width="32%" alt="Personal Library Screen" title="Library">
+  <img src="readmeimages/backgroundplaydemo.webp" width="32%" alt="Demo of Background Play" title="Background Play Demo">
+  <img src="readmeimages/video.png" width="32%" alt="Video watchalong page" title="video">
   <br>
   <em>Playlists, Upload New Songs & Watch Videos & More &nbsp;&bull;&nbsp; Full Background Play & System Controls</em>
 </p>
@@ -351,5 +360,30 @@ After 7 days, the app will crash immediately when you try to open it. **You do n
 
 ---
 
+## Art Credits
+
+The Shimeji sprites come from the **NeurolingsCE** mascot packs:
+
+```text
+Neuron, Weuron, and Eviling
+Artwork: Paccha
+Shimeji configuration: @promote. and @dalekcraft
+
+Vedaling and Tuteling
+Artwork: Moneka / monikaphobia
+Shimeji configuration: @promote. and @dalekcraft
+
+Cerber
+Artwork contributors: AnoWan / @AnoT0ki_銀髪赤い瞳好き, 于陌Wan / @于陌, 六水Wan / @六水hexa, 加斯科涅Wan / @DentalFlossPicks, and 士灰Wan / @士灰
+Shimeji configuration: qingchenyou / 轻尘呦
+
+Source: NeurolingsCE mascot packs
+License: GNU General Public License v3.0
+```
+
+**For a more complete credits list, see: [twinskaraoke.com/credits](https://twinskaraoke.com/about#credits)**
+
 ## License
 This project is licensed under the [Apache-2.0 License](LICENSE).
+
+The NeurolingsCE mascot packs described under [Art Credits](#art-credits) are licensed separately under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html) and are downloaded at runtime rather than bundled in this repository.
