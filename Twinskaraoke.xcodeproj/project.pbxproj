@@ -11,6 +11,7 @@
 		93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */; };
 		D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0C385982FB0BD870055284E /* Spleeter in Frameworks */ = {isa = PBXBuildFile; productRef = D0C385972FB0BD870055284E /* Spleeter */; };
+		D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 /* PillarboxPlayer */; };
 		D0DB31F82FA8A3F80089C24C /* LNPopupUI in Frameworks */ = {isa = PBXBuildFile; productRef = D0DB31F72FA8A3F80089C24C /* LNPopupUI */; };
 		D0DB31F92FA8A3F80089C24C /* LNPopupUI in Embed Frameworks */ = {isa = PBXBuildFile; productRef = D0DB31F72FA8A3F80089C24C /* LNPopupUI */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -246,6 +247,7 @@
 				93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */,
 				D0DB31F82FA8A3F80089C24C /* LNPopupUI in Frameworks */,
 				D0C385982FB0BD870055284E /* Spleeter in Frameworks */,
+				D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -427,6 +429,7 @@
 				93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */,
 				D0DB31F72FA8A3F80089C24C /* LNPopupUI */,
 				D0C385972FB0BD870055284E /* Spleeter */,
+				D0E1CB012FC2000100000002 /* PillarboxPlayer */,
 			);
 			productName = Twinskaraoke;
 			productReference = D0F981B52F94C10900FD69AB /* Twinskaraoke.app */;
@@ -596,6 +599,7 @@
 				93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
 				D094F1182FA8A0A5006B427D /* XCRemoteSwiftPackageReference "LNPopupUI" */,
 				D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */,
+				D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0F981B62F94C10900FD69AB /* Products */;
@@ -1183,7 +1187,7 @@
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1226,7 +1230,7 @@
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1585,6 +1589,14 @@
 				minimumVersion = 0.2.0;
 			};
 		};
+		D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SRGSSR/pillarbox-apple";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 19.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1602,6 +1614,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D094F1182FA8A0A5006B427D /* XCRemoteSwiftPackageReference "LNPopupUI" */;
 			productName = LNPopupUI;
+		};
+		D0E1CB012FC2000100000002 /* PillarboxPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */;
+			productName = PillarboxPlayer;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

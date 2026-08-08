@@ -2,6 +2,11 @@ import SwiftUI
 
 @main
 struct TwinskaraokeApp: App {
+    #if canImport(UIKit)
+        // Supplies `supportedInterfaceOrientationsFor:`, which is what keeps the
+        // app portrait everywhere except the video player. See AppOrientationGate.
+        @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
