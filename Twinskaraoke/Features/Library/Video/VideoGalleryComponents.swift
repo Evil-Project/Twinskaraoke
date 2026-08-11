@@ -91,9 +91,11 @@ struct VideoThumbnail: View {
             )
             // "Watched" takes the runtime's place rather than crowding in
             // beside it: once you have seen a video, how long it was is the
-            // less useful of the two.
+            // less useful of the two. Both are badges, so both answer to
+            // `showsBadges` — the featured card opts out of badges and would
+            // otherwise have gained a capsule with no runtime to replace.
             .overlay(alignment: .bottomTrailing) {
-                if showsProgress, isWatched {
+                if showsBadges, showsProgress, isWatched {
                     VideoWatchedBadge()
                         .padding(6)
                 } else if showsBadges, let runtime = video.formattedRuntime {

@@ -354,7 +354,17 @@ private struct VideoResumeBanner: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
+                    // 24pt is well under the 44pt minimum touch target, and
+                    // "Start Over" sits one 10pt gap away, so a mis-tap
+                    // restarted the video instead of dismissing the notice.
+                    // The padding takes the tappable area to 44pt and is then
+                    // removed from layout again, so the banner keeps its
+                    // height and the mark keeps its size. 10pt on the leading
+                    // side fills exactly the stack's spacing, leaving the two
+                    // targets adjacent rather than overlapping.
+                    .padding(10)
                     .contentShape(Rectangle())
+                    .padding(-10)
             }
             .accessibilityLabel("Dismiss")
         }
