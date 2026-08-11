@@ -162,7 +162,11 @@ final class VideoPlaybackModel: ObservableObject {
         guard let video else { return }
         VideoResumeStore.shared.clear(videoID: video.id)
         player.seek(to: .zero)
-        player.play()
+        // Through `play()`, not `player.play()`: `pause()` cancels the periodic
+        // save, and restarting the player directly would leave it cancelled for
+        // the rest of the session, so a pause followed by Start Over lost the
+        // cadence that covers being killed while backgrounded.
+        play()
     }
 
     func dismissResumeBanner() {

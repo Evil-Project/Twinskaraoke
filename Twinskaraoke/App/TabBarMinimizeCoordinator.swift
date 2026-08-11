@@ -141,24 +141,32 @@ import SwiftUI
         /// the scroll view, so a flick's deceleration counts as well as the drag.
         private func handlePan(_ recognizer: UIPanGestureRecognizer) {
             guard recognizer.state == .began, let view = recognizer.view else { return }
-            let scrolled = Self.scrollView(under: recognizer.location(in: view), in: view)
-            guard let scrolled, scrolled !== trackedScrollView else { return }
-            track(scrolled)
+            guard let scrolled = Self.scrollView(under: recognizer.location(in: view), in: view) else { return }
+
+            if scrolled !== trackedScrollView {
+                trackedScrollView = scrolled
+                offsetObservation = observeOffset(of: scrolled)
+            }
+
+            // Every gesture measures from its own reversal, including one that
+            // lands on the scroll view already being watched. Leaving the extrema
+            // in place carried a stale peak into the next gesture, where it
+            // satisfied `revealDistance` on the very first offset change — even
+            // one heading down, which flipped the bar out and straight back in.
+            rearm()
+            offsetPeak = scrolled.contentOffset.y
+            offsetTrough = scrolled.contentOffset.y
         }
 
-        private func track(_ scrollView: UIScrollView) {
-            trackedScrollView = scrollView
-            offsetPeak = scrollView.contentOffset.y
-            offsetTrough = scrollView.contentOffset.y
-            isHoldingExpanded = false
-            // Replaces any previous observation, so only one scroll view is ever
-            // watched. The change handler is `@Sendable`, so the offset comes out
-            // of the (Sendable) change rather than off the scroll view, and the
-            // hop is asserted rather than scheduled: `UIScrollView` mutates
-            // `contentOffset` on the main thread during both dragging and
-            // deceleration, and a `Task` hop here would land a frame late and
-            // out of order with the offsets it is accumulating.
-            offsetObservation = scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, change in
+        /// Replaces any previous observation, so only one scroll view is ever
+        /// watched. The change handler is `@Sendable`, so the offset comes out of
+        /// the (Sendable) change rather than off the scroll view, and the hop is
+        /// asserted rather than scheduled: `UIScrollView` mutates `contentOffset`
+        /// on the main thread during both dragging and deceleration, and a `Task`
+        /// hop here would land a frame late and out of order with the offsets it
+        /// is accumulating.
+        private func observeOffset(of scrollView: UIScrollView) -> NSKeyValueObservation {
+            scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, change in
                 guard let offsetY = change.newValue?.y else { return }
                 MainActor.assumeIsolated {
                     self?.trackOffset(offsetY)
