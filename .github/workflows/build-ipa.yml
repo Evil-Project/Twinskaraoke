@@ -25,8 +25,12 @@ jobs:
 
       - name: Archive iPhone
         run: |
+          # -skipPackagePluginValidation: Pillarbox ships a build tool plugin that
+          # Xcode refuses to run until it is trusted, and the prompt that grants
+          # trust cannot be answered on a runner. See tests.yml.
           xcodebuild archive \
             -project Twinskaraoke.xcodeproj \
+            -skipPackagePluginValidation \
             -scheme "Twinskaraoke" \
             -archivePath build/iPhone.xcarchive \
             -destination "generic/platform=iOS" \
@@ -56,6 +60,7 @@ jobs:
         run: |
           xcodebuild archive \
             -project Twinskaraoke.xcodeproj \
+            -skipPackagePluginValidation \
             -scheme "TwinskaraokeWatchApp" \
             -archivePath build/Watch.xcarchive \
             -destination "generic/platform=watchOS" \

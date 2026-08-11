@@ -34,8 +34,14 @@ jobs:
             end
           ')
           echo "Using simulator UDID: $udid"
+          # -skipPackagePluginValidation: Pillarbox ships PillarboxPackageInfoPlugin,
+          # an SPM build tool plugin, and Xcode will not run a plugin that has not
+          # been trusted. Trust is normally granted through a prompt in the GUI,
+          # which a runner has no way to answer, so every build since Pillarbox
+          # arrived died on "must be enabled before it can be used".
           xcodebuild test \
             -project Twinskaraoke.xcodeproj \
+            -skipPackagePluginValidation \
             -scheme "Twinskaraoke" \
             -destination "platform=iOS Simulator,id=$udid" \
             -only-testing:TwinskaraokeTests \
@@ -70,6 +76,7 @@ jobs:
           echo "Using simulator UDID: $udid"
           xcodebuild test \
             -project Twinskaraoke.xcodeproj \
+            -skipPackagePluginValidation \
             -scheme "TwinskaraokeWatchApp" \
             -destination "platform=watchOS Simulator,id=$udid" \
             -only-testing:'Twinskaraoke Watch AppTests' \
