@@ -119,6 +119,7 @@ private struct PopupHostView: View {
     @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
+    private let tabBarMinimize = TabBarMinimizeCoordinator.shared
 
     init() {
         _selectedSection = State(initialValue: Self.initialSection)
@@ -203,7 +204,11 @@ private struct PopupHostView: View {
         // mini player ever looks misplaced: LNPopupController floats its bar
         // above the tab bar, and ShimejiFloorRegistry rests idle instances on
         // the live UITabBar's top edge, both of which move as the bar minimizes.
-        .tabBarMinimizeBehavior(.onScrollDown)
+        // `.onScrollDown` alone only brings the bar back after a very long scroll
+        // up, so TabBarMinimizeCoordinator drives the reveal off a shorter
+        // threshold and hands the behaviour back once the user scrolls down again.
+        .tabBarMinimizeBehavior(tabBarMinimize.mode.swiftUI)
+        .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {
