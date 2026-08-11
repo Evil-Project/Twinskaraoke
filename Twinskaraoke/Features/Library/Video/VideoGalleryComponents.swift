@@ -62,6 +62,20 @@ struct VideoThumbnail: View {
     let video: GalleryVideo
     var cornerRadius: CGFloat = 10
     var showsBadges = true
+    /// Separate from `showsBadges` because the featured card suppresses the
+    /// badges to stay clean but still wants to say it has been half-watched.
+    var showsProgress = true
+
+    /// `nil` both when the video was never started and when its runtime was
+    /// never established — most of the catalogue reports no `duration`, and a
+    /// bar with nothing to divide by would be a lie either way.
+    private var watchedFraction: Double? {
+        VideoResumeStore.shared.point(for: video.id)?.fraction
+    }
+
+    private var isWatched: Bool {
+        VideoResumeStore.shared.isWatched(video.id)
+    }
 
     var body: some View {
         Color.clear
@@ -75,8 +89,16 @@ struct VideoThumbnail: View {
                     }
                 }
             )
+            // "Watched" takes the runtime's place rather than crowding in
+            // beside it: once you have seen a video, how long it was is the
+            // less useful of the two. Both are badges, so both answer to
+            // `showsBadges` — the featured card opts out of badges and would
+            // otherwise have gained a capsule with no runtime to replace.
             .overlay(alignment: .bottomTrailing) {
-                if showsBadges, let runtime = video.formattedRuntime {
+                if showsBadges, showsProgress, isWatched {
+                    VideoWatchedBadge()
+                        .padding(6)
+                } else if showsBadges, let runtime = video.formattedRuntime {
                     Text(runtime)
                         .font(.caption2.weight(.semibold))
                         .monospacedDigit()
@@ -98,7 +120,52 @@ struct VideoThumbnail: View {
                         .padding(6)
                 }
             }
+            // Flush with the bottom edge, under the runtime badge's own 6pt
+            // inset, so the two never collide.
+            .overlay(alignment: .bottom) {
+                if showsProgress, let watchedFraction {
+                    VideoResumeProgressBar(fraction: watchedFraction)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+/// Marks a video the viewer has already seen through to the end.
+struct VideoWatchedBadge: View {
+    var body: some View {
+        Label("Watched", systemImage: "checkmark.circle.fill")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(.black.opacity(0.72), in: Capsule())
+    }
+}
+
+/// How far through a video the viewer got, drawn across the foot of its poster.
+struct VideoResumeProgressBar: View {
+    let fraction: Double
+    var height: CGFloat = 3
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.black.opacity(0.45))
+                Rectangle()
+                    .fill(Color.appAccent)
+                    // A floor so a barely-started video still reads as started
+                    // rather than as an empty track.
+                    .frame(width: max(2, proxy.size.width * fraction))
+            }
+        }
+        .frame(height: height)
+        // Not "Watched" — that string is the finished badge, and sharing one
+        // catalogue key between a partial-progress label and a completion badge
+        // would give translators one word for two different claims.
+        .accessibilityLabel("Watch progress")
+        .accessibilityValue(Text(fraction.formatted(.percent.precision(.fractionLength(0)))))
     }
 }
 

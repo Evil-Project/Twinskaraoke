@@ -67,6 +67,10 @@ struct VideoGalleryView: View {
                 .padding(.horizontal, AM.Spacing.screenMargin)
             }
 
+            // Above the filter bar because it is account state, not a slice of
+            // the feed — the filter below has nothing to say about it.
+            ContinueWatchingSection(zoomNamespace: zoomNamespace)
+
             VideoGalleryFilterBar(filter: $filter)
                 .padding(.horizontal, AM.Spacing.screenMargin)
 

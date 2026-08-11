@@ -25,6 +25,7 @@ struct VideoPlayerScreen: View {
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private let audioWillPlay = NotificationCenter.default.publisher(
         for: MediaPlaybackCoordinator.audioWillPlay
@@ -65,8 +66,11 @@ struct VideoPlayerScreen: View {
                     quality: $quality,
                     gravity: $gravity,
                     isBuffering: isBuffering,
+                    resumedFrom: model.resumedFrom,
                     onExit: { isFullScreen = false },
-                    onRetry: { model.reload() }
+                    onRetry: { model.reload() },
+                    onStartFromBeginning: { model.startFromBeginning() },
+                    onDismissResume: { model.dismissResumeBanner() }
                 )
             }
             // Tilting the device enters and leaves full screen.
@@ -79,6 +83,13 @@ struct VideoPlayerScreen: View {
                 model.pause()
                 visibilityTracker.player = nil
                 progressTracker.player = nil
+            }
+            // Backgrounding never reaches `onDisappear`, and an app killed while
+            // backgrounded never runs anything again, so this is the last chance
+            // to write the playhead for the "exits the app" case.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase != .active else { return }
+                model.persistPosition()
             }
             .onReceive(audioWillPlay) { _ in
                 model.player.pause()
@@ -138,8 +149,11 @@ struct VideoPlayerScreen: View {
                 gravity: $gravity,
                 isBuffering: isBuffering,
                 isFullScreen: false,
+                resumedFrom: model.resumedFrom,
                 onToggleFullScreen: { isFullScreen = true },
-                onRetry: { model.reload() }
+                onRetry: { model.reload() },
+                onStartFromBeginning: { model.startFromBeginning() },
+                onDismissResume: { model.dismissResumeBanner() }
             )
         }
     }
@@ -178,8 +192,11 @@ private struct VideoFullScreenPlayer: View {
     @Binding var quality: VideoQuality
     @Binding var gravity: AVLayerVideoGravity
     let isBuffering: Bool
+    let resumedFrom: TimeInterval?
     let onExit: () -> Void
     let onRetry: () -> Void
+    let onStartFromBeginning: () -> Void
+    let onDismissResume: () -> Void
 
     var body: some View {
         VideoPlayerSurface(
@@ -190,8 +207,11 @@ private struct VideoFullScreenPlayer: View {
             gravity: $gravity,
             isBuffering: isBuffering,
             isFullScreen: true,
+            resumedFrom: resumedFrom,
             onToggleFullScreen: onExit,
-            onRetry: onRetry
+            onRetry: onRetry,
+            onStartFromBeginning: onStartFromBeginning,
+            onDismissResume: onDismissResume
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
@@ -233,8 +253,11 @@ private struct VideoPlayerSurface: View {
     @Binding var gravity: AVLayerVideoGravity
     let isBuffering: Bool
     let isFullScreen: Bool
+    let resumedFrom: TimeInterval?
     let onToggleFullScreen: () -> Void
     let onRetry: () -> Void
+    let onStartFromBeginning: () -> Void
+    let onDismissResume: () -> Void
 
     var body: some View {
         ZStack {
@@ -270,6 +293,85 @@ private struct VideoPlayerSurface: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { visibilityTracker.toggle() }
+        // Deliberately outside the visibility-gated overlay: the banner is a
+        // timed notice about what just happened, not a transport control, so
+        // tapping to hide the controls must not take it away with them.
+        .overlay(alignment: .topLeading) {
+            if let resumedFrom, player.error == nil {
+                VideoResumeBanner(
+                    position: resumedFrom,
+                    onStartFromBeginning: onStartFromBeginning,
+                    onDismiss: onDismissResume
+                )
+                .padding(isFullScreen ? 28 : 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: resumedFrom)
+    }
+}
+
+/// Says where playback picked up, and offers the way out of it.
+///
+/// Resuming silently is the wrong default for a gallery: a viewer who opens a
+/// video expecting the start needs to see that it did something else, and needs
+/// one tap to undo it.
+private struct VideoResumeBanner: View {
+    let position: TimeInterval
+    let onStartFromBeginning: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Label(
+                "Resumed from \(VideoTimecodeFormatter.string(fromSeconds: Int(position.rounded())))",
+                systemImage: "clock.arrow.circlepath"
+            )
+            .scaledSystemFont(size: 12, weight: .semibold)
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            // The inline surface is only as wide as a 16:9 box on a phone, so
+            // the notice has to give way rather than push the actions off it.
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+
+            Button {
+                AppHaptic.selection.play()
+                onStartFromBeginning()
+            } label: {
+                Text("Start Over")
+                    .scaledSystemFont(size: 12, weight: .bold)
+                    .foregroundStyle(Color.appAccent)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .accessibilityHint("Plays this video from the beginning")
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 24, height: 24)
+                    // 24pt is well under the 44pt minimum touch target, and
+                    // "Start Over" sits one 10pt gap away, so a mis-tap
+                    // restarted the video instead of dismissing the notice.
+                    // The padding takes the tappable area to 44pt and is then
+                    // removed from layout again, so the banner keeps its
+                    // height and the mark keeps its size. 10pt on the leading
+                    // side fills exactly the stack's spacing, leaving the two
+                    // targets adjacent rather than overlapping.
+                    .padding(10)
+                    .contentShape(Rectangle())
+                    .padding(-10)
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 2)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.72), in: Capsule())
     }
 }
 
