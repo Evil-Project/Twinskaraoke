@@ -90,3 +90,24 @@ struct ArtworkPaletteRegressionTests {
         #expect(palette != ArtworkPalette.placeholder)
     }
 }
+
+extension ArtworkPaletteRegressionTests {
+    /// Pins the channel order of the sampled bytes.
+    ///
+    /// `dominantColors` reads the first three bytes of each pixel as R, G, B.
+    /// Neither `UIGraphicsBeginImageContextWithOptions` nor
+    /// `UIGraphicsImageRenderer` promises that layout — iOS commonly hands back
+    /// BGRA — and a swap is invisible in every other test here, because a grey,
+    /// a near-black and a near-white cover all survive exchanging red and blue.
+    /// A lopsided colour does not.
+    @Test("A red cover yields a red palette, not a blue one")
+    func channelOrderIsNotSwapped() {
+        let red = UIColor(red: 0.72, green: 0.15, blue: 0.15, alpha: 1)
+        let palette = ArtworkPalette(image: solidImage(red))
+        let dominant = palette.allColors()[0]
+
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        dominant.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #expect(r > b, "expected a red-dominant colour, got r=\(r) g=\(g) b=\(b)")
+    }
+}
