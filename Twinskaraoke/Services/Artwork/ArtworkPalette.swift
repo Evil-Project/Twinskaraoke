@@ -52,10 +52,17 @@ nonisolated struct ArtworkPalette: Equatable {
 
         private static func dominantColors(image: UIImage, count: Int) -> [UIColor] {
             let size = CGSize(width: 32, height: 32)
-            UIGraphicsBeginImageContextWithOptions(size, false, 1)
-            defer { UIGraphicsEndImageContext() }
-            image.draw(in: CGRect(origin: .zero, size: size))
-            guard let cg = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            format.opaque = false
+            // The byte walk below assumes 8-bit sRGB. Left at the renderer's
+            // default this would be a wide-gamut context on capable displays,
+            // changing bitsPerPixel out from under those offsets.
+            format.preferredRange = .standard
+            let scaled = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }
+            guard let cg = scaled.cgImage,
                   let provider = cg.dataProvider,
                   let data = provider.data,
                   let bytes = CFDataGetBytePtr(data)

@@ -115,7 +115,7 @@ final class RadioController {
                 guard !Task.isCancelled else { return }
                 if attempt < maxRetries - 1 {
                     let delay = Double(1 << attempt)
-                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try? await Task.sleep(for: .seconds(delay))
                 }
             }
         }

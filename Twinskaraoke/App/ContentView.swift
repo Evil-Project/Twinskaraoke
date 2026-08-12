@@ -77,7 +77,7 @@ private final class PopupPlaybackState {
     private func scheduleSnapshotPublish() {
         guard publishTask == nil else { return }
         publishTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 33_000_000)
+            try? await Task.sleep(for: .milliseconds(33))
             guard let self else { return }
             let nextSnapshot = pendingSnapshot
             publishTask = nil

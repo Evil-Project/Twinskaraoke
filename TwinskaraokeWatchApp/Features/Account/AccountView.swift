@@ -147,7 +147,7 @@ struct AccountView: View {
                         Text(language.displayName).tag(language.rawValue)
                     }
                 }
-                .compatibleOnChange(of: languageMode) { _ in
+                .onChange(of: languageMode) { _, _ in
                     WatchHaptic.play(.click)
                 }
                 .accessibilityHint("Changes the language used on this watch.")
@@ -155,7 +155,7 @@ struct AccountView: View {
 
             Section("Motion") {
                 Toggle("Respect Reduce Motion", isOn: $respectReducedMotion)
-                    .compatibleOnChange(of: respectReducedMotion) { _ in
+                    .onChange(of: respectReducedMotion) { _, _ in
                         WatchHaptic.play(.click)
                     }
             }
@@ -163,7 +163,7 @@ struct AccountView: View {
         .navigationTitle("Account")
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: showsFullGuestID)
         .onAppear(perform: refreshCacheSize)
-        .compatibleOnChange(of: audioManager.cacheRevision) { _ in
+        .onChange(of: audioManager.cacheRevision) { _, _ in
             refreshCacheSize()
         }
         .confirmationDialog(
@@ -210,7 +210,7 @@ private struct WatchAccountHeader: View {
                     } placeholder: {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 31, weight: .semibold))
-                            .foregroundColor(.appAccent)
+                            .foregroundStyle(Color.appAccent)
                     }
                     .frame(width: 50, height: 50)
                     .clipShape(Circle())
@@ -221,12 +221,12 @@ private struct WatchAccountHeader: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                     Text(statusText)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -279,7 +279,7 @@ private struct WatchAccountPill: View {
             .font(.system(size: 10, weight: .semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.78)
-            .foregroundColor(.appAccent)
+            .foregroundStyle(Color.appAccent)
             .frame(maxWidth: .infinity, minHeight: 24)
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -297,18 +297,18 @@ private struct WatchAccountTokenRow: View {
         HStack(spacing: 9) {
             Image(systemName: showsFullValue ? "eye.fill" : "number")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.appAccent)
+                .foregroundStyle(Color.appAccent)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(Color.appAccent.opacity(0.14)))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(value)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.68)
             }
@@ -317,7 +317,7 @@ private struct WatchAccountTokenRow: View {
 
             Image(systemName: showsFullValue ? "eye.slash" : "eye")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
         .contentShape(Rectangle())
@@ -334,7 +334,7 @@ private struct WatchAccountStatusRow: View {
         HStack(spacing: 9) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(tint)
+                .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(tint.opacity(0.14)))
                 .accessibilityHidden(true)
@@ -342,11 +342,11 @@ private struct WatchAccountStatusRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(value)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -1,27 +1,5 @@
 import SwiftUI
 
-#if os(iOS)
-  import UIKit
-#endif
-
-extension View {
-  @ViewBuilder
-  func compatibleOnChange<T: Equatable>(
-    of value: T,
-    action: @escaping (T) -> Void
-  ) -> some View {
-    #if os(watchOS)
-    if #available(watchOS 10.0, *) {
-      self.onChange(of: value) { _, newValue in action(newValue) }
-    } else {
-      self.onChange(of: value, perform: action)
-    }
-    #else
-    self.onChange(of: value) { _, newValue in action(newValue) }
-    #endif
-  }
-}
-
 struct PressableButtonStyle: ButtonStyle {
   var scale: CGFloat = 0.97
   var dim: Double = 0.7
@@ -69,7 +47,7 @@ private struct PressableButtonBody: View {
       .scaleEffect(reduceMotion ? 1.0 : (configuration.isPressed ? scale : 1.0))
       .opacity(currentOpacity)
       .animation(reduceMotion ? nil : animation, value: configuration.isPressed)
-      .compatibleOnChange(of: configuration.isPressed) { isPressed in
+      .onChange(of: configuration.isPressed) { _, isPressed in
         updatePressState(isPressed)
       }
   }

@@ -164,7 +164,7 @@ struct RemoteArtworkImage: View {
         
         // 3. CodeRabbit Fix: Safe sleep wrapper to catch cancellation
         do {
-            try await Task.sleep(nanoseconds: ArtworkFailureBackoff.shared.cooldownNanoseconds)
+            try await Task.sleep(for: ArtworkFailureBackoff.shared.cooldownDuration)
         } catch {
             // Reset flag on cancellation so the image doesn't stay frozen
             self.loadFailed = false
@@ -246,8 +246,8 @@ final class ArtworkFailureBackoff {
     // body evaluation, where publishing a change is illegal.
     private(set) var generation = 0
 
-    var cooldownNanoseconds: UInt64 {
-        UInt64(cooldown * 1_000_000_000)
+    var cooldownDuration: Duration {
+        .seconds(cooldown)
     }
 
     func isBlocked(_ url: URL) -> Bool {
@@ -351,11 +351,8 @@ struct MusicArtworkPlaceholder: View {
     var cornerRadius: CGFloat = 8
 
     var body: some View {
-        GeometryReader { proxy in
-            Color.appPlaceholderPrimary
-                .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        Color.appPlaceholderPrimary
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 

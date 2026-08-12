@@ -112,7 +112,7 @@ struct QueueView: View {
         .onAppear {
             prefetchArtwork()
         }
-        .compatibleOnChange(of: audioManager.upNextSongs.map(\.id)) { _ in
+        .onChange(of: audioManager.upNextSongs.map(\.id)) { _, _ in
             prefetchArtwork()
         }
         .onDisappear {
@@ -174,7 +174,7 @@ private struct WatchQueuedSongRow: View {
 
                 Text("\(offset + 1)")
                     .font(.system(size: 8, weight: .heavy, design: .rounded))
-                    .foregroundColor(isUpNext ? .white : .primary)
+                    .foregroundStyle(isUpNext ? .white : .primary)
                     .frame(minWidth: 15, minHeight: 15)
                     .background(
                         Circle()
@@ -191,22 +191,22 @@ private struct WatchQueuedSongRow: View {
                 HStack(spacing: 4) {
                     Image(systemName: isUpNext ? "text.line.first.and.arrowtriangle.forward" : "line.3.horizontal")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(isUpNext ? .appAccent : .secondary)
+                        .foregroundStyle(isUpNext ? Color.appAccent : .secondary)
                         .accessibilityHidden(true)
                     Text(isUpNext ? "Up Next" : "Queued \(offset + 1) of \(total)")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(isUpNext ? .appAccent : .secondary)
+                        .foregroundStyle(isUpNext ? Color.appAccent : .secondary)
                         .lineLimit(1)
                 }
 
                 Text(song.title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Text(song.artistName)
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -214,7 +214,7 @@ private struct WatchQueuedSongRow: View {
 
             Text(song.durationText)
                 .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .monospacedDigit()
                 .accessibilityHidden(true)
@@ -271,15 +271,15 @@ private struct WatchQueueSummaryCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Queue")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Text(song.title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text(queueSummary)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
@@ -353,7 +353,7 @@ private struct WatchQueueTransportButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: iconSize, weight: .semibold))
-                .foregroundColor(tint)
+                .foregroundStyle(tint)
                 .frame(width: diameter, height: diameter)
                 .background(Circle().fill(fill))
         }

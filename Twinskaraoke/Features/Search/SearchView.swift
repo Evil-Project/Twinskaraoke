@@ -130,7 +130,7 @@ struct SearchView: View {
             await Task.yield()
             guard !Task.isCancelled else { return }
             AudioPlayerManager.shared.play(song: song, context: context)
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, pendingSongID == song.id else { return }
             pendingSongID = nil
         }

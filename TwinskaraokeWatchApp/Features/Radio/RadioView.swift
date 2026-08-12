@@ -129,7 +129,7 @@ private struct RadioNowPlayingCard: View {
                             .overlay {
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.appAccent)
+                                    .foregroundStyle(Color.appAccent)
                             }
                     }
                     .frame(width: 44, height: 44)
@@ -148,13 +148,13 @@ private struct RadioNowPlayingCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(isTunedIn ? .appAccent : .primary)
+                        .foregroundStyle(isTunedIn ? Color.appAccent : .primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
@@ -215,7 +215,7 @@ private struct RadioStatusPill: View {
             .font(.system(size: 10, weight: .semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
-            .foregroundColor(.appAccent)
+            .foregroundStyle(Color.appAccent)
             .padding(.horizontal, 8)
             .frame(minHeight: 22)
             .background(
@@ -239,7 +239,7 @@ private struct RadioTrackRow: View {
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .foregroundStyle(.secondary.opacity(0.7))
                     }
             }
             .frame(width: 32, height: 32)
@@ -252,7 +252,7 @@ private struct RadioTrackRow: View {
                 if let artist = song.artist {
                     Text(artist)
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }

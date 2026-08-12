@@ -26,7 +26,7 @@ struct SearchView: View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 TextField("Search", text: $viewModel.searchText)
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
@@ -39,7 +39,7 @@ struct SearchView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 22, height: 22)
                     }
                     .buttonStyle(.watchPressable)
@@ -120,11 +120,11 @@ struct SearchView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.title)
                                             .font(.system(size: 13, weight: .semibold))
-                                            .foregroundColor(.primary)
+                                            .foregroundStyle(.primary)
                                             .lineLimit(1)
                                         Text(item.originalArtistDisplay)
                                             .font(.system(size: 11))
-                                            .foregroundColor(.secondary)
+                                            .foregroundStyle(.secondary)
                                             .lineLimit(1)
                                     }
                                 }
@@ -153,7 +153,7 @@ struct SearchView: View {
         .onAppear {
             prefetchArtwork()
         }
-        .compatibleOnChange(of: viewModel.resolvedResults.map(\.id)) { _ in
+        .onChange(of: viewModel.resolvedResults.map(\.id)) { _, _ in
             prefetchArtwork()
         }
         .onDisappear {
@@ -206,18 +206,18 @@ private struct WatchSearchResultsSummary: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.appAccent)
+                .foregroundStyle(Color.appAccent)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(Color.appAccent.opacity(0.14)))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(resultCountText)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text("Results for \"\(query)\"")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 

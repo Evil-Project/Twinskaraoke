@@ -57,7 +57,7 @@ final class LyricsTranslationService {
                     lastError = LyricsTranslationError.invalidResponse
                     if attempt < maxRetries - 1 {
                         let delay = baseDelay * pow(2.0, Double(attempt))
-                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        try await Task.sleep(for: .seconds(delay))
                         continue
                     }
                 }
@@ -69,7 +69,7 @@ final class LyricsTranslationService {
                 lastError = error
                 if shouldRetry(urlError: error), attempt < maxRetries - 1 {
                     let delay = baseDelay * pow(2.0, Double(attempt))
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try await Task.sleep(for: .seconds(delay))
                     continue
                 }
                 throw error

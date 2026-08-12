@@ -176,11 +176,11 @@ struct PlayerView: View {
                 lastCrownFeedbackStep = feedbackStep(crownValue)
                 favorites.loadIfNeeded()
             }
-            .compatibleOnChange(of: crownValue) { newValue in
+            .onChange(of: crownValue) { _, newValue in
                 guard isListenerTurn(newValue) else { return }
                 applyCrown(newValue, feedback: true)
             }
-            .compatibleOnChange(of: audioManager.volume) { newValue in
+            .onChange(of: audioManager.volume) { _, newValue in
                 guard crownTarget == .volume else { return }
                 let position = crownPosition(forVolume: newValue)
                 if abs(position - crownValue) > 0.01 {
@@ -188,10 +188,10 @@ struct PlayerView: View {
                     lastCrownFeedbackStep = feedbackStep(position)
                 }
             }
-            .compatibleOnChange(of: audioManager.currentTime) { _ in
+            .onChange(of: audioManager.currentTime) { _, _ in
                 syncCrownToPlayback()
             }
-            .compatibleOnChange(of: audioManager.isRadioMode) { isRadio in
+            .onChange(of: audioManager.isRadioMode) { _, isRadio in
                 guard isRadio else { return }
                 // A live stream has no position for the Crown to point at, and
                 // the queue page it may be sitting on no longer exists.
@@ -251,12 +251,12 @@ struct PlayerView: View {
                 VStack(spacing: 2) {
                     Text(song.title)
                         .font(.system(size: metrics.titleSize, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                     Text(song.artistName)
                         .font(.system(size: metrics.artistSize))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 }
@@ -270,7 +270,7 @@ struct PlayerView: View {
                     // and nowhere to seek to.
                     Label("Live", systemImage: "dot.radiowaves.left.and.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.appAccent)
+                        .foregroundStyle(Color.appAccent)
                         .padding(.horizontal, 8)
                         .frame(minHeight: 20)
                         .background(Capsule().fill(Color.appAccent.opacity(0.12)))
@@ -292,7 +292,7 @@ struct PlayerView: View {
                                 Text("-" + formatTime(max(0, audioManager.duration - audioManager.currentTime)))
                             }
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(crownTarget == .position ? .appAccent : .secondary)
+                            .foregroundStyle(crownTarget == .position ? Color.appAccent : .secondary)
                         }
                         .contentShape(Rectangle())
                     }
@@ -386,7 +386,7 @@ struct PlayerView: View {
                             } label: {
                                 Image(systemName: isFavorite ? "star.fill" : "star")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(isFavorite ? .appAccent : .secondary)
+                                    .foregroundStyle(isFavorite ? Color.appAccent : .secondary)
                                     .frame(
                                         width: metrics.secondaryControlSize,
                                         height: metrics.secondaryControlSize
@@ -412,7 +412,7 @@ struct PlayerView: View {
                         } label: {
                             Image(systemName: "shuffle")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(audioManager.isShuffleOn ? .appAccent : .secondary)
+                                .foregroundStyle(audioManager.isShuffleOn ? Color.appAccent : .secondary)
                                 .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
                                 .background(
                                     Circle().fill(audioManager.isShuffleOn ? Color.appAccent.opacity(0.14) : Color.clear)
@@ -428,8 +428,8 @@ struct PlayerView: View {
                         } label: {
                             Image(systemName: audioManager.playbackMode.iconName)
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(
-                                    audioManager.playbackMode == .singleLoop ? .appAccent : .secondary
+                                .foregroundStyle(
+                                    audioManager.playbackMode == .singleLoop ? Color.appAccent : .secondary
                                 )
                                 .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
                                 .background(
@@ -454,7 +454,7 @@ struct PlayerView: View {
                         } label: {
                             Image(systemName: "list.bullet")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
                         }
                         .buttonStyle(.watchPressable)
@@ -772,7 +772,7 @@ private struct WatchPlayerIconButton: View {
                 .overlay {
                     Image(systemName: systemName)
                         .font(.system(size: iconSize, weight: .semibold))
-                        .foregroundColor(tint)
+                        .foregroundStyle(tint)
                 }
         }
         .buttonStyle(.watchPressable)

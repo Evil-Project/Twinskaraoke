@@ -89,13 +89,13 @@ struct PlaylistsGridView: View {
             userViewModel.fetch()
             prefetchArtwork()
         }
-        .compatibleOnChange(of: viewModel.playlists.map(\.id)) { _ in
+        .onChange(of: viewModel.playlists.map(\.id)) { _, _ in
             prefetchArtwork()
         }
-        .compatibleOnChange(of: userViewModel.playlists.map(\.id)) { _ in
+        .onChange(of: userViewModel.playlists.map(\.id)) { _, _ in
             prefetchArtwork()
         }
-        .compatibleOnChange(of: auth.linkState) { state in
+        .onChange(of: auth.linkState) { _, state in
             // Follow the phone in and out of a session so another account's
             // playlists never linger on screen.
             if state == .signedIn {
@@ -128,19 +128,19 @@ struct PlaylistsGridView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Yours")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.leading, 4)
 
             HStack(spacing: 9) {
                 Image(systemName: "exclamationmark.icloud")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 28)
                     .accessibilityHidden(true)
 
                 Text(userViewModel.loadError ?? "Check your connection and try again.")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 4)
@@ -169,7 +169,7 @@ struct PlaylistsGridView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Yours")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.leading, 4)
 
             LazyVGrid(columns: columns, spacing: 12) {
@@ -196,7 +196,7 @@ struct PlaylistsGridView: View {
                 ProgressView()
                 Text("Loading Playlists")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 24)
@@ -265,18 +265,18 @@ private struct WatchPlaylistsHeader: View {
                     .fill(Color.appAccent.opacity(0.14))
                 Image(systemName: "music.note.list")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.appAccent)
+                    .foregroundStyle(Color.appAccent)
             }
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Playlists")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(summaryText)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -314,7 +314,7 @@ struct WatchPlaylistCard: View {
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.secondary.opacity(0.65))
+                            .foregroundStyle(.secondary.opacity(0.65))
                     }
                 WatchCachedImage(url: playlist.thumbnailURL ?? playlist.imageURL) { image in
                     image.resizable().scaledToFill()
@@ -327,7 +327,7 @@ struct WatchPlaylistCard: View {
             .overlay(alignment: .bottomTrailing) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color.black.opacity(0.45)))
                     .padding(5)
@@ -337,13 +337,13 @@ struct WatchPlaylistCard: View {
             VStack(spacing: 2) {
                 Text(playlist.name)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
                 Text(playlist.songCountText)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .frame(minHeight: 32, alignment: .top)

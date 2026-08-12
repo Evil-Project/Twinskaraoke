@@ -207,18 +207,18 @@ private struct WatchPlaylistDetailHeader: View {
                         .fill(Color.appAccent.opacity(0.16))
                     Image(systemName: "music.note.list")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.appAccent)
+                        .foregroundStyle(Color.appAccent)
                 }
                 .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(playlistName)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                     Text(summaryText)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
@@ -281,7 +281,7 @@ private struct WatchPlaylistHeaderButton: View {
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-                .foregroundColor(tint)
+                .foregroundStyle(tint)
                 .frame(maxWidth: .infinity, minHeight: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
