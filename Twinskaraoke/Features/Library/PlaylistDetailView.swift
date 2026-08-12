@@ -22,6 +22,9 @@ struct PlaylistDetailView: View {
     private static let searchRevealDeadZone: CGFloat = 30
     /// Below 1 so the field trails the finger — ~110pt of pull for a full reveal.
     private static let searchRevealResistance: CGFloat = 0.65
+    /// Step the observed pull is rounded to, so the reveal cannot re-trigger the
+    /// scroll observation that drives it. See the `onScrollGeometryChange` below.
+    private static let searchPullStep: CGFloat = 2
     @State private var searchRevealHeight: CGFloat = 0
     /// Drives the navigation bar's title and background. The old search field
     /// hid the title while it was active, because it lived in the bar area; the
@@ -344,7 +347,18 @@ struct PlaylistDetailView: View {
         // meaningless). Driving height from the live pull needs none of it.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             // Positive while pulled past the top.
-            -(geometry.contentOffset.y + geometry.contentInsets.top)
+            let pull = -(geometry.contentOffset.y + geometry.contentInsets.top)
+            // Quantised, because this observation is circular: the action writes
+            // `searchRevealHeight`, that height is laid out inside this very
+            // scroll view, and the resulting geometry change re-enters here on
+            // the same frame -- which is what SwiftUI reports as
+            // "<OnScrollGeometryChange Modifier> tried to update multiple times
+            // per frame". Rounding to a step gives the loop somewhere to stop:
+            // the sub-step geometry the action induces no longer reads as a
+            // change. `ScrollOptimization` makes the same point the coarse way,
+            // with zones; a reveal needs to track the finger, so it rounds
+            // instead. At 0.65 resistance a 2pt step is ~1.3pt of height.
+            return (pull / Self.searchPullStep).rounded() * Self.searchPullStep
         } action: { _, pull in
             updateSearchReveal(pull: pull)
         }
