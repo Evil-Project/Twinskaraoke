@@ -324,7 +324,7 @@ private struct WatchBrowseLinkRow: View {
         HStack(spacing: 10) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(tint)
+                .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(tint.opacity(0.14)))
                 .accessibilityHidden(true)
@@ -332,11 +332,11 @@ private struct WatchBrowseLinkRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }

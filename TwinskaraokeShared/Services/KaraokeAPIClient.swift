@@ -888,7 +888,7 @@ nonisolated enum KaraokeAPIClient {
     allowsRetry: Bool = true
   ) async throws -> Data {
     let maxRetries = 3
-    let baseDelay: UInt64 = 500_000_000
+    let baseDelay: Duration = .milliseconds(500)
     // `allowsRetry: false` is for fire-and-forget writes whose failure is
     // cosmetic (play counts). Retrying those triples their cost for no user
     // benefit, and they burst when someone skips through a queue.
@@ -910,15 +910,15 @@ nonisolated enum KaraokeAPIClient {
           }
 
           if canRetry && shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {
-            let delay: UInt64
+            let delay: Duration
             if httpResponse.statusCode == 429,
               let retryAfter = retryAfterInterval(from: httpResponse)
             {
-              delay = UInt64(retryAfter * 1_000_000_000)
+              delay = .seconds(retryAfter)
             } else {
               delay = backoffDelay(attempt: attempt, baseDelay: baseDelay)
             }
-            try await Task.sleep(nanoseconds: delay)
+            try await Task.sleep(for: delay)
             continue
           }
           throw APIError.httpStatus(httpResponse.statusCode)
@@ -927,7 +927,7 @@ nonisolated enum KaraokeAPIClient {
       } catch let error as URLError {
 
         if canRetry && shouldRetry(urlError: error) && attempt < maxRetries - 1 {
-          try await Task.sleep(nanoseconds: backoffDelay(attempt: attempt, baseDelay: baseDelay))
+          try await Task.sleep(for: backoffDelay(attempt: attempt, baseDelay: baseDelay))
           continue
         }
         throw error
@@ -947,13 +947,13 @@ nonisolated enum KaraokeAPIClient {
 
   // Exponential backoff with up to half a base delay of random jitter so
   // concurrent retrying clients don't stay in lockstep.
-  private static func backoffDelay(attempt: Int, baseDelay: UInt64) -> UInt64 {
-    baseDelay * UInt64(1 << attempt) + UInt64.random(in: 0 ... baseDelay / 2)
+  private static func backoffDelay(attempt: Int, baseDelay: Duration) -> Duration {
+    baseDelay * Double(1 << attempt) + baseDelay * Double.random(in: 0 ... 0.5)
   }
 
   // Retry-After may be delta-seconds or an HTTP-date. The parsed value is
-  // clamped so an absurd header can't overflow the nanosecond conversion
-  // (or park the retry for hours) at the call site.
+  // clamped so an absurd header can't park the retry for hours at the call
+  // site.
   private static let maxRetryAfterInterval: TimeInterval = 300
 
   private static func retryAfterInterval(from response: HTTPURLResponse) -> TimeInterval? {

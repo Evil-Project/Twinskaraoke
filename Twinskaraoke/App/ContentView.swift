@@ -77,7 +77,7 @@ private final class PopupPlaybackState {
     private func scheduleSnapshotPublish() {
         guard publishTask == nil else { return }
         publishTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 33_000_000)
+            try? await Task.sleep(for: .milliseconds(33))
             guard let self else { return }
             let nextSnapshot = pendingSnapshot
             publishTask = nil
@@ -563,31 +563,37 @@ private struct PopupContent: View {
         FullScreenPlayerView()
             .environment(AudioPlayerManager.shared)
             .popupItem {
+                // `trailingButtons:` explicitly. LNPopupUI 4 added a
+                // `leadingButtons:` parameter ahead of it, so the bare trailing
+                // closure this used to be now binds to the leading slot — which
+                // is what moved the play and next buttons to the left of the
+                // artwork.
                 PopupItem(
                     id: popupState.id,
                     verbatimTitle: popupState.title,
                     verbatimSubtitle: popupState.subtitle.isEmpty ? nil : popupState.subtitle,
-                    image: popupImage
-                ) {
-                    ToolbarItemGroup(placement: .popupBar) {
-                        PopupBarTrailingItems(
-                            isPlaying: popupState.isPlaying,
-                            isRadioMode: popupState.isRadioMode,
-                            onTogglePlayPause: {
-                                #if canImport(UIKit)
-                                    PopupOpenIntentGate.shared.suppressNextOpen()
-                                #endif
-                                AudioPlayerManager.shared.togglePlayPause()
-                            },
-                            onNext: {
-                                #if canImport(UIKit)
-                                    PopupOpenIntentGate.shared.suppressNextOpen()
-                                #endif
-                                AudioPlayerManager.shared.playNextOrRandom()
-                            }
-                        )
+                    image: popupImage,
+                    trailingButtons: {
+                        ToolbarItemGroup(placement: .popupBar) {
+                            PopupBarTrailingItems(
+                                isPlaying: popupState.isPlaying,
+                                isRadioMode: popupState.isRadioMode,
+                                onTogglePlayPause: {
+                                    #if canImport(UIKit)
+                                        PopupOpenIntentGate.shared.suppressNextOpen()
+                                    #endif
+                                    AudioPlayerManager.shared.togglePlayPause()
+                                },
+                                onNext: {
+                                    #if canImport(UIKit)
+                                        PopupOpenIntentGate.shared.suppressNextOpen()
+                                    #endif
+                                    AudioPlayerManager.shared.playNextOrRandom()
+                                }
+                            )
+                        }
                     }
-                }
+                )
             }
     }
 

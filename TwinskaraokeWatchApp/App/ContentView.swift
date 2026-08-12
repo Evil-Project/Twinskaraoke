@@ -62,7 +62,7 @@ struct WatchSongArtwork: View {
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: size * 0.34, weight: .semibold))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .foregroundStyle(.secondary.opacity(0.7))
                     }
             }
             .frame(width: size, height: size)
@@ -119,10 +119,10 @@ struct WatchNowPlayingGlyph: View {
         }
         .frame(width: 12, height: 12)
         .onAppear(perform: syncAnimation)
-        .compatibleOnChange(of: isPlaying) { _ in
+        .onChange(of: isPlaying) { _, _ in
             syncAnimation()
         }
-        .compatibleOnChange(of: reduceMotion) { _ in
+        .onChange(of: reduceMotion) { _, _ in
             syncAnimation()
         }
     }
@@ -173,11 +173,11 @@ struct WatchSongRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(isCurrent ? .appAccent : .primary)
+                    .foregroundStyle(isCurrent ? Color.appAccent : .primary)
                     .lineLimit(1)
                 Text(song.artistName)
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -186,13 +186,13 @@ struct WatchSongRow: View {
             if let trailingSystemImage {
                 Image(systemName: trailingSystemImage)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(isCurrent ? .appAccent : .secondary)
+                    .foregroundStyle(isCurrent ? Color.appAccent : .secondary)
                     .frame(width: 18)
                     .accessibilityHidden(true)
             } else if showsDuration {
                 Text(song.durationText)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .accessibilityHidden(true)
             }
@@ -232,13 +232,13 @@ struct WatchEmptyState: View {
         VStack(spacing: 7) {
             Image(systemName: systemImage)
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .multilineTextAlignment(.center)
             Text(message)
                 .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -261,13 +261,13 @@ struct WatchLoadErrorState: View {
         VStack(spacing: 7) {
             Image(systemName: "exclamationmark.icloud")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .multilineTextAlignment(.center)
             Text(message)
                 .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Retry", action: retryAction)

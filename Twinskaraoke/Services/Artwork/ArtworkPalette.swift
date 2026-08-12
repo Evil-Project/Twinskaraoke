@@ -52,20 +52,40 @@ nonisolated struct ArtworkPalette: Equatable {
 
         private static func dominantColors(image: UIImage, count: Int) -> [UIColor] {
             let size = CGSize(width: 32, height: 32)
-            UIGraphicsBeginImageContextWithOptions(size, false, 1)
-            defer { UIGraphicsEndImageContext() }
-            image.draw(in: CGRect(origin: .zero, size: size))
-            guard let cg = UIGraphicsGetImageFromCurrentImageContext()?.cgImage,
-                  let provider = cg.dataProvider,
-                  let data = provider.data,
-                  let bytes = CFDataGetBytePtr(data)
+            let width = Int(size.width)
+            let height = Int(size.height)
+            // Draw into a context whose layout we chose, rather than sampling
+            // whatever one of the UIKit convenience renderers happened to
+            // produce. Neither `UIGraphicsBeginImageContextWithOptions` nor
+            // `UIGraphicsImageRenderer` promises a channel order, and on iOS
+            // both hand back BGRA — so the byte walk below, which reads the
+            // first three bytes as R, G and B, was returning every palette with
+            // red and blue exchanged. `premultipliedLast | byteOrder32Big` is
+            // RGBA, and sRGB at 8 bits per component keeps the offsets honest
+            // on wide-gamut displays.
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                      data: nil,
+                      width: width,
+                      height: height,
+                      bitsPerComponent: 8,
+                      bytesPerRow: 0,
+                      space: space,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                          | CGBitmapInfo.byteOrder32Big.rawValue
+                  )
             else { return [] }
-            let bpp = max(cg.bitsPerPixel / 8, 4)
-            let rowBytes = cg.bytesPerRow
-            // bpp is floored at 4 regardless of the real pixel size, so a
-            // non-RGBA context would make these offsets outrun the buffer.
-            // An overread is worse than a crash, so bound it explicitly.
-            let byteCount = CFDataGetLength(data)
+            UIGraphicsPushContext(context)
+            // Drawn without the UIKit flip, so this lands vertically mirrored.
+            // Irrelevant: what follows is a histogram over every sampled pixel,
+            // and it does not care where any of them sat.
+            image.draw(in: CGRect(origin: .zero, size: size))
+            UIGraphicsPopContext()
+            guard let base = context.data else { return [] }
+            let bytes = base.assumingMemoryBound(to: UInt8.self)
+            let bpp = 4
+            let rowBytes = context.bytesPerRow
+            let byteCount = rowBytes * height
             var buckets: [UInt32: (count: Int, saturation: CGFloat, brightness: CGFloat)] = [:]
             for y in stride(from: 0, to: Int(size.height), by: 2) {
                 for x in stride(from: 0, to: Int(size.width), by: 2) {

@@ -107,7 +107,7 @@ struct FavoritesView: View {
             // so an unchanged list costs a cache hit rather than a request.
             viewModel.fetch(force: true)
         }
-        .compatibleOnChange(of: auth.linkState) { state in
+        .onChange(of: auth.linkState) { _, state in
             // Following the phone out of a session: drop the previous
             // account's list rather than leaving it on screen.
             if state == .signedIn {

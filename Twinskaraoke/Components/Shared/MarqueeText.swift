@@ -23,50 +23,44 @@ struct MarqueeText: View {
             .opacity(0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        if needsScroll {
-                            HStack(spacing: gap) {
-                                Text(text).font(font).foregroundStyle(color).fixedSize()
-                                Text(text).font(font).foregroundStyle(color).fixedSize()
-                            }
-                            .offset(x: -phase)
-                        } else {
+                ZStack(alignment: .leading) {
+                    if needsScroll {
+                        HStack(spacing: gap) {
+                            Text(text).font(font).foregroundStyle(color).fixedSize()
                             Text(text).font(font).foregroundStyle(color).fixedSize()
                         }
-                    }
-                    // The invisible base Text below is the accessibility
-                    // element; these overlay copies are visual-only.
-                    .accessibilityHidden(true)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
-                    .clipped()
-                    .mask(
-                        LinearGradient(
-                            stops: needsScroll
-                                ? [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .black, location: 0.04),
-                                    .init(color: .black, location: 0.96),
-                                    .init(color: .clear, location: 1),
-                                ]
-                                : [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 1),
-                                ],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .onAppear {
-                        containerWidth = geo.size.width
-                        if animationTask == nil { restartAnimation() }
-                    }
-                    .onChange(of: geo.size.width) { _, newWidth in
-                        guard abs(containerWidth - newWidth) > 0.5 else { return }
-                        containerWidth = newWidth
-                        restartAnimation()
+                        .offset(x: -phase)
+                    } else {
+                        Text(text).font(font).foregroundStyle(color).fixedSize()
                     }
                 }
+                // The invisible base Text below is the accessibility
+                // element; these overlay copies are visual-only.
+                .accessibilityHidden(true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .clipped()
+                .mask(
+                    LinearGradient(
+                        stops: needsScroll
+                            ? [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.04),
+                                .init(color: .black, location: 0.96),
+                                .init(color: .clear, location: 1),
+                            ]
+                            : [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 1),
+                            ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
             )
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+                guard abs(containerWidth - newWidth) > 0.5 else { return }
+                containerWidth = newWidth
+                restartAnimation()
+            }
             .background(
                 Text(text)
                     .font(font)
@@ -74,18 +68,12 @@ struct MarqueeText: View {
                     .hidden()
                     // Measuring copy only; keep it out of the accessibility tree.
                     .accessibilityHidden(true)
-                    .background(
-                        GeometryReader { t in
-                            Color.clear.preference(key: TextSizeKey.self, value: t.size)
-                        }
-                    )
+                    .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+                        guard abs(textSize.width - size.width) > 0.5 else { return }
+                        textSize = size
+                        restartAnimation()
+                    }
             )
-            .onPreferenceChange(TextSizeKey.self) { size in
-                if abs(textSize.width - size.width) > 0.5 {
-                    textSize = size
-                    restartAnimation()
-                }
-            }
             .onChange(of: text) {
                 restartAnimation()
             }
@@ -102,23 +90,16 @@ struct MarqueeText: View {
         let distance = textSize.width + gap
         let duration = Double(distance) / Double(speed)
         animationTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(startDelay * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(startDelay))
             while !Task.isCancelled {
                 withOptionalAnimation(AppMotion.linear(duration: duration)) {
                     phase = distance
                 }
-                try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+                try? await Task.sleep(for: .seconds(duration))
                 if Task.isCancelled { break }
                 phase = 0
-                try? await Task.sleep(nanoseconds: UInt64(startDelay * 1_000_000_000))
+                try? await Task.sleep(for: .seconds(startDelay))
             }
         }
-    }
-}
-
-private struct TextSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
     }
 }

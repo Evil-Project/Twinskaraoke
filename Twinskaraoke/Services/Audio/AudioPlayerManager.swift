@@ -1164,7 +1164,7 @@ final class AudioPlayerManager {
             guard delay.isFinite else { return }
             if delay > 0 {
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try await Task.sleep(for: .seconds(delay))
                 } catch {
                     return
                 }
@@ -2539,7 +2539,7 @@ final class AudioPlayerManager {
             )
             cancelBackgroundAnalysisRetry()
             backgroundAnalysisRetryTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                try? await Task.sleep(for: .seconds(3))
                 guard let self,
                       let currentSong,
                       currentSong.id == songID,
@@ -2669,7 +2669,7 @@ final class AudioPlayerManager {
                 else { return }
                 sourceURL = localPlaybackFileURL(for: currentSong)
                 if sourceURL == nil {
-                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    try? await Task.sleep(for: .milliseconds(500))
                 }
             }
             guard let sourceURL else { return }

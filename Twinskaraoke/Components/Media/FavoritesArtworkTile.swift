@@ -139,10 +139,7 @@ struct PlaylistPlaceholderArtwork: View {
     let seed: String
 
     var body: some View {
-        GeometryReader { geo in
-            MusicArtworkPlaceholder(cornerRadius: 0)
-                .frame(width: geo.size.width, height: geo.size.height)
-        }
+        MusicArtworkPlaceholder(cornerRadius: 0)
     }
 }
 
