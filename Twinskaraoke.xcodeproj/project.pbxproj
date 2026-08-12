@@ -801,6 +801,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeMacApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -836,6 +837,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeMacApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -867,6 +869,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeTVApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -898,6 +901,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeTVApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1105,6 +1109,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.evilneuro.Twinskaraoke;
@@ -1141,6 +1146,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.evilneuro.Twinskaraoke;
@@ -1180,6 +1186,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Twinskaraoke/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan QR codes to sign in on the web.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save artwork from the Art Gallery to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
@@ -1223,6 +1230,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Twinskaraoke/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Twinskaraoke;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan QR codes to sign in on the web.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save artwork from the Art Gallery to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
