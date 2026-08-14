@@ -50,15 +50,25 @@ struct MiniPlayerBar: View {
             )
         }
         .padding(.horizontal, 12)
-        // No `maxWidth: .infinity`. The accessory animates its own width as the
-        // tab bar minimizes and expands, and claiming all available width on
-        // every frame of that fought it: the content settled against one edge
-        // part-way through and then snapped back to centre at the end.
+        // Anchored to the leading edge and clipped, which is what keeps the
+        // expansion honest.
         //
-        // The layout also changes shape between the two placements, and that
-        // change is deliberately not animated — the system is already animating
-        // the container, and animating the contents on a second, unrelated
-        // curve is what made the move read as two separate movements.
+        // `\.tabViewBottomAccessoryPlacement` flips to `.expanded` at the
+        // *start* of the tab bar's expansion, so the contents grow — subtitle
+        // and next button return, artwork goes 30 to 40 — while the container
+        // is still pill-width. Content wider than its frame is centred by
+        // default, and that read as the pill sitting too far right until the
+        // container caught up and everything snapped into line. Pinned leading,
+        // the artwork and title stay where they belong for the whole animation
+        // and the surplus runs off the trailing edge, where clipping hides it.
+        //
+        // Minimizing never showed this because the contents *shrink*: they fit
+        // the container at every step, so there is nothing to overflow.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        // The shape change itself is deliberately not animated: the system is
+        // already animating the container, and putting the contents on a
+        // second, unrelated curve made the move read as two movements.
         .animation(nil, value: isInline)
         // The whole bar is one big open affordance, but only where a child has
         // not already claimed the touch. `contentShape` is what makes the gaps
