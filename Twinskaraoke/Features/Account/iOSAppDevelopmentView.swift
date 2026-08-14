@@ -69,7 +69,6 @@ struct iOSAppDevelopmentView: View {
                 techRow("AVFoundation", detail: "Playback, crossfade, vocal-cancel audio mix")
                 techRow("Combine", detail: "Player and download state")
                 techRow("SDWebImageSwiftUI", detail: "Artwork loading & caching")
-                techRow("LNPopupUI", detail: "Mini-player popup bar")
             }
             Section("Contributing") {
                 Text(

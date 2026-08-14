@@ -135,7 +135,7 @@ final class ShimejiEngine: NSObject {
         // no-ops for the overlay and must not restart its animation.
         playbackObservation = observeContinuously({
             _ = AudioPlayerManager.shared.currentSong
-            _ = PopupPresentationState.shared.isExpanded
+            _ = NowPlayingPresentation.shared.isExpanded
         }, onChange: { [weak self] in
             self?.syncPlaybackState()
         })
@@ -145,7 +145,7 @@ final class ShimejiEngine: NSObject {
     private func syncPlaybackState() {
         let hasSong = AudioPlayerManager.shared.currentSong != nil
         if hasMiniPlayer != hasSong { hasMiniPlayer = hasSong }
-        let isExpanded = PopupPresentationState.shared.isExpanded
+        let isExpanded = NowPlayingPresentation.shared.isExpanded
         if isNowPlayingOpen != isExpanded { isNowPlayingOpen = isExpanded }
     }
 

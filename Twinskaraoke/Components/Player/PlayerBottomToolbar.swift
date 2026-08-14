@@ -45,9 +45,6 @@ struct PlayerBottomToolbar: View {
             #endif
             Button {
                 AppHaptic.selection.play()
-                #if canImport(UIKit)
-                    PopupOpenIntentGate.shared.suppressNextOpen()
-                #endif
                 showingQueue = true
             } label: {
                 Image(systemName: "list.bullet")

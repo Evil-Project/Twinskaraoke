@@ -80,8 +80,7 @@ import SwiftUI
 
         /// Declared through `.tabBarMinimizeBehavior(_:)` rather than only assigned
         /// to the controller, because SwiftUI re-applies the declared value on
-        /// every update and would otherwise overwrite a direct assignment — the
-        /// same trap `PopupBarEnvironmentTracker` documents for the popup bar style.
+        /// every update and would otherwise overwrite a direct assignment.
         private(set) var mode: Mode = .minimizesOnScrollDown
 
         @ObservationIgnored private weak var tabBarController: UITabBarController?
@@ -125,8 +124,8 @@ import SwiftUI
             gestureTarget = target
 
             // `cancelsTouchesInView` off and simultaneous recognition on, so this
-            // only ever watches the scroll gestures it sits above — the same
-            // arrangement `PopupOpenIntentGate` uses on the popup bar.
+            // only ever watches the scroll gestures it sits above rather than
+            // taking any touch away from them.
             let recognizer = UIPanGestureRecognizer(target: target, action: #selector(GestureTarget.handle(_:)))
             recognizer.name = Self.recognizerName
             recognizer.cancelsTouchesInView = false

@@ -138,9 +138,6 @@ struct RadioView: View {
 
     private func showLiveSchedule() {
         AppHaptic.selection.play()
-        #if canImport(UIKit)
-            PopupOpenIntentGate.shared.suppressNextOpen()
-        #endif
         showingRadioSchedule = true
     }
 

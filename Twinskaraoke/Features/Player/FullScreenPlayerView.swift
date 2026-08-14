@@ -299,9 +299,8 @@ private struct PlayerMoreMenu: View {
 
 struct FullScreenPlayerView: View {
     @Environment(AudioPlayerManager.self) var audioManager
-    private let popupPresentation = PopupPresentationState.shared
+    private let presentation = NowPlayingPresentation.shared
     private let favorites = FavoritesManager.shared
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
     @State private var showLyrics = false
@@ -452,9 +451,6 @@ struct FullScreenPlayerView: View {
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
             // Radio has no lyrics; leaving it restores the canvas default.
             showLyrics = isRadio ? false : usesPadCanvas
-        }
-        .onChange(of: popupPresentation.isExpanded) { _, isShown in
-            if !isShown { dismiss() }
         }
         .onChange(of: audioManager.aiEnabled) { _, enabled in
             if !enabled {
@@ -808,7 +804,7 @@ struct FullScreenPlayerView: View {
     private var dismissBar: some View {
         Button {
             AppHaptic.dismiss.play()
-            popupPresentation.collapse()
+            presentation.collapse()
         } label: {
             Capsule()
                 .fill(Color.primary.opacity(0.35))
@@ -1075,7 +1071,7 @@ struct FullScreenPlayerView: View {
     private func backgroundView(song: Song) -> some View {
         PlayerAmbientBackground(
             artworkURL: audioManager.displayImageURL(for: song, variant: .blur),
-            isPlaying: audioManager.isPlaying && popupPresentation.isExpanded
+            isPlaying: audioManager.isPlaying && presentation.isExpanded
         )
     }
 

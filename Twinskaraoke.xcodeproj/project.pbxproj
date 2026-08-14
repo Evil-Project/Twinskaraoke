@@ -12,8 +12,6 @@
 		D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D0C385982FB0BD870055284E /* Spleeter in Frameworks */ = {isa = PBXBuildFile; productRef = D0C385972FB0BD870055284E /* Spleeter */; };
 		D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 /* PillarboxPlayer */; };
-		D0DB31F82FA8A3F80089C24C /* LNPopupUI in Frameworks */ = {isa = PBXBuildFile; productRef = D0DB31F72FA8A3F80089C24C /* LNPopupUI */; };
-		D0DB31F92FA8A3F80089C24C /* LNPopupUI in Embed Frameworks */ = {isa = PBXBuildFile; productRef = D0DB31F72FA8A3F80089C24C /* LNPopupUI */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -72,17 +70,6 @@
 				D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0DB31FA2FA8A3F80089C24C /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				D0DB31F92FA8A3F80089C24C /* LNPopupUI in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		D0F981FE2F94C10B00FD69AB /* Embed Watch Content */ = {
@@ -245,7 +232,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				93D8E68C2F9B5FA60090FBFA /* SDWebImageSwiftUI in Frameworks */,
-				D0DB31F82FA8A3F80089C24C /* LNPopupUI in Frameworks */,
 				D0C385982FB0BD870055284E /* Spleeter in Frameworks */,
 				D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */,
 			);
@@ -413,7 +399,6 @@
 				D0F981B22F94C10900FD69AB /* Frameworks */,
 				D0F981B32F94C10900FD69AB /* Resources */,
 				D0F981FE2F94C10B00FD69AB /* Embed Watch Content */,
-				D0DB31FA2FA8A3F80089C24C /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -427,7 +412,6 @@
 			name = Twinskaraoke;
 			packageProductDependencies = (
 				93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */,
-				D0DB31F72FA8A3F80089C24C /* LNPopupUI */,
 				D0C385972FB0BD870055284E /* Spleeter */,
 				D0E1CB012FC2000100000002 /* PillarboxPlayer */,
 			);
@@ -597,7 +581,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
-				D094F1182FA8A0A5006B427D /* XCRemoteSwiftPackageReference "LNPopupUI" */,
 				D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */,
 				D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */,
 			);
@@ -1195,7 +1178,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1239,7 +1222,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1269,7 +1252,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQCU59RKTN;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1297,7 +1280,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQCU59RKTN;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1324,7 +1307,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQCU59RKTN;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1350,7 +1333,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GQCU59RKTN;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1581,14 +1564,6 @@
 				minimumVersion = 3.1.4;
 			};
 		};
-		D094F1182FA8A0A5006B427D /* XCRemoteSwiftPackageReference "LNPopupUI" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/LeoNatan/LNPopupUI";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.1.3;
-			};
-		};
 		D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jiyimeta/swift-spleeter";
@@ -1617,11 +1592,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */;
 			productName = Spleeter;
-		};
-		D0DB31F72FA8A3F80089C24C /* LNPopupUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D094F1182FA8A0A5006B427D /* XCRemoteSwiftPackageReference "LNPopupUI" */;
-			productName = LNPopupUI;
 		};
 		D0E1CB012FC2000100000002 /* PillarboxPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
