@@ -124,22 +124,14 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // UIKit owns minimizing and revealing, in both directions.
-        //
-        // `TabBarMinimizeCoordinator` used to drive the reveal off a shorter
-        // threshold by flipping this to `.never` and back, because the system's
-        // own reveal distance is long — measured at roughly 440pt. That flip was
-        // the thing making the mini player misbehave: forced, the accessory took
-        // its expanded frame, fell back to the inline one, and corrected only
-        // when minimization was handed back, so the pill sat at the wrong width
-        // for as long as that took. Left alone, every transition is a single
-        // clean change between x=84 w=234 and x=21 w=360.
-        //
-        // LNPopupController reached the same conclusion from the other side: it
-        // reads the tab bar's minimized state and its proposed accessory frame
-        // and follows them. It never drives the bar. We have no private API and
-        // no need for one — we just stop pushing.
+        // Declared once and never varied. The system's own reveal distance is
+        // long — roughly 440pt — so `TabBarMinimizeCoordinator` still brings the
+        // bar back after a short scroll up, but it does that by assigning
+        // `tabBarMinimizeBehavior` on the controller directly and never through
+        // this modifier. Changing the *declared* value is what used to leave the
+        // mini player at the wrong width for about a second; see that type.
         .tabBarMinimizeBehavior(.onScrollDown)
+        .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {
