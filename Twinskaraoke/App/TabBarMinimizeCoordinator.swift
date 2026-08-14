@@ -81,6 +81,23 @@ import SwiftUI
         /// `trackOffset`.
         private static let expandedHold = Duration.milliseconds(80)
 
+        /// Minimum spacing between two forced reveals.
+        ///
+        /// Every reveal interrupts UIKit's own scroll-away interaction by
+        /// flipping the behaviour out from under it and back. One interruption
+        /// is the price of the short threshold; a rapid series of them is not
+        /// worth anything, because after the first the bar is already expanded
+        /// and there is nothing left to reveal. Scrolling up and down quickly
+        /// several times in a row could otherwise force a reveal every couple of
+        /// hundred milliseconds, each landing while UIKit was still animating
+        /// the last one.
+        ///
+        /// Comfortably longer than the expand animation, so a forced reveal
+        /// always lands on a settled bar. A reveal suppressed by this is not
+        /// lost: the gesture stays armed and fires as soon as the window
+        /// passes.
+        private static let revealCooldown = Duration.milliseconds(500)
+
         private static let recognizerName = "Twinskaraoke.TabBarExpandOnScrollUp"
 
         enum Mode {
@@ -120,6 +137,7 @@ import SwiftUI
         @ObservationIgnored private weak var trackedScrollView: UIScrollView?
         @ObservationIgnored private var offsetObservation: NSKeyValueObservation?
         @ObservationIgnored private var rearmTask: Task<Void, Never>?
+        @ObservationIgnored private var lastRevealAt: ContinuousClock.Instant?
         @ObservationIgnored private var offsetPeak: CGFloat = 0
         @ObservationIgnored private var offsetTrough: CGFloat = 0
         /// Whether a reveal may fire. Cleared by one, restored only once the
@@ -236,6 +254,13 @@ import SwiftUI
                 return
             }
             guard offsetPeak - offsetY >= Self.revealDistance else { return }
+            // Deliberately returns without disarming, so the reveal is deferred
+            // rather than dropped: the next offset change past the window still
+            // qualifies.
+            if let lastRevealAt, ContinuousClock.now - lastRevealAt < Self.revealCooldown {
+                return
+            }
+            lastRevealAt = ContinuousClock.now
             setMode(.staysExpanded)
             isRevealArmed = false
             offsetTrough = offsetY
