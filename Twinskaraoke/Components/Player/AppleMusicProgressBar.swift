@@ -1,5 +1,27 @@
 import SwiftUI
 
+/// The filled portion of the bar, drawn rather than sized.
+///
+/// `animatableData` puts the interpolation in the drawing layer: the view's
+/// frame never changes, so nothing here participates in the layout animations
+/// that carry the full player's movement to its children.
+private struct ProgressFill: Shape {
+    var fraction: Double
+
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let width = max(0, rect.width * CGFloat(min(max(fraction, 0), 1)))
+        guard width > 0 else { return Path() }
+        return Capsule().path(
+            in: CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height)
+        )
+    }
+}
+
 struct AppleMusicProgressBar: View {
     @Binding var progress: Double
     @Binding var isScrubbing: Bool
@@ -53,9 +75,24 @@ struct AppleMusicProgressBar: View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .leading) {
                     Capsule().fill(trackColor)
-                    Capsule()
+                    // The fill is drawn, not laid out. `Capsule().frame(width:)`
+                    // animates the *frame*, which is the same system SwiftUI
+                    // uses to propagate the full player's animated position to
+                    // its descendants — so while the player was being dragged or
+                    // sprung, the fill's width animation and the player's
+                    // movement were interpolating the same geometry at once and
+                    // the progress line visibly ran back and forth. Only during
+                    // playback, because paused there is no width change to
+                    // interact with.
+                    //
+                    // As a `Shape` with `animatableData`, the frame is constant
+                    // and only the path is interpolated. The parent's transform
+                    // is applied to the result afterwards, so the two can no
+                    // longer interfere — and the fill keeps its own animation
+                    // rather than having to hold still while the player moves.
+                    ProgressFill(fraction: clampedProgress)
                         .fill(fillColor)
-                        .frame(width: max(0, width * CGFloat(clampedProgress)))
+                        .frame(width: width, height: height)
                     Circle()
                         .fill(fillColor)
                         .frame(width: thumbDiameter, height: thumbDiameter)
