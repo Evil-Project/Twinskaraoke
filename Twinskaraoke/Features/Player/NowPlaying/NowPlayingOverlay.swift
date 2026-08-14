@@ -69,6 +69,17 @@ struct NowPlayingOverlay: View {
                     .environment(AudioPlayerManager.shared)
                     .environment(\.playerSafeAreaInsets, safeAreaInsets)
                     .frame(width: proxy.size.width, height: height)
+                    // Clipped before it is moved, because the player is parked
+                    // just below the screen rather than unmounted, and
+                    // `PlayerAmbientBackground` paints 96pt past every edge on
+                    // purpose — it says so, and says the host clips the
+                    // overflow. The popup's content view controller used to do
+                    // that. Without it the parked player's backdrop bled up
+                    // into the bottom of the screen as a band of ambient colour
+                    // under the mini player. Clipping to the player's own frame
+                    // costs nothing while it is open: that frame is the whole
+                    // window, so the backdrop still covers every edge.
+                    .clipped()
                     .offset(y: offset(height: height))
                     .gesture(dismissDrag(height: height))
             }
