@@ -810,7 +810,9 @@ struct FullScreenPlayerView: View {
 
     private var dismissBar: some View {
         Button {
-            AppHaptic.dismiss.play()
+            // No haptic here: `collapse()` plays `.dismiss` itself, so every
+            // route out of the player feels the same. It used to be needed,
+            // back when the presentation only stored a flag.
             presentation.collapse()
         } label: {
             Capsule()

@@ -53,6 +53,11 @@ struct NowPlayingOverlay: View {
     /// sideways keeps working.
     @State private var isDraggingVertically = false
 
+    /// Whether a drag is in flight at all. Unlike `onEnded`, this is guaranteed
+    /// to come back false when another recognizer cancels the gesture, which is
+    /// what `dragDidFinish` needs to hear.
+    @GestureState private var isDragActive = false
+
     var body: some View {
         GeometryReader { proxy in
             let height = proxy.size.height
@@ -119,6 +124,26 @@ struct NowPlayingOverlay: View {
                 presentation.applyAnimationTarget()
             }
         }
+        // `onEnded` does not run when another recognizer cancels the drag, and
+        // two things were left behind when that happened: the axis claim stayed
+        // true, so the next horizontal drag moved the player, and — worse —
+        // nothing settled the player at all, leaving it stranded part-way down.
+        //
+        // `@GestureState` is guaranteed to reset on cancellation as well as on
+        // a normal end. Reacting to that *change* rather than reading it inside
+        // the gesture keeps this clear of any assumption about the order in
+        // which `updating` and `onChanged` run for a single event.
+        .onChange(of: isDragActive) { _, isActive in
+            guard !isActive else { return }
+            isDraggingVertically = false
+            withOptionalAnimation(reduceMotion ? nil : AppMotion.gentle) {
+                overshoot = 0
+            }
+            // In the ordinary case `onEnded` has already settled it, and left an
+            // animation running that says so.
+            guard presentation.isTransitioning, !presentation.isAnimatingTransition else { return }
+            presentation.endDrag(dismissing: presentation.progress < 0.5)
+        }
         .onChange(of: snapshot.hasCurrentSong) { _, hasSong in
             if !hasSong {
                 presentation.dismissImmediately()
@@ -156,6 +181,9 @@ struct NowPlayingOverlay: View {
 
     private func dismissDrag(height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 10)
+            .updating($isDragActive) { _, isActive, _ in
+                isActive = true
+            }
             .onChanged { value in
                 // A sideways drag is somebody else's — most likely a swipe
                 // across the artwork. Claiming it here would make the player

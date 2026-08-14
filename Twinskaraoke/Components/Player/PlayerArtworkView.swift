@@ -51,6 +51,12 @@ struct PlayerArtworkView: View {
             } action: { frame in
                 NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
             }
+            // The artwork is not always on screen — the lyrics surface replaces
+            // it — and a frame left behind after it goes would aim the morph at
+            // somewhere the artwork no longer is.
+            .onDisappear {
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil)
+            }
             .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)
             .scaleEffect(artworkScale)
