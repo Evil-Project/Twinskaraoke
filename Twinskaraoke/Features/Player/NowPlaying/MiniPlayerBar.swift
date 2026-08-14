@@ -126,23 +126,37 @@ struct MiniPlayerBar: View {
     }
 
     @ViewBuilder
+    /// Title over artist in both placements, the way Apple Music stacks them:
+    /// the title carries the weight and the artist is plainly lighter beneath
+    /// it, so the pair reads as one item at a glance rather than two labels.
+    ///
+    /// The minimized bar keeps both lines and just drops a type size. An
+    /// earlier version hid the artist there to save room, which lost the one
+    /// piece of information that tells two versions of the same song apart.
     private var titles: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(snapshot.title)
-                .font(.subheadline.weight(.medium))
+                .font(titleFont)
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
-            // Dropped when inline: the minimized bar is 48pt tall and shared
-            // with the tab pill, and two lines of text there reads as clutter
-            // rather than information.
-            if !isInline, !snapshot.subtitle.isEmpty {
+            if !snapshot.subtitle.isEmpty {
                 Text(snapshot.subtitle)
-                    .font(.caption)
+                    .font(subtitleFont)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
         .accessibilityHidden(true)
+    }
+
+    private var titleFont: Font {
+        isInline ? .caption.weight(.semibold) : .subheadline.weight(.semibold)
+    }
+
+    /// Explicitly `.regular`: the artist should never inherit the title's
+    /// weight, which is the whole contrast the pair is built on.
+    private var subtitleFont: Font {
+        isInline ? .caption2.weight(.regular) : .caption.weight(.regular)
     }
 
     /// Upward only, and judged on where the finger ended rather than on
