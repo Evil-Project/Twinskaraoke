@@ -28,14 +28,18 @@ struct AppleMusicProgressBar: View {
     let onSeekEnd: (Double) -> Void
     var trackColor: Color = .primary.opacity(0.22)
     var fillColor: Color = .primary
-    var idleHeight: CGFloat = 5
-    var activeHeight: CGFloat = 9
+    /// Apple Music's Now Playing bars, and the same for playback position and
+    /// volume — they read as one control family rather than two. The volume row
+    /// carried these values explicitly while the playback bar kept a thinner
+    /// 5/9 default, so the two never matched.
+    var idleHeight: CGFloat = 7
+    var activeHeight: CGFloat = 12
     var accessibilityLabel: String = "Progress"
     var accessibilityValueText: String?
     var accessibilityHint: String = "Swipe up or down to adjust."
     var scrubValueText: String?
-    @ScaledMetric(relativeTo: .body) private var scaledIdleHeight: CGFloat = 5
-    @ScaledMetric(relativeTo: .body) private var scaledActiveHeight: CGFloat = 9
+    @ScaledMetric(relativeTo: .body) private var scaledIdleHeight: CGFloat = 7
+    @ScaledMetric(relativeTo: .body) private var scaledActiveHeight: CGFloat = 12
     @ScaledMetric(relativeTo: .body) private var scaledIdleThumbDiameter: CGFloat = 8
     @ScaledMetric(relativeTo: .body) private var scaledActiveThumbDiameter: CGFloat = 14
     @ScaledMetric(relativeTo: .caption) private var scaledBubbleWidth: CGFloat = 64

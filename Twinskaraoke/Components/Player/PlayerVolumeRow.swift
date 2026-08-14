@@ -42,8 +42,6 @@ struct PlayerVolumeRow: View {
                 },
                 trackColor: Color.primary.opacity(0.18),
                 fillColor: .primary,
-                idleHeight: 7,
-                activeHeight: 12,
                 accessibilityLabel: "Volume",
                 accessibilityValueText: "\(Int(displayVolume * 100)) percent",
                 accessibilityHint: "Drag or swipe up and down to adjust volume."
