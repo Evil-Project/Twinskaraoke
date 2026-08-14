@@ -18,7 +18,6 @@ private struct PopupHostView: View {
     @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
-    private let tabBarMinimize = TabBarMinimizeCoordinator.shared
     private let nowPlaying = NowPlayingSnapshotState.shared
     // The mini player is presented from the root and sits above every pushed
     // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
@@ -125,16 +124,22 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // Replaces the hand-rolled scroll-collapse that BottomChromeState was
-        // built for and never wired up. Worth re-checking on device if the
-        // mini player ever looks misplaced: ShimejiFloorRegistry rests idle
-        // instances on the live UITabBar's top edge, which moves as the bar
-        // minimizes, and the accessory rides along with it.
-        // `.onScrollDown` alone only brings the bar back after a very long scroll
-        // up, so TabBarMinimizeCoordinator drives the reveal off a shorter
-        // threshold and hands the behaviour back once the user scrolls down again.
-        .tabBarMinimizeBehavior(tabBarMinimize.mode.swiftUI)
-        .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
+        // UIKit owns minimizing and revealing, in both directions.
+        //
+        // `TabBarMinimizeCoordinator` used to drive the reveal off a shorter
+        // threshold by flipping this to `.never` and back, because the system's
+        // own reveal distance is long — measured at roughly 440pt. That flip was
+        // the thing making the mini player misbehave: forced, the accessory took
+        // its expanded frame, fell back to the inline one, and corrected only
+        // when minimization was handed back, so the pill sat at the wrong width
+        // for as long as that took. Left alone, every transition is a single
+        // clean change between x=84 w=234 and x=21 w=360.
+        //
+        // LNPopupController reached the same conclusion from the other side: it
+        // reads the tab bar's minimized state and its proposed accessory frame
+        // and follows them. It never drives the bar. We have no private API and
+        // no need for one — we just stop pushing.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var sidebarShell: some View {

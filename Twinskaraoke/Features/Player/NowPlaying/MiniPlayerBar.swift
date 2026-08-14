@@ -51,14 +51,14 @@ struct MiniPlayerBar: View {
         }
         .padding(.horizontal, 12)
         // Leading-anchored and clipped so the contents stay put and never spill
-        // while the container is between its two sizes.
+        // while the container is between its two sizes — the placement flips at
+        // the start of the transition, so for a moment the contents are
+        // expanded-shaped inside an inline-sized accessory.
         //
-        // This is defensive, not the cure: the shift that was visible on
-        // expansion was the *container's*, measured at x=84 w=234 inline versus
-        // x=21 w=360 expanded, and no content alignment can move that. See
-        // `TabBarMinimizeCoordinator.expandedHold`. There is still a short
-        // window where the accessory is inline-sized while its contents are
-        // expanded-shaped, and this is what keeps that from being ragged.
+        // Defensive only. The shift that used to be visible on expansion was the
+        // *container's*, measured at x=84 w=234 inline against x=21 w=360
+        // expanded, and no content alignment could have moved it; that came from
+        // forcing the tab bar open and is gone with the coordinator.
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         // The shape change itself is deliberately not animated: the system is
