@@ -130,8 +130,7 @@ struct NowPlayingOverlay: View {
                 image: image,
                 from: from,
                 to: to,
-                progress: presentation.progress,
-                targetScale: snapshot.isPlaying ? 1 : PlayerArtworkView.pausedScale
+                progress: presentation.progress
             )
         }
     }

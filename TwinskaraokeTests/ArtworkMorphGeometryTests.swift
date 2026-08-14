@@ -12,10 +12,8 @@ struct ArtworkMorphGeometryTests {
     private let bar = CGRect(x: 24, y: 780, width: 40, height: 40)
     private let player = CGRect(x: 27, y: 180, width: 340, height: 340)
 
-    private func rect(_ progress: Double, targetScale: CGFloat = 1) -> CGRect {
-        ArtworkMorphLayer.Geometry.rect(
-            from: bar, to: player, progress: progress, targetScale: targetScale
-        )
+    private func rect(_ progress: Double) -> CGRect {
+        ArtworkMorphLayer.Geometry.rect(from: bar, to: player, progress: progress)
     }
 
     @Test("At rest collapsed, it sits exactly on the mini player's artwork")
@@ -34,15 +32,16 @@ struct ArtworkMorphGeometryTests {
         #expect(abs(end.width - player.width) < 0.001)
     }
 
-    /// The player shrinks its artwork while paused, and the measured frame is
-    /// the layout one, which a `scaleEffect` does not change. Without this the
-    /// flying artwork lands at full size and the real one pops down to meet it.
-    @Test("A paused player is met at its shrunken size, centred in place")
-    func honoursThePausedScale() {
-        let end = rect(1, targetScale: PlayerArtworkView.pausedScale)
-        #expect(abs(end.width - player.width * PlayerArtworkView.pausedScale) < 0.001)
-        // Scaled about its centre, not its origin: the artwork shrinks in
-        // place rather than drifting up and to the left as it does so.
+    /// The target rect is taken exactly as measured, with no scaling of its
+    /// own. `GeometryProxy.frame(in: .global)` reports the *rendered* rect, so
+    /// the player's paused `scaleEffect` is already in it — measured at 304.5pt
+    /// for a 346pt artwork. An earlier version applied that 0.88 a second time
+    /// here and shrank the target twice.
+    @Test("The measured target is honoured exactly, with no scaling of its own")
+    func doesNotRescaleTheTarget() {
+        let end = rect(1)
+        #expect(abs(end.width - player.width) < 0.001)
+        #expect(abs(end.height - player.height) < 0.001)
         #expect(abs(end.midX - player.midX) < 0.001)
         #expect(abs(end.midY - player.midY) < 0.001)
     }

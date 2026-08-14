@@ -19,13 +19,9 @@ struct ArtworkMorphLayer: View {
     let from: CGRect
     let to: CGRect
     let progress: Double
-    /// The full player shrinks its artwork while paused. The measured frame is
-    /// the layout one and does not know about that, so the morph would land at
-    /// full size and the real artwork would pop down to meet it.
-    let targetScale: CGFloat
 
     var body: some View {
-        let rect = Geometry.rect(from: from, to: to, progress: progress, targetScale: targetScale)
+        let rect = Geometry.rect(from: from, to: to, progress: progress)
 
         Image(uiImage: image)
             .resizable()
@@ -48,14 +44,16 @@ struct ArtworkMorphLayer: View {
     /// rect, a corner radius running the wrong way, artwork flying in from the
     /// origin because a frame was still `.zero`.
     enum Geometry {
-        static func rect(
-            from: CGRect, to: CGRect, progress: Double, targetScale: CGFloat
-        ) -> CGRect {
-            let target = to.scaled(by: targetScale)
-            let width = lerp(from.width, target.width, progress)
-            let height = lerp(from.height, target.height, progress)
-            let midX = lerp(from.midX, target.midX, progress)
-            let midY = lerp(from.midY, target.midY, progress)
+        /// Both rects are taken as given. `GeometryProxy.frame(in: .global)`
+        /// reports the *rendered* rect, not the layout one — measured at
+        /// 304.5pt for a 346pt artwork carrying the player's paused
+        /// `scaleEffect` of 0.88 — so the pause shrink is already in `to`.
+        /// Compensating for it here as well shrank the target twice.
+        static func rect(from: CGRect, to: CGRect, progress: Double) -> CGRect {
+            let width = lerp(from.width, to.width, progress)
+            let height = lerp(from.height, to.height, progress)
+            let midX = lerp(from.midX, to.midX, progress)
+            let midY = lerp(from.midY, to.midY, progress)
             return CGRect(x: midX - width / 2, y: midY - height / 2, width: width, height: height)
         }
 
@@ -66,18 +64,5 @@ struct ArtworkMorphLayer: View {
         private static func lerp(_ start: CGFloat, _ end: CGFloat, _ progress: Double) -> CGFloat {
             start + (end - start) * CGFloat(progress)
         }
-    }
-}
-
-private extension CGRect {
-    /// Scaled about its own centre, so the artwork shrinks in place rather
-    /// than towards the origin.
-    func scaled(by scale: CGFloat) -> CGRect {
-        CGRect(
-            x: midX - width * scale / 2,
-            y: midY - height * scale / 2,
-            width: width * scale,
-            height: height * scale
-        )
     }
 }
