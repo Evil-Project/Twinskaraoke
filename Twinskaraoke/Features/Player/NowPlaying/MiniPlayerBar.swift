@@ -50,20 +50,15 @@ struct MiniPlayerBar: View {
             )
         }
         .padding(.horizontal, 12)
-        // Anchored to the leading edge and clipped, which is what keeps the
-        // expansion honest.
+        // Leading-anchored and clipped so the contents stay put and never spill
+        // while the container is between its two sizes.
         //
-        // `\.tabViewBottomAccessoryPlacement` flips to `.expanded` at the
-        // *start* of the tab bar's expansion, so the contents grow — subtitle
-        // and next button return, artwork goes 30 to 40 — while the container
-        // is still pill-width. Content wider than its frame is centred by
-        // default, and that read as the pill sitting too far right until the
-        // container caught up and everything snapped into line. Pinned leading,
-        // the artwork and title stay where they belong for the whole animation
-        // and the surplus runs off the trailing edge, where clipping hides it.
-        //
-        // Minimizing never showed this because the contents *shrink*: they fit
-        // the container at every step, so there is nothing to overflow.
+        // This is defensive, not the cure: the shift that was visible on
+        // expansion was the *container's*, measured at x=84 w=234 inline versus
+        // x=21 w=360 expanded, and no content alignment can move that. See
+        // `TabBarMinimizeCoordinator.expandedHold`. There is still a short
+        // window where the accessory is inline-sized while its contents are
+        // expanded-shaped, and this is what keeps that from being ragged.
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         // The shape change itself is deliberately not animated: the system is
