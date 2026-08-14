@@ -225,7 +225,7 @@ final class TwinskaraokeUITests: XCTestCase {
     origin.withOffset(CGVector(dx: 200, dy: swipeY)).tap()
 
     XCTAssertFalse(
-      app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 3),
+      waitUntil(timeout: 3) { self.miniPlayerExists(in: app) },
       "Neither the swipe nor a tap during the shrink may start playback."
     )
 
@@ -260,7 +260,20 @@ final class TwinskaraokeUITests: XCTestCase {
   /// while the screen is still arriving.
   private func tapStartsPlayback(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
     element.tap()
-    return app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 1.5)
+    return waitUntil(timeout: 1.5) { self.miniPlayerExists(in: app) }
+  }
+
+  /// Whether the mini player is on screen, under either element type.
+  ///
+  /// It resolves as a *button*: it carries a button trait, because tapping it
+  /// opens the player. It was an `other` element while the bar was a plain
+  /// `UIView` supplied by LNPopupUI. Both are checked rather than just the one
+  /// that happens to be current, because the assertions above are negative —
+  /// querying only the type the bar no longer uses would make "the mini player
+  /// did not appear" pass without the mini player having anything to do with it.
+  private func miniPlayerExists(in app: XCUIApplication) -> Bool {
+    app.buttons["MiniPlayerBar"].firstMatch.exists
+      || app.otherElements["MiniPlayerBar"].firstMatch.exists
   }
 
   private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
@@ -449,6 +462,62 @@ final class TwinskaraokeUITests: XCTestCase {
       XCTAssertTrue(
         accessibleElementExists(identifier: "Radio.WideOverview", in: app, timeout: 8),
         "Expected Radio to use a wide overview layout on iPad."
+      )
+    }
+  }
+
+  /// A short, fast downward flick must dismiss the full-screen player, every
+  /// time.
+  ///
+  /// This is the regression that ended the LNPopupController dependency. That
+  /// library decided dismissal from absolute position against a threshold of
+  /// about 290pt and then discarded velocity entirely when the finger lifted,
+  /// so a flick like the one below — decisive, but only a fraction of the
+  /// screen — was rejected and sprang back roughly one time in three. Nothing
+  /// projected where the gesture was going.
+  ///
+  /// Repeated, because the failure was intermittent: a single pass proves very
+  /// little, and the old behaviour would clear a lucky one.
+  func testFlickingDownDismissesTheFullScreenPlayer() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+
+    XCTAssertTrue(
+      app.staticTexts["Made for You"].waitForExistence(timeout: 8),
+      "Expected Home song shelf to be visible."
+    )
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+
+    let player = app.otherElements["FullScreenPlayer"]
+
+    for attempt in 1...6 {
+      openMiniPlayer(in: app)
+      XCTAssertTrue(
+        player.waitForExistence(timeout: 8),
+        "Attempt \(attempt): the mini player did not open the full-screen player."
+      )
+
+      // Short travel, high speed — a quarter of the screen, thrown. Started
+      // below the grabber so this exercises the drag itself rather than the
+      // dismiss button, which never had the bug.
+      let start = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.20))
+      let end = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32))
+      start.press(forDuration: 0.01, thenDragTo: end, withVelocity: 2500, thenHoldForDuration: 0)
+
+      // Hittability, not existence: the dismissed player stays mounted, parked
+      // off the bottom of the screen, so it remains in the accessibility tree.
+      // What changes is that it stops taking touches.
+      XCTAssertTrue(
+        waitUntil(timeout: 4) { !player.isHittable },
+        "Attempt \(attempt): a fast downward flick left the player open."
+      )
+      XCTAssertTrue(
+        waitUntil(timeout: 4) { self.miniPlayerExists(in: app) },
+        "Attempt \(attempt): the mini player did not come back after dismissal."
       )
     }
   }
@@ -764,12 +833,14 @@ final class TwinskaraokeUITests: XCTestCase {
   }
 
   private func openMiniPlayer(in app: XCUIApplication) {
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { self.miniPlayerExists(in: app) },
+      "Missing mini-player bar."
+    )
     let miniPlayer =
       app.buttons["MiniPlayerBar"].firstMatch.exists
       ? app.buttons["MiniPlayerBar"].firstMatch
       : app.otherElements["MiniPlayerBar"].firstMatch
-
-    XCTAssertTrue(miniPlayer.waitForExistence(timeout: 8), "Missing mini-player bar.")
     miniPlayer.tap()
   }
 
