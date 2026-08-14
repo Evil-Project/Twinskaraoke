@@ -98,6 +98,28 @@ import SwiftUI
         /// passes.
         private static let revealCooldown = Duration.milliseconds(500)
 
+        /// How recently the finger must have asked for the bar, and how firmly.
+        ///
+        /// Distance alone is not intent. `contentOffset` moving back up by
+        /// `revealDistance` says nothing about who moved it: a downward flick
+        /// that reaches the end of the content bounces back by far more than
+        /// 72pt on its own. That fired a reveal in the middle of a downward
+        /// scroll, which applied `.never` while UIKit was busy minimizing — so
+        /// the tab bar sprang back to full size with the mini player already
+        /// on its way to the inline slot, and the two ended up on top of each
+        /// other before sorting themselves out.
+        ///
+        /// The window is generous because the distance is deliberately measured
+        /// on the content and not the finger: a quick flick travels barely any
+        /// distance under the thumb and coasts a long way afterwards, and that
+        /// coast should still count. It only has to outlast the gesture, not
+        /// the deceleration.
+        private static let revealIntentWindow = Duration.milliseconds(1200)
+
+        /// Ignores the incidental drift of a finger that is really holding
+        /// still, or changing direction.
+        private static let revealIntentVelocity: CGFloat = 60
+
         private static let recognizerName = "Twinskaraoke.TabBarExpandOnScrollUp"
 
         enum Mode {
@@ -138,6 +160,7 @@ import SwiftUI
         @ObservationIgnored private var offsetObservation: NSKeyValueObservation?
         @ObservationIgnored private var rearmTask: Task<Void, Never>?
         @ObservationIgnored private var lastRevealAt: ContinuousClock.Instant?
+        @ObservationIgnored private var lastRevealIntentAt: ContinuousClock.Instant?
         @ObservationIgnored private var offsetPeak: CGFloat = 0
         @ObservationIgnored private var offsetTrough: CGFloat = 0
         /// Whether a reveal may fire. Cleared by one, restored only once the
@@ -187,10 +210,20 @@ import SwiftUI
             controller.view.addGestureRecognizer(recognizer)
         }
 
-        /// The pan is only used to find the scroll view under the touch and to
-        /// reset the accumulator per gesture; the distance itself is measured on
-        /// the scroll view, so a flick's deceleration counts as well as the drag.
+        /// The pan finds the scroll view under the touch, resets the accumulator
+        /// per gesture, and records which way the finger is actually going. The
+        /// distance itself is still measured on the scroll view, so a flick's
+        /// deceleration counts as well as the drag.
         private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            if let view = recognizer.view, recognizer.state == .changed || recognizer.state == .ended {
+                // Positive y is the finger travelling down the screen, which
+                // drags the content back up — the direction that asks for the
+                // bar. Noted with a timestamp rather than a flag so momentum
+                // after the lift still counts; see `revealIntentWindow`.
+                if recognizer.velocity(in: view).y > Self.revealIntentVelocity {
+                    lastRevealIntentAt = ContinuousClock.now
+                }
+            }
             guard recognizer.state == .began, let view = recognizer.view else { return }
             guard let scrolled = Self.scrollView(under: recognizer.location(in: view), in: view) else { return }
 
@@ -254,6 +287,12 @@ import SwiftUI
                 return
             }
             guard offsetPeak - offsetY >= Self.revealDistance else { return }
+            // The content came back up, but only the finger can say whether that
+            // was asked for. Without this, a bounce at the end of a downward
+            // flick reveals the bar mid-scroll.
+            guard let lastRevealIntentAt,
+                  ContinuousClock.now - lastRevealIntentAt < Self.revealIntentWindow
+            else { return }
             // Deliberately returns without disarming, so the reveal is deferred
             // rather than dropped: the next offset change past the window still
             // qualifies.
