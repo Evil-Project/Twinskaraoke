@@ -42,6 +42,56 @@ final class NowPlayingPresentation {
         progress > 0 && progress < 1
     }
 
+    /// Where the mini player's artwork sits, in global coordinates, and where
+    /// the full player's sits. The morph interpolates between them off
+    /// `progress`, so it tracks the finger rather than running on its own
+    /// clock — which is why this is measured rather than left to
+    /// `matchedGeometryEffect`, which only animates state changes.
+    private(set) var barArtworkFrame: CGRect?
+    private(set) var playerArtworkFrame: CGRect?
+
+    /// Whether the flying artwork is standing in for the two real ones. Both
+    /// frames have to be known: before the first layout pass of either, there
+    /// is nothing to interpolate, and a morph from `.zero` reads as the artwork
+    /// flying in from the top-left corner.
+    ///
+    /// `isAnimatingTransition` is in here as well as `isTransitioning`, and it
+    /// has to be. `withAnimation` sets `progress` to its destination
+    /// *immediately* and animates only the rendering, so on a tap-to-open the
+    /// stored value is 1 before the player has moved and `isTransitioning` is
+    /// false for the entire animation. Gating on that alone would give a morph
+    /// that appears under a dragging finger and never for a tap.
+    ///
+    /// The flying artwork's geometry needs no such help: it is computed from
+    /// `progress`, so a drag updates it per frame, and an animated change moves
+    /// its `frame` and `position` between two values inside the transaction,
+    /// which SwiftUI interpolates for us. Only the question of *whether it is
+    /// on screen* has to be held open for the duration.
+    var isMorphingArtwork: Bool {
+        (isTransitioning || isAnimatingTransition)
+            && barArtworkFrame != nil
+            && playerArtworkFrame != nil
+    }
+
+    /// True from the start of an animated open or close until the spring has
+    /// settled. Nothing observes the animation's completion, so it is timed.
+    private(set) var isAnimatingTransition = false
+    @ObservationIgnored private var settleTask: Task<Void, Never>?
+
+    /// A little longer than `AppMotion.gentle` takes to come to rest. Ending
+    /// early would swap the flying artwork for the real one mid-flight, which
+    /// is the one visible seam this is meant to remove; ending late costs
+    /// nothing, because by then the two are in the same place.
+    private static let settleDuration = Duration.milliseconds(700)
+
+    func reportBarArtworkFrame(_ frame: CGRect?) {
+        barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
+    }
+
+    func reportPlayerArtworkFrame(_ frame: CGRect?) {
+        playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
+    }
+
     /// Mirrors `\.appReduceMotion` so the intent methods below can animate
     /// consistently no matter which view calls them — `FullScreenPlayerView`'s
     /// grabber calls `collapse()` from deep inside the player, and requiring
@@ -57,18 +107,14 @@ final class NowPlayingPresentation {
         guard !isExpanded else { return }
         AppHaptic.commit.play()
         isExpanded = true
-        withOptionalAnimation(transitionAnimation) {
-            progress = 1
-        }
+        animate(to: 1)
     }
 
     func collapse() {
         guard isExpanded else { return }
         AppHaptic.dismiss.play()
         isExpanded = false
-        withOptionalAnimation(transitionAnimation) {
-            progress = 0
-        }
+        animate(to: 0)
     }
 
     // MARK: - Interactive drag
@@ -77,6 +123,14 @@ final class NowPlayingPresentation {
     /// lag the drag by its own duration, which is the "indirect" feel we
     /// already rejected once while trying to tune the old library.
     func drag(to progress: Double) {
+        // Guarded rather than assigned unconditionally: this runs on every
+        // frame of the drag, and an observable write per frame invalidates
+        // every view reading the presentation for no change at all.
+        if isAnimatingTransition {
+            settleTask?.cancel()
+            settleTask = nil
+            isAnimatingTransition = false
+        }
         self.progress = min(1, max(0, progress))
     }
 
@@ -92,9 +146,7 @@ final class NowPlayingPresentation {
         if wasExpanded != isExpanded {
             (isExpanded ? AppHaptic.commit : AppHaptic.dismiss).play()
         }
-        withOptionalAnimation(transitionAnimation) {
-            progress = dismissing ? 0 : 1
-        }
+        animate(to: dismissing ? 0 : 1)
     }
 
     /// Drops the player without ceremony. For the case where the thing being
@@ -102,8 +154,35 @@ final class NowPlayingPresentation {
     /// where an animated close would be animating a player that has nothing
     /// left to show.
     func dismissImmediately() {
+        settleTask?.cancel()
+        settleTask = nil
+        isAnimatingTransition = false
         isExpanded = false
         progress = 0
+    }
+
+    // MARK: - Driving the animation
+
+    private func animate(to target: Double) {
+        settleTask?.cancel()
+        settleTask = nil
+        guard let animation = transitionAnimation else {
+            // Reduce Motion: the change is instant, so there is no flight for
+            // the artwork to be in and nothing to hold the gate open for.
+            isAnimatingTransition = false
+            progress = target
+            return
+        }
+        isAnimatingTransition = true
+        withAnimation(animation) {
+            progress = target
+        }
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.settleDuration)
+            guard !Task.isCancelled else { return }
+            self?.isAnimatingTransition = false
+            self?.settleTask = nil
+        }
     }
 
     /// Large surfaces move on `gentle`; this is the largest one in the app.

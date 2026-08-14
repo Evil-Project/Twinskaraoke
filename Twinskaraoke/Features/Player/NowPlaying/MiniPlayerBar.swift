@@ -100,6 +100,14 @@ struct MiniPlayerBar: View {
         }
         .frame(width: artworkSize, height: artworkSize)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            presentation.reportBarArtworkFrame(frame)
+        }
+        // Hidden while the flying artwork stands in for it, so the two are
+        // never on screen at the same time.
+        .opacity(presentation.isMorphingArtwork ? 0 : 1)
         .accessibilityHidden(true)
     }
 

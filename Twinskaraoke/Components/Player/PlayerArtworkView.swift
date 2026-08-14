@@ -21,6 +21,16 @@ struct PlayerArtworkView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        // The mini player's artwork morphs into this one, so the transition
+        // needs to know where "this one" is. Reported from here rather than
+        // from each of the five call sites — compact, the two iPad layouts and
+        // radio all route through this view, and only one is ever on screen.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
+        }
+        .opacity(NowPlayingPresentation.shared.isMorphingArtwork ? 0 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(song.title) artwork")
         .accessibilityHint(onTap == nil ? "Album artwork." : "Opens full-screen artwork.")
@@ -63,8 +73,14 @@ struct PlayerArtworkView: View {
         .accessibilityHidden(true)
     }
 
+    /// How far the artwork shrinks while paused. Exposed because the morph
+    /// layer measures this view's *layout* frame, which a `scaleEffect` does
+    /// not change — without applying the same factor the flying artwork would
+    /// land at full size and the real one would pop down to meet it.
+    static let pausedScale: CGFloat = 0.88
+
     private var artworkScale: CGFloat {
-        audioManager.isPlaying ? 1.0 : 0.88
+        audioManager.isPlaying ? 1.0 : Self.pausedScale
     }
 
     private var artworkPlaybackAnimation: Animation? {

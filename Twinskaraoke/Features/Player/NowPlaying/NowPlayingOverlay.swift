@@ -60,6 +60,10 @@ struct NowPlayingOverlay: View {
                     .offset(y: offset(height: height))
                     .gesture(dismissDrag(height: height))
             }
+            // Above the player, because for most of the transition the player
+            // is still on its way up and the artwork has to be seen crossing
+            // the gap between the two.
+            artworkMorph
         }
         // Outside the reader, so the reader's region is the whole window: the
         // player draws under the status bar and the home indicator, and its own
@@ -85,6 +89,24 @@ struct NowPlayingOverlay: View {
             if !hasSong {
                 presentation.dismissImmediately()
             }
+        }
+    }
+
+    // MARK: - The artwork in flight
+
+    @ViewBuilder
+    private var artworkMorph: some View {
+        if presentation.isMorphingArtwork,
+           let image = snapshot.artwork,
+           let from = presentation.barArtworkFrame,
+           let to = presentation.playerArtworkFrame {
+            ArtworkMorphLayer(
+                image: image,
+                from: from,
+                to: to,
+                progress: presentation.progress,
+                targetScale: snapshot.isPlaying ? 1 : PlayerArtworkView.pausedScale
+            )
         }
     }
 
