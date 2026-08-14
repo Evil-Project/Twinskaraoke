@@ -114,19 +114,7 @@ struct AppleMusicProgressBar: View {
             )
             .animation(scrubAnimation, value: isScrubbing)
             .animation(isScrubbing || reduceMotion ? nil : .linear(duration: 0.25), value: clampedProgress)
-            // Never inherit motion from elsewhere. A `withAnimation` transaction
-            // applies to every animatable change in the update, not only the
-            // state it wraps, and the fill's width is animatable: opening or
-            // closing the full player runs a spring, so a playback tick landing
-            // in the same update moved the fill on that spring instead of the
-            // linear ramp above — and a spring overshoots, so the progress line
-            // visibly bounced back and forth. Only ever while playing, because
-            // only then does the fill have anywhere to go.
-            //
-            // The `.animation(_:value:)` modifiers above sit inside this and
-            // still drive the bar's own transitions. Same defence, and the same
-            // reasoning, as `PlayerAmbientBackground`.
-            .transaction { $0.animation = nil }
+
         }
         .frame(height: controlHeight)
         .accessibilityElement(children: .ignore)

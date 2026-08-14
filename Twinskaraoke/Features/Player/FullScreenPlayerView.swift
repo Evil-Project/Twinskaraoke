@@ -950,6 +950,22 @@ struct FullScreenPlayerView: View {
         @Environment(AudioPlayerManager.self) private var audioManager
         private let clock = PlaybackClock.shared
         @Environment(\.appReduceMotion) private var reduceMotion
+        @Environment(\.playerIsMoving) private var isPlayerMoving
+
+        /// The position shown while the player itself is moving.
+        ///
+        /// The fill's width is animatable, and the player is moved by an
+        /// `.offset` whose animation propagates to every descendant, so a
+        /// playback tick arriving mid-transition animated the fill against a
+        /// frame that was itself in motion — the progress line visibly ran back
+        /// and forth. Only ever during playback, because paused the fill has
+        /// nowhere to go.
+        ///
+        /// Holding the last value for the length of the move sidesteps it:
+        /// there is no width change to animate. At most ~0.7s of the position
+        /// not advancing, which is not perceptible on a bar this size, and it
+        /// leaves the bar's own scrub and fill animations untouched.
+        @State private var heldProgress: Double?
 
         private func formattedTime(_ seconds: Double) -> String {
             let s = Int(seconds)
@@ -963,7 +979,12 @@ struct FullScreenPlayerView: View {
             let elapsed = min(max(audioManager.playbackTime, 0), duration)
             return VStack(spacing: 0) {
                 AppleMusicProgressBar(
-                    progress: $clock.progress,
+                    progress: Binding(
+                        get: { heldProgress ?? clock.progress },
+                        // Written only by scrubbing, which cannot happen while
+                        // the player is moving, so it always reaches the clock.
+                        set: { clock.progress = $0 }
+                    ),
                     isScrubbing: $audioManager.isEditingProgress,
                     onSeekEnd: { fraction in audioManager.seek(to: fraction) },
                     accessibilityLabel: "Playback position",
@@ -974,6 +995,9 @@ struct FullScreenPlayerView: View {
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.progressTopPadding)
+                .onChange(of: isPlayerMoving) { _, isMoving in
+                    heldProgress = isMoving ? clock.progress : nil
+                }
                 HStack {
                     Text(formattedTime(elapsed))
                     Spacer()

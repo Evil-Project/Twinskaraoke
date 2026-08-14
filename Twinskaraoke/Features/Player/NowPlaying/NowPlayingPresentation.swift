@@ -73,6 +73,16 @@ final class NowPlayingPresentation {
             && playerArtworkFrame != nil
     }
 
+    /// Whether a finger is currently driving the player.
+    private(set) var isDragging = false
+
+    /// Whether the player's geometry is changing at all, by finger or by
+    /// spring. Anything inside the player that animates on its own should hold
+    /// still while this is true — see `\.playerIsMoving`.
+    var isMoving: Bool {
+        isDragging || isAnimatingTransition
+    }
+
     /// True from the start of an animated open or close until the spring has
     /// settled. Nothing observes the animation's completion, so it is timed.
     private(set) var isAnimatingTransition = false
@@ -124,6 +134,9 @@ final class NowPlayingPresentation {
             settleTask = nil
             isAnimatingTransition = false
         }
+        if !isDragging {
+            isDragging = true
+        }
         self.progress = min(1, max(0, progress))
     }
 
@@ -134,6 +147,7 @@ final class NowPlayingPresentation {
     /// as one makes the player feel like it did something the user did not ask
     /// for.
     func endDrag(dismissing: Bool) {
+        isDragging = false
         let wasExpanded = isExpanded
         isExpanded = !dismissing
         if wasExpanded != isExpanded {
@@ -150,6 +164,7 @@ final class NowPlayingPresentation {
         settleTask?.cancel()
         settleTask = nil
         isAnimatingTransition = false
+        isDragging = false
         isExpanded = false
         progress = 0
     }
@@ -208,7 +223,30 @@ private struct PlayerSafeAreaInsetsKey: EnvironmentKey {
     static let defaultValue: EdgeInsets?  = nil
 }
 
+private struct PlayerIsMovingKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
+    /// Whether the full player's geometry is currently changing, by finger or
+    /// by spring.
+    ///
+    /// Content inside the player that animates on its own should hold its value
+    /// still while this is true. The player is moved by an `.offset`, and
+    /// SwiftUI propagates that as an animated position change to every
+    /// descendant, so a descendant animating its own geometry in the same
+    /// update is animating against a moving frame.
+    ///
+    /// Note what this is *not*: `.transaction { $0.animation = nil }`. That
+    /// drops the inherited animation, which also drops the descendant's share
+    /// of the player's movement — it snaps to its final position while the rest
+    /// of the player animates. Holding the value still avoids the problem
+    /// instead of opting out of the motion.
+    var playerIsMoving: Bool {
+        get { self[PlayerIsMovingKey.self] }
+        set { self[PlayerIsMovingKey.self] = newValue }
+    }
+
     /// The window's real safe-area insets, for a player hosted inside a view
     /// that ignores the safe area.
     ///

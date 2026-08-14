@@ -68,6 +68,7 @@ struct NowPlayingOverlay: View {
                 FullScreenPlayerView()
                     .environment(AudioPlayerManager.shared)
                     .environment(\.playerSafeAreaInsets, safeAreaInsets)
+                    .environment(\.playerIsMoving, presentation.isMoving)
                     .frame(width: proxy.size.width, height: height)
                     // Clipped before it is moved, because the player is parked
                     // just below the screen rather than unmounted, and
