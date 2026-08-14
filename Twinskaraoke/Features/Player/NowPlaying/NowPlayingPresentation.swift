@@ -92,13 +92,6 @@ final class NowPlayingPresentation {
         playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    /// Mirrors `\.appReduceMotion` so the intent methods below can animate
-    /// consistently no matter which view calls them — `FullScreenPlayerView`'s
-    /// grabber calls `collapse()` from deep inside the player, and requiring
-    /// every such call site to remember its own `withAnimation` is how the two
-    /// directions drift apart. `NowPlayingOverlay` keeps this current.
-    @ObservationIgnored var prefersReducedMotion = false
-
     private init() {}
 
     // MARK: - Intent
@@ -163,20 +156,23 @@ final class NowPlayingPresentation {
 
     // MARK: - Driving the animation
 
+    /// Sets the destination and flags the flight; the *animation* belongs to
+    /// `NowPlayingOverlay`, which applies it with `.animation(_:value:)`.
+    ///
+    /// It used to be a `withAnimation` here, and that quietly only worked in
+    /// one direction. A transaction does not cross a hosting boundary, and the
+    /// two directions are called from different view trees: `collapse()` and
+    /// `endDrag()` come from inside the overlay, but `expand()` is called by
+    /// `MiniPlayerBar`, which lives in the tab bar's accessory slot — a
+    /// separate tree owned by UIKit. So closing animated and opening snapped,
+    /// which also made the artwork morph appear to jump straight to full size
+    /// before settling. Declaring the animation on the view that moves makes
+    /// it independent of who asked.
     private func animate(to target: Double) {
         settleTask?.cancel()
         settleTask = nil
-        guard let animation = transitionAnimation else {
-            // Reduce Motion: the change is instant, so there is no flight for
-            // the artwork to be in and nothing to hold the gate open for.
-            isAnimatingTransition = false
-            progress = target
-            return
-        }
         isAnimatingTransition = true
-        withAnimation(animation) {
-            progress = target
-        }
+        progress = target
         settleTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.settleDuration)
             guard !Task.isCancelled else { return }
@@ -184,9 +180,25 @@ final class NowPlayingPresentation {
             self?.settleTask = nil
         }
     }
+}
 
-    /// Large surfaces move on `gentle`; this is the largest one in the app.
-    private var transitionAnimation: Animation? {
-        prefersReducedMotion ? nil : AppMotion.gentle
+// MARK: - Safe-area handoff
+
+private struct PlayerSafeAreaInsetsKey: EnvironmentKey {
+    static let defaultValue: EdgeInsets?  = nil
+}
+
+extension EnvironmentValues {
+    /// The window's real safe-area insets, for a player hosted inside a view
+    /// that ignores the safe area.
+    ///
+    /// `FullScreenPlayerView` lays itself out against the insets and needs the
+    /// true ones, but its own `GeometryReader` sits inside `NowPlayingOverlay`,
+    /// which has already ignored them so the player can paint edge to edge —
+    /// and a reader below that point reports zero. Nil outside the overlay, so
+    /// previews and any other host keep reading their own geometry.
+    var playerSafeAreaInsets: EdgeInsets? {
+        get { self[PlayerSafeAreaInsetsKey.self] }
+        set { self[PlayerSafeAreaInsetsKey.self] = newValue }
     }
 }

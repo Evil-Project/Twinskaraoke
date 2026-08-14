@@ -232,8 +232,6 @@ enum AM {
         static let shelfSpacing: CGFloat = 20
         static let shelfTile: CGFloat = 162
         static let compactShelfTile: CGFloat = 132
-        static let tabBarContentInset: CGFloat = 32
-        static let sidebarContentInset: CGFloat = 32
     }
 
     enum Layout {
@@ -348,14 +346,6 @@ extension View {
         background(ScreenBackgroundFill(style: .grouped))
     }
 
-    func tabBarScrollInset() -> some View {
-        modifier(TabBarScrollInsetModifier())
-    }
-
-    func tabBarBottomPadding() -> some View {
-        modifier(TabBarBottomPaddingModifier())
-    }
-
     /// Search on a screen whose subject is the list, not the searching: the
     /// field collapses to a toolbar button until tapped, so the content keeps
     /// the room.
@@ -379,43 +369,6 @@ func withOptionalAnimation<Result>(
         }
     } else {
         return try body()
-    }
-}
-
-private enum AdaptiveBottomChrome {
-    static func inset(horizontalSizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        #if canImport(UIKit)
-            if horizontalSizeClass == .regular {
-                let idiom = UIDevice.current.userInterfaceIdiom
-                if idiom == .pad || idiom == .mac {
-                    return AM.Spacing.sidebarContentInset
-                }
-            }
-        #endif
-        return AM.Spacing.tabBarContentInset
-    }
-}
-
-private struct TabBarScrollInsetModifier: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    func body(content: Content) -> some View {
-        content.contentMargins(
-            .bottom,
-            AdaptiveBottomChrome.inset(horizontalSizeClass: horizontalSizeClass),
-            for: .scrollContent
-        )
-    }
-}
-
-private struct TabBarBottomPaddingModifier: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    func body(content: Content) -> some View {
-        content.padding(
-            .bottom,
-            AdaptiveBottomChrome.inset(horizontalSizeClass: horizontalSizeClass)
-        )
     }
 }
 

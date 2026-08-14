@@ -30,9 +30,15 @@ private struct PopupHostView: View {
     }
 
     var body: some View {
-        ZStack {
-            rootShell
-            NowPlayingOverlay()
+        // The reader is outside the overlay on purpose: it is laid out
+        // normally, so it can still see the window's safe-area insets. The
+        // overlay ignores them, and nothing nested under that point can read
+        // them back.
+        GeometryReader { proxy in
+            ZStack {
+                rootShell
+                NowPlayingOverlay(safeAreaInsets: proxy.safeAreaInsets)
+            }
         }
         .environment(homeViewModel)
         .onAppear {

@@ -50,7 +50,16 @@ struct MiniPlayerBar: View {
             )
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity)
+        // No `maxWidth: .infinity`. The accessory animates its own width as the
+        // tab bar minimizes and expands, and claiming all available width on
+        // every frame of that fought it: the content settled against one edge
+        // part-way through and then snapped back to centre at the end.
+        //
+        // The layout also changes shape between the two placements, and that
+        // change is deliberately not animated — the system is already animating
+        // the container, and animating the contents on a second, unrelated
+        // curve is what made the move read as two separate movements.
+        .animation(nil, value: isInline)
         // The whole bar is one big open affordance, but only where a child has
         // not already claimed the touch. `contentShape` is what makes the gaps
         // between the artwork, the titles and the buttons tappable at all —

@@ -301,6 +301,7 @@ struct FullScreenPlayerView: View {
     @Environment(AudioPlayerManager.self) var audioManager
     private let presentation = NowPlayingPresentation.shared
     private let favorites = FavoritesManager.shared
+    @Environment(\.playerSafeAreaInsets) private var injectedSafeAreaInsets
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
     @State private var showLyrics = false
@@ -324,8 +325,14 @@ struct FullScreenPlayerView: View {
         Group {
             if let song {
                 GeometryReader { geo in
-                    let safeTop = geo.safeAreaInsets.top
-                    let safeBottom = geo.safeAreaInsets.bottom
+                    // Injected when hosted by `NowPlayingOverlay`, which ignores
+                    // the safe area so the player can paint edge to edge — a
+                    // reader below that point reports zero insets, which used to
+                    // put the content under the status bar and, by inflating
+                    // `contentHeight` past the compact breakpoint, enlarge every
+                    // font on the screen.
+                    let safeTop = injectedSafeAreaInsets?.top ?? geo.safeAreaInsets.top
+                    let safeBottom = injectedSafeAreaInsets?.bottom ?? geo.safeAreaInsets.bottom
                     let metrics = PlayerLayoutMetrics(
                         containerSize: geo.size,
                         safeTop: safeTop,

@@ -29,6 +29,17 @@ import SwiftUI
 struct NowPlayingOverlay: View {
     @Environment(\.appReduceMotion) private var reduceMotion
 
+    /// The window's real safe-area insets, handed down from `PopupHostView`.
+    ///
+    /// They cannot be read from in here: this view ignores the safe area so the
+    /// player can draw under the status bar and the home indicator, and a
+    /// `GeometryReader` nested inside a region that has already ignored it
+    /// reports zero. Measured on device — `size=402x874 safeTop=0 safeBottom=0`
+    /// — which silently pushed `PlayerLayoutMetrics.contentHeight` from 781 to
+    /// 874, past its 760pt `isCompactHeight` breakpoint, and made every font on
+    /// the player a step too large.
+    let safeAreaInsets: EdgeInsets
+
     private let presentation = NowPlayingPresentation.shared
     private let snapshot = NowPlayingSnapshotState.shared
 
@@ -56,6 +67,7 @@ struct NowPlayingOverlay: View {
             if snapshot.hasCurrentSong {
                 FullScreenPlayerView()
                     .environment(AudioPlayerManager.shared)
+                    .environment(\.playerSafeAreaInsets, safeAreaInsets)
                     .frame(width: proxy.size.width, height: height)
                     .offset(y: offset(height: height))
                     .gesture(dismissDrag(height: height))
@@ -65,6 +77,12 @@ struct NowPlayingOverlay: View {
             // the gap between the two.
             artworkMorph
         }
+        // The animation lives here rather than at the call sites, so opening
+        // and closing move identically no matter which view tree asked. Nil
+        // while a finger is down: a drag sets `progress` every frame and an
+        // implicit animation would lag it behind the finger by its own
+        // duration, which is the "indirect" feel we rejected once already.
+        .animation(transitionAnimation, value: presentation.progress)
         // Outside the reader, so the reader's region is the whole window: the
         // player draws under the status bar and the home indicator, and its own
         // `GeometryReader` still reports the real insets to lay its content out
@@ -78,9 +96,6 @@ struct NowPlayingOverlay: View {
         // player is still in the accessibility tree, and would otherwise sit
         // there as a screenful of focusable controls behind the app.
         .accessibilityHidden(!presentation.isPresenting)
-        .onChange(of: reduceMotion, initial: true) { _, isReduced in
-            presentation.prefersReducedMotion = isReduced
-        }
         // The player has nothing to show once the song is gone — playback
         // cleared, queue emptied. Animating it away would be animating an
         // empty screen, since `FullScreenPlayerView` renders nothing without a
@@ -111,6 +126,12 @@ struct NowPlayingOverlay: View {
     }
 
     // MARK: - Geometry
+
+    /// Large surfaces move on `gentle`; this is the largest one in the app.
+    private var transitionAnimation: Animation? {
+        guard presentation.isAnimatingTransition, !reduceMotion else { return nil }
+        return AppMotion.gentle
+    }
 
     private func offset(height: CGFloat) -> CGFloat {
         (1 - presentation.progress) * height + overshoot

@@ -286,7 +286,6 @@ private struct BrowseCategoriesView: View {
         .smoothScrolling()
         .musicScreenBackground()
         .scrollIndicators(.hidden)
-        .tabBarScrollInset()
         .refreshable {
             AppHaptic.selection.play()
             // `async let` so the three shelves reload concurrently; awaiting
@@ -551,7 +550,6 @@ private struct GenreDetailLoadingView: View {
             .padding(.bottom, AM.Spacing.l)
         }
         .smoothScrolling()
-        .tabBarScrollInset()
         .accessibilityLabel("Loading \(genre.name) songs")
     }
 }
@@ -823,7 +821,6 @@ private struct SearchCategoryLoadingView: View {
             .padding(.bottom, AM.Spacing.l)
         }
         .smoothScrolling()
-        .tabBarScrollInset()
         .accessibilityLabel("Loading \(title) songs")
     }
 }

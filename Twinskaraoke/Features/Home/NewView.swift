@@ -29,7 +29,6 @@ struct NewView: View {
                     .padding(.bottom, AM.Spacing.l)
                 }
                 .smoothScrolling()
-                .tabBarScrollInset()
                 .musicScreenBackground()
             }
             .navigationTitle("New")
