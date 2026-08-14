@@ -19,6 +19,12 @@ struct ArtworkMorphLayer: View {
     let from: CGRect
     let to: CGRect
     let progress: Double
+    /// The shadow the real artwork wears once it arrives, faded in across the
+    /// flight. Without it the stand-in was flat and the shadow appeared to
+    /// arrive a beat late — it was simply the moment the real artwork came
+    /// back. A mini player thumbnail has no shadow, so scaling it with
+    /// `progress` is also the honest interpolation between the two ends.
+    let shadow: AM.ShadowStyle
 
     var body: some View {
         let rect = Geometry.rect(from: from, to: to, progress: progress)
@@ -32,6 +38,11 @@ struct ArtworkMorphLayer: View {
                     cornerRadius: Geometry.cornerRadius(progress: progress),
                     style: .continuous
                 )
+            )
+            .shadow(
+                color: shadow.color.opacity(progress),
+                radius: shadow.radius * CGFloat(progress),
+                y: shadow.y * CGFloat(progress)
             )
             .position(x: rect.midX, y: rect.midY)
             .allowsHitTesting(false)

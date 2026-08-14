@@ -88,12 +88,6 @@ struct NowPlayingOverlay: View {
             // the gap between the two.
             artworkMorph
         }
-        // The animation lives here rather than at the call sites, so opening
-        // and closing move identically no matter which view tree asked. Nil
-        // while a finger is down: a drag sets `progress` every frame and an
-        // implicit animation would lag it behind the finger by its own
-        // duration, which is the "indirect" feel we rejected once already.
-        .animation(transitionAnimation, value: presentation.progress)
         // Outside the reader, so the reader's region is the whole window: the
         // player draws under the status bar and the home indicator, and its own
         // `GeometryReader` still reports the real insets to lay its content out
@@ -111,6 +105,20 @@ struct NowPlayingOverlay: View {
         // cleared, queue emptied. Animating it away would be animating an
         // empty screen, since `FullScreenPlayerView` renders nothing without a
         // current song.
+        // The transition is performed here, in the tree that actually moves, so
+        // it animates no matter which view asked for it — `MiniPlayerBar` lives
+        // in the tab bar's accessory slot and its transactions do not reach us.
+        //
+        // Scoped to one update per transition rather than declared over the
+        // subtree with `.animation(_:value:)`: that fired every frame of a drag
+        // with a nil animation and interrupted the scrub bar's own fill
+        // animation, which juddered while the player was dragged during
+        // playback.
+        .onChange(of: presentation.animationToken) { _, _ in
+            withOptionalAnimation(reduceMotion ? nil : AppMotion.gentle) {
+                presentation.applyAnimationTarget()
+            }
+        }
         .onChange(of: snapshot.hasCurrentSong) { _, hasSong in
             if !hasSong {
                 presentation.dismissImmediately()
@@ -130,18 +138,15 @@ struct NowPlayingOverlay: View {
                 image: image,
                 from: from,
                 to: to,
-                progress: presentation.progress
+                progress: presentation.progress,
+                // The same style the arriving artwork uses, so nothing changes
+                // at the handover.
+                shadow: snapshot.isPlaying ? AM.Shadow.heroPlaying : AM.Shadow.heroIdle
             )
         }
     }
 
     // MARK: - Geometry
-
-    /// Large surfaces move on `gentle`; this is the largest one in the app.
-    private var transitionAnimation: Animation? {
-        guard presentation.isAnimatingTransition, !reduceMotion else { return nil }
-        return AppMotion.gentle
-    }
 
     private func offset(height: CGFloat) -> CGFloat {
         (1 - presentation.progress) * height + overshoot

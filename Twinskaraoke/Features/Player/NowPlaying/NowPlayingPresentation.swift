@@ -156,23 +156,43 @@ final class NowPlayingPresentation {
 
     // MARK: - Driving the animation
 
-    /// Sets the destination and flags the flight; the *animation* belongs to
-    /// `NowPlayingOverlay`, which applies it with `.animation(_:value:)`.
+    /// Where an animated transition is heading, and a token that changes every
+    /// time one is requested.
     ///
-    /// It used to be a `withAnimation` here, and that quietly only worked in
-    /// one direction. A transaction does not cross a hosting boundary, and the
-    /// two directions are called from different view trees: `collapse()` and
-    /// `endDrag()` come from inside the overlay, but `expand()` is called by
-    /// `MiniPlayerBar`, which lives in the tab bar's accessory slot — a
-    /// separate tree owned by UIKit. So closing animated and opening snapped,
-    /// which also made the artwork morph appear to jump straight to full size
-    /// before settling. Declaring the animation on the view that moves makes
-    /// it independent of who asked.
+    /// `NowPlayingOverlay` watches the token and performs the move itself,
+    /// inside its own `withAnimation`. Two earlier arrangements were wrong in
+    /// different ways, and both are worth remembering.
+    ///
+    /// Calling `withAnimation` *here* only animated one direction: a
+    /// transaction does not cross a hosting boundary, and `collapse()` and
+    /// `endDrag()` are called from inside the overlay while `expand()` comes
+    /// from `MiniPlayerBar`, which lives in the tab bar's accessory slot.
+    ///
+    /// Replacing that with `.animation(_:value:)` on the overlay fixed the
+    /// direction but animated the player's whole subtree. During a drag that
+    /// modifier fires every frame with a nil animation, which interrupts any
+    /// animation already running inside the player — the scrub bar's fill
+    /// animates its width over 0.25s on every playback tick, so it visibly
+    /// juddered back and forth while the player was dragged, but only while
+    /// something was playing.
+    ///
+    /// Driving it from the overlay's own `onChange` keeps the animation in the
+    /// right tree and scopes it to one update per transition instead of one
+    /// per frame.
+    private(set) var animationTarget: Double = 0
+    private(set) var animationToken = 0
+
+    /// Applied by `NowPlayingOverlay` inside its own animation.
+    func applyAnimationTarget() {
+        progress = animationTarget
+    }
+
     private func animate(to target: Double) {
         settleTask?.cancel()
         settleTask = nil
         isAnimatingTransition = true
-        progress = target
+        animationTarget = target
+        animationToken &+= 1
         settleTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.settleDuration)
             guard !Task.isCancelled else { return }
