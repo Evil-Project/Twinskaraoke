@@ -82,9 +82,8 @@ import SwiftUI
         /// while something like the full-screen player is presented over
         /// the app's own window underneath — so falling/walking/climbing
         /// instances stay clamped correctly through rotation, Split View
-        /// resizing, etc. Also re-measures the mini player bar's live top
-        /// edge on the same cadence, since LNPopupUI doesn't offer a
-        /// change notification for it.
+        /// resizing, etc. The mini player's own edge is not polled here — it
+        /// is a SwiftUI view now, so it reports its frame as it changes.
         private func startTrackingBounds(in scene: UIWindowScene) {
             boundsTrackingTimer?.invalidate()
             trackedScene = scene
@@ -103,7 +102,6 @@ import SwiftUI
         @objc private func refreshTrackedBounds() {
             guard let scene = trackedScene else { return }
             ShimejiEngine.shared.bounds = scene.effectiveGeometry.coordinateSpace.bounds
-            ShimejiEngine.shared.miniPlayerY = ShimejiMiniPlayerTracker.shared.topEdgeY
             ShimejiEngine.shared.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: window)
         }
     }

@@ -73,7 +73,6 @@ struct LibraryView: View {
                 }
                 .scrollIndicators(.hidden)
                 .smoothScrolling()
-                .tabBarScrollInset()
                 .musicScreenBackground()
             }
             .navigationTitle("Library")

@@ -21,6 +21,7 @@ struct PlayerArtworkView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .opacity(NowPlayingPresentation.shared.isMorphingArtwork ? 0 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(song.title) artwork")
         .accessibilityHint(onTap == nil ? "Album artwork." : "Opens full-screen artwork.")
@@ -38,6 +39,24 @@ struct PlayerArtworkView: View {
                 lowResURL: audioManager.displayImageURL(for: song, variant: .thumbnail)
             )
             .frame(width: size, height: size)
+            // The morph target, reported from the artwork itself rather than
+            // from the body: the body carries `.frame(maxWidth: .infinity)`, so
+            // its frame is the full column width, and `size` is often smaller —
+            // the flying artwork was landing at the column's width and only
+            // snapping down to the real one when the morph ended. Reported from
+            // here it covers all five call sites (compact, both iPad layouts,
+            // radio), and only one is ever on screen.
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
+            }
+            // The artwork is not always on screen — the lyrics surface replaces
+            // it — and a frame left behind after it goes would aim the morph at
+            // somewhere the artwork no longer is.
+            .onDisappear {
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil)
+            }
             .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)
             .scaleEffect(artworkScale)
@@ -63,8 +82,11 @@ struct PlayerArtworkView: View {
         .accessibilityHidden(true)
     }
 
+    /// How far the artwork shrinks while paused.
+    private static let pausedScale: CGFloat = 0.88
+
     private var artworkScale: CGFloat {
-        audioManager.isPlaying ? 1.0 : 0.88
+        audioManager.isPlaying ? 1.0 : Self.pausedScale
     }
 
     private var artworkPlaybackAnimation: Animation? {

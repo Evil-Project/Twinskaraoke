@@ -25,7 +25,6 @@ struct BrowseSongCollectionView: View {
         GeometryReader { geo in
             ScrollView {
                 collectionOverview(width: geo.size.width)
-                    .tabBarBottomPadding()
             }
             .smoothScrolling()
             .collapsedNavigationTitle($showsCollapsedTitle)

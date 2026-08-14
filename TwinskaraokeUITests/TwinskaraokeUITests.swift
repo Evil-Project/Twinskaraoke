@@ -225,7 +225,7 @@ final class TwinskaraokeUITests: XCTestCase {
     origin.withOffset(CGVector(dx: 200, dy: swipeY)).tap()
 
     XCTAssertFalse(
-      app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 3),
+      waitUntil(timeout: 3) { self.miniPlayerExists(in: app) },
       "Neither the swipe nor a tap during the shrink may start playback."
     )
 
@@ -260,7 +260,27 @@ final class TwinskaraokeUITests: XCTestCase {
   /// while the screen is still arriving.
   private func tapStartsPlayback(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
     element.tap()
-    return app.otherElements["MiniPlayerBar"].waitForExistence(timeout: 1.5)
+    return waitUntil(timeout: 1.5) { self.miniPlayerExists(in: app) }
+  }
+
+  /// Whether the mini player is on screen, under either element type.
+  ///
+  /// It resolves as a *button*: it carries a button trait, because tapping it
+  /// opens the player. It was an `other` element while the bar was a plain
+  /// `UIView` supplied by LNPopupUI. Both are checked rather than just the one
+  /// that happens to be current, because the assertions above are negative —
+  /// querying only the type the bar no longer uses would make "the mini player
+  /// did not appear" pass without the mini player having anything to do with it.
+  private func miniPlayerExists(in app: XCUIApplication) -> Bool {
+    app.buttons["MiniPlayerBar"].firstMatch.exists
+      || app.otherElements["MiniPlayerBar"].firstMatch.exists
+  }
+
+  /// Present *and* reachable. The full player covers the window while it is
+  /// presenting, so this is what says it has really gone.
+  private func miniPlayerIsHittable(in app: XCUIApplication) -> Bool {
+    app.buttons["MiniPlayerBar"].firstMatch.isHittable
+      || app.otherElements["MiniPlayerBar"].firstMatch.isHittable
   }
 
   private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
@@ -449,6 +469,61 @@ final class TwinskaraokeUITests: XCTestCase {
       XCTAssertTrue(
         accessibleElementExists(identifier: "Radio.WideOverview", in: app, timeout: 8),
         "Expected Radio to use a wide overview layout on iPad."
+      )
+    }
+  }
+
+  /// Dragging the player down must dismiss it, and hand the screen back.
+  ///
+  /// This covers the gesture end to end — that a downward drag on the player's
+  /// body reaches `NowPlayingOverlay`'s recogniser, settles, and releases hit
+  /// testing so the app underneath is usable again. The *decision* it settles
+  /// on lives in `PlayerDismissMetricsTests`, which is where the velocity
+  /// projection that used to fail is actually covered.
+  ///
+  /// It deliberately does not flick. XCUITest does not deliver the intermediate
+  /// touches of a fast synthesized drag, so the gesture never begins: measured,
+  /// the player sat at `progress=1.0` throughout while the assertions passed
+  /// anyway, because an open player covering the screen reads as not hittable
+  /// just as a dismissed one does. A slow drag does arrive, which is why this
+  /// commits on distance instead.
+  ///
+  /// Repeated, because a stuck presentation only shows on the second open.
+  func testDraggingDownDismissesTheFullScreenPlayer() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+
+    XCTAssertTrue(
+      app.staticTexts["Made for You"].waitForExistence(timeout: 8),
+      "Expected Home song shelf to be visible."
+    )
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+
+    let player = app.otherElements["FullScreenPlayer"]
+
+    for attempt in 1...3 {
+      openMiniPlayer(in: app)
+      XCTAssertTrue(
+        waitUntil(timeout: 8) { player.isHittable },
+        "Attempt \(attempt): the mini player did not open the full-screen player."
+      )
+
+      // Started below the grabber, so this is the drag itself rather than the
+      // dismiss button, which never had the bug.
+      let start = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18))
+      let end = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+      start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 400, thenHoldForDuration: 0.1)
+
+      // The mini player becoming tappable again is the assertion that means
+      // something: the overlay covers the whole window while it is presenting,
+      // so nothing underneath can be touched until it has actually gone.
+      XCTAssertTrue(
+        waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+        "Attempt \(attempt): dragging down left the player up, or holding the screen."
       )
     }
   }
@@ -764,12 +839,21 @@ final class TwinskaraokeUITests: XCTestCase {
   }
 
   private func openMiniPlayer(in app: XCUIApplication) {
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { self.miniPlayerExists(in: app) },
+      "Missing mini-player bar."
+    )
     let miniPlayer =
       app.buttons["MiniPlayerBar"].firstMatch.exists
       ? app.buttons["MiniPlayerBar"].firstMatch
       : app.otherElements["MiniPlayerBar"].firstMatch
-
-    XCTAssertTrue(miniPlayer.waitForExistence(timeout: 8), "Missing mini-player bar.")
+    // Hittable, not just present. Straight after a dismissal the full player is
+    // still sliding down over the bar, and a tap sent then lands on the player
+    // instead — which is why opening it a second time in a row failed.
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { miniPlayer.isHittable },
+      "Mini-player bar never became tappable."
+    )
     miniPlayer.tap()
   }
 

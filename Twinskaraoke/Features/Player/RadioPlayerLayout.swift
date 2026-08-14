@@ -140,9 +140,6 @@ struct RadioPlayerLayout: View {
 
         Button {
             AppHaptic.selection.play()
-            #if canImport(UIKit)
-                PopupOpenIntentGate.shared.suppressNextOpen()
-            #endif
             showingQueue = true
         } label: {
             Label("Show Live Schedule", systemImage: "list.bullet")

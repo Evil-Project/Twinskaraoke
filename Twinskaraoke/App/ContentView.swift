@@ -1,110 +1,9 @@
-import Combine
-import LNPopupUI
 import SwiftUI
 import Observation
 
 #if canImport(UIKit)
     import UIKit
 #endif
-
-@MainActor
-@Observable
-private final class PopupPlaybackState {
-    static let shared = PopupPlaybackState()
-
-    var hasCurrentSong: Bool {
-        snapshot.id != nil
-    }
-
-    var id: String {
-        snapshot.id ?? "now-playing"
-    }
-
-    var title: String {
-        snapshot.title
-    }
-
-    var subtitle: String {
-        snapshot.subtitle
-    }
-
-    var artwork: UIImage? {
-        snapshot.artwork
-    }
-
-    var isPlaying: Bool {
-        snapshot.isPlaying
-    }
-
-    var isRadioMode: Bool {
-        snapshot.isRadioMode
-    }
-
-    private var snapshot = PopupPlaybackSnapshot()
-    @ObservationIgnored private var pendingSnapshot = PopupPlaybackSnapshot()
-    @ObservationIgnored private var publishTask: Task<Void, Never>?
-    @ObservationIgnored private var observation: ObservationToken?
-
-    private init() {
-        // Replaces four `$property.sink` pipelines. The per-property
-        // `removeDuplicates` they carried is redundant here: `scheduleSnapshotPublish`
-        // already drops a rebuild that `matches` the published snapshot, so
-        // rebuilding all four fields on any change is equivalent.
-        observation = observeContinuously({
-            let manager = AudioPlayerManager.shared
-            _ = manager.currentSong
-            _ = manager.nowPlayingArtwork
-            _ = manager.isPlaying
-            _ = manager.isRadioMode
-        }, onChange: { [weak self] in
-            self?.rebuildPendingSnapshot()
-        })
-        rebuildPendingSnapshot()
-    }
-
-    private func rebuildPendingSnapshot() {
-        let manager = AudioPlayerManager.shared
-        let song = manager.currentSong
-        pendingSnapshot.id = song?.id
-        pendingSnapshot.title = song?.title ?? ""
-        pendingSnapshot.subtitle = song?.displayArtist ?? ""
-        pendingSnapshot.artwork = manager.nowPlayingArtwork
-        pendingSnapshot.isPlaying = manager.isPlaying
-        pendingSnapshot.isRadioMode = manager.isRadioMode
-        scheduleSnapshotPublish()
-    }
-
-    private func scheduleSnapshotPublish() {
-        guard publishTask == nil else { return }
-        publishTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(33))
-            guard let self else { return }
-            let nextSnapshot = pendingSnapshot
-            publishTask = nil
-            guard !snapshot.matches(nextSnapshot) else { return }
-
-            snapshot = nextSnapshot
-        }
-    }
-}
-
-private struct PopupPlaybackSnapshot {
-    var id: String?
-    var title = ""
-    var subtitle = ""
-    var artwork: UIImage?
-    var isPlaying = false
-    var isRadioMode = false
-
-    func matches(_ other: PopupPlaybackSnapshot) -> Bool {
-        id == other.id
-            && title == other.title
-            && subtitle == other.subtitle
-            && artwork === other.artwork
-            && isPlaying == other.isPlaying
-            && isRadioMode == other.isRadioMode
-    }
-}
 
 struct ContentView: View {
     var body: some View {
@@ -119,37 +18,56 @@ private struct PopupHostView: View {
     @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
-    private let tabBarMinimize = TabBarMinimizeCoordinator.shared
+    private let nowPlaying = NowPlayingSnapshotState.shared
+    // The mini player is presented from the root and sits above every pushed
+    // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
+    // full-screen video has to withdraw the bar here instead.
+    private let videoFullScreen = VideoFullScreenState.shared
 
     init() {
         _selectedSection = State(initialValue: Self.initialSection)
     }
 
     var body: some View {
-        rootShell
-            .environment(homeViewModel)
-            .modifier(PopupModifier())
-            .onAppear {
-                // Warm the account-scoped state that the shared song context
-                // menu reads. Both used to load only when Library (or the
-                // full-screen player) first appeared, so a long-press before
-                // that — or during the fetch — rendered "Favorite" for a song
-                // that was already favorited, and hid "Remove from Playlist".
-                // A context menu's contents are snapshotted when it opens, so a
-                // load landing mid-press cannot correct the label afterwards.
-                FavoritesManager.shared.loadIfNeeded()
-                UserPlaylistsManager.shared.loadIfNeeded()
-                if DeveloperMode.shouldTriggerEasterEgg() {
-                    showCaptcha = true
-                }
+        // The reader is outside the overlay on purpose: it is laid out
+        // normally, so it can still see the window's safe-area insets. The
+        // overlay ignores them, and nothing nested under that point can read
+        // them back.
+        GeometryReader { proxy in
+            ZStack {
+                rootShell
+                NowPlayingOverlay(safeAreaInsets: proxy.safeAreaInsets)
             }
-            .fullScreenCover(isPresented: $showCaptcha) {
-                CaptchaWebView(
-                    url: URL(string: "https://twinskaraoke.evilneur.org")!,
-                    onClose: { showCaptcha = false }
-                )
-                .ignoresSafeArea()
+        }
+        .environment(homeViewModel)
+        .onAppear {
+            // Warm the account-scoped state that the shared song context
+            // menu reads. Both used to load only when Library (or the
+            // full-screen player) first appeared, so a long-press before
+            // that — or during the fetch — rendered "Favorite" for a song
+            // that was already favorited, and hid "Remove from Playlist".
+            // A context menu's contents are snapshotted when it opens, so a
+            // load landing mid-press cannot correct the label afterwards.
+            FavoritesManager.shared.loadIfNeeded()
+            UserPlaylistsManager.shared.loadIfNeeded()
+            if DeveloperMode.shouldTriggerEasterEgg() {
+                showCaptcha = true
             }
+        }
+        .fullScreenCover(isPresented: $showCaptcha) {
+            CaptchaWebView(
+                url: URL(string: "https://twinskaraoke.evilneur.org")!,
+                onClose: { showCaptcha = false }
+            )
+            .ignoresSafeArea()
+        }
+    }
+
+    /// The mini player shows whenever there is something playing, and steps
+    /// aside for full-screen video, which covers the tab bar the accessory
+    /// slot lives in.
+    private var showsMiniPlayer: Bool {
+        nowPlaying.hasCurrentSong && !videoFullScreen.isActive
     }
 
     private var rootShell: some View {
@@ -199,15 +117,20 @@ private struct PopupHostView: View {
             }
         }
         .tint(.appAccent)
-        // Replaces the hand-rolled scroll-collapse that BottomChromeState was
-        // built for and never wired up. Worth re-checking on device if the
-        // mini player ever looks misplaced: LNPopupController floats its bar
-        // above the tab bar, and ShimejiFloorRegistry rests idle instances on
-        // the live UITabBar's top edge, both of which move as the bar minimizes.
-        // `.onScrollDown` alone only brings the bar back after a very long scroll
-        // up, so TabBarMinimizeCoordinator drives the reveal off a shorter
-        // threshold and hands the behaviour back once the user scrolls down again.
-        .tabBarMinimizeBehavior(tabBarMinimize.mode.swiftUI)
+        // The mini player goes in the system's own accessory slot — the one
+        // Apple Music uses. That is what gives it Liquid Glass, the merge into
+        // the minimized tab bar, and a bottom content inset on every screen
+        // underneath, none of which we now maintain ourselves.
+        .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
+            MiniPlayerBar()
+        }
+        // Declared once and never varied. The system's own reveal distance is
+        // long — roughly 440pt — so `TabBarMinimizeCoordinator` still brings the
+        // bar back after a short scroll up, but it does that by assigning
+        // `tabBarMinimizeBehavior` on the controller directly and never through
+        // this modifier. Changing the *declared* value is what used to leave the
+        // mini player at the wrong width for about a second; see that type.
+        .tabBarMinimizeBehavior(.onScrollDown)
         .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
     }
 
@@ -232,9 +155,20 @@ private struct PopupHostView: View {
             // `safeAreaBar`, not `safeAreaInset`: this is a bar, so it should
             // get the bar treatment — glass and scroll-edge behaviour — rather
             // than painting its own `.bar` background under a plain inset.
+            //
+            // The same `MiniPlayerBar` as the tab shell, not a second design.
+            // There is no accessory slot outside a `TabView`, so it reads a nil
+            // placement and lays itself out at full size. This used to be a
+            // separate, non-interactive "Now Playing" hint that sat *underneath*
+            // a floating popup bar — two mini players stacked on the same screen.
             .safeAreaBar(edge: .bottom, spacing: 0) {
-                SidebarNowPlayingHint()
+                if showsMiniPlayer {
+                    MiniPlayerBar()
+                        .padding(.vertical, 8)
+                        .transition(.opacity)
+                }
             }
+            .animation(AppMotion.quick, value: showsMiniPlayer)
         } detail: {
             currentSection.content
                 .id(currentSection)
@@ -393,61 +327,6 @@ private struct SidebarSectionRow: View {
     }
 }
 
-private struct SidebarNowPlayingHint: View {
-    private let popupState = PopupPlaybackState.shared
-
-    var body: some View {
-        Group {
-            if popupState.hasCurrentSong {
-                HStack(spacing: 10) {
-                    artwork
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Now Playing")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                        Text(popupState.title)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        if !popupState.subtitle.isEmpty {
-                            Text(popupState.subtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                // No background or hairline of its own — `safeAreaBar` gives the
-                // content the system bar treatment, and painting `.bar` plus a
-                // divider on top of that just doubles it.
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Now Playing")
-                .accessibilityValue(popupState.subtitle.isEmpty ? popupState.title : "\(popupState.title), \(popupState.subtitle)")
-                .transition(.opacity)
-            }
-        }
-        .animation(AppMotion.quick, value: popupState.hasCurrentSong)
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let artwork = popupState.artwork {
-            Image(uiImage: artwork)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
-        } else {
-            MusicArtworkPlaceholder(cornerRadius: AM.Radius.thumb)
-                .frame(width: 38, height: 38)
-        }
-    }
-}
-
 private extension RootSection {
     /// Sidebar only, and deliberately scoped to this extension: the tab bar
     /// fills the selected symbol for itself, and handing it the filled variant
@@ -481,183 +360,6 @@ private extension RootSection {
         case .search:
             Color(red: 0.23, green: 0.68, blue: 0.48)
         }
-    }
-}
-
-private struct PopupModifier: ViewModifier {
-    private let popupState = PopupPlaybackState.shared
-    private let presentationState = PopupPresentationState.shared
-    private let barEnvironment = PopupBarEnvironmentTracker.shared
-    // LNPopupController floats the mini player above the tab bar and every
-    // pushed screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
-    // full-screen video has to withdraw the bar here instead.
-    private let videoFullScreen = VideoFullScreenState.shared
-
-    func body(content: Content) -> some View {
-        content
-            .popup(
-                isBarPresented: .constant(popupState.hasCurrentSong && !videoFullScreen.isActive),
-                isPopupOpen: Binding(
-                    get: { presentationState.isExpanded },
-                    set: { isOpen in
-                        if isOpen {
-                            #if canImport(UIKit)
-                                let isIntentionalOpen =
-                                    presentationState.isExpanded || PopupOpenIntentGate.shared.consumeIntent()
-                                guard isIntentionalOpen else {
-                                    presentationState.collapse()
-                                    return
-                                }
-                            #endif
-                        }
-                        // The mini player's own tap and its swipe-to-dismiss are
-                        // handled inside LNPopupController, so this binding is
-                        // the only place either surfaces to us.  Guarded on an
-                        // actual change: the suppression path above calls
-                        // `collapse()` on an already-collapsed popup.
-                        let wasExpanded = presentationState.isExpanded
-                        presentationState.setExpanded(isOpen)
-                        if isOpen != wasExpanded {
-                            (isOpen ? AppHaptic.commit : AppHaptic.dismiss).play()
-                        }
-                    }
-                )
-            ) {
-                PopupContent(popupState: popupState)
-            }
-            // `.floating` (58pt) matches the full-size tab bar; `.floatingCompact`
-            // (48pt) matches the minimized row the bar merges into. The height
-            // comes from the style alone — LNPopupController does not shrink a
-            // bar when it goes inline — so the style has to follow the tab bar,
-            // which is what PopupBarEnvironmentTracker watches for.
-            //
-            // The artwork follows the height on its own: LNPopupBar sizes it as
-            // `barHeight - 18`, so it moves between 40pt and 30pt with the bar.
-            .popupBarStyle(barEnvironment.barStyle)
-            .popupBarProgressViewStyle(.none)
-            .popupCloseButtonStyle(.none)
-            .popupInteractionStyle(.drag)
-            .popupBarMarqueeScrollEnabled(false)
-            .popupBarCustomizer { popupBar in
-                popupBar.accessibilityIdentifier = "MiniPlayerBar"
-                popupBar.accessibilityLabel = "Now Playing"
-                popupBar.accessibilityHint = "Opens the full-screen player."
-
-                PopupOpenIntentGate.shared.installTouchRecognizer(on: popupBar)
-                #if canImport(UIKit)
-                    PopupBarEnvironmentTracker.shared.observe(popupBar)
-                    ShimejiMiniPlayerTracker.shared.register(popupBar)
-                #endif
-            }
-    }
-}
-
-private struct PopupContent: View {
-    private let popupState: PopupPlaybackState
-
-    init(popupState: PopupPlaybackState) {
-        self.popupState = popupState
-    }
-
-    var body: some View {
-        FullScreenPlayerView()
-            .environment(AudioPlayerManager.shared)
-            .popupItem {
-                // `trailingButtons:` explicitly. LNPopupUI 4 added a
-                // `leadingButtons:` parameter ahead of it, so the bare trailing
-                // closure this used to be now binds to the leading slot — which
-                // is what moved the play and next buttons to the left of the
-                // artwork.
-                PopupItem(
-                    id: popupState.id,
-                    verbatimTitle: popupState.title,
-                    verbatimSubtitle: popupState.subtitle.isEmpty ? nil : popupState.subtitle,
-                    image: popupImage,
-                    trailingButtons: {
-                        ToolbarItemGroup(placement: .popupBar) {
-                            PopupBarTrailingItems(
-                                isPlaying: popupState.isPlaying,
-                                isRadioMode: popupState.isRadioMode,
-                                onTogglePlayPause: {
-                                    #if canImport(UIKit)
-                                        PopupOpenIntentGate.shared.suppressNextOpen()
-                                    #endif
-                                    AudioPlayerManager.shared.togglePlayPause()
-                                },
-                                onNext: {
-                                    #if canImport(UIKit)
-                                        PopupOpenIntentGate.shared.suppressNextOpen()
-                                    #endif
-                                    AudioPlayerManager.shared.playNextOrRandom()
-                                }
-                            )
-                        }
-                    }
-                )
-            }
-    }
-
-    private var popupImage: Image {
-        if let artwork = popupState.artwork {
-            Image(uiImage: artwork)
-        } else {
-            Image(systemName: "music.note")
-        }
-    }
-}
-
-private struct PopupBarTrailingItems: View, Equatable {
-    let isPlaying: Bool
-    let isRadioMode: Bool
-    let onTogglePlayPause: () -> Void
-    let onNext: () -> Void
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.isPlaying == rhs.isPlaying && lhs.isRadioMode == rhs.isRadioMode
-    }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onTogglePlayPause) {
-                Image(systemName: playPauseSymbol)
-                    .contentTransition(.symbolEffect(.replace))
-                    .font(.title3.bold())
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .commit))
-            .accessibilityLabel(playPauseAccessibilityLabel)
-            .accessibilityHint(
-                isRadioMode ? "Controls the live radio stream." : "Controls the current song."
-            )
-            if !isRadioMode {
-                Button(action: onNext) {
-                    Image(systemName: "forward.fill")
-                        .font(.title3.bold())
-                        .foregroundStyle(.primary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableButtonStyle(scale: 0.86, dim: 0.65, haptic: .selection))
-                .accessibilityLabel("Next track")
-                .accessibilityHint("Skips to the next song.")
-            }
-        }
-    }
-
-    private var playPauseAccessibilityLabel: String {
-        if isRadioMode {
-            return isPlaying ? "Stop live radio" : "Play live radio"
-        }
-        return isPlaying ? "Pause" : "Play"
-    }
-
-    private var playPauseSymbol: String {
-        if isRadioMode {
-            return isPlaying ? "stop.fill" : "play.fill"
-        }
-        return isPlaying ? "pause.fill" : "play.fill"
     }
 }
 

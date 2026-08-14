@@ -3,40 +3,44 @@ import SwiftUI
 #if canImport(UIKit)
     import UIKit
 
-    /// Tracks the live on-screen frame of the mini player (LNPopupUI's
-    /// popup bar) so `ShimejiEngine` can treat its top edge as a floor
-    /// Shimeji can land on. LNPopupUI owns and lays out this view itself —
-    /// there's no SwiftUI geometry to read — so the only way to know where
-    /// it actually is on screen is to hold the live `UIView` handed back by
-    /// `.popupBarCustomizer` in `ContentView` and ask it directly.
+    /// Tracks the mini player's top edge so `ShimejiEngine` can treat it as a
+    /// floor Shimeji can land on.
+    ///
+    /// `MiniPlayerBar` pushes its own frame here as SwiftUI lays it out. This
+    /// used to be a poll: the bar was a `UIView` owned by LNPopupUI, with no
+    /// SwiftUI geometry to read and no change notification offered, so
+    /// `ShimejiOverlayController` re-measured it twice a second and Shimeji
+    /// visibly lagged the bar whenever the tab bar minimized. A view we own
+    /// reports the change instead of being asked about it.
     ///
     /// A plain (non-actor) singleton for the same reason as the old floor
     /// registry this replaces: the only reader is `ShimejiOverlayController`,
-    /// already `@MainActor`, and the only writer is the customizer callback,
-    /// which SwiftUI also runs on the main thread.
+    /// already `@MainActor`, and the only writer is a SwiftUI geometry
+    /// callback, which also runs on the main thread.
     final class ShimejiMiniPlayerTracker {
         static let shared = ShimejiMiniPlayerTracker()
 
-        private weak var barView: UIView?
-
         private init() {}
 
-        /// Called from `.popupBarCustomizer` whenever LNPopupUI (re)builds
-        /// the bar, so this always points at the current one.
-        func register(_ barView: UIView) {
-            self.barView = barView
+        /// The bar's current top edge in window coordinates — the same space
+        /// `ShimejiEngine.bounds` is tracked in. Nil while no bar is showing,
+        /// which is what puts Shimeji back on the tab bar's edge.
+        private(set) var topEdgeY: CGFloat?
+
+        /// - Parameter frame: the bar's frame in global coordinates, or nil
+        ///   when the bar leaves the screen.
+        func report(frame: CGRect?) {
+            guard let frame, frame.height > 0 else {
+                update(topEdgeY: nil)
+                return
+            }
+            update(topEdgeY: frame.minY)
         }
 
-        /// The bar's current top edge, in its own window's coordinate space
-        /// — the same space `ShimejiEngine.bounds` is tracked in, since both
-        /// ultimately come from the same key window. Nil if the bar hasn't
-        /// been registered yet or isn't actually attached to a window (not
-        /// laid out yet, or the popup bar isn't showing).
-        var topEdgeY: CGFloat? {
-            guard let barView, let window = barView.window, barView.bounds.height > 0 else { return nil }
-            let frameInWindow = barView.convert(barView.bounds, to: window)
-            guard frameInWindow.height > 0 else { return nil }
-            return frameInWindow.minY
+        private func update(topEdgeY newValue: CGFloat?) {
+            guard newValue != topEdgeY else { return }
+            topEdgeY = newValue
+            ShimejiEngine.shared.miniPlayerY = newValue
         }
     }
 

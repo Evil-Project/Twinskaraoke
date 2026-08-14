@@ -299,9 +299,9 @@ private struct PlayerMoreMenu: View {
 
 struct FullScreenPlayerView: View {
     @Environment(AudioPlayerManager.self) var audioManager
-    private let popupPresentation = PopupPresentationState.shared
+    private let presentation = NowPlayingPresentation.shared
     private let favorites = FavoritesManager.shared
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.playerSafeAreaInsets) private var injectedSafeAreaInsets
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showingQueue = false
     @State private var showLyrics = false
@@ -325,8 +325,14 @@ struct FullScreenPlayerView: View {
         Group {
             if let song {
                 GeometryReader { geo in
-                    let safeTop = geo.safeAreaInsets.top
-                    let safeBottom = geo.safeAreaInsets.bottom
+                    // Injected when hosted by `NowPlayingOverlay`, which ignores
+                    // the safe area so the player can paint edge to edge — a
+                    // reader below that point reports zero insets, which used to
+                    // put the content under the status bar and, by inflating
+                    // `contentHeight` past the compact breakpoint, enlarge every
+                    // font on the screen.
+                    let safeTop = injectedSafeAreaInsets?.top ?? geo.safeAreaInsets.top
+                    let safeBottom = injectedSafeAreaInsets?.bottom ?? geo.safeAreaInsets.bottom
                     let metrics = PlayerLayoutMetrics(
                         containerSize: geo.size,
                         safeTop: safeTop,
@@ -452,9 +458,6 @@ struct FullScreenPlayerView: View {
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
             // Radio has no lyrics; leaving it restores the canvas default.
             showLyrics = isRadio ? false : usesPadCanvas
-        }
-        .onChange(of: popupPresentation.isExpanded) { _, isShown in
-            if !isShown { dismiss() }
         }
         .onChange(of: audioManager.aiEnabled) { _, enabled in
             if !enabled {
@@ -807,8 +810,10 @@ struct FullScreenPlayerView: View {
 
     private var dismissBar: some View {
         Button {
-            AppHaptic.dismiss.play()
-            popupPresentation.collapse()
+            // No haptic here: `collapse()` plays `.dismiss` itself, so every
+            // route out of the player feels the same. It used to be needed,
+            // back when the presentation only stored a flag.
+            presentation.collapse()
         } label: {
             Capsule()
                 .fill(Color.primary.opacity(0.35))
@@ -1075,7 +1080,7 @@ struct FullScreenPlayerView: View {
     private func backgroundView(song: Song) -> some View {
         PlayerAmbientBackground(
             artworkURL: audioManager.displayImageURL(for: song, variant: .blur),
-            isPlaying: audioManager.isPlaying && popupPresentation.isExpanded
+            isPlaying: audioManager.isPlaying && presentation.isExpanded
         )
     }
 

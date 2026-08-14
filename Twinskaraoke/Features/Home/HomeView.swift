@@ -31,7 +31,6 @@ struct HomeView: View {
                 }
                 .smoothScrolling()
                 .scrollEdgeHaptic()
-                .tabBarScrollInset()
                 .musicScreenBackground()
             }
             .navigationTitle("Home")

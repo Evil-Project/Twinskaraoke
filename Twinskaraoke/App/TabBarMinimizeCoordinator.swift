@@ -29,6 +29,21 @@ import SwiftUI
     /// `contentOffset` after the lift, so tracking the content covers the drag
     /// and its momentum with one threshold and no velocity guesswork.
     ///
+    /// **The flip is told to UIKit only, never declared to SwiftUI.** That is
+    /// the whole reason this works. `mode` used to be `@Observable` and fed
+    /// `.tabBarMinimizeBehavior(_:)` as well, and the declared value changing
+    /// re-rendered the tab bar: the `tabViewBottomAccessory` took its expanded
+    /// frame, rebuilt itself back at the inline one, and corrected only when the
+    /// behaviour was handed back — so the mini player sat at the wrong width for
+    /// as long as that took, which on device read as a second of the pill being
+    /// in the wrong place. Measured with the assignment alone, the accessory
+    /// makes exactly one clean move (x=84 w=234 to x=21 w=360, ~54ms) and the
+    /// hand-back changes nothing.
+    ///
+    /// So `.tabBarMinimizeBehavior(.onScrollDown)` stays declared and constant.
+    /// If SwiftUI happens to re-apply it during the brief `.never` window the
+    /// reveal is simply lost, which is a missed reveal rather than a glitch.
+    ///
     /// The flip runs without checking whether the bar is actually minimized,
     /// because nothing public reports that: `UITabBar`'s frame and origin and the
     /// container's bottom safe-area inset are all identical in both states. On an
@@ -51,9 +66,59 @@ import SwiftUI
         /// collapse again on the swipe that just asked for it.
         private static let rearmDistance: CGFloat = 24
 
-        /// Quiet period after the last offset change that also hands minimization
-        /// back, for a reveal the user never follows with a downward scroll.
-        private static let settleDelay = Duration.milliseconds(350)
+        /// How long `.never` is held after a reveal.
+        ///
+        /// The accessory settles its geometry in two steps: it takes the
+        /// expanded frame within ~50ms of `.never` being set, drops back to the
+        /// inline one a few milliseconds later, and only corrects for good once
+        /// minimization is handed back. So this delay is, in effect, how long
+        /// the mini player sits at the wrong width — measured on the simulator
+        /// at 213ms with a 150ms hold and 142ms with this one, against 1-2s
+        /// when the hand-back waited for deceleration to end.
+        ///
+        /// 80ms is comfortably longer than the ~50ms UIKit needs to restore the
+        /// bar. Fixed, not measured from the last scroll event: see
+        /// `trackOffset`.
+        private static let expandedHold = Duration.milliseconds(80)
+
+        /// Minimum spacing between two forced reveals.
+        ///
+        /// Every reveal interrupts UIKit's own scroll-away interaction by
+        /// flipping the behaviour out from under it and back. One interruption
+        /// is the price of the short threshold; a rapid series of them is not
+        /// worth anything, because after the first the bar is already expanded
+        /// and there is nothing left to reveal. Scrolling up and down quickly
+        /// several times in a row could otherwise force a reveal every couple of
+        /// hundred milliseconds, each landing while UIKit was still animating
+        /// the last one.
+        ///
+        /// Comfortably longer than the expand animation, so a forced reveal
+        /// always lands on a settled bar. A reveal suppressed by this is not
+        /// lost: the gesture stays armed and fires as soon as the window
+        /// passes.
+        private static let revealCooldown = Duration.milliseconds(500)
+
+        /// How recently the finger must have asked for the bar, and how firmly.
+        ///
+        /// Distance alone is not intent. `contentOffset` moving back up by
+        /// `revealDistance` says nothing about who moved it: a downward flick
+        /// that reaches the end of the content bounces back by far more than
+        /// 72pt on its own. That fired a reveal in the middle of a downward
+        /// scroll, which applied `.never` while UIKit was busy minimizing — so
+        /// the tab bar sprang back to full size with the mini player already
+        /// on its way to the inline slot, and the two ended up on top of each
+        /// other before sorting themselves out.
+        ///
+        /// The window is generous because the distance is deliberately measured
+        /// on the content and not the finger: a quick flick travels barely any
+        /// distance under the thumb and coasts a long way afterwards, and that
+        /// coast should still count. It only has to outlast the gesture, not
+        /// the deceleration.
+        private static let revealIntentWindow = Duration.milliseconds(1200)
+
+        /// Ignores the incidental drift of a finger that is really holding
+        /// still, or changing direction.
+        private static let revealIntentVelocity: CGFloat = 60
 
         private static let recognizerName = "Twinskaraoke.TabBarExpandOnScrollUp"
 
@@ -78,20 +143,29 @@ import SwiftUI
             }
         }
 
-        /// Declared through `.tabBarMinimizeBehavior(_:)` rather than only assigned
-        /// to the controller, because SwiftUI re-applies the declared value on
-        /// every update and would otherwise overwrite a direct assignment — the
-        /// same trap `PopupBarEnvironmentTracker` documents for the popup bar style.
-        private(set) var mode: Mode = .minimizesOnScrollDown
+        /// Assigned straight to the controller and never published.
+        ///
+        /// It used to also be declared through `.tabBarMinimizeBehavior(_:)`,
+        /// because SwiftUI re-applies the declared value on every update and can
+        /// overwrite a direct assignment. But publishing it is what made the
+        /// mini player misbehave: the declared value changing re-renders the tab
+        /// bar, and the accessory rebuilt itself inline mid-reveal. The declared
+        /// value now stays `.onScrollDown` forever and only UIKit is told
+        /// otherwise, for a few frames.
+        private var mode: Mode = .minimizesOnScrollDown
 
         @ObservationIgnored private weak var tabBarController: UITabBarController?
         @ObservationIgnored private var gestureTarget: GestureTarget?
         @ObservationIgnored private weak var trackedScrollView: UIScrollView?
         @ObservationIgnored private var offsetObservation: NSKeyValueObservation?
         @ObservationIgnored private var rearmTask: Task<Void, Never>?
+        @ObservationIgnored private var lastRevealAt: ContinuousClock.Instant?
+        @ObservationIgnored private var lastRevealIntentAt: ContinuousClock.Instant?
         @ObservationIgnored private var offsetPeak: CGFloat = 0
         @ObservationIgnored private var offsetTrough: CGFloat = 0
-        @ObservationIgnored private var isHoldingExpanded = false
+        /// Whether a reveal may fire. Cleared by one, restored only once the
+        /// user scrolls back down past `rearmDistance`.
+        @ObservationIgnored private var isRevealArmed = true
 
         private init() {}
 
@@ -125,8 +199,8 @@ import SwiftUI
             gestureTarget = target
 
             // `cancelsTouchesInView` off and simultaneous recognition on, so this
-            // only ever watches the scroll gestures it sits above — the same
-            // arrangement `PopupOpenIntentGate` uses on the popup bar.
+            // only ever watches the scroll gestures it sits above rather than
+            // taking any touch away from them.
             let recognizer = UIPanGestureRecognizer(target: target, action: #selector(GestureTarget.handle(_:)))
             recognizer.name = Self.recognizerName
             recognizer.cancelsTouchesInView = false
@@ -136,10 +210,20 @@ import SwiftUI
             controller.view.addGestureRecognizer(recognizer)
         }
 
-        /// The pan is only used to find the scroll view under the touch and to
-        /// reset the accumulator per gesture; the distance itself is measured on
-        /// the scroll view, so a flick's deceleration counts as well as the drag.
+        /// The pan finds the scroll view under the touch, resets the accumulator
+        /// per gesture, and records which way the finger is actually going. The
+        /// distance itself is still measured on the scroll view, so a flick's
+        /// deceleration counts as well as the drag.
         private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            if let view = recognizer.view, recognizer.state == .changed || recognizer.state == .ended {
+                // Positive y is the finger travelling down the screen, which
+                // drags the content back up — the direction that asks for the
+                // bar. Noted with a timestamp rather than a flag so momentum
+                // after the lift still counts; see `revealIntentWindow`.
+                if recognizer.velocity(in: view).y > Self.revealIntentVelocity {
+                    lastRevealIntentAt = ContinuousClock.now
+                }
+            }
             guard recognizer.state == .began, let view = recognizer.view else { return }
             guard let scrolled = Self.scrollView(under: recognizer.location(in: view), in: view) else { return }
 
@@ -178,41 +262,67 @@ import SwiftUI
             offsetPeak = max(offsetPeak, offsetY)
             offsetTrough = min(offsetTrough, offsetY)
 
-            if isHoldingExpanded {
-                // Heading back down: hand minimization straight back, so the bar
-                // can collapse again on the same swipe.
-                guard offsetY - offsetTrough >= Self.rearmDistance else {
-                    scheduleRearm()
-                    return
-                }
-                rearm()
+            // Two separate questions, which this used to conflate: how long
+            // `.never` is held, and when another reveal may fire.
+            //
+            // The hold is now a short fixed window (see `expandedHold`). It used
+            // to be pushed out by every offset change so that it landed after
+            // deceleration, but the accessory only settles its geometry on the
+            // *second* mode change, and a real flick decelerates for 1-2s.
+            // Measured on the way back up: the bar reached its expanded frame
+            // (x=21 w=360), regressed to the inline one, and corrected only once
+            // minimization was handed back — which is precisely the delay that
+            // was visible.
+            //
+            // Arming is what stops that becoming a flip-flop. `offsetPeak` is
+            // still the high-water mark once the hold expires, so content still
+            // coasting upward re-cleared `revealDistance` immediately and the
+            // mode oscillated every ~400ms. A reveal now disarms until the user
+            // actually heads back down.
+            guard isRevealArmed else {
+                guard offsetY - offsetTrough >= Self.rearmDistance else { return }
+                isRevealArmed = true
                 offsetPeak = offsetY
-            } else {
-                guard offsetPeak - offsetY >= Self.revealDistance else { return }
-                setMode(.staysExpanded)
-                isHoldingExpanded = true
                 offsetTrough = offsetY
-                scheduleRearm()
+                return
             }
+            guard offsetPeak - offsetY >= Self.revealDistance else { return }
+            // The content came back up, but only the finger can say whether that
+            // was asked for. Without this, a bounce at the end of a downward
+            // flick reveals the bar mid-scroll.
+            guard let lastRevealIntentAt,
+                  ContinuousClock.now - lastRevealIntentAt < Self.revealIntentWindow
+            else { return }
+            // Deliberately returns without disarming, so the reveal is deferred
+            // rather than dropped: the next offset change past the window still
+            // qualifies.
+            if let lastRevealAt, ContinuousClock.now - lastRevealAt < Self.revealCooldown {
+                return
+            }
+            lastRevealAt = ContinuousClock.now
+            setMode(.staysExpanded)
+            isRevealArmed = false
+            offsetTrough = offsetY
+            scheduleRearm()
         }
 
-        /// Hands minimization back once the scroll settles, so a reveal that is
-        /// never followed by a downward scroll does not latch `.never` forever
-        /// and leave the next scroll down unable to collapse the bar. Pushed out
-        /// by every further offset change, so it lands after deceleration ends.
+        /// Hands minimization back a short, fixed time after the reveal, so
+        /// `.never` is never latched and the next scroll down can collapse the
+        /// bar again. Scrolling back down earlier rearms immediately.
         private func scheduleRearm() {
             rearmTask?.cancel()
             rearmTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: Self.settleDelay)
+                try? await Task.sleep(for: Self.expandedHold)
                 guard !Task.isCancelled else { return }
                 self?.rearm()
             }
         }
 
+        /// Hands minimization back. Deliberately does not re-arm the reveal:
+        /// that waits for downward travel.
         private func rearm() {
             rearmTask?.cancel()
             rearmTask = nil
-            isHoldingExpanded = false
             setMode(.minimizesOnScrollDown)
         }
 
@@ -235,9 +345,6 @@ import SwiftUI
         private func setMode(_ next: Mode) {
             guard mode != next else { return }
             mode = next
-            // Also set it directly, so the bar moves on this touch rather than a
-            // frame later when SwiftUI re-renders. The declared
-            // `.tabBarMinimizeBehavior(_:)` then re-applies the identical value.
             tabBarController?.tabBarMinimizeBehavior = next.uiKit
         }
 

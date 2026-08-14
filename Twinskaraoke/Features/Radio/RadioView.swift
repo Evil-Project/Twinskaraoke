@@ -75,7 +75,6 @@ struct RadioView: View {
                     .padding(.top, AM.Spacing.l)
                     .padding(.bottom, AM.Spacing.l)
                 }
-                .tabBarScrollInset()
                 .smoothScrolling(bounceBehavior: .always)
                 .musicScreenBackground()
             }
@@ -138,9 +137,6 @@ struct RadioView: View {
 
     private func showLiveSchedule() {
         AppHaptic.selection.play()
-        #if canImport(UIKit)
-            PopupOpenIntentGate.shared.suppressNextOpen()
-        #endif
         showingRadioSchedule = true
     }
 
