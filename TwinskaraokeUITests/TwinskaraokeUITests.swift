@@ -574,6 +574,13 @@ final class TwinskaraokeUITests: XCTestCase {
       coverArtViewer(in: app).waitForExistence(timeout: 3),
       "Dragging the player down from the artwork opened the cover art."
     )
+    // Both halves, because either one alone can be satisfied by a broken
+    // player: a gesture that swallowed the drag outright would open no cover
+    // art and dismiss nothing, and pass the assertion above on its own.
+    XCTAssertTrue(
+      waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+      "Dragging down from the artwork did not dismiss the full-screen player."
+    )
   }
 
   /// The other half of the bargain: a deliberate tap must still open it.
