@@ -27,6 +27,13 @@ struct MarqueeText: View {
     var gap: CGFloat = 48
     var startDelay: Double = 1.2
 
+    /// Set by a host that knows this marquee is on screen but not *visible* —
+    /// the mini player while the full-screen player covers it, and the player
+    /// while it is parked below the screen. Neither unmounts the other, so
+    /// `onDisappear` never fires for either and both would otherwise keep a
+    /// display link alive to scroll text nobody can see.
+    var isPaused: Bool = false
+
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var textSize: CGSize = .zero
     @State private var containerWidth: CGFloat = 0
@@ -51,7 +58,7 @@ struct MarqueeText: View {
     }
 
     private var isScrolling: Bool {
-        needsScroll && isVisible
+        needsScroll && isVisible && !isPaused
     }
 
     /// One text plus one gap: the point at which the trailing copy sits exactly
@@ -71,45 +78,59 @@ struct MarqueeText: View {
             .opacity(0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(
-                TimelineView(
-                    .animation(
-                        minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
-                        paused: !isScrolling
-                    )
-                ) { context in
-                    ZStack(alignment: .leading) {
-                        if needsScroll {
+                // The timeline wraps only the part that moves; the sizing and
+                // the clip stay outside it.
+                ZStack(alignment: .leading) {
+                    if needsScroll {
+                        TimelineView(
+                            .animation(
+                                minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                                paused: !isScrolling
+                            )
+                        ) { context in
                             HStack(spacing: gap) {
-                                Text(text).font(font).foregroundStyle(color).fixedSize()
-                                Text(text).font(font).foregroundStyle(color).fixedSize()
+                                copy
+                                copy
                             }
                             .offset(x: -phase(at: context.date))
-                        } else {
-                            Text(text).font(font).foregroundStyle(color).fixedSize()
                         }
+                    } else {
+                        copy
                     }
-                    // The invisible base Text below is the accessibility
-                    // element; these overlay copies are visual-only.
-                    .accessibilityHidden(true)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .clipped()
-                    .mask(
-                        LinearGradient(
-                            stops: needsScroll
-                                ? [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: .black, location: 0.04),
-                                    .init(color: .black, location: 0.96),
-                                    .init(color: .clear, location: 1),
-                                ]
-                                : [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 1),
-                                ],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
                 }
+                // The invisible base Text below is the accessibility
+                // element; these overlay copies are visual-only.
+                .accessibilityHidden(true)
+                // The measured width, not `maxWidth: .infinity`. Inside an
+                // overlay that flexible frame does not resolve against the row's
+                // width, so it came out unbounded and `.clipped()` had an
+                // infinite rectangle to clip to — which is to say it did
+                // nothing, and a long title scrolled clean across the buttons
+                // next to it and off both edges of the screen. Measured on the
+                // simulator: the row's own frame was correct throughout, only
+                // the drawing escaped it. `containerWidth` is the same number
+                // `needsScroll` is already decided from, so there is nothing new
+                // to keep in step.
+                .frame(width: containerWidth > 0 ? containerWidth : nil, alignment: .leading)
+                .mask(
+                    LinearGradient(
+                        stops: needsScroll
+                            ? [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.04),
+                                .init(color: .black, location: 0.96),
+                                .init(color: .clear, location: 1),
+                            ]
+                            : [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 1),
+                            ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
+                // Last, so the hard edge is the final word on where this may
+                // draw whatever the mask does with its own bounds.
+                .clipped()
             )
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
                 guard abs(containerWidth - newWidth) > 0.5 else { return }
@@ -132,6 +153,13 @@ struct MarqueeText: View {
             .onChange(of: text) {
                 restartCycle()
             }
+            // Resuming starts a fresh dwell rather than picking the pass up
+            // where it left off. A host only pauses this when it is covered, so
+            // there is no jump to see, and coming back to a title that starts
+            // from its first character is the more useful of the two.
+            .onChange(of: isPaused) { _, paused in
+                if !paused { restartCycle() }
+            }
             .onAppear {
                 isVisible = true
                 restartCycle()
@@ -139,6 +167,23 @@ struct MarqueeText: View {
             .onDisappear {
                 isVisible = false
             }
+    }
+
+    /// One drawn copy of the text. Two of these ride the scroll, spaced a `gap`
+    /// apart, so the wrap back to zero lands the trailing copy exactly where the
+    /// leading one started.
+    ///
+    /// `contentTransition` is here rather than at the call sites because the
+    /// title rows that adopted this used to crossfade between songs, and a
+    /// `Text` nested inside a component cannot be reached by the caller's
+    /// modifier. The ancestor `.animation(_:value: song.id)` still supplies the
+    /// transaction.
+    private var copy: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(color)
+            .contentTransition(.opacity)
+            .fixedSize()
     }
 
     private func phase(at date: Date) -> CGFloat {

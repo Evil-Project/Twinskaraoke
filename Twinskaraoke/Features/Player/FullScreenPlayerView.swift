@@ -908,23 +908,29 @@ struct FullScreenPlayerView: View {
     ) -> some View {
         HStack(alignment: .center, spacing: compact ? 8 : 12) {
             VStack(alignment: .leading, spacing: compact ? 2 : 4) {
-                Text(song.title)
-                    .font(compact || metrics.titleSize <= 20 ? .headline.bold() : AM.Font.nowPlayingTitle)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .contentTransition(.opacity)
-                Text(song.displayArtist)
-                    .font(compact || metrics.artistSize <= 15 ? .subheadline : AM.Font.nowPlayingArtist)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
+                MarqueeText(
+                    text: song.title,
+                    font: compact || metrics.titleSize <= 20
+                        ? .headline.bold() : AM.Font.nowPlayingTitle,
+                    color: .primary,
+                    isPaused: !presentation.isExpanded
+                )
+                MarqueeText(
+                    text: song.displayArtist,
+                    font: compact || metrics.artistSize <= 15
+                        ? .subheadline : AM.Font.nowPlayingArtist,
+                    color: .secondary,
+                    isPaused: !presentation.isExpanded
+                )
             }
             .animation(reduceMotion ? nil : AppMotion.quick, value: song.id)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Now playing")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
-            Spacer(minLength: 8)
+            // Not a `Spacer`: the titles are flexible now, and two flexible
+            // children split the free width between them, which would start a
+            // title scrolling while half the row sat empty beside it.
+            .padding(.trailing, 8)
             PlayerFavoriteButton(
                 song: song,
                 font: .title2,

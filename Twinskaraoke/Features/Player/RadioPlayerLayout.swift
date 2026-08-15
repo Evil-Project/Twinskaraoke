@@ -4,6 +4,9 @@ struct RadioPlayerLayout: View {
     @Environment(AudioPlayerManager.self) var audioManager
     let favorites: FavoritesManager
     private let radio = RadioController.shared
+    /// Only to stop the marquees while this layout is parked below the screen —
+    /// the player stays mounted when it is closed, so nothing else would.
+    private let presentation = NowPlayingPresentation.shared
     @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showingQueue: Bool
     let song: Song
@@ -64,17 +67,24 @@ struct RadioPlayerLayout: View {
                 MarqueeText(
                     text: song.title,
                     font: AM.Font.nowPlayingTitle,
-                    color: .primary
+                    color: .primary,
+                    isPaused: !presentation.isExpanded
                 )
-                Text(song.displayArtist)
-                    .font(AM.Font.nowPlayingArtist)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                MarqueeText(
+                    text: song.displayArtist,
+                    font: AM.Font.nowPlayingArtist,
+                    color: .secondary,
+                    isPaused: !presentation.isExpanded
+                )
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Live radio")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
-            Spacer(minLength: 8)
+            // Not a `Spacer`. The title has been flexible ever since it became a
+            // marquee, and a `Spacer` is flexible too, so the two were quietly
+            // splitting the free width — the title scrolled from about half the
+            // row while the other half sat empty.
+            .padding(.trailing, 8)
             if canFavoriteRadioSong, let songID = radioFavoriteID {
                 Button {
                     toggleRadioFavorite(songID)

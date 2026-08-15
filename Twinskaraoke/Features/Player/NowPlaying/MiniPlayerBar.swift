@@ -41,8 +41,13 @@ struct MiniPlayerBar: View {
     var body: some View {
         HStack(spacing: 10) {
             artwork
+            // No `Spacer` between the titles and the controls. The titles now
+            // grow to fill, and a `Spacer` is flexible too — SwiftUI would split
+            // the free width between them, so a title would start scrolling with
+            // half the bar sitting empty next to it. The trailing padding keeps
+            // the gap the `Spacer(minLength: 8)` used to guarantee.
             titles
-            Spacer(minLength: 8)
+                .padding(.trailing, 8)
             MiniPlayerTransportControls(
                 isPlaying: snapshot.isPlaying,
                 isRadioMode: snapshot.isRadioMode,
@@ -133,21 +138,38 @@ struct MiniPlayerBar: View {
     /// The minimized bar keeps both lines and just drops a type size. An
     /// earlier version hid the artist there to save room, which lost the one
     /// piece of information that tells two versions of the same song apart.
+    ///
+    /// Both lines scroll when they outgrow the bar, which is what makes keeping
+    /// the artist in the minimized placement affordable: there is very little
+    /// room there, and truncating to "Bohemian Rha…" tells you less than a line
+    /// that eventually shows all of it. Paused while the full-screen player is
+    /// up — the bar is behind it, and nothing should be scrolling out of sight.
     private var titles: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(snapshot.title)
-                .font(titleFont)
-                .foregroundStyle(Color.primary)
-                .lineLimit(1)
+            MarqueeText(
+                text: snapshot.title,
+                font: titleFont,
+                color: .primary,
+                gap: Self.marqueeGap,
+                isPaused: presentation.isExpanded
+            )
             if !snapshot.subtitle.isEmpty {
-                Text(snapshot.subtitle)
-                    .font(subtitleFont)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                MarqueeText(
+                    text: snapshot.subtitle,
+                    font: subtitleFont,
+                    color: .secondary,
+                    gap: Self.marqueeGap,
+                    isPaused: presentation.isExpanded
+                )
             }
         }
         .accessibilityHidden(true)
     }
+
+    /// Tighter than the marquee's default, which is sized for the full-screen
+    /// player. At 48pt a quarter of the minimized pill would be blank as the
+    /// title wraps.
+    private static let marqueeGap: CGFloat = 28
 
     private var titleFont: Font {
         isInline ? .caption.weight(.semibold) : .subheadline.weight(.semibold)
