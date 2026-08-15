@@ -5,33 +5,35 @@ struct PlayerArtworkView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     let song: Song
     let size: CGFloat
+
+    /// Opens the full-screen cover art. Nil on the surfaces where the artwork
+    /// is just a picture — the radio player is one — which is why every
+    /// interactive and assistive affordance below is conditional on it.
+    ///
+    /// It is deliberately wired to a `TapGesture` and not to a `Button`. A
+    /// SwiftUI button fires on touch-up whenever the touch is still inside its
+    /// bounds; it has no notion of the finger having travelled. The artwork is
+    /// the largest target on the player, so a drag down that began and ended on
+    /// it stayed in bounds and opened the cover art instead of dismissing the
+    /// player. Drags long enough to leave the artwork behaved, which is what
+    /// made it intermittent. A `TapGesture` fails once the touch moves past its
+    /// tolerance, so the drag reaches `NowPlayingOverlay` — child gestures
+    /// resolve before the container's, and a failed one yields.
+    ///
+    /// Both halves are covered by
+    /// `testDraggingDownFromTheArtworkDoesNotOpenTheCoverArt` and
+    /// `testTappingTheArtworkOpensTheCoverArt`.
+    ///
+    /// The cost is the press-in scale and dim `PressableButtonStyle` gave this.
+    /// No gesture reports a press state without claiming the touch, and
+    /// claiming it is exactly what must not happen here; the selection haptic
+    /// still marks the moment.
     var onTap: (() -> Void)?
+
     var body: some View {
         Group {
             if let onTap {
                 artwork
-                    // A tap gesture rather than a `Button`, and the difference
-                    // is the whole point. A SwiftUI button fires on touch-up
-                    // whenever the touch is still inside its bounds; it has no
-                    // notion of the finger having travelled. This is the largest
-                    // target on the player, so a drag down that began and ended
-                    // on the artwork stayed in bounds and opened the full-screen
-                    // cover art instead of dismissing the player. Drags long
-                    // enough to leave the artwork behaved, which is what made it
-                    // intermittent.
-                    //
-                    // `TapGesture` fails once the touch moves past its
-                    // tolerance, so the drag reaches `NowPlayingOverlay` — child
-                    // gestures resolve first, and a failed one yields. A
-                    // deliberate tap is unaffected; both halves are covered by
-                    // `testDraggingDownFromTheArtworkDoesNotOpenTheCoverArt` and
-                    // `testTappingTheArtworkOpensTheCoverArt`.
-                    //
-                    // The cost is the press-in scale and dim that
-                    // `PressableButtonStyle` gave this. No gesture reports a
-                    // press state without claiming the touch, and claiming it is
-                    // exactly what must not happen here; the selection haptic
-                    // still marks the moment.
                     .contentShape(.rect)
                     .onTapGesture {
                         AppHaptic.selection.play()
@@ -48,11 +50,9 @@ struct PlayerArtworkView: View {
         .accessibilityLabel("\(song.title) artwork")
         .accessibilityHint(onTap == nil ? "Album artwork." : "Opens full-screen artwork.")
         // Explicit now that this is no longer a `Button`, so VoiceOver still
-        // announces it as one and offers the action below.
+        // announces it as one and offers the activation below.
         .accessibilityAddTraits(onTap == nil ? [] : .isButton)
-        .accessibilityAction {
-            onTap?()
-        }
+        .accessibilityActivation(onTap)
     }
 
     private var artwork: some View {
@@ -124,5 +124,22 @@ struct PlayerArtworkView: View {
 
     private var bufferingTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
+    }
+}
+
+private extension View {
+    /// Registers the default activation only when there is something to run.
+    ///
+    /// An unconditional `accessibilityAction` leaves VoiceOver offering an
+    /// activation that does nothing on the surfaces that pass no `onTap` — the
+    /// radio player's artwork is one — which reads as a control that is simply
+    /// broken. Gating it matches how the `.isButton` trait is applied.
+    @ViewBuilder
+    func accessibilityActivation(_ action: (() -> Void)?) -> some View {
+        if let action {
+            accessibilityAction { action() }
+        } else {
+            self
+        }
     }
 }
