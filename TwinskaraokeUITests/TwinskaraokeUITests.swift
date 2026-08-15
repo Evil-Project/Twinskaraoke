@@ -528,6 +528,93 @@ final class TwinskaraokeUITests: XCTestCase {
     }
   }
 
+  /// Dragging the player down from the artwork must not be mistaken for a tap
+  /// on it.
+  ///
+  /// The artwork used to be a `Button`, and a SwiftUI button fires on touch-up
+  /// whenever the touch is still inside its bounds — it has no notion of the
+  /// finger having travelled. The artwork is the largest target on the player,
+  /// so a downward drag that began and ended on it stayed in bounds and opened
+  /// the full-screen cover art instead of dismissing the player. Drags long
+  /// enough to leave the artwork behaved, which is why it only happened
+  /// sometimes.
+  ///
+  /// The drag here is deliberately contained within the artwork, since that is
+  /// the only shape of gesture that ever reproduced it.
+  func testDraggingDownFromTheArtworkDoesNotOpenTheCoverArt() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+
+    XCTAssertTrue(
+      app.staticTexts["Made for You"].waitForExistence(timeout: 8),
+      "Expected Home song shelf to be visible."
+    )
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+
+    openMiniPlayer(in: app)
+    let player = app.otherElements["FullScreenPlayer"]
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { player.isHittable },
+      "The mini player did not open the full-screen player."
+    )
+
+    let artwork = playerArtwork(in: app)
+    XCTAssertTrue(artwork.waitForExistence(timeout: 8), "Missing the player artwork.")
+
+    // Both ends inside the artwork, so the touch never leaves the old button.
+    let start = artwork.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+    let end = artwork.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92))
+    start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 400, thenHoldForDuration: 0.1)
+
+    XCTAssertFalse(
+      coverArtViewer(in: app).waitForExistence(timeout: 3),
+      "Dragging the player down from the artwork opened the cover art."
+    )
+    // Both halves, because either one alone can be satisfied by a broken
+    // player: a gesture that swallowed the drag outright would open no cover
+    // art and dismiss nothing, and pass the assertion above on its own.
+    XCTAssertTrue(
+      waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+      "Dragging down from the artwork did not dismiss the full-screen player."
+    )
+  }
+
+  /// The other half of the bargain: a deliberate tap must still open it.
+  func testTappingTheArtworkOpensTheCoverArt() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+
+    XCTAssertTrue(
+      app.staticTexts["Made for You"].waitForExistence(timeout: 8),
+      "Expected Home song shelf to be visible."
+    )
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+
+    openMiniPlayer(in: app)
+    let player = app.otherElements["FullScreenPlayer"]
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { player.isHittable },
+      "The mini player did not open the full-screen player."
+    )
+
+    let artwork = playerArtwork(in: app)
+    XCTAssertTrue(artwork.waitForExistence(timeout: 8), "Missing the player artwork.")
+    artwork.tap()
+
+    XCTAssertTrue(
+      coverArtViewer(in: app).waitForExistence(timeout: 8),
+      "Tapping the artwork no longer opens the cover art."
+    )
+  }
+
   func testHomeSongOpensFullScreenPlayerControls() throws {
     let app = launchApp(initialSection: "home")
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
@@ -836,6 +923,17 @@ final class TwinskaraokeUITests: XCTestCase {
     let firstNavigationButton = app.navigationBars.buttons.element(boundBy: 0)
     XCTAssertTrue(firstNavigationButton.waitForExistence(timeout: 5), "Missing back navigation button.")
     firstNavigationButton.tap()
+  }
+
+  /// Matched on any element type: the artwork was a `Button` and is now a
+  /// plain element carrying the button trait, and the identifier is the part
+  /// that is meant to be stable across that.
+  private func playerArtwork(in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any).matching(identifier: "PlayerArtwork").firstMatch
+  }
+
+  private func coverArtViewer(in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any).matching(identifier: "CoverArtViewer").firstMatch
   }
 
   private func openMiniPlayer(in app: XCUIApplication) {
