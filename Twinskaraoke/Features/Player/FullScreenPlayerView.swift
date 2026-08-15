@@ -375,6 +375,9 @@ struct FullScreenPlayerView: View {
                     title: isEasterEgg ? easterEggArtistName : coverArtArtistName,
                     subtitle: isEasterEgg ? easterEggArtistLink : coverArtArtistLink
                 )
+                // Named so a test can assert this did *not* open. Dragging the
+                // player down from the artwork used to bring it up by accident.
+                .accessibilityIdentifier("CoverArtViewer")
                 .onDisappear {
                     easterEggImageURL = nil
                     easterEggArtistName = nil

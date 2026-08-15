@@ -9,13 +9,34 @@ struct PlayerArtworkView: View {
     var body: some View {
         Group {
             if let onTap {
-                Button {
-                    AppHaptic.selection.play()
-                    onTap()
-                } label: {
-                    artwork
-                }
-                .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.88, haptic: nil))
+                artwork
+                    // A tap gesture rather than a `Button`, and the difference
+                    // is the whole point. A SwiftUI button fires on touch-up
+                    // whenever the touch is still inside its bounds; it has no
+                    // notion of the finger having travelled. This is the largest
+                    // target on the player, so a drag down that began and ended
+                    // on the artwork stayed in bounds and opened the full-screen
+                    // cover art instead of dismissing the player. Drags long
+                    // enough to leave the artwork behaved, which is what made it
+                    // intermittent.
+                    //
+                    // `TapGesture` fails once the touch moves past its
+                    // tolerance, so the drag reaches `NowPlayingOverlay` — child
+                    // gestures resolve first, and a failed one yields. A
+                    // deliberate tap is unaffected; both halves are covered by
+                    // `testDraggingDownFromTheArtworkDoesNotOpenTheCoverArt` and
+                    // `testTappingTheArtworkOpensTheCoverArt`.
+                    //
+                    // The cost is the press-in scale and dim that
+                    // `PressableButtonStyle` gave this. No gesture reports a
+                    // press state without claiming the touch, and claiming it is
+                    // exactly what must not happen here; the selection haptic
+                    // still marks the moment.
+                    .contentShape(.rect)
+                    .onTapGesture {
+                        AppHaptic.selection.play()
+                        onTap()
+                    }
             } else {
                 artwork
             }
@@ -23,8 +44,12 @@ struct PlayerArtworkView: View {
         .frame(maxWidth: .infinity)
         .opacity(NowPlayingPresentation.shared.isMorphingArtwork ? 0 : 1)
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("PlayerArtwork")
         .accessibilityLabel("\(song.title) artwork")
         .accessibilityHint(onTap == nil ? "Album artwork." : "Opens full-screen artwork.")
+        // Explicit now that this is no longer a `Button`, so VoiceOver still
+        // announces it as one and offers the action below.
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
         .accessibilityAction {
             onTap?()
         }
