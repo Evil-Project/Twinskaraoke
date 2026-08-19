@@ -4,13 +4,65 @@ import SwiftUI
     import UIKit
 #endif
 
+/// The active queue mode, drawn as a small glyph on the corner of the Playing
+/// Next button the way Apple Music does. Autoplay is deliberately absent: it is
+/// on by default, so badging it would mean a permanent glyph that says nothing —
+/// Apple Music leaves it out for the same reason. Only one glyph fits, so
+/// repeat outranks shuffle: repeat changes where the queue ends, which is the
+/// less obvious of the two once playback is under way.
+enum PlayerQueueModeBadge {
+    case shuffle, repeatAll, repeatOne
+
+    var symbol: String {
+        switch self {
+        case .shuffle: "shuffle"
+        case .repeatAll: "repeat"
+        case .repeatOne: "repeat.1"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .shuffle: "Shuffle on"
+        case .repeatAll: "Repeat all"
+        case .repeatOne: "Repeat one"
+        }
+    }
+
+    static func resolve(isShuffled: Bool, repeatMode: RepeatMode) -> PlayerQueueModeBadge? {
+        switch repeatMode {
+        case .one: return .repeatOne
+        case .all: return .repeatAll
+        case .off: return isShuffled ? .shuffle : nil
+        }
+    }
+}
+
 struct PlayerBottomToolbar: View {
     @Environment(AudioPlayerManager.self) var audioManager
+    @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showingQueue: Bool
     let song: Song
     let onLyricsToggle: () -> Void
     let showLyrics: Bool
     var horizontalPadding: CGFloat = 48
+
+    /// Radio has no queue to shuffle or repeat, so the badge stays off there.
+    private var queueModeBadge: PlayerQueueModeBadge? {
+        guard !audioManager.isRadioMode else { return nil }
+        return PlayerQueueModeBadge.resolve(
+            isShuffled: audioManager.isShuffled,
+            repeatMode: audioManager.repeatMode
+        )
+    }
+
+    private var badgeAnimation: Animation? {
+        reduceMotion ? nil : AppMotion.snap
+    }
+
+    private var badgeTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.6))
+    }
 
     var body: some View {
         HStack(spacing: audioManager.isRadioMode ? 56 : 0) {
@@ -50,17 +102,39 @@ struct PlayerBottomToolbar: View {
                 Image(systemName: "list.bullet")
                     .font(.title3)
                     .foregroundStyle(.primary)
+                    .overlay(alignment: .topTrailing) { queueModeBadgeView }
                     .frame(width: 44, height: 44)
                     .frame(maxWidth: audioManager.isRadioMode ? nil : .infinity)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
             .accessibilityLabel("Playing Next")
+            .accessibilityValue(queueModeBadge?.label ?? "")
             .accessibilityHint("Show the queue for \(song.title)")
             .accessibilityIdentifier("PlayerToolbar.PlayingNext")
+            .animation(badgeAnimation, value: queueModeBadge?.symbol)
         }
         .padding(.horizontal, audioManager.isRadioMode ? 0 : horizontalPadding)
         .padding(.top, 16)
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var queueModeBadgeView: some View {
+        if let badge = queueModeBadge {
+            Group {
+                if reduceMotion {
+                    Image(systemName: badge.symbol)
+                } else {
+                    Image(systemName: badge.symbol)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(Color.appAccent)
+            .offset(x: 9, y: -8)
+            .transition(badgeTransition)
+            .accessibilityHidden(true)
+        }
     }
 
     private func routeSymbolName(_ name: String) -> String {
