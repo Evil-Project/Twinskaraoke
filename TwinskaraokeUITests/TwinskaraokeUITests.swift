@@ -180,6 +180,47 @@ final class TwinskaraokeUITests: XCTestCase {
     )
   }
 
+  func testOpeningPlaylistDoesNotAddItToRecentlyPlayed() throws {
+    let app = launchApp(initialSection: "search", resetRecentlyPlayed: true)
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    openVisibleItem(
+      "Karaoke Essentials",
+      identifier: "PlaylistList.ui-search-playlist-essentials",
+      in: app
+    )
+    XCTAssertTrue(
+      app.staticTexts["Karaoke Essentials"].waitForExistence(timeout: 8)
+        || app.navigationBars["Karaoke Essentials"].waitForExistence(timeout: 8),
+      "Expected the playlist detail to open before checking playback history."
+    )
+
+    openRootSection("Home", in: app)
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8))
+    XCTAssertFalse(
+      accessibleElementExists(identifier: "Home.RecentlyPlayed", in: app, timeout: 2),
+      "Opening a playlist without playing from it must not add it to Recently Played."
+    )
+
+    openRootSection("Search", in: app)
+    scrollToVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "PlaylistDetail.song.0.ui-search-song-1",
+      in: app
+    )
+    let firstSong = element(identifier: "PlaylistDetail.song.0.ui-search-song-1", in: app)
+    XCTAssertTrue(
+      waitUntil(timeout: 5) { firstSong.isHittable && self.tapStartsPlayback(firstSong, in: app) },
+      "Expected deliberate playlist playback to start."
+    )
+
+    openRootSection("Home", in: app)
+    XCTAssertTrue(
+      accessibleElementExists(identifier: "Home.RecentlyPlayed", in: app, timeout: 5),
+      "Playing from the playlist must add it to Recently Played."
+    )
+  }
+
   /// Swiping a zoom-pushed screen away must not start playback.
   ///
   /// Two ways it did, both measured on iOS 26.5 before `ZoomPushDismissal`
@@ -799,9 +840,15 @@ final class TwinskaraokeUITests: XCTestCase {
     )
   }
 
-  private func launchApp(initialSection: String? = nil) -> XCUIApplication {
+  private func launchApp(
+    initialSection: String? = nil,
+    resetRecentlyPlayed: Bool = false
+  ) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments += ["-UITestMode", "1"]
+    if resetRecentlyPlayed {
+      app.launchArguments.append("-UITestResetRecentlyPlayed")
+    }
     if let initialSection {
       app.launchArguments += ["-UITestInitialSection", initialSection]
     }

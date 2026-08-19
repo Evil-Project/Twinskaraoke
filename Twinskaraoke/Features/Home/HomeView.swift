@@ -80,6 +80,7 @@ struct HomeView: View {
 
             if !recentlyPlayed.playlists.isEmpty {
                 PlaylistCarousel(title: "Recently Played", playlists: recentlyPlayed.playlists)
+                    .accessibilityIdentifier("Home.RecentlyPlayed")
                     .shelfEntrance(index: 1)
             }
 
@@ -124,6 +125,7 @@ struct HomeView: View {
                             playlists: recentlyPlayed.playlists,
                             horizontalPadding: 0
                         )
+                        .accessibilityIdentifier("Home.RecentlyPlayed")
                     }
 
                     if !viewModel.suggestions.isEmpty {

@@ -60,13 +60,9 @@ struct PlaylistDetailView: View {
     @State private var rowArmingTask: Task<Void, Never>?
     private var playbackTapsArmed: Bool { hasSettledAfterAppear && !isArriving }
     /// onAppear fires repeatedly for one visit — device logs show appeared and
-    /// disappeared 1ms apart, over and over. Everything below it is one-shot
-    /// work: reload cancels and restarts the network load, and record() writes
-    /// UserDefaults *and* mutates an @Observable that HomeView and NewView both
-    /// read, so it re-renders two always-alive tab roots and every carousel in
-    /// them. Running that several times per navigation was pure churn.
+    /// disappeared 1ms apart, over and over. Reloading below cancels and restarts
+    /// the network load, so it remains one-shot work for a visit.
     @State private var hasStartedVisit = false
-    @State private var hasRecordedVisit = false
     private let userPlaylists = UserPlaylistsManager.shared
 
     init(playlist: Playlist) {
@@ -481,21 +477,6 @@ struct PlaylistDetailView: View {
             }
         }
         .onDisappear {
-            // Recorded on the way out, not the way in. This reorders the list
-            // that Home's "Recently Played" carousel is bound to, and doing that
-            // mid-navigation moved the very cell that had just been tapped.
-            // Under the cover presentation that broke outright — the cover lived
-            // on that cell, so the tap appeared to do nothing. Pushing is not as
-            // fragile, but reordering two always-alive tab roots while a
-            // transition runs is still wasted work at the worst moment.
-            // Latched: onDisappear fires repeatedly for a single visit, and
-            // record() writes UserDefaults and mutates an @Observable that two
-            // always-alive tab roots read. Without this the churn was relocated
-            // from appear to disappear rather than removed.
-            if !hasRecordedVisit {
-                hasRecordedVisit = true
-                RecentlyPlayedStore.shared.record(playlist)
-            }
             rowArmingTask?.cancel()
             hasSettledAfterAppear = false
             prefetchTask?.cancel()
@@ -783,6 +764,7 @@ struct PlaylistDetailView: View {
             Button {
                 if let first = songs.first {
                     AppHaptic.selection.play()
+                    RecentlyPlayedStore.shared.record(playlist)
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {
@@ -792,6 +774,7 @@ struct PlaylistDetailView: View {
             .accessibilityLabel("Play playlist")
             Button {
                 AppHaptic.selection.play()
+                RecentlyPlayedStore.shared.record(playlist)
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
@@ -807,6 +790,7 @@ struct PlaylistDetailView: View {
 
     private func play(_ song: Song, context: [Song]) {
         AppHaptic.selection.play()
+        RecentlyPlayedStore.shared.record(playlist)
         AudioPlayerManager.shared.play(song: song, context: context)
     }
 
@@ -969,4 +953,3 @@ private struct PlaylistMoreMenu: View {
         .accessibilityIdentifier("PlaylistDetail.moreActions")
     }
 }
-

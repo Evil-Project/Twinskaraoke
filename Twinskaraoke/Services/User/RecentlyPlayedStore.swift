@@ -10,6 +10,9 @@ final class RecentlyPlayedStore {
     private static let limit = 20
     private(set) var playlists: [Playlist] = []
     private init() {
+        if ProcessInfo.processInfo.arguments.contains("-UITestResetRecentlyPlayed") {
+            UserDefaults.standard.removeObject(forKey: Self.storageKey)
+        }
         load()
     }
 
