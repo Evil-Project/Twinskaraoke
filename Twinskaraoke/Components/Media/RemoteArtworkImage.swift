@@ -16,7 +16,6 @@ struct RemoteArtworkImage: View {
     // isBlocked when the window ends instead of showing the placeholder forever.
     private let failureBackoff = ArtworkFailureBackoff.shared
     @State private var fullLoaded: Bool = false
-    @State private var loadFailed: Bool = false
     @State private var renderedFullURL: URL?
     var body: some View {
         // Load-bearing read: `isBlocked(url)` below is a method call over
@@ -39,7 +38,6 @@ struct RemoteArtworkImage: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .onChange(of: url) {
             fullLoaded = false
-            loadFailed = false
             renderedFullURL = nil
         }
     }
@@ -91,7 +89,7 @@ struct RemoteArtworkImage: View {
                     Color.clear
                 }
             }
-            if let url, !loadFailed, !ArtworkFailureBackoff.shared.isBlocked(url) {
+            if let url, !ArtworkFailureBackoff.shared.isBlocked(url) {
                 WebImage(
                     url: url,
                     options: ImageCacheConfig.defaultOptions,
@@ -137,48 +135,30 @@ struct RemoteArtworkImage: View {
 
     @MainActor
     private func markRendered(_ loadedURL: URL) {
-        guard url == loadedURL, renderedFullURL != loadedURL || !fullLoaded || loadFailed else { return }
+        guard url == loadedURL, renderedFullURL != loadedURL || !fullLoaded else { return }
         withOptionalAnimation(loadAnimation) {
             renderedFullURL = loadedURL
             fullLoaded = true
-            loadFailed = false
         }
         ArtworkFailureBackoff.shared.clear(loadedURL)
     }
 
-    private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
-    // 1. Guard check handles condition gating consistently up front
-    guard url == failedURL, !loadFailed else { return }
+    private func markFinishedAfterFailure(for failedURL: URL, error _: Error) {
+        guard url == failedURL else { return }
 
-    let safeURL = Self.redactedURLString(failedURL)
-    DebugLogger.log(
-        "Artwork load failed for \(safeURL): \(error.localizedDescription)",
-        category: .cache
-    )
-    ArtworkFailureBackoff.shared.recordFailure(failedURL)
-    evictFailedImageCache(for: failedURL)
-
-    // 2. Task block cleanly isolated using standard MainActor syntax
-    Task { @MainActor in
-        self.loadFailed = true
-        
-        // 3. CodeRabbit Fix: Safe sleep wrapper to catch cancellation
-        do {
-            try await Task.sleep(for: ArtworkFailureBackoff.shared.cooldownDuration)
-        } catch {
-            // Reset flag on cancellation so the image doesn't stay frozen
-            self.loadFailed = false
-            return 
-        }
-        
-        // 4. Reset failure flag if the user hasn't scrolled to a new URL
-        if self.url == failedURL {
-            self.loadFailed = false
-        }
+        let safeURL = Self.redactedURLString(failedURL)
+        DebugLogger.log(
+            "Artwork load failed for \(safeURL)",
+            category: .cache
+        )
+        // The shared backoff is the single retry owner. Its generation update
+        // removes this WebImage immediately, and its scheduled expiry
+        // recomposes every view for the URL after the cooldown. A per-view
+        // five-minute Task here duplicated that timer and retained off-screen
+        // view state throughout CDN outages.
+        ArtworkFailureBackoff.shared.recordFailure(failedURL)
+        evictFailedImageCache(for: failedURL)
     }
-}
-
-
 
     private var shouldAnimateLoad: Bool {
         !scrollState.isScrolling && shouldPreferProgressiveArtwork

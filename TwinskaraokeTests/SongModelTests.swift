@@ -15,6 +15,28 @@ private actor UploadedSongLoaderProbe {
     }
 }
 
+private actor CancellableSongLoaderProbe {
+    private var calls = 0
+
+    func load() async throws -> [Song] {
+        calls += 1
+        do {
+            try await Task.sleep(for: .seconds(60))
+        } catch is CancellationError {
+            // Deliberately return after cancellation to prove that each cache
+            // rejects results from an invalidated generation independently of
+            // loader cooperation.
+        }
+        return []
+    }
+
+    func waitUntilStarted() async {
+        while calls == 0 {
+            await Task.yield()
+        }
+    }
+}
+
 @Suite("Song model")
 struct SongModelTests {
     private func useGlobalStorageRegion() {
@@ -517,6 +539,69 @@ struct SongModelTests {
         #expect(callsForStableFavorites == 1)
         #expect(callsAfterAddingFavorite == 2)
         #expect(callsAfterExpiration == 3)
+    }
+
+    @Test("Uploaded metadata invalidation cancels an in-flight response")
+    func uploadedSongMetadataInvalidationCancelsInFlightResponse() async {
+        let cache = UploadedSongMetadataCache(lifetime: 60)
+        let loader = CancellableSongLoaderProbe()
+        let request = Task {
+            try await cache.value(for: ["first"]) { try await loader.load() }
+        }
+
+        await loader.waitUntilStarted()
+        await cache.invalidate()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected invalidation to cancel the in-flight upload metadata response")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @Test("Favorite catalog invalidation cancels in-flight metadata")
+    func favoriteCatalogInvalidationCancelsInFlightResponse() async {
+        let cache = FavoriteCatalogMetadataCache(lifetime: 60)
+        let loader = CancellableSongLoaderProbe()
+        let request = Task {
+            try await cache.value(for: ["first"]) { try await loader.load() }
+        }
+
+        await loader.waitUntilStarted()
+        await cache.invalidate()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected invalidation to cancel the in-flight catalog metadata response")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @Test("Favorite list invalidation cancels an in-flight response")
+    func favoriteSongsInvalidationCancelsInFlightResponse() async {
+        let cache = FavoriteSongsCache(lifetime: 60)
+        let loader = CancellableSongLoaderProbe()
+        let request = Task {
+            try await cache.value { try await loader.load() }
+        }
+
+        await loader.waitUntilStarted()
+        await cache.invalidate()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected invalidation to cancel the in-flight favorite list response")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error)")
+        }
     }
 
     @Test("Uploaded song metadata takes priority when hydrating favorites")

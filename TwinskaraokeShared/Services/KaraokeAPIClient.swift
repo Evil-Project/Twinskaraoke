@@ -49,16 +49,15 @@ actor UploadedSongMetadataCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        let coveredIDs = (cachedValue?.coveredIDs ?? [])
-          .union(requestedIDs)
-          .union(songs.map(\.id))
-        cachedValue = Entry(
-          songs: songs,
-          coveredIDs: coveredIDs,
-          expiresAt: now.addingTimeInterval(lifetime)
-        )
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      let coveredIDs = (cachedValue?.coveredIDs ?? [])
+        .union(requestedIDs)
+        .union(songs.map(\.id))
+      cachedValue = Entry(
+        songs: songs,
+        coveredIDs: coveredIDs,
+        expiresAt: now.addingTimeInterval(lifetime)
+      )
       if inFlight?.id == request.id {
         inFlight = nil
       }
@@ -73,6 +72,10 @@ actor UploadedSongMetadataCache {
 
   func invalidate() {
     cachedValue = nil
+    // Dropping only our reference still lets current awaiters receive the
+    // previous account's response. Cancellation makes invalidation a delivery
+    // boundary as well as a cache boundary.
+    inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
   }
@@ -207,9 +210,8 @@ actor FavoriteCatalogMetadataCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
       if inFlight[key]?.id == request.id {
         inFlight[key] = nil
       }
@@ -224,6 +226,9 @@ actor FavoriteCatalogMetadataCache {
 
   func invalidate() {
     cachedValue = nil
+    // Favorite mutations and signout must not deliver metadata fetched for
+    // the state that was just invalidated.
+    inFlight.values.forEach { $0.task.cancel() }
     inFlight.removeAll()
     epoch &+= 1
   }
@@ -270,9 +275,8 @@ actor FavoriteSongsCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
       if inFlight?.id == request.id {
         inFlight = nil
       }
@@ -287,6 +291,9 @@ actor FavoriteSongsCache {
 
   func invalidate() {
     cachedValue = nil
+    // Prevent an older favorite list from reaching an awaiting screen after a
+    // toggle or account change.
+    inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
   }
