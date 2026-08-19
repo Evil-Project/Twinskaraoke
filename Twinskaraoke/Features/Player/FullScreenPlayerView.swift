@@ -200,25 +200,23 @@ private struct PlayerLayoutMetrics {
     }
 }
 
-private let playerTitleButtonBackground = Color.clear
-
-private var playerTitleButtonBorder: some View {
-    Circle()
-        .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
-}
+/// The soft filled circle the player's actions sit on, Apple Music's treatment
+/// for favorite, more and the queue-mode badge on Playing Next. It is the
+/// shared control fill rather than a player-local grey so the three surfaces
+/// and the badge in ``PlayerBottomToolbar`` cannot drift apart.
+private let playerTitleButtonBackground = Color.appControlInactiveFill
 
 private func playerTitleIconColor(isActive _: Bool = false) -> Color {
     Color.primary
 }
 
 private extension View {
-    /// The circular background/border worn by the player's title-surface
-    /// buttons. The iPad control bar sits on its own glass and skips it.
+    /// The circular background worn by the player's title-surface buttons.
+    /// The iPad control bar sits on its own glass and skips it.
     @ViewBuilder
     func playerTitleButtonChrome(_ isVisible: Bool) -> some View {
         if isVisible {
             background(playerTitleButtonBackground, in: Circle())
-                .overlay(playerTitleButtonBorder)
         } else {
             self
         }
@@ -894,8 +892,7 @@ struct FullScreenPlayerView: View {
                     .font(.headline.bold())
                     .foregroundStyle(playerTitleIconColor())
                     .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
+                    .playerTitleButtonChrome(true)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Hide lyrics")

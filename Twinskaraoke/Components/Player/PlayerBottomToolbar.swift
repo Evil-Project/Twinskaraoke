@@ -102,8 +102,11 @@ struct PlayerBottomToolbar: View {
                 Image(systemName: "list.bullet")
                     .font(.title3)
                     .foregroundStyle(.primary)
-                    .overlay(alignment: .topTrailing) { queueModeBadgeView }
                     .frame(width: 44, height: 44)
+                    // Cornered on the button's frame rather than on the glyph:
+                    // the badge clears the list icon's top rule that way, so
+                    // the two never overlap at any Dynamic Type size.
+                    .overlay(alignment: .topTrailing) { queueModeBadgeView }
                     .frame(maxWidth: audioManager.isRadioMode ? nil : .infinity)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
@@ -130,8 +133,10 @@ struct PlayerBottomToolbar: View {
                 }
             }
             .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(Color.appAccent)
-            .offset(x: 9, y: -8)
+            .foregroundStyle(.primary)
+            .frame(width: 16, height: 16)
+            .background(Color.appControlInactiveFill, in: Circle())
+            .offset(x: 2, y: -2)
             .transition(badgeTransition)
             .accessibilityHidden(true)
         }
