@@ -27,7 +27,7 @@ struct PlaylistActionsMenuItems: View {
             Button {
                 AppHaptic.selection.play()
                 if let first = songs.first {
-                    AudioPlayerManager.shared.playInOrder(song: first, context: songs)
+                    PlaylistPlayback.playInOrder(first, from: playlist, context: songs)
                 }
             } label: {
                 Label("Play", systemImage: "play.fill")
@@ -35,7 +35,7 @@ struct PlaylistActionsMenuItems: View {
 
             Button {
                 AppHaptic.selection.play()
-                AudioPlayerManager.shared.playShuffled(from: songs)
+                PlaylistPlayback.playShuffled(from: playlist, songs: songs)
             } label: {
                 Label("Shuffle", systemImage: "shuffle")
             }

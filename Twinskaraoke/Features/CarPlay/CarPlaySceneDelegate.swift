@@ -527,8 +527,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
 
         template.updateSections([
-            songActionSection(title: playlist.name, songs: songs),
-            CPListSection(items: songItems(songs, context: songs), header: "Songs", sectionIndexTitle: nil),
+            songActionSection(title: playlist.name, songs: songs, playlist: playlist),
+            CPListSection(
+                items: songItems(songs, context: songs, playlist: playlist),
+                header: "Songs",
+                sectionIndexTitle: nil
+            ),
         ])
     }
 
@@ -702,14 +706,19 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         rebuildRadioTemplate()
     }
 
-    private func songActionSection(title: String, songs: [Song], includeRefresh: Bool = false) -> CPListSection {
+    private func songActionSection(
+        title: String,
+        songs: [Song],
+        playlist: Playlist? = nil,
+        includeRefresh: Bool = false
+    ) -> CPListSection {
         var items: [CPListItem] = []
 
         let playAll = CPListItem(text: "Play All", detailText: SongCountText.songs(songs.count))
         playAll.isEnabled = !songs.isEmpty
         playAll.handler = { [weak self] _, completion in
             if let first = songs.first {
-                self?.play(first, in: songs)
+                self?.play(first, in: songs, playlist: playlist)
             }
             completion()
         }
@@ -718,7 +727,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let shuffle = CPListItem(text: "Shuffle", detailText: title)
         shuffle.isEnabled = !songs.isEmpty
         shuffle.handler = { [weak self] _, completion in
-            self?.playShuffled(songs)
+            self?.playShuffled(songs, playlist: playlist)
             completion()
         }
         items.append(shuffle)
@@ -735,13 +744,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return CPListSection(items: items, header: nil, sectionIndexTitle: nil)
     }
 
-    private func songItems(_ songs: [Song], context: [Song]) -> [CPListItem] {
+    private func songItems(_ songs: [Song], context: [Song], playlist: Playlist? = nil) -> [CPListItem] {
         songs.prefix(maximumBrowseRows).map { song in
-            songItem(song, context: context)
+            songItem(song, context: context, playlist: playlist)
         }
     }
 
-    private func songItem(_ song: Song, context: [Song]) -> CPListItem {
+    private func songItem(_ song: Song, context: [Song], playlist: Playlist? = nil) -> CPListItem {
         let item = CPListItem(
             text: song.title,
             detailText: songDetailText(song),
@@ -751,7 +760,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         )
         item.isPlaying = player.isPlaying && player.currentSong?.id == song.id
         item.handler = { [weak self] _, completion in
-            self?.play(song, in: context)
+            self?.play(song, in: context, playlist: playlist)
             completion()
         }
         loadSongArtwork(for: song, into: item)
@@ -825,14 +834,23 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return UIImage(systemName: "dot.radiowaves.left.and.right", withConfiguration: configuration) ?? fallbackSongImage()
     }
 
-    private func play(_ song: Song, in context: [Song]) {
-        player.playInOrder(song: song, context: context.isEmpty ? [song] : context)
+    private func play(_ song: Song, in context: [Song], playlist: Playlist? = nil) {
+        let playbackContext = context.isEmpty ? [song] : context
+        if let playlist {
+            PlaylistPlayback.playInOrder(song, from: playlist, context: playbackContext)
+        } else {
+            player.playInOrder(song: song, context: playbackContext)
+        }
         refreshVisibleTemplates()
         showNowPlaying()
     }
 
-    private func playShuffled(_ songs: [Song]) {
-        player.playShuffled(from: songs)
+    private func playShuffled(_ songs: [Song], playlist: Playlist? = nil) {
+        if let playlist {
+            PlaylistPlayback.playShuffled(from: playlist, songs: songs)
+        } else {
+            player.playShuffled(from: songs)
+        }
         refreshVisibleTemplates()
         showNowPlaying()
     }

@@ -9,8 +9,13 @@ final class RecentlyPlayedStore {
     private static let storageKey = "nk.recentlyPlayed.playlists.v1"
     private static let limit = 20
     private(set) var playlists: [Playlist] = []
+
     private init() {
         load()
+    }
+
+    static func resetPersistedHistoryForUITesting() {
+        UserDefaults.standard.removeObject(forKey: Self.storageKey)
     }
 
     func record(_ playlist: Playlist) {
