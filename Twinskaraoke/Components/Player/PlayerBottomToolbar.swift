@@ -135,7 +135,7 @@ struct PlayerBottomToolbar: View {
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(.primary)
             .frame(width: 16, height: 16)
-            .background(Color.appControlInactiveFill, in: Circle())
+            .background(Color.appPlayerActionFill, in: Circle())
             .offset(x: 2, y: -2)
             .transition(badgeTransition)
             .accessibilityHidden(true)
