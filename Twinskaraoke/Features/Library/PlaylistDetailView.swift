@@ -764,8 +764,7 @@ struct PlaylistDetailView: View {
             Button {
                 if let first = songs.first {
                     AppHaptic.selection.play()
-                    RecentlyPlayedStore.shared.record(playlist)
-                    AudioPlayerManager.shared.playInOrder(song: first, context: songs)
+                    PlaylistPlayback.playInOrder(first, from: playlist, context: songs)
                 }
             } label: {
                 LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
@@ -774,8 +773,7 @@ struct PlaylistDetailView: View {
             .accessibilityLabel("Play playlist")
             Button {
                 AppHaptic.selection.play()
-                RecentlyPlayedStore.shared.record(playlist)
-                AudioPlayerManager.shared.playShuffled(from: songs)
+                PlaylistPlayback.playShuffled(from: playlist, songs: songs)
             } label: {
                 LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
             }
@@ -790,8 +788,7 @@ struct PlaylistDetailView: View {
 
     private func play(_ song: Song, context: [Song]) {
         AppHaptic.selection.play()
-        RecentlyPlayedStore.shared.record(playlist)
-        AudioPlayerManager.shared.play(song: song, context: context)
+        PlaylistPlayback.play(song, from: playlist, context: context)
     }
 
     /// Non-nil only for a playlist the signed-in user owns. Favorites is

@@ -343,8 +343,7 @@ private struct WideLibraryHero: View {
                     Button {
                         if let first = playableSongs.first {
                             AppHaptic.selection.play()
-                            RecentlyPlayedStore.shared.record(playlist)
-                            AudioPlayerManager.shared.playInOrder(song: first, context: playableSongs)
+                            PlaylistPlayback.playInOrder(first, from: playlist, context: playableSongs)
                         }
                     } label: {
                         LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
@@ -354,8 +353,7 @@ private struct WideLibraryHero: View {
 
                     Button {
                         AppHaptic.selection.play()
-                        RecentlyPlayedStore.shared.record(playlist)
-                        AudioPlayerManager.shared.playShuffled(from: playableSongs)
+                        PlaylistPlayback.playShuffled(from: playlist, songs: playableSongs)
                     } label: {
                         LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
                     }
