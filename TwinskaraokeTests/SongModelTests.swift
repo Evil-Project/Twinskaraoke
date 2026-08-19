@@ -20,7 +20,13 @@ private actor CancellableSongLoaderProbe {
 
     func load() async throws -> [Song] {
         calls += 1
-        try await Task.sleep(for: .seconds(60))
+        do {
+            try await Task.sleep(for: .seconds(60))
+        } catch is CancellationError {
+            // Deliberately return after cancellation to prove that each cache
+            // rejects results from an invalidated generation independently of
+            // loader cooperation.
+        }
         return []
     }
 

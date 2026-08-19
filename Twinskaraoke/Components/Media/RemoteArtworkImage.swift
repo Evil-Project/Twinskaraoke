@@ -143,12 +143,12 @@ struct RemoteArtworkImage: View {
         ArtworkFailureBackoff.shared.clear(loadedURL)
     }
 
-    private func markFinishedAfterFailure(for failedURL: URL, error: Error) {
+    private func markFinishedAfterFailure(for failedURL: URL, error _: Error) {
         guard url == failedURL else { return }
 
         let safeURL = Self.redactedURLString(failedURL)
         DebugLogger.log(
-            "Artwork load failed for \(safeURL): \(error.localizedDescription)",
+            "Artwork load failed for \(safeURL)",
             category: .cache
         )
         // The shared backoff is the single retry owner. Its generation update

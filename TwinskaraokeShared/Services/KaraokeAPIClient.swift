@@ -49,16 +49,15 @@ actor UploadedSongMetadataCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        let coveredIDs = (cachedValue?.coveredIDs ?? [])
-          .union(requestedIDs)
-          .union(songs.map(\.id))
-        cachedValue = Entry(
-          songs: songs,
-          coveredIDs: coveredIDs,
-          expiresAt: now.addingTimeInterval(lifetime)
-        )
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      let coveredIDs = (cachedValue?.coveredIDs ?? [])
+        .union(requestedIDs)
+        .union(songs.map(\.id))
+      cachedValue = Entry(
+        songs: songs,
+        coveredIDs: coveredIDs,
+        expiresAt: now.addingTimeInterval(lifetime)
+      )
       if inFlight?.id == request.id {
         inFlight = nil
       }
@@ -211,9 +210,8 @@ actor FavoriteCatalogMetadataCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      cachedValue = Entry(key: key, songs: songs, expiresAt: now.addingTimeInterval(lifetime))
       if inFlight[key]?.id == request.id {
         inFlight[key] = nil
       }
@@ -277,9 +275,8 @@ actor FavoriteSongsCache {
 
     do {
       let songs = try await request.task.value
-      if epoch == startEpoch {
-        cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
-      }
+      guard epoch == startEpoch else { throw CancellationError() }
+      cachedValue = Entry(songs: songs, expiresAt: now.addingTimeInterval(lifetime))
       if inFlight?.id == request.id {
         inFlight = nil
       }

@@ -120,7 +120,6 @@ final class HomeViewModel {
         let pageSize = topPicksPageSize
         let generation = dataGeneration
         topPicksLoadMoreTask = Task { [weak self] in
-            guard let self else { return }
             let playlists: [Playlist] = switch source {
             case .setlists:
                 await (try? KaraokeAPIClient.playlists(
@@ -135,7 +134,7 @@ final class HomeViewModel {
                     pageSize: pageSize
                 )) ?? []
             }
-            guard !Task.isCancelled, dataGeneration == generation else { return }
+            guard !Task.isCancelled, let self, self.dataGeneration == generation else { return }
             if !playlists.isEmpty {
                 let existing = Set(recentPlaylists.map(\.id))
                 recentPlaylists += playlists.filter { !existing.contains($0.id) }
