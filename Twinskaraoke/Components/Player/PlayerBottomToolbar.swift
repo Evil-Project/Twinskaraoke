@@ -56,6 +56,16 @@ struct PlayerBottomToolbar: View {
         )
     }
 
+    /// Never blank: an empty string is still a value as far as VoiceOver is
+    /// concerned, and the plain case is worth hearing. A conditional
+    /// `accessibilityValue` would say nothing at all, but branching the
+    /// modifier changes the button's identity, which kills the badge's
+    /// transition every time a mode goes on or off.
+    private var queueModeAccessibilityValue: String {
+        if audioManager.isRadioMode { return "Live radio" }
+        return queueModeBadge?.label ?? "Playing in order"
+    }
+
     private var badgeAnimation: Animation? {
         reduceMotion ? nil : AppMotion.snap
     }
@@ -111,7 +121,7 @@ struct PlayerBottomToolbar: View {
             }
             .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55))
             .accessibilityLabel("Playing Next")
-            .accessibilityValue(queueModeBadge?.label ?? "")
+            .accessibilityValue(queueModeAccessibilityValue)
             .accessibilityHint("Show the queue for \(song.title)")
             .accessibilityIdentifier("PlayerToolbar.PlayingNext")
             .animation(badgeAnimation, value: queueModeBadge?.symbol)
@@ -124,21 +134,15 @@ struct PlayerBottomToolbar: View {
     @ViewBuilder
     private var queueModeBadgeView: some View {
         if let badge = queueModeBadge {
-            Group {
-                if reduceMotion {
-                    Image(systemName: badge.symbol)
-                } else {
-                    Image(systemName: badge.symbol)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-            }
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.primary)
-            .frame(width: 16, height: 16)
-            .background(Color.appPlayerActionFill, in: Circle())
-            .offset(x: 2, y: -2)
-            .transition(badgeTransition)
-            .accessibilityHidden(true)
+            Image(systemName: badge.symbol)
+                .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.primary)
+                .frame(width: 16, height: 16)
+                .background(Color.appPlayerActionFill, in: Circle())
+                .offset(x: 2, y: -2)
+                .transition(badgeTransition)
+                .accessibilityHidden(true)
         }
     }
 
