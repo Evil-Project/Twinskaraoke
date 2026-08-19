@@ -25,6 +25,7 @@ final class HomeViewModel {
     @ObservationIgnored private var topPicksSource: TopPicksSource = .setlists
     @ObservationIgnored private var dataGeneration = 0
     @ObservationIgnored private var homeLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var topPicksLoadMoreTask: Task<Void, Never>?
 
     // No work in init. This type is held in `@State`, whose initial-value
     // expression is re-evaluated on every re-initialization of the owning view
@@ -41,6 +42,8 @@ final class HomeViewModel {
 
         if hasLoaded, !force { return }
         homeLoadTask?.cancel()
+        topPicksLoadMoreTask?.cancel()
+        topPicksLoadMoreTask = nil
         dataGeneration += 1
         let generation = dataGeneration
         hasLoaded = true
@@ -116,7 +119,8 @@ final class HomeViewModel {
         let source = topPicksSource
         let pageSize = topPicksPageSize
         let generation = dataGeneration
-        Task { [weak self] in
+        topPicksLoadMoreTask = Task { [weak self] in
+            guard let self else { return }
             let playlists: [Playlist] = switch source {
             case .setlists:
                 await (try? KaraokeAPIClient.playlists(
@@ -131,18 +135,17 @@ final class HomeViewModel {
                     pageSize: pageSize
                 )) ?? []
             }
-            await MainActor.run {
-                guard let self, self.dataGeneration == generation else { return }
-                if !playlists.isEmpty {
-                    let existing = Set(self.recentPlaylists.map(\.id))
-                    self.recentPlaylists += playlists.filter { !existing.contains($0.id) }
-                    self.topPicksPage += 1
-                    self.canLoadMoreTopPicks = playlists.count == self.topPicksPageSize
-                } else {
-                    self.canLoadMoreTopPicks = false
-                }
-                self.isLoadingMoreTopPicks = false
+            guard !Task.isCancelled, dataGeneration == generation else { return }
+            if !playlists.isEmpty {
+                let existing = Set(recentPlaylists.map(\.id))
+                recentPlaylists += playlists.filter { !existing.contains($0.id) }
+                topPicksPage += 1
+                canLoadMoreTopPicks = playlists.count == topPicksPageSize
+            } else {
+                canLoadMoreTopPicks = false
             }
+            isLoadingMoreTopPicks = false
+            topPicksLoadMoreTask = nil
         }
     }
 
@@ -242,5 +245,6 @@ final class HomeViewModel {
 
     deinit {
         homeLoadTask?.cancel()
+        topPicksLoadMoreTask?.cancel()
     }
 }

@@ -73,6 +73,10 @@ actor UploadedSongMetadataCache {
 
   func invalidate() {
     cachedValue = nil
+    // Dropping only our reference still lets current awaiters receive the
+    // previous account's response. Cancellation makes invalidation a delivery
+    // boundary as well as a cache boundary.
+    inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
   }
@@ -224,6 +228,9 @@ actor FavoriteCatalogMetadataCache {
 
   func invalidate() {
     cachedValue = nil
+    // Favorite mutations and signout must not deliver metadata fetched for
+    // the state that was just invalidated.
+    inFlight.values.forEach { $0.task.cancel() }
     inFlight.removeAll()
     epoch &+= 1
   }
@@ -287,6 +294,9 @@ actor FavoriteSongsCache {
 
   func invalidate() {
     cachedValue = nil
+    // Prevent an older favorite list from reaching an awaiting screen after a
+    // toggle or account change.
+    inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
   }
