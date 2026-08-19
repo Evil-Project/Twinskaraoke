@@ -31,6 +31,7 @@ final class TVAuthManager {
     }
 
     @ObservationIgnored private var qrTask: Task<Void, Never>?
+    @ObservationIgnored private var sessionExpiredObserver: NSObjectProtocol?
 
     private let defaults = UserDefaults.standard
 
@@ -52,7 +53,7 @@ final class TVAuthManager {
 
     init() {
         loadPersistedSession()
-        NotificationCenter.default.addObserver(
+        sessionExpiredObserver = NotificationCenter.default.addObserver(
             forName: .karaokeSessionExpired,
             object: nil,
             queue: .main
@@ -60,6 +61,13 @@ final class TVAuthManager {
             Task { @MainActor [weak self] in
                 await self?.expireSession()
             }
+        }
+    }
+
+    isolated deinit {
+        qrTask?.cancel()
+        if let sessionExpiredObserver {
+            NotificationCenter.default.removeObserver(sessionExpiredObserver)
         }
     }
 

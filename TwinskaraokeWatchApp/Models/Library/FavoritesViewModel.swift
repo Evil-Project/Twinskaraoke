@@ -19,26 +19,56 @@ final class FavoritesViewModel {
     /// when the truth is "could not ask".
     var needsPhoneSession = false
 
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private let isAuthenticated: @Sendable () -> Bool
+    @ObservationIgnored private let loadSongs: @Sendable () async throws -> [Song]
+
+    init(
+        isAuthenticated: @escaping @Sendable () -> Bool = { CredentialStore.isAuthenticated },
+        loadSongs: @escaping @Sendable () async throws -> [Song] = {
+            try await KaraokeAPIClient.favoriteSongs()
+        }
+    ) {
+        self.isAuthenticated = isAuthenticated
+        self.loadSongs = loadSongs
+    }
+
+    isolated deinit {
+        loadTask?.cancel()
+    }
+
     func fetch(force: Bool = false) {
-        guard !isLoading else { return }
-        guard force || songs.isEmpty else { return }
-        guard CredentialStore.isAuthenticated else {
+        guard isAuthenticated() else {
+            cancelLoad()
             songs = []
             loadError = nil
             needsPhoneSession = true
             return
         }
+        guard !isLoading else { return }
+        guard force || songs.isEmpty else { return }
+
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        let loader = loadSongs
         needsPhoneSession = false
         isLoading = true
         loadError = nil
-        Task { [weak self] in
-            guard let self else { return }
-            defer { isLoading = false }
+        loadTask = Task { [weak self] in
             do {
-                songs = try await KaraokeAPIClient.favoriteSongs()
-                needsPhoneSession = false
+                let loaded = try await loader()
+                try Task.checkCancellation()
+                guard let self, self.loadGeneration == generation else { return }
+                self.songs = loaded
+                self.needsPhoneSession = false
+                self.finishLoad(generation: generation)
+            } catch is CancellationError {
+                self?.finishLoad(generation: generation)
             } catch {
-                loadError = "Check your connection and try again."
+                guard let self, self.loadGeneration == generation else { return }
+                self.loadError = "Check your connection and try again."
+                self.finishLoad(generation: generation)
             }
         }
     }
@@ -50,8 +80,22 @@ final class FavoritesViewModel {
     }
 
     func reset() {
+        cancelLoad()
         songs = []
         loadError = nil
         needsPhoneSession = false
+    }
+
+    private func cancelLoad() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
+    private func finishLoad(generation: Int) {
+        guard loadGeneration == generation else { return }
+        loadTask = nil
+        isLoading = false
     }
 }
