@@ -200,27 +200,38 @@ private struct PlayerLayoutMetrics {
     }
 }
 
-private let playerTitleButtonBackground = Color.clear
-
-private var playerTitleButtonBorder: some View {
-    Circle()
-        .stroke(Color.primary.opacity(0.08), lineWidth: 0.6)
-}
+/// The soft filled circle the player's actions sit on, Apple Music's treatment
+/// for favorite, more and the queue-mode badge on Playing Next. It is a theme
+/// token rather than a literal grey here so the three title surfaces and the
+/// badge in ``PlayerBottomToolbar`` cannot drift apart.
+private let playerTitleButtonBackground = Color.appPlayerActionFill
 
 private func playerTitleIconColor(isActive _: Bool = false) -> Color {
     Color.primary
 }
 
+/// How far the filled circle sits inside the button's hit target. The tap area
+/// stays a full 44pt; only the circle shrinks, so it hugs the glyph the way
+/// Apple Music's does instead of filling the whole target.
+private let playerTitleButtonChromeInset: CGFloat = 10
+
 private extension View {
-    /// The circular background/border worn by the player's title-surface
-    /// buttons. The iPad control bar sits on its own glass and skips it.
+    /// The circular background worn by the player's title-surface buttons, and
+    /// the hit target underneath it. The iPad control bar sits on its own glass
+    /// and skips the circle, but keeps the target.
     @ViewBuilder
-    func playerTitleButtonChrome(_ isVisible: Bool) -> some View {
+    func playerTitleButtonChrome(_ isVisible: Bool, size: CGFloat) -> some View {
         if isVisible {
-            background(playerTitleButtonBackground, in: Circle())
-                .overlay(playerTitleButtonBorder)
+            frame(
+                width: size - playerTitleButtonChromeInset,
+                height: size - playerTitleButtonChromeInset
+            )
+            .background(playerTitleButtonBackground, in: Circle())
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
         } else {
-            self
+            frame(width: size, height: size)
+                .contentShape(Rectangle())
         }
     }
 }
@@ -260,9 +271,7 @@ private struct PlayerFavoriteButton: View {
             }
             .font(font)
             .foregroundStyle(playerTitleIconColor(isActive: isFavorite))
-            .frame(width: size, height: size)
-            .contentShape(Rectangle())
-            .playerTitleButtonChrome(showsChrome)
+            .playerTitleButtonChrome(showsChrome, size: size)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
         .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
@@ -287,9 +296,7 @@ private struct PlayerMoreMenu: View {
             Image(systemName: "ellipsis")
                 .font(font)
                 .foregroundStyle(playerTitleIconColor())
-                .frame(width: size, height: size)
-                .contentShape(Rectangle())
-                .playerTitleButtonChrome(showsChrome)
+                .playerTitleButtonChrome(showsChrome, size: size)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
         .accessibilityLabel("More")
@@ -893,9 +900,7 @@ struct FullScreenPlayerView: View {
                 Image(systemName: "chevron.down")
                     .font(.headline.bold())
                     .foregroundStyle(playerTitleIconColor())
-                    .frame(width: 44, height: 44)
-                    .background(playerTitleButtonBackground, in: Circle())
-                    .overlay(playerTitleButtonBorder)
+                    .playerTitleButtonChrome(true, size: 44)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Hide lyrics")

@@ -132,6 +132,15 @@ nonisolated extension Color {
             light: UIColor.black.withAlphaComponent(0.08),
             dark: UIColor.white.withAlphaComponent(0.16)
         )
+        /// The circle under the player's round actions — favorite, more, the
+        /// lyrics-header chevron and the queue-mode badge. A shade deeper than
+        /// `appControlInactiveFill`, which washed out against the artwork
+        /// ambience; Apple Music's reads as a darker grey than the surface it
+        /// sits on rather than a light film over it.
+        static let appPlayerActionFill = adaptive(
+            light: UIColor.black.withAlphaComponent(0.12),
+            dark: UIColor.white.withAlphaComponent(0.10)
+        )
         static let appArtworkOverlay = adaptive(
             light: UIColor.white.withAlphaComponent(0.45),
             dark: UIColor.black.withAlphaComponent(0.40)
