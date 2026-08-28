@@ -296,12 +296,6 @@ struct PlaylistDetailView: View {
                 .id(Self.contentAnchor)
             }
                 .padding(.bottom, 16)
-                .onGeometryChange(for: CGFloat.self) { proxy in
-                    proxy.size.width
-                } action: { width in
-                    guard width > 0, abs(width - contentWidth) > 0.5 else { return }
-                    contentWidth = width
-                }
                 // Row changes (e.g. unfavouriting) used to animate via the
                 // `filteredSongs` swap; now that the list is derived, the
                 // animation attaches to the value instead. Same 300-row
@@ -313,6 +307,18 @@ struct PlaylistDetailView: View {
                         : AppMotion.quick,
                     value: displayedSongs
                 )
+        }
+        // Measure the viewport, not the laid-out content. The former
+        // `onGeometryChange` lived on the content VStack; because its first
+        // pass used the 390pt compact fallback, the VStack reported that same
+        // intrinsic width and could never promote itself to the wide layout on
+        // iPad. Scroll geometry exposes the actual detail-column width without
+        // inserting the GeometryReader that breaks navigation-bar edge tracking.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.containerSize.width
+        } action: { _, width in
+            guard width > 0, abs(width - contentWidth) > 0.5 else { return }
+            contentWidth = width
         }
         .smoothScrolling()
         .scrollEdgeHaptic()

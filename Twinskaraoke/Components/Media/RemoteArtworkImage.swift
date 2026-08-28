@@ -352,7 +352,7 @@ struct CenteredLoadingView: View {
 
 struct MusicSkeletonShimmer: ViewModifier {
     var isActive: Bool
-    @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
     private let scrollState = ScrollPerformanceState.shared
     @State private var phase: CGFloat = -0.8
 
@@ -378,7 +378,7 @@ struct MusicSkeletonShimmer: ViewModifier {
     private var effectiveActive: Bool {
         isActive
             && !scrollState.isScrolling
-            && !reduceMotion
+            && !reduceEffects
     }
 
     private func restartIfNeeded(active: Bool) {

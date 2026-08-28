@@ -34,7 +34,7 @@ struct MarqueeText: View {
     /// display link alive to scroll text nobody can see.
     var isPaused: Bool = false
 
-    @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
     @State private var textSize: CGSize = .zero
     @State private var containerWidth: CGFloat = 0
 
@@ -54,7 +54,7 @@ struct MarqueeText: View {
     @State private var startDate = Date()
 
     private var needsScroll: Bool {
-        !reduceMotion && containerWidth > 0 && textSize.width > containerWidth + 0.5
+        !reduceEffects && containerWidth > 0 && textSize.width > containerWidth + 0.5
     }
 
     private var isScrolling: Bool {

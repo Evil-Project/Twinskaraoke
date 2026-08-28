@@ -84,7 +84,7 @@ private struct PopupHostView: View {
     }
 
     private func usesSidebarShell(availableWidth: CGFloat) -> Bool {
-        guard AM.Layout.usesWideCanvas(
+        guard AM.Layout.usesSidebarCanvas(
             horizontalSizeClass: horizontalSizeClass,
             availableWidth: availableWidth
         ) else { return false }
