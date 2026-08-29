@@ -272,7 +272,16 @@ enum AM {
             horizontalSizeClass: UserInterfaceSizeClass?,
             availableWidth: CGFloat
         ) -> Bool {
-            horizontalSizeClass == .regular && availableWidth >= sidebarMinimumWidth
+            guard horizontalSizeClass == .regular else { return false }
+            #if canImport(UIKit)
+                // Mac idiom windows keep desktop navigation even when resized
+                // below the iPad sidebar threshold. Falling back to a tab bar
+                // here is a platform regression, not an adaptive layout.
+                if UIDevice.current.userInterfaceIdiom == .mac {
+                    return true
+                }
+            #endif
+            return availableWidth >= sidebarMinimumWidth
         }
 
         static func shelfTileWidth(for availableWidth: CGFloat, compact: Bool = false) -> CGFloat {

@@ -153,6 +153,12 @@ struct MarqueeText: View {
             .onChange(of: text) {
                 restartCycle()
             }
+            // The timeline is removed while decorative effects are reduced.
+            // Start from a fresh dwell when it returns instead of including
+            // the paused interval in the elapsed phase.
+            .onChange(of: reduceEffects) { _, shouldReduce in
+                if !shouldReduce { restartCycle() }
+            }
             // Resuming starts a fresh dwell rather than picking the pass up
             // where it left off. A host only pauses this when it is covered, so
             // there is no jump to see, and coming back to a title that starts

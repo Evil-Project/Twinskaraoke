@@ -128,10 +128,14 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable {
         guard let start = upNextStart(after: current) else { return }
         var upNext = Array(items[start...])
         guard offsets.allSatisfy(upNext.indices.contains) else { return }
+        let removedIDs = Set(offsets.map { upNext[$0].id })
         for index in offsets.sorted(by: >) {
             upNext.remove(at: index)
         }
         items = Array(items[..<start]) + upNext
+        if !originalItems.isEmpty {
+            originalItems.removeAll { removedIDs.contains($0.id) }
+        }
     }
 
     private func upNextStart(after current: Song?) -> Int? {

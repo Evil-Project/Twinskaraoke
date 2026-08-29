@@ -204,7 +204,8 @@ final class TwinskaraokeUITests: XCTestCase {
 
     openRootSection("Search", in: app)
     let firstSongIdentifier = "PlaylistDetail.song.0.ui-search-song-1"
-    if !element(identifier: firstSongIdentifier, in: app).waitForExistence(timeout: 2) {
+    let firstSong = element(identifier: firstSongIdentifier, in: app)
+    if !waitUntil(timeout: 2, { firstSong.isHittable }) {
       // A split-view section switch may restore Search at its root instead of
       // preserving the pushed playlist. Reopen it explicitly so this test
       // measures history semantics, not NavigationSplitView path retention.
@@ -220,7 +221,6 @@ final class TwinskaraokeUITests: XCTestCase {
       identifier: firstSongIdentifier,
       in: app
     )
-    let firstSong = element(identifier: firstSongIdentifier, in: app)
     XCTAssertTrue(
       waitUntil(timeout: 5) { firstSong.isHittable && self.tapStartsPlayback(firstSong, in: app) },
       "Expected deliberate playlist playback to start."
@@ -787,17 +787,21 @@ final class TwinskaraokeUITests: XCTestCase {
     openMiniPlayer(in: app)
 
     XCTAssertTrue(
-      app.buttons["Play"].waitForExistence(timeout: 8)
-        || app.buttons["Pause"].waitForExistence(timeout: 8),
+      waitUntil(timeout: 8) {
+        app.buttons["Play"].firstMatch.isHittable
+          || app.buttons["Pause"].firstMatch.isHittable
+      },
       "The primary transport control disappeared at an accessibility text size."
     )
     XCTAssertTrue(
-      app.buttons["Playing Next"].waitForExistence(timeout: 8),
+      waitUntil(timeout: 8) { app.buttons["Playing Next"].firstMatch.isHittable },
       "The queue control disappeared at an accessibility text size."
     )
     XCTAssertTrue(
-      app.buttons["Show Lyrics"].waitForExistence(timeout: 8)
-        || app.buttons["Hide Lyrics"].waitForExistence(timeout: 8),
+      waitUntil(timeout: 8) {
+        app.buttons["Show Lyrics"].firstMatch.isHittable
+          || app.buttons["Hide Lyrics"].firstMatch.isHittable
+      },
       "The lyrics control disappeared at an accessibility text size."
     )
   }
@@ -1094,20 +1098,22 @@ final class TwinskaraokeUITests: XCTestCase {
     for _ in 0..<6 {
       if let identifier {
         let identifiedElement = element(identifier: identifier, in: app)
-        if identifiedElement.exists {
+        if identifiedElement.isHittable {
           return
         }
       }
-      if app.staticTexts[title].exists || app.buttons[title].exists {
+      if app.staticTexts[title].firstMatch.isHittable
+        || app.buttons[title].firstMatch.isHittable
+      {
         return
       }
       app.swipeUp()
     }
 
     XCTAssertTrue(
-      (identifier.map { element(identifier: $0, in: app).exists } ?? false)
-        || app.staticTexts[title].exists
-        || app.buttons[title].exists,
+      (identifier.map { element(identifier: $0, in: app).isHittable } ?? false)
+        || app.staticTexts[title].firstMatch.isHittable
+        || app.buttons[title].firstMatch.isHittable,
       "Missing visible item \(title) after scrolling."
     )
   }
