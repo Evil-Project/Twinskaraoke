@@ -631,12 +631,35 @@ final class TwinskaraokeUITests: XCTestCase {
     // Both halves, because either one alone can be satisfied by a broken
     // player: a gesture that swallowed the drag outright would open no cover
     // art and dismiss nothing, and pass the assertion above on its own.
-    // Compact artwork is tall enough for this contained drag to cross the
-    // player's 25% commit threshold. The iPad landscape bottom bar uses a 64pt
-    // thumbnail only ~90pt above the screen edge, so dismissal is physically
-    // impossible without a fast flick; `testDraggingDownDismisses...` covers
-    // the full-surface dismissal path on every layout.
-    if !isRunningOnPad {
+    if isRunningOnPad {
+      // The landscape bottom bar uses a 64pt thumbnail only ~90pt above the
+      // screen edge. A contained drag cannot cross the player's 25% commit
+      // threshold, so first assert that it correctly springs back rather than
+      // silently treating a missing dismissal assertion as success.
+      XCTAssertFalse(
+        waitUntil(timeout: 1) { self.miniPlayerIsHittable(in: app) },
+        "A short contained iPad artwork drag unexpectedly dismissed the player."
+      )
+
+      // Then prove the artwork drag did not leave the shared gesture state
+      // stuck: a deliberate full-surface pull must still dismiss normally.
+      let dismissStart = player.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)
+      )
+      let dismissEnd = player.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)
+      )
+      dismissStart.press(
+        forDuration: 0.05,
+        thenDragTo: dismissEnd,
+        withVelocity: 400,
+        thenHoldForDuration: 0.1
+      )
+      XCTAssertTrue(
+        waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+        "The iPad player could not dismiss after a contained artwork drag."
+      )
+    } else {
       XCTAssertTrue(
         waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
         "Dragging down from the artwork did not dismiss the full-screen player."
