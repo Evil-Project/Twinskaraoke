@@ -36,12 +36,25 @@ struct AppReduceMotionKey: EnvironmentKey {
     static let defaultValue: Bool = false
 }
 
+struct AppReduceEffectsKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
     /// Whether reduce-motion should be respected, combining the system
     /// accessibility setting with the user's in-app preference.
     var appReduceMotion: Bool {
         get { self[AppReduceMotionKey.self] }
         set { self[AppReduceMotionKey.self] = newValue }
+    }
+
+    /// Pauses perpetual, decorative effects when either Reduce Motion or Low
+    /// Power Mode is active. Interaction transitions still use
+    /// `appReduceMotion`, so Low Power Mode does not make the interface feel
+    /// abruptly unanimated.
+    var appReduceEffects: Bool {
+        get { self[AppReduceEffectsKey.self] }
+        set { self[AppReduceEffectsKey.self] = newValue }
     }
 }
 
@@ -62,12 +75,27 @@ private struct ReduceMotionInjector<Content: View>: View {
     let content: Content
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @State private var lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     var body: some View {
-        content.environment(\.appReduceMotion, AppMotion.reduceMotion(
+        let reduceMotion = AppMotion.reduceMotion(
             systemReduceMotion: systemReduceMotion,
             respectPreference: respectReducedMotion
-        ))
+        )
+        content
+            .environment(\.appReduceMotion, reduceMotion)
+            .environment(
+                \.appReduceEffects,
+                AppMotion.reduceDecorativeEffects(
+                    reduceMotion: reduceMotion,
+                    lowPowerModeEnabled: lowPowerModeEnabled
+                )
+            )
+            .onReceive(
+                NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
+            ) { _ in
+                lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
     }
 }
 
@@ -76,6 +104,13 @@ private struct ReduceMotionInjector<Content: View>: View {
 enum AppMotion {
   static func reduceMotion(systemReduceMotion: Bool, respectPreference: Bool) -> Bool {
     respectPreference && systemReduceMotion
+  }
+
+  static func reduceDecorativeEffects(
+    reduceMotion: Bool,
+    lowPowerModeEnabled: Bool
+  ) -> Bool {
+    reduceMotion || lowPowerModeEnabled
   }
 
   static func duration(_ seconds: TimeInterval) -> TimeInterval {

@@ -16,7 +16,7 @@ private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
 
-enum RepeatMode {
+nonisolated enum RepeatMode: Equatable, Sendable {
     case off, all, one
     var symbol: String {
         switch self {
@@ -69,7 +69,8 @@ final class AudioPlayerManager {
         set { PlaybackClock.shared.progress = newValue }
     }
 
-    var queue: [Song] = []
+    private var queueState = PlaybackQueueState()
+    var queue: [Song] { queueState.items }
     var isEditingProgress = false
     var volume: Double = 1.0
     var isUserScrubbingVolume: Bool = false
@@ -80,7 +81,7 @@ final class AudioPlayerManager {
     var routeIcon: String = "airplayaudio"
     var routeName: String = ""
     var repeatMode: RepeatMode = .off
-    var isShuffled: Bool = false
+    var isShuffled: Bool { queueState.isShuffled }
     var autoplayEnabled: Bool = true
     var isRadioMode: Bool = false
     var radioArtworkURL: URL?
@@ -375,7 +376,6 @@ final class AudioPlayerManager {
     private var streamStartedAt: Date?
 
     private var _suppressModeSwitch = false
-    private var originalQueue: [Song] = []
     private var cancellables = Set<AnyCancellable>()
     private var artworkURL: URL?
     private var artworkTask: (any SDWebImageOperation)?
@@ -405,9 +405,11 @@ final class AudioPlayerManager {
     private var activeCrossfadePlan: TransitionCoordinator.TransitionPlan?
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
-    private var audioSessionCategoryConfigured = false
-    private var audioSessionIsActive = false
     private var handlingAudioSessionInterruption = false
+    @ObservationIgnored private let audioSessionController: any AudioSessionManaging =
+        AudioSessionController()
+    @ObservationIgnored private let nowPlayingPublisher: any NowPlayingPublishing =
+        SystemNowPlayingPublisher()
 
     private let easterEggSongID = "73376790-47d2-4c17-a7fc-88d11dccd2f0"
     private var easterEggQueuedForCurrentSong = false
@@ -485,6 +487,11 @@ final class AudioPlayerManager {
         isPlaying = playing
         isBuffering = buffering
         if changed {
+            if playing, !buffering {
+                AppPerformance.event("Playback Ready")
+            } else if !playing, !buffering {
+                AppPerformance.event("Playback Stopped")
+            }
             DebugLogger.log(
                 "Playback state changed: playing=\(playing), buffering=\(buffering), reason=\(reason)",
                 category: .playback
@@ -1348,6 +1355,7 @@ final class AudioPlayerManager {
             cacheRecoverySongID = nil
         }
         DebugLogger.log("Play requested: \(song.title) (id: \(song.id))", category: .playback)
+        AppPerformance.event("Playback Request")
         let previousSongID = currentSong?.id
         let effectToResume = currentActiveEffect ?? deferredAIEffect
         suppressPlaybackEndedCallbacks()
@@ -1388,17 +1396,7 @@ final class AudioPlayerManager {
         progress = 0
         currentSong = song
         warmPlayerArtwork(for: song)
-        if !context.isEmpty {
-            queue = context
-            if isShuffled {
-                originalQueue = context
-                var rest = queue.filter { $0.id != song.id }
-                rest.shuffle()
-                queue = [song] + rest
-            } else {
-                originalQueue = []
-            }
-        }
+        queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
         // Songs with a remote source use the non-decompressing lookup; a
         // compressed-only cache falls through to startStreamPlayback, whose
@@ -1475,23 +1473,7 @@ final class AudioPlayerManager {
             return
         }
 
-        func inserting(_ song: Song, into source: [Song], after current: Song) -> [Song] {
-            var updated = source
-            updated.removeAll { $0.id == song.id && $0.id != current.id }
-            if updated.contains(where: { $0.id == current.id }) == false {
-                updated.insert(current, at: 0)
-            }
-            guard song.id != current.id else { return updated }
-            let currentIndex = updated.firstIndex(where: { $0.id == current.id }) ?? 0
-            let insertIndex = min(currentIndex + 1, updated.count)
-            updated.insert(song, at: insertIndex)
-            return updated
-        }
-
-        queue = inserting(song, into: queue, after: current)
-        if !originalQueue.isEmpty {
-            originalQueue = inserting(song, into: originalQueue, after: current)
-        }
+        queueState.insertNext(song, after: current)
         transitionCoordinator.reset()
         upcomingSong = nil
     }
@@ -1913,21 +1895,20 @@ final class AudioPlayerManager {
         #endif
         configureAudioSessionCategory()
         activateAudioSession()
-        if repeatMode == .one, let current = currentSong {
+        switch queueState.advance(
+            after: currentSong,
+            repeatMode: repeatMode,
+            autoplayEnabled: autoplayEnabled
+        ) {
+        case .replayCurrent:
+            guard let current = currentSong else { return }
             // Repeat-one replay: not a new listen, so don't count it again.
             play(song: current, context: [], resetTransitionVolume: true, reportsPlayCount: false)
-            return
-        }
-        if let current = currentSong, !queue.isEmpty,
-           let idx = queue.firstIndex(where: { $0.id == current.id }),
-           idx + 1 < queue.count
-        {
-            play(song: queue[idx + 1])
-        } else if repeatMode == .all, let first = queue.first {
-            play(song: first)
-        } else if autoplayEnabled {
+        case .play(let song):
+            play(song: song)
+        case .autoplay:
             fetchRandomTrending()
-        } else {
+        case .stop:
             avEngine.pause()
             setPlaybackState(
                 playing: false,
@@ -1942,14 +1923,11 @@ final class AudioPlayerManager {
 
     func playPrevious() {
         if isRadioMode { return }
-        guard let current = currentSong, !queue.isEmpty,
-              let idx = queue.firstIndex(where: { $0.id == current.id }),
-              idx - 1 >= 0
-        else {
+        guard let previous = queueState.previous(before: currentSong) else {
             seek(to: 0)
             return
         }
-        play(song: queue[idx - 1])
+        play(song: previous)
     }
 
     func toggleRepeat() {
@@ -1957,31 +1935,20 @@ final class AudioPlayerManager {
     }
 
     func toggleShuffle() {
-        isShuffled.toggle()
-        if isShuffled {
-            originalQueue = queue
-            guard let current = currentSong else { return }
-            var rest = queue.filter { $0.id != current.id }
-            rest.shuffle()
-            queue = [current] + rest
-        } else if !originalQueue.isEmpty {
-            queue = originalQueue
-            originalQueue = []
-        }
+        queueState.toggleShuffle(current: currentSong)
     }
 
     func playInOrder(song: Song, context: [Song]) {
-        isShuffled = false
-        originalQueue = []
+        queueState.beginInOrder(context: context)
         play(song: song, context: context)
     }
 
     func playShuffled(from songs: [Song]) {
-        guard let pick = songs.randomElement() else { return }
-        let shuffled = [pick] + songs.filter { $0.id != pick.id }.shuffled()
-        isShuffled = true
-        play(song: pick, context: shuffled)
-        originalQueue = songs
+        guard let pick = queueState.beginShuffled(songs: songs) else { return }
+        // The state already contains the shuffled queue and its original
+        // ordering. Passing that queue back as a context would shuffle it a
+        // second time and overwrite the restoration order.
+        play(song: pick)
     }
 
     func toggleAutoplay() {
@@ -1989,25 +1956,11 @@ final class AudioPlayerManager {
     }
 
     func moveInUpNext(from source: IndexSet, to destination: Int) {
-        guard let current = currentSong,
-              let baseIdx = queue.firstIndex(where: { $0.id == current.id })
-        else { return }
-        let upNextStart = baseIdx + 1
-        guard upNextStart < queue.count else { return }
-        var upNext = Array(queue[upNextStart...])
-        upNext.move(fromOffsets: source, toOffset: destination)
-        queue = Array(queue[..<upNextStart]) + upNext
+        queueState.moveUpNext(after: currentSong, from: source, to: destination)
     }
 
     func removeFromUpNext(at offsets: IndexSet) {
-        guard let current = currentSong,
-              let baseIdx = queue.firstIndex(where: { $0.id == current.id })
-        else { return }
-        let upNextStart = baseIdx + 1
-        guard upNextStart < queue.count else { return }
-        var upNext = Array(queue[upNextStart...])
-        upNext.remove(atOffsets: offsets)
-        queue = Array(queue[..<upNextStart]) + upNext
+        queueState.removeUpNext(after: currentSong, at: offsets)
     }
 
     private func observeManagedPlayer(
@@ -2144,6 +2097,7 @@ final class AudioPlayerManager {
     }
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
         let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id
         if alreadyOnSameStation {
@@ -2168,8 +2122,7 @@ final class AudioPlayerManager {
         isRadioMode = true
         radioArtworkURL = artworkURL
         progress = 0
-        queue = []
-        originalQueue = []
+        queueState.clear()
         currentSong = song
         startRadio(url: streamURL)
     }
@@ -2716,30 +2669,19 @@ final class AudioPlayerManager {
     }
 
     private func configureAudioSessionCategory() {
-        guard !audioSessionCategoryConfigured else { return }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback, mode: .default, policy: .longFormAudio, options: []
-            )
-            audioSessionCategoryConfigured = true
-        } catch {
-            DebugLogger.log("Audio session category configuration failed: \(error)", category: .playback)
-        }
+        audioSessionController.prepareForPlayback()
     }
 
     private func activateAudioSession() {
-        guard !audioSessionIsActive else { return }
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-            audioSessionIsActive = true
-        } catch {
-            DebugLogger.log("Audio session activation failed: \(error)", category: .playback)
-        }
+        // Kept as a compatibility seam while call sites are migrated from the
+        // former configure/activate pair. The controller makes this idempotent.
+        audioSessionController.prepareForPlayback()
     }
 
     private func syncSystemVolume(
-        _ systemVolume: Float = AVAudioSession.sharedInstance().outputVolume
+        _ systemVolume: Float? = nil
     ) {
+        let systemVolume = systemVolume ?? audioSessionController.outputVolume
         let reconciledVolume = SystemVolumeReconciliation.value(
             currentVolume: volume,
             systemVolume: systemVolume,
@@ -2765,10 +2707,7 @@ final class AudioPlayerManager {
 
     private func handleMediaServicesReset() {
         DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
-        audioSessionCategoryConfigured = false
-        audioSessionIsActive = false
-        configureAudioSessionCategory()
-        activateAudioSession()
+        audioSessionController.resetAfterMediaServicesLoss()
         if isPlaying, !isRadioMode, !isStreamMode {
             let position = lastKnownPlaybackTime
             avEngine.startEngineIfNeeded()
@@ -2783,7 +2722,7 @@ final class AudioPlayerManager {
         else { return }
         switch type {
         case .began:
-            audioSessionIsActive = false
+            audioSessionController.markInterrupted()
             wasPlayingBeforeInterruption = isPlaybackRequested
             DebugLogger.log(
                 "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
@@ -2825,46 +2764,9 @@ final class AudioPlayerManager {
     }
 
     func updateRouteIcon() {
-        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
-        guard let primary = outputs.first else {
-            routeIcon = "airplayaudio"
-            routeName = ""
-            return
-        }
-        routeName = primary.portName
-        let nameLower = primary.portName.lowercased()
-        switch primary.portType {
-        case .builtInSpeaker, .builtInReceiver:
-            routeIcon = "airplayaudio"
-        case .headphones:
-            routeIcon = "headphones"
-        case .HDMI:
-            routeIcon = "tv.fill"
-        case .bluetoothA2DP, .bluetoothLE, .bluetoothHFP:
-            if nameLower.contains("airpods max") {
-                routeIcon = "airpodsmax"
-            } else if nameLower.contains("airpods pro") {
-                routeIcon = "airpodspro"
-            } else if nameLower.contains("airpods") {
-                routeIcon = "airpods"
-            } else if nameLower.contains("beats") {
-                routeIcon = "beats.headphones"
-            } else {
-                routeIcon = "hifispeaker.fill"
-            }
-        case .airPlay:
-            if nameLower.contains("homepod mini") {
-                routeIcon = "homepodmini"
-            } else if nameLower.contains("homepod") {
-                routeIcon = "homepod"
-            } else if nameLower.contains("apple tv") {
-                routeIcon = "appletv"
-            } else {
-                routeIcon = "airplayaudio"
-            }
-        default:
-            routeIcon = "airplayaudio"
-        }
+        let route = audioSessionController.currentRoute
+        routeName = route.name
+        routeIcon = route.symbol
     }
 
     private func setupRemoteCommands() {
@@ -2999,7 +2901,7 @@ final class AudioPlayerManager {
 
     private func updateNowPlayingInfo(reloadArtwork: Bool) {
         guard let song = currentSong else {
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            nowPlayingPublisher.info = nil
             lastNowPlayingElapsedSecond = nil
             lastNowPlayingPlaybackRate = nil
             lastLoggedNowPlayingElapsedSecond = nil
@@ -3024,9 +2926,9 @@ final class AudioPlayerManager {
             }
         }
         if shouldResetNowPlayingIdentity {
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            nowPlayingPublisher.info = nil
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        nowPlayingPublisher.info = info
         updateRemoteCommandAvailability()
         DebugLogger.log(
             "Now Playing updated: rate=\(nowPlayingPlaybackRate), playing=\(isPlaying), buffering=\(isBuffering)",
@@ -3061,7 +2963,7 @@ final class AudioPlayerManager {
             elapsed: isRadioMode ? nil : elapsed,
             includeExistingArtwork: true
         )
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        nowPlayingPublisher.info = info
         if lastLoggedNowPlayingElapsedSecond == nil
             || roundedSecond - (lastLoggedNowPlayingElapsedSecond ?? 0) >= 15
         {
@@ -3080,39 +2982,16 @@ final class AudioPlayerManager {
         elapsed: TimeInterval?,
         includeExistingArtwork: Bool
     ) -> [String: Any] {
-        let currentInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        // Keep system surfaces driven by the public Now Playing contract:
-        // metadata, elapsed time, duration, and playback rate.
-        let originalArtists = song.originalArtists?
-            .filter { !$0.isEmpty }
-            .joined(separator: ", ")
-        let artist: String
-        if let originalArtists, !originalArtists.isEmpty {
-            artist = originalArtists
-        } else {
-            artist = song.artistName
-        }
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: song.title,
-            MPMediaItemPropertyArtist: artist,
-            MPMediaItemPropertyMediaType: MPMediaType.music.rawValue,
-            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
-            MPNowPlayingInfoPropertyPlaybackRate: nowPlayingPlaybackRate,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
-        ]
-        if includeExistingArtwork,
-           let artwork = currentInfo?[MPMediaItemPropertyArtwork]
-        {
-            info[MPMediaItemPropertyArtwork] = artwork
-        }
-        if isRadioMode {
-            info[MPNowPlayingInfoPropertyIsLiveStream] = true
-        } else {
-            info[MPNowPlayingInfoPropertyIsLiveStream] = false
-            info[MPMediaItemPropertyPlaybackDuration] = playbackDuration
-            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed ?? playbackTime
-        }
-        return info
+        return NowPlayingInfoBuilder.make(
+            song: song,
+            playbackRate: nowPlayingPlaybackRate,
+            isLiveStream: isRadioMode,
+            duration: playbackDuration,
+            elapsed: elapsed ?? playbackTime,
+            existingArtwork: includeExistingArtwork
+                ? nowPlayingPublisher.info?[MPMediaItemPropertyArtwork]
+                : nil
+        )
     }
 
     private func loadArtworkAsync(from url: URL) {
@@ -3174,7 +3053,7 @@ final class AudioPlayerManager {
                     includeExistingArtwork: false
                 )
                 info[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+                self.nowPlayingPublisher.info = info
                 self.updateRemoteCommandAvailability()
                 if self.isRadioMode {
                     self.lastNowPlayingElapsedSecond = nil

@@ -9,6 +9,7 @@ struct PlayerAmbientBackground: View {
     let artworkURL: URL?
     var isPlaying: Bool = true
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
     @State private var palette: ArtworkPalette = .placeholder
     @State private var paletteSourceURL: URL?
     /// Breath time already run before the current stretch of playback.
@@ -17,7 +18,7 @@ struct PlayerAmbientBackground: View {
     @State private var breathResumedAt = Date()
 
     private var shouldAnimateAmbient: Bool {
-        isPlaying && !reduceMotion
+        isPlaying && !reduceEffects
     }
 
     /// Seconds for one full out-and-back breath.

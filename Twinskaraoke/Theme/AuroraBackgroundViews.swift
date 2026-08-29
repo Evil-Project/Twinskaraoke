@@ -16,9 +16,8 @@ class CloudProvider {
 }
 
 struct Cloud: View {
-    // Fixed: Marked StateObject private and added appReduceMotion environment key
     @State private var provider = CloudProvider()
-    @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
     @State private var move = false
 
     let proxy: GeometryProxy
@@ -32,30 +31,36 @@ struct Cloud: View {
             .fill(color)
             .frame(height: proxy.size.height / provider.frameHeightRatio)
             .offset(provider.offset)
-            // Fixed: Only apply rotation shift if user allows motion animations
-            .rotationEffect(.init(degrees: (move && !reduceMotion) ? rotationStart : rotationStart + 360))
+            .rotationEffect(.init(degrees: (move && !reduceEffects) ? rotationStart : rotationStart + 360))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .opacity(0.8)
             .onAppear {
-                // Fixed: Respect reduceMotion settings by blocking the infinite animation loop
-                guard !reduceMotion else { return }
-                
-                withOptionalAnimation(Animation.linear(duration: duration).repeatForever(autoreverses: false)) {
-                    move.toggle()
-                }
+                updateAnimation(shouldReduce: reduceEffects)
             }
+            .onChange(of: reduceEffects) { _, shouldReduce in
+                updateAnimation(shouldReduce: shouldReduce)
+            }
+    }
+
+    private func updateAnimation(shouldReduce: Bool) {
+        if shouldReduce {
+            withOptionalAnimation(nil) { move = false }
+        } else {
+            move = false
+            withOptionalAnimation(Animation.linear(duration: duration).repeatForever(autoreverses: false)) {
+                move = true
+            }
+        }
     }
 }
 
 struct FloatingClouds: View {
-    @Environment(\.appReduceMotion) private var reduceMotion
     let blur: CGFloat = 64
     private let scheme: ColorScheme = .dark
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                // Clouds will automatically inherit and respect reduceMotion via Environment
                 Cloud(proxy: proxy, color: Theme.ellipsesTopLeading(forScheme: scheme), rotationStart: 0, duration: 60, alignment: .topLeading)
                 Cloud(proxy: proxy, color: Theme.ellipsesBottomTrailing(forScheme: scheme), rotationStart: 90, duration: 90, alignment: .bottomTrailing)
                 Cloud(proxy: proxy, color: Theme.ellipsesTopTrailing(forScheme: scheme), rotationStart: 180, duration: 75, alignment: .topTrailing)
@@ -70,6 +75,7 @@ struct FloatingClouds: View {
 /// what pushes the wash from "blurry colored blobs" to something that reads
 /// as an actual aurora — a faint band of light drifting across the sky.
 private struct AuroraShimmerOverlay: View {
+    @Environment(\.appReduceEffects) private var reduceEffects
     @State private var animate = false
 
     var body: some View {
@@ -84,10 +90,22 @@ private struct AuroraShimmerOverlay: View {
         )
         .blendMode(.plusLighter)
         .onAppear {
+            guard !reduceEffects else { return }
             withOptionalAnimation(
                 Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
             ) {
                 animate = true
+            }
+        }
+        .onChange(of: reduceEffects) { _, shouldReduce in
+            if shouldReduce {
+                withOptionalAnimation(nil) { animate = false }
+            } else {
+                withOptionalAnimation(
+                    Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
+                ) {
+                    animate = true
+                }
             }
         }
     }

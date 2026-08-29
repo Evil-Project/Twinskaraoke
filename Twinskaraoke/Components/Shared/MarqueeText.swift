@@ -34,7 +34,7 @@ struct MarqueeText: View {
     /// display link alive to scroll text nobody can see.
     var isPaused: Bool = false
 
-    @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
     @State private var textSize: CGSize = .zero
     @State private var containerWidth: CGFloat = 0
 
@@ -54,7 +54,7 @@ struct MarqueeText: View {
     @State private var startDate = Date()
 
     private var needsScroll: Bool {
-        !reduceMotion && containerWidth > 0 && textSize.width > containerWidth + 0.5
+        !reduceEffects && containerWidth > 0 && textSize.width > containerWidth + 0.5
     }
 
     private var isScrolling: Bool {
@@ -152,6 +152,12 @@ struct MarqueeText: View {
             )
             .onChange(of: text) {
                 restartCycle()
+            }
+            // The timeline is removed while decorative effects are reduced.
+            // Start from a fresh dwell when it returns instead of including
+            // the paused interval in the elapsed phase.
+            .onChange(of: reduceEffects) { _, shouldReduce in
+                if !shouldReduce { restartCycle() }
             }
             // Resuming starts a fresh dwell rather than picking the pass up
             // where it left off. A host only pauses this when it is covered, so

@@ -160,7 +160,7 @@ final class TwinskaraokeUITests: XCTestCase {
     )
     if isRunningOnPad {
       XCTAssertTrue(
-        accessibleElementExists(identifier: "PlaylistDetail.WideOverview", in: app, timeout: 8),
+        playlistDetailUsesWideOverview(in: app, timeout: 8),
         "Expected playlist detail to use a wide Apple Music-style overview on iPad."
       )
     }
@@ -203,12 +203,24 @@ final class TwinskaraokeUITests: XCTestCase {
     )
 
     openRootSection("Search", in: app)
+    let firstSongIdentifier = "PlaylistDetail.song.0.ui-search-song-1"
+    let firstSong = element(identifier: firstSongIdentifier, in: app)
+    if !waitUntil(timeout: 2, { firstSong.isHittable }) {
+      // A split-view section switch may restore Search at its root instead of
+      // preserving the pushed playlist. Reopen it explicitly so this test
+      // measures history semantics, not NavigationSplitView path retention.
+      openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+      openVisibleItem(
+        "Karaoke Essentials",
+        identifier: "PlaylistList.ui-search-playlist-essentials",
+        in: app
+      )
+    }
     scrollToVisibleItem(
       "Wake Me Up Before You Go-Go",
-      identifier: "PlaylistDetail.song.0.ui-search-song-1",
+      identifier: firstSongIdentifier,
       in: app
     )
-    let firstSong = element(identifier: "PlaylistDetail.song.0.ui-search-song-1", in: app)
     XCTAssertTrue(
       waitUntil(timeout: 5) { firstSong.isHittable && self.tapStartsPlayback(firstSong, in: app) },
       "Expected deliberate playlist playback to start."
@@ -606,7 +618,8 @@ final class TwinskaraokeUITests: XCTestCase {
     let artwork = playerArtwork(in: app)
     XCTAssertTrue(artwork.waitForExistence(timeout: 8), "Missing the player artwork.")
 
-    // Both ends inside the artwork, so the touch never leaves the old button.
+    // Keep both ends inside the artwork: that is the exact gesture the former
+    // Button misread as a tap.
     let start = artwork.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
     let end = artwork.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92))
     start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 400, thenHoldForDuration: 0.1)
@@ -618,10 +631,40 @@ final class TwinskaraokeUITests: XCTestCase {
     // Both halves, because either one alone can be satisfied by a broken
     // player: a gesture that swallowed the drag outright would open no cover
     // art and dismiss nothing, and pass the assertion above on its own.
-    XCTAssertTrue(
-      waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
-      "Dragging down from the artwork did not dismiss the full-screen player."
-    )
+    if isRunningOnPad {
+      // The landscape bottom bar uses a 64pt thumbnail only ~90pt above the
+      // screen edge. A contained drag cannot cross the player's 25% commit
+      // threshold, so first assert that it correctly springs back rather than
+      // silently treating a missing dismissal assertion as success.
+      XCTAssertFalse(
+        waitUntil(timeout: 1) { self.miniPlayerIsHittable(in: app) },
+        "A short contained iPad artwork drag unexpectedly dismissed the player."
+      )
+
+      // Then prove the artwork drag did not leave the shared gesture state
+      // stuck: a deliberate full-surface pull must still dismiss normally.
+      let dismissStart = player.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)
+      )
+      let dismissEnd = player.coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)
+      )
+      dismissStart.press(
+        forDuration: 0.05,
+        thenDragTo: dismissEnd,
+        withVelocity: 400,
+        thenHoldForDuration: 0.1
+      )
+      XCTAssertTrue(
+        waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+        "The iPad player could not dismiss after a contained artwork drag."
+      )
+    } else {
+      XCTAssertTrue(
+        waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) },
+        "Dragging down from the artwork did not dismiss the full-screen player."
+      )
+    }
   }
 
   /// The other half of the bargain: a deliberate tap must still open it.
@@ -727,6 +770,40 @@ final class TwinskaraokeUITests: XCTestCase {
         "Expected the player to switch into lyrics mode."
       )
     }
+  }
+
+  func testAccessibilityDynamicTypeKeepsPlayerControlsReachable() throws {
+    let app = launchApp(
+      initialSection: "home",
+      preferredContentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
+    )
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+    openMiniPlayer(in: app)
+
+    XCTAssertTrue(
+      waitUntil(timeout: 8) {
+        app.buttons["Play"].firstMatch.isHittable
+          || app.buttons["Pause"].firstMatch.isHittable
+      },
+      "The primary transport control disappeared at an accessibility text size."
+    )
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { app.buttons["Playing Next"].firstMatch.isHittable },
+      "The queue control disappeared at an accessibility text size."
+    )
+    XCTAssertTrue(
+      waitUntil(timeout: 8) {
+        app.buttons["Show Lyrics"].firstMatch.isHittable
+          || app.buttons["Hide Lyrics"].firstMatch.isHittable
+      },
+      "The lyrics control disappeared at an accessibility text size."
+    )
   }
 
   func testAccountToolbarOpensAccountAndSettings() throws {
@@ -842,7 +919,8 @@ final class TwinskaraokeUITests: XCTestCase {
 
   private func launchApp(
     initialSection: String? = nil,
-    resetRecentlyPlayed: Bool = false
+    resetRecentlyPlayed: Bool = false,
+    preferredContentSizeCategory: String? = nil
   ) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments += ["-UITestMode", "1"]
@@ -852,17 +930,30 @@ final class TwinskaraokeUITests: XCTestCase {
     if let initialSection {
       app.launchArguments += ["-UITestInitialSection", initialSection]
     }
+    if let preferredContentSizeCategory {
+      app.launchArguments += [
+        "-UIPreferredContentSizeCategoryName",
+        preferredContentSizeCategory,
+      ]
+    }
     app.launch()
     return app
   }
 
   private func openRootSection(_ title: String, in app: XCUIApplication) {
-    if app.tabBars.buttons[title].waitForExistence(timeout: 3) {
-      app.tabBars.buttons[title].tap()
+    let tabButton = app.tabBars.buttons[title].firstMatch
+    if tabButton.waitForExistence(timeout: 3) {
+      tabButton.tap()
       return
     }
 
     let identifier = "RootSection.\(title.lowercased())"
+    let identifiedSidebarCell = app.cells.containing(.staticText, identifier: identifier).firstMatch
+    if identifiedSidebarCell.waitForExistence(timeout: 3) {
+      identifiedSidebarCell.tap()
+      return
+    }
+
     if app.staticTexts[identifier].waitForExistence(timeout: 3) {
       app.staticTexts[identifier].tap()
       return
@@ -891,8 +982,9 @@ final class TwinskaraokeUITests: XCTestCase {
       return
     }
 
-    if app.buttons[title].waitForExistence(timeout: 3) {
-      app.buttons[title].tap()
+    let fallbackButton = app.buttons[title].firstMatch
+    if fallbackButton.waitForExistence(timeout: 3) {
+      fallbackButton.tap()
       return
     }
 
@@ -1006,20 +1098,22 @@ final class TwinskaraokeUITests: XCTestCase {
     for _ in 0..<6 {
       if let identifier {
         let identifiedElement = element(identifier: identifier, in: app)
-        if identifiedElement.exists {
+        if identifiedElement.isHittable {
           return
         }
       }
-      if app.staticTexts[title].exists || app.buttons[title].exists {
+      if app.staticTexts[title].firstMatch.isHittable
+        || app.buttons[title].firstMatch.isHittable
+      {
         return
       }
       app.swipeUp()
     }
 
     XCTAssertTrue(
-      (identifier.map { element(identifier: $0, in: app).exists } ?? false)
-        || app.staticTexts[title].exists
-        || app.buttons[title].exists,
+      (identifier.map { element(identifier: $0, in: app).isHittable } ?? false)
+        || app.staticTexts[title].firstMatch.isHittable
+        || app.buttons[title].firstMatch.isHittable,
       "Missing visible item \(title) after scrolling."
     )
   }
@@ -1030,6 +1124,29 @@ final class TwinskaraokeUITests: XCTestCase {
     timeout: TimeInterval
   ) -> Bool {
     element(identifier: identifier, in: app).waitForExistence(timeout: timeout)
+  }
+
+  private func playlistDetailUsesWideOverview(
+    in app: XCUIApplication,
+    timeout: TimeInterval
+  ) -> Bool {
+    if accessibleElementExists(
+      identifier: "PlaylistDetail.WideOverview",
+      in: app,
+      timeout: timeout
+    ) {
+      return true
+    }
+
+    // iOS 26 can omit identifier-only `.contain` accessibility containers.
+    // Verify the actual two-column layout instead: the artwork/title rail must
+    // sit meaningfully to the left of the first song column.
+    let title = app.staticTexts["Karaoke Essentials"].firstMatch
+    let firstSong = element(identifier: "PlaylistDetail.song.0.ui-search-song-1", in: app)
+    guard title.waitForExistence(timeout: timeout),
+          firstSong.waitForExistence(timeout: timeout)
+    else { return false }
+    return firstSong.frame.minX - title.frame.minX >= 280
   }
 
   private var isRunningOnPad: Bool {

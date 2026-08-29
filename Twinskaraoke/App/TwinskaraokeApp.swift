@@ -11,6 +11,7 @@ struct TwinskaraokeApp: App {
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     init() {
+        AppPerformance.event("App Initialization")
         if AppRuntime.isUITestMode,
            ProcessInfo.processInfo.arguments.contains("-UITestResetRecentlyPlayed")
         {

@@ -247,6 +247,12 @@ enum AM {
         static let wideContentMaxWidth: CGFloat = 1180
         static let wideRailMaxWidth: CGFloat = 740
         static let wideInspectorWidth: CGFloat = 340
+        /// A 13-inch iPad is 1376pt wide in landscape. Its balanced sidebar
+        /// consumes 330pt, leaving a 1046pt detail canvas; using the former
+        /// 1050pt threshold for both shell and content meant the largest iPad
+        /// opened a sidebar and then missed every wide content layout by 4pt.
+        static let wideCanvasMinimumWidth: CGFloat = 980
+        static let sidebarMinimumWidth: CGFloat = 1050
 
         static func usesWideCanvas(
             horizontalSizeClass: UserInterfaceSizeClass?,
@@ -259,7 +265,23 @@ enum AM {
                 }
             #endif
             guard let availableWidth else { return false }
-            return availableWidth >= 1050
+            return availableWidth >= wideCanvasMinimumWidth
+        }
+
+        static func usesSidebarCanvas(
+            horizontalSizeClass: UserInterfaceSizeClass?,
+            availableWidth: CGFloat
+        ) -> Bool {
+            guard horizontalSizeClass == .regular else { return false }
+            #if canImport(UIKit)
+                // Mac idiom windows keep desktop navigation even when resized
+                // below the iPad sidebar threshold. Falling back to a tab bar
+                // here is a platform regression, not an adaptive layout.
+                if UIDevice.current.userInterfaceIdiom == .mac {
+                    return true
+                }
+            #endif
+            return availableWidth >= sidebarMinimumWidth
         }
 
         static func shelfTileWidth(for availableWidth: CGFloat, compact: Bool = false) -> CGFloat {

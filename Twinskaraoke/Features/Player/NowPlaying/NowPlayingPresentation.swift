@@ -98,6 +98,7 @@ final class NowPlayingPresentation {
 
     func expand() {
         guard !isExpanded else { return }
+        AppPerformance.event("Player Expand")
         AppHaptic.commit.play()
         isExpanded = true
         animate(to: 1)
@@ -105,6 +106,7 @@ final class NowPlayingPresentation {
 
     func collapse() {
         guard isExpanded else { return }
+        AppPerformance.event("Player Collapse")
         AppHaptic.dismiss.play()
         isExpanded = false
         animate(to: 0)
@@ -147,6 +149,7 @@ final class NowPlayingPresentation {
     /// where an animated close would be animating a player that has nothing
     /// left to show.
     func dismissImmediately() {
+        AppPerformance.event("Player Immediate Dismiss")
         settleTask?.cancel()
         settleTask = nil
         isAnimatingTransition = false

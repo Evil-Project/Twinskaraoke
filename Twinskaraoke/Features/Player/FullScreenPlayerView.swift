@@ -8,13 +8,14 @@ private struct PlayerLayoutMetrics {
     let containerSize: CGSize
     let safeTop: CGFloat
     let safeBottom: CGFloat
+    let usesAccessibilityText: Bool
 
     private var contentHeight: CGFloat {
         max(1, containerSize.height - safeTop - safeBottom)
     }
 
     private var isCompactHeight: Bool {
-        contentHeight < 760
+        contentHeight < 760 || usesAccessibilityText
     }
 
     private var isWidePhone: Bool {
@@ -41,17 +42,19 @@ private struct PlayerLayoutMetrics {
 
     var horizontalPadding: CGFloat {
         if usesPadLayout { return 0 }
+        if usesAccessibilityText { return 20 }
         if isWidePhone { return 34 }
         return isCompactHeight ? 24 : 28
     }
 
     var toolbarHorizontalPadding: CGFloat {
-        isCompactHeight ? 38 : 48
+        if usesAccessibilityText { return 28 }
+        return isCompactHeight ? 38 : 48
     }
 
     var artSize: CGFloat {
         let widthBound = containerSize.width - (horizontalPadding * 2)
-        let heightFraction = contentHeight * (isCompactHeight ? 0.43 : 0.48)
+        let heightFraction = contentHeight * (usesAccessibilityText ? 0.34 : (isCompactHeight ? 0.43 : 0.48))
         let maxSize: CGFloat = isWidePhone ? 390 : 360
         return min(widthBound, heightFraction, maxSize)
     }
@@ -126,11 +129,13 @@ private struct PlayerLayoutMetrics {
     }
 
     var artworkTopSpacer: CGFloat {
-        isCompactHeight ? 10 : 20
+        if usesAccessibilityText { return 4 }
+        return isCompactHeight ? 10 : 20
     }
 
     var artworkBottomSpacer: CGFloat {
-        isCompactHeight ? 18 : 28
+        if usesAccessibilityText { return 10 }
+        return isCompactHeight ? 18 : 28
     }
 
     var lyricsTopSpacer: CGFloat {
@@ -142,15 +147,18 @@ private struct PlayerLayoutMetrics {
     }
 
     var progressTopPadding: CGFloat {
-        isCompactHeight ? 10 : 16
+        if usesAccessibilityText { return 6 }
+        return isCompactHeight ? 10 : 16
     }
 
     var controlsTopPadding: CGFloat {
-        isCompactHeight ? 40 : 54
+        if usesAccessibilityText { return 24 }
+        return isCompactHeight ? 40 : 54
     }
 
     var controlsBottomSpacer: CGFloat {
-        isCompactHeight ? 30 : 46
+        if usesAccessibilityText { return 18 }
+        return isCompactHeight ? 30 : 46
     }
 
     var transportControlHeight: CGFloat {
@@ -310,6 +318,7 @@ struct FullScreenPlayerView: View {
     private let favorites = FavoritesManager.shared
     @Environment(\.playerSafeAreaInsets) private var injectedSafeAreaInsets
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingQueue = false
     @State private var showLyrics = false
     @State private var didSetInitialSurface = false
@@ -343,7 +352,8 @@ struct FullScreenPlayerView: View {
                     let metrics = PlayerLayoutMetrics(
                         containerSize: geo.size,
                         safeTop: safeTop,
-                        safeBottom: safeBottom
+                        safeBottom: safeBottom,
+                        usesAccessibilityText: dynamicTypeSize.isAccessibilitySize
                     )
                     ZStack(alignment: .top) {
                         Group {

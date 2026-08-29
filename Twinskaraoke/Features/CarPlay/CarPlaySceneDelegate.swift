@@ -449,10 +449,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func playlistListItem(_ playlist: Playlist) -> CPListItem {
-        let item = CPListItem(text: playlist.name, detailText: playlistDetailText(playlist))
+        let item = CPListItem(
+            text: playlist.name,
+            detailText: playlistDetailText(playlist),
+            image: fallbackPlaylistImage(for: playlist),
+            accessoryImage: nil,
+            accessoryType: .disclosureIndicator
+        )
         item.handler = { [weak self] _, completion in
             self?.showPlaylist(playlist, completion: completion)
         }
+        loadPlaylistArtwork(for: playlist, into: item)
         return item
     }
 
@@ -806,9 +813,22 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
     }
 
+    private func loadPlaylistArtwork(for playlist: Playlist, into item: CPListItem) {
+        guard !playlist.isFavorites else { return }
+        guard let sourceURL = playlist.explicitCoverThumbnailURL
+            ?? playlist.initialMosaicArtworkURLs.first
+        else { return }
+        let url = ArtworkURLBuilder.variantURL(from: sourceURL, variant: .row) ?? sourceURL
+        loadArtwork(from: url, into: item)
+    }
+
     private func loadRadioArtwork(for song: RadioNowPlaying.SongInfo, into item: CPListItem) {
         guard let artworkURL = song.artworkURL else { return }
         let url = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .row) ?? artworkURL
+        loadArtwork(from: url, into: item)
+    }
+
+    private func loadArtwork(from url: URL, into item: CPListItem) {
         let targetSize = carPlayListArtworkSize()
         let displayScale = interfaceController?.carTraitCollection.displayScale ?? 2
         artworkLoader.loadImage(from: url, targetSize: targetSize, displayScale: displayScale) { [weak item] image in
@@ -832,6 +852,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func fallbackRadioImage() -> UIImage {
         let configuration = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
         return UIImage(systemName: "dot.radiowaves.left.and.right", withConfiguration: configuration) ?? fallbackSongImage()
+    }
+
+    private func fallbackPlaylistImage(for playlist: Playlist) -> UIImage {
+        let symbol = playlist.isFavorites ? "star.fill" : "music.note.list"
+        let configuration = UIImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+        return UIImage(systemName: symbol, withConfiguration: configuration) ?? fallbackSongImage()
     }
 
     private func play(_ song: Song, in context: [Song], playlist: Playlist? = nil) {
@@ -884,9 +910,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
 @MainActor
 private final class CarPlayArtworkLoader {
-    private let cache = NSCache<NSURL, UIImage>()
-    private var operations: [NSURL: any SDWebImageOperation] = [:]
-    private var completions: [NSURL: [@MainActor (UIImage) -> Void]] = [:]
+    private let cache = NSCache<NSString, UIImage>()
+    private var operations: [NSString: any SDWebImageOperation] = [:]
+    private var completions: [NSString: [@MainActor (UIImage) -> Void]] = [:]
+    private var generation = 0
+
+    init() {
+        cache.countLimit = 96
+        cache.totalCostLimit = 12 * 1_024 * 1_024
+    }
 
     func loadImage(
         from url: URL,
@@ -894,7 +926,8 @@ private final class CarPlayArtworkLoader {
         displayScale: CGFloat,
         completion: @escaping @MainActor (UIImage) -> Void
     ) {
-        let cacheKey = url as NSURL
+        let maxPixel = max(targetSize.width, targetSize.height) * max(displayScale, 1)
+        let cacheKey = NSString(string: "\(url.absoluteString)#\(Int(maxPixel.rounded(.up)))")
         if let cached = cache.object(forKey: cacheKey) {
             completion(cached)
             return
@@ -903,23 +936,17 @@ private final class CarPlayArtworkLoader {
         completions[cacheKey, default: []].append(completion)
         guard operations[cacheKey] == nil else { return }
 
+        let requestGeneration = generation
         operations[cacheKey] = SDWebImageManager.shared.loadImage(
             with: url,
             options: [],
             context: ImageCacheConfig.memoryAndDiskCacheContext,
             progress: nil
         ) { [weak self] image, _, _, _, _, _ in
-            guard let image else {
-                Task { @MainActor [weak self] in
-                    self?.finishLoading(cacheKey, image: nil)
-                }
-                return
-            }
-
-            let maxPixel = max(targetSize.width, targetSize.height) * max(displayScale, 1)
-            let processedImage = image.croppedToSquare().downscaled(maxPixel: maxPixel)
             Task { @MainActor [weak self] in
-                self?.finishLoading(cacheKey, image: processedImage)
+                guard let self, self.generation == requestGeneration else { return }
+                let processedImage = image?.croppedToSquare().downscaled(maxPixel: maxPixel)
+                self.finishLoading(cacheKey, image: processedImage)
             }
         }
     }
@@ -928,13 +955,15 @@ private final class CarPlayArtworkLoader {
         operations.values.forEach { $0.cancel() }
         operations.removeAll()
         completions.removeAll()
+        generation &+= 1
     }
 
-    private func finishLoading(_ cacheKey: NSURL, image: UIImage?) {
+    private func finishLoading(_ cacheKey: NSString, image: UIImage?) {
         operations[cacheKey] = nil
         let handlers = completions.removeValue(forKey: cacheKey) ?? []
         guard let image else { return }
-        cache.setObject(image, forKey: cacheKey)
+        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        cache.setObject(image, forKey: cacheKey, cost: cost)
         handlers.forEach { $0(image) }
     }
 }
