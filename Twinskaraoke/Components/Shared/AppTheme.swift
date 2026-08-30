@@ -577,25 +577,53 @@ private struct ToolbarIconLabel: View {
 /// 17pt glyph would only inflate the header's height without widening
 /// anything you can actually tap.
 struct AMSectionHeader<Destination: View>: View {
-    let title: String
+    /// Held as a `Text` so the two entry points can differ in *how* the title
+    /// resolves. `Text(LocalizedStringKey)` is looked up in the string catalog;
+    /// `Text(verbatim:)` is not, and neither is the `Text(String)` this
+    /// component used to build — which is how "Recently Added" quietly lost its
+    /// translations the moment it moved out of a literal `Text` and into here.
+    private let title: Text
     let destination: Destination?
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
+    /// For literal titles, which is most of them. Extracted for localization.
     init(
-        _ title: String,
+        _ titleKey: LocalizedStringKey,
         destination: Destination,
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) {
-        self.title = title
+        title = Text(titleKey)
         self.destination = destination
         self.horizontalPadding = horizontalPadding
     }
 
     init(
-        _ title: String,
+        _ titleKey: LocalizedStringKey,
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) where Destination == EmptyView {
-        self.title = title
+        title = Text(titleKey)
+        destination = nil
+        self.horizontalPadding = horizontalPadding
+    }
+
+    /// For titles that arrive as a runtime `String` — a shelf whose name came
+    /// from a view model. Nothing to look up, so say so at the call site
+    /// instead of silently getting the non-localizing overload.
+    init(
+        verbatim title: String,
+        destination: Destination,
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) {
+        self.title = Text(verbatim: title)
+        self.destination = destination
+        self.horizontalPadding = horizontalPadding
+    }
+
+    init(
+        verbatim title: String,
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) where Destination == EmptyView {
+        self.title = Text(verbatim: title)
         destination = nil
         self.horizontalPadding = horizontalPadding
     }
@@ -616,7 +644,7 @@ struct AMSectionHeader<Destination: View>: View {
 
     private func headerRow(showChevron: Bool) -> some View {
         HStack(spacing: AM.Spacing.xs) {
-            Text(title)
+            title
                 .font(AM.Font.sectionHeader)
                 .foregroundStyle(.primary)
             if showChevron {

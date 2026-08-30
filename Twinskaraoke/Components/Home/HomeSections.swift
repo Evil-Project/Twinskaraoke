@@ -15,7 +15,8 @@ struct PlaylistCarousel: View {
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
-                    title, destination: PlaylistListView(title: title, playlists: playlists, apiURL: apiURL)
+                    verbatim: title,
+                    destination: PlaylistListView(title: title, playlists: playlists, apiURL: apiURL)
                 )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -68,7 +69,7 @@ struct HomeSongSection: View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
-                AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+                AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -107,7 +108,7 @@ struct WideSongListPanel: View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
             // The panel supplies its own margins, so the header adds none.
             AMSectionHeader(
-                title,
+                verbatim: title,
                 destination: BrowseSongCollectionView(title: title, songs: songs),
                 horizontalPadding: 0
             )

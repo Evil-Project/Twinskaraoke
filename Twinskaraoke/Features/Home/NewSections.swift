@@ -113,7 +113,7 @@ struct NewSongRail: View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+                AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -139,7 +139,7 @@ struct NewSongListPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+            AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -167,7 +167,7 @@ struct NewPlaylistRail: View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(title, destination: PlaylistListView(title: title, playlists: playlists))
+                AMSectionHeader(verbatim: title, destination: PlaylistListView(title: title, playlists: playlists))
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(playlists) { playlist in
