@@ -40,14 +40,14 @@ enum SongRowSize {
 
     var titleFont: Font {
         switch self {
-        case .compact: .subheadline
+        case .compact: AM.Font.rowCompactTitle
         case .regular: AM.Font.rowTitle
         }
     }
 
     var subtitleFont: Font {
         switch self {
-        case .compact: .caption
+        case .compact: AM.Font.rowCompactSubtitle
         case .regular: AM.Font.rowSubtitle
         }
     }
@@ -125,6 +125,12 @@ struct SongRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            // One trailing accessory, then the menu. Apple Music's rows show a
+            // single status glyph; this used to stack a download badge, a
+            // duration and an ellipsis side by side, which read busier than the
+            // artwork it sat next to. Download state outranks the duration
+            // because it is the transient, actionable one — the duration is
+            // still on the row's accessibility value either way.
             Group {
                 if downloadState.status.isDownloaded {
                     Image(systemName: "arrow.down.circle.fill")
@@ -136,15 +142,14 @@ struct SongRow: View {
                     ProgressView()
                         .controlSize(.small)
                         .transition(statusTransition)
+                } else if !song.durationText.isEmpty {
+                    Text(song.durationText)
+                        .font(AM.Font.timecode)
+                        .foregroundStyle(.secondary)
+                        .transition(statusTransition)
                 }
             }
             .animation(statusAnimation, value: downloadState.status)
-            if !song.durationText.isEmpty {
-                Text(song.durationText)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
             if let trailing {
                 trailing
             } else {
@@ -203,18 +208,22 @@ enum MusicGridCardSize: Equatable {
     var titleFont: Font {
         switch self {
         case .regular: AM.Font.tileTitle
-        case .compact: .subheadline
+        case .compact: AM.Font.rowCompactTitle
         }
     }
 
     var artistFont: Font {
         switch self {
         case .regular: AM.Font.tileCaption
-        case .compact: .caption
+        case .compact: AM.Font.rowCompactSubtitle
         }
     }
 
-    var textSpacing: CGFloat {
+    /// Artwork to the label block. Distinct from the gap *inside* the label
+    /// block: on an Apple Music tile the two lines sit almost touching and the
+    /// whole pair is set away from the image, which is what groups them as one
+    /// caption rather than two stacked rows.
+    var artworkTextGap: CGFloat {
         switch self {
         case .regular: AM.Spacing.s
         case .compact: 6
@@ -255,16 +264,18 @@ struct MusicGridCard: View {
             AppHaptic.selection.play()
             AudioPlayerManager.shared.play(song: song, context: context)
         } label: {
-            VStack(alignment: .leading, spacing: size.textSpacing) {
+            VStack(alignment: .leading, spacing: size.artworkTextGap) {
                 artwork
-                Text(song.title)
-                    .font(size.titleFont)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(artistText)
-                    .font(size.artistFont)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.title)
+                        .font(size.titleFont)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(artistText)
+                        .font(size.artistFont)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             .frame(width: width, alignment: .leading)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
@@ -408,13 +419,13 @@ struct SongContextPreview: View {
         ContextPreviewCard {
             RemoteArtworkImage(
                 url: song.imageURL,
-                cornerRadius: 10,
+                cornerRadius: AM.Radius.hero,
                 lowResURL: song.thumbnailURL,
                 fixedDisplaySize: CGSize(width: 220, height: 220)
             )
             .aspectRatio(1, contentMode: .fill)
             .frame(width: 220, height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(song.title)
