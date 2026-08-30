@@ -421,7 +421,7 @@ struct RadioView: View {
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            RadioSectionHeader("New & Recent")
+            AMSectionHeader(String(localized: "New & Recent"), horizontalPadding: 0)
                 .padding(.horizontal, horizontalPadding)
             LazyVStack(spacing: 0) {
                 ForEach(history.prefix(10).enumerated().map { PositionedRadioHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
@@ -467,24 +467,6 @@ private struct PositionedRadioHistoryItem: Identifiable {
 
     var id: ID {
         ID(offset: offset, songID: item.song.id)
-    }
-}
-
-private struct RadioSectionHeader: View {
-    let title: String
-
-    init(_ title: String) {
-        self.title = title
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
-            Text(title)
-                .font(AM.Font.sectionHeader)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-        .padding(.top, 2)
     }
 }
 

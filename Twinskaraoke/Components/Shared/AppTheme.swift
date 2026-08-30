@@ -354,13 +354,6 @@ enum AM {
         static func mediaShelfHeight(tileWidth: CGFloat, labelAllowance: CGFloat = shelfLabelAllowance) -> CGFloat {
             tileWidth + labelAllowance
         }
-
-        static func compactMediaShelfHeight(tileWidth: CGFloat) -> CGFloat {
-            tileWidth + 86
-        }
-
-        static let mediaShelfHeight = mediaShelfHeight(tileWidth: 190)
-        static let compactMediaShelfHeight = compactMediaShelfHeight(tileWidth: 152)
     }
 
     /// The type ramp, calibrated against Apple Music rather than assembled a
@@ -577,14 +570,6 @@ private struct ToolbarIconLabel: View {
     }
 }
 
-/// The one section header. Every shelf, grid and panel heading goes through
-/// this — there used to be three hand-rolled variants that disagreed on the
-/// chevron's size, weight and colour.
-///
-/// The chevron carries no hit frame of its own on purpose. The whole row is
-/// the `NavigationLink`'s target via `contentShape`, so a 44x44 box around a
-/// 17pt glyph would only inflate the header's height without widening
-/// anything you can actually tap.
 /// The one section header. Every shelf, grid and panel heading goes through
 /// this — there used to be three hand-rolled variants that disagreed on the
 /// chevron's size, weight and colour.

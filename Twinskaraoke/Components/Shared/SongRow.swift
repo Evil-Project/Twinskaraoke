@@ -136,11 +136,12 @@ struct SongRow: View {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel("Downloaded")
+                        .accessibilityLabel(statusLabel("Downloaded"))
                         .transition(statusTransition)
                 } else if downloadState.status.isDownloading {
                     ProgressView()
                         .controlSize(.small)
+                        .accessibilityLabel(statusLabel("Downloading"))
                         .transition(statusTransition)
                 } else if !song.durationText.isEmpty {
                     Text(song.durationText)
@@ -183,6 +184,15 @@ struct SongRow: View {
         SongActionsMenuItems(song: song) {
             showAddToPlaylist = true
         }
+    }
+
+    /// The status glyph replaces the duration rather than sitting beside it, so
+    /// it has to carry the duration itself. `songRowAccessibility` also puts the
+    /// duration on the row, but six of the screens that draw a SongRow never
+    /// apply that modifier — without this the time is simply gone for VoiceOver
+    /// on any downloaded row there.
+    private func statusLabel(_ status: String) -> String {
+        song.durationText.isEmpty ? status : "\(status), \(song.durationText)"
     }
 
     private var statusAnimation: Animation? {

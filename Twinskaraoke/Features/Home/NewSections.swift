@@ -5,6 +5,14 @@ struct NewFeaturedRail: View {
     let secondary: Song?
     let songs: [Song]
 
+    /// The kicker/title/subtitle block above each card's artwork. Split out of
+    /// the old flat 316 so it can scale: the artwork half is sized from the
+    /// card width and does not grow with the text, but this half does, and a
+    /// fixed total clipped the subtitle at the larger accessibility sizes.
+    /// 243 + 73 reproduces 316 exactly at the default text size.
+    @ScaledMetric(relativeTo: .subheadline) private var cardTextAllowance: CGFloat = 73
+    private let cardArtworkAllowance: CGFloat = 243
+
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = featureCardWidth(for: proxy.size.width)
@@ -36,7 +44,7 @@ struct NewFeaturedRail: View {
                 .padding(.horizontal, AM.Spacing.screenMargin)
             }
         }
-        .frame(height: 316)
+        .frame(height: cardArtworkAllowance + cardTextAllowance)
     }
 
     private func featureCardWidth(for availableWidth: CGFloat) -> CGFloat {

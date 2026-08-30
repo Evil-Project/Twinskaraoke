@@ -311,18 +311,14 @@ private struct BrowseCategoriesView: View {
 
     private var wideBrowseBoard: some View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
-            VStack(alignment: .leading, spacing: AM.Spacing.l) {
-                Text("Featured")
-                    .font(AM.Font.sectionHeader)
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(String(localized: "Featured"), horizontalPadding: 0)
                 featuredGrid(horizontalPadding: 0)
             }
             .frame(width: 390, alignment: .topLeading)
 
-            VStack(alignment: .leading, spacing: AM.Spacing.l) {
-                Text("Genres")
-                    .font(AM.Font.sectionHeader)
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(String(localized: "Genres"), horizontalPadding: 0)
                 genresGridContent
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
