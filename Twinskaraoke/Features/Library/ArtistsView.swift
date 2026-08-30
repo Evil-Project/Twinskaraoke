@@ -244,7 +244,7 @@ struct ArtistDetailView: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showsCollapsedTitle)
+        .animation(reduceMotion ? nil : AppMotion.quick, value: showsCollapsedTitle)
         .onAppear { loader.load(id: artist.id, fallback: artist) }
     }
 

@@ -792,7 +792,10 @@ private struct SearchStateGlyph: View {
 
 
     private var pulseAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.9, dampingFraction: 0.78)
+        // Deliberately slower than any AppMotion role: this is a perpetual
+        // loading pulse, and the interaction springs would drive it at roughly
+        // twice the rate, which reads as agitation rather than waiting.
+        reduceMotion ? nil : AppMotion.spring(response: 0.9, dampingFraction: 0.78)
             .repeatForever(autoreverses: true)
     }
 }

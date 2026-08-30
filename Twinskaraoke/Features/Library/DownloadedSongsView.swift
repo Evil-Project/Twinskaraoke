@@ -101,7 +101,7 @@ struct DownloadedSongsView: View {
             Text("All offline songs on this device will be removed. You can download them again from song menus.")
         }
         .musicScreenBackground()
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showsCollapsedTitle)
+        .animation(reduceMotion ? nil : AppMotion.quick, value: showsCollapsedTitle)
         .scrollIndicators(.hidden)
         .refreshable {
             AppHaptic.selection.play()
