@@ -26,7 +26,8 @@ struct PlaylistCarousel: View {
                         title: title,
                         playlists: playlists,
                         apiURL: apiURL
-                    )
+                    ),
+                    horizontalPadding: horizontalPadding
                 )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -53,23 +54,14 @@ struct PlaylistCarousel: View {
                     .padding(.horizontal, horizontalPadding)
                 }
             }
-            .onAppear {
-                updateAvailableWidth(proxy.size.width)
-            }
-            .onChange(of: proxy.size.width) { _, width in
-                updateAvailableWidth(width)
-            }
         }
+        .trackingWidth(into: $availableWidth)
         .frame(height: AM.Layout.mediaShelfHeight(
             tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
             labelAllowance: labelAllowance
         ))
     }
 
-    private func updateAvailableWidth(_ width: CGFloat) {
-        guard width > 0, abs(width - availableWidth) > 0.5 else { return }
-        availableWidth = width
-    }
 }
 
 struct HomeSongSection: View {
@@ -97,7 +89,8 @@ struct HomeSongSection: View {
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
                     title,
-                    destination: BrowseSongCollectionView(title: title, songs: songs)
+                    destination: BrowseSongCollectionView(title: title, songs: songs),
+                    horizontalPadding: horizontalPadding
                 )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -113,23 +106,14 @@ struct HomeSongSection: View {
                     .padding(.horizontal, horizontalPadding)
                 }
             }
-            .onAppear {
-                updateAvailableWidth(proxy.size.width)
-            }
-            .onChange(of: proxy.size.width) { _, width in
-                updateAvailableWidth(width)
-            }
         }
+        .trackingWidth(into: $availableWidth)
         .frame(height: AM.Layout.mediaShelfHeight(
             tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
             labelAllowance: labelAllowance
         ))
     }
 
-    private func updateAvailableWidth(_ width: CGFloat) {
-        guard width > 0, abs(width - availableWidth) > 0.5 else { return }
-        availableWidth = width
-    }
 }
 
 struct WideSongListPanel: View {
@@ -171,7 +155,7 @@ struct LatestSingleSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
-            AMSectionHeader(String(localized: "Latest Single"))
+            AMSectionHeader(String(localized: "Latest Single"), horizontalPadding: horizontalPadding)
             Button {
                 play()
             } label: {

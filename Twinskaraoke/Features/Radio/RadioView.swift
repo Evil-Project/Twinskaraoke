@@ -647,7 +647,7 @@ private struct RadioStationContextPreview: View {
                     .foregroundStyle(Color.appAccent)
                     .textCase(.uppercase)
                 Text(title)
-                    .font(AM.Font.chevron)
+                    .font(AM.Font.rowTitle.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(subtitle)

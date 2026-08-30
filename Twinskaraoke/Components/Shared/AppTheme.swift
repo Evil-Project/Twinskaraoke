@@ -444,6 +444,24 @@ extension View {
     }
 }
 
+extension View {
+    /// Reports this view's width into `width`, ignoring sub-point jitter.
+    ///
+    /// Shelves need their own width in two places at once: inside a
+    /// `GeometryReader` to size tiles, and outside it to size the fixed frame
+    /// the `GeometryReader` sits in. The proxy only reaches the first, so the
+    /// width has to be carried out in state. Five shelves were each about to
+    /// grow their own copy of that.
+    func trackingWidth(into width: Binding<CGFloat>) -> some View {
+        onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            guard newWidth > 0, abs(newWidth - width.wrappedValue) > 0.5 else { return }
+            width.wrappedValue = newWidth
+        }
+    }
+}
+
 @MainActor
 @discardableResult
 func withOptionalAnimation<Result>(

@@ -6,12 +6,17 @@ struct NewFeaturedRail: View {
     let songs: [Song]
 
     /// The kicker/title/subtitle block above each card's artwork. Split out of
-    /// the old flat 316 so it can scale: the artwork half is sized from the
-    /// card width and does not grow with the text, but this half does, and a
-    /// fixed total clipped the subtitle at the larger accessibility sizes.
-    /// 243 + 73 reproduces 316 exactly at the default text size.
+    /// the old flat 316 so it can scale with the text, which a fixed total
+    /// could not — it clipped the subtitle at the larger accessibility sizes.
     @ScaledMetric(relativeTo: .subheadline) private var cardTextAllowance: CGFloat = 73
-    private let cardArtworkAllowance: CGFloat = 243
+    @State private var availableWidth: CGFloat = 390
+
+    /// The artwork half is measured, not assumed. Pinning it to 243 — the
+    /// widest card's 420 * 0.56 — left ~40pt of dead space under every card on
+    /// a phone, where the card clamps far below that.
+    private var cardArtworkHeight: CGFloat {
+        featureCardWidth(for: availableWidth) * NewFeatureCard.artworkWidthRatio
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -26,7 +31,7 @@ struct NewFeaturedRail: View {
                             song: primary,
                             context: songs,
                             width: cardWidth,
-                            artworkSize: cardWidth * 0.56
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
                     }
                     if let secondary {
@@ -37,14 +42,15 @@ struct NewFeaturedRail: View {
                             song: secondary,
                             context: songs,
                             width: cardWidth,
-                            artworkSize: cardWidth * 0.56
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
                     }
                 }
                 .padding(.horizontal, AM.Spacing.screenMargin)
             }
         }
-        .frame(height: cardArtworkAllowance + cardTextAllowance)
+        .trackingWidth(into: $availableWidth)
+        .frame(height: cardArtworkHeight + AM.Spacing.s + cardTextAllowance)
     }
 
     private func featureCardWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -53,6 +59,10 @@ struct NewFeaturedRail: View {
 }
 
 private struct NewFeatureCard: View {
+    /// The artwork's height as a fraction of the card's width. Read by
+    /// NewFeaturedRail too, so the rail's frame matches what the card draws.
+    static let artworkWidthRatio: CGFloat = 0.56
+
     let kicker: String
     let title: String
     let subtitle: String
@@ -117,6 +127,7 @@ struct NewSongRail: View {
     /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
         AM.Layout.shelfLabelAllowance
+    @State private var availableWidth: CGFloat = 390
     let title: String
     let songs: [Song]
 
@@ -142,7 +153,11 @@ struct NewSongRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: 190, labelAllowance: labelAllowance))
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 }
 
@@ -154,9 +169,10 @@ struct NewSongListPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
             AMSectionHeader(
-                    title,
-                    destination: BrowseSongCollectionView(title: title, songs: songs)
-                )
+                title,
+                destination: BrowseSongCollectionView(title: title, songs: songs),
+                horizontalPadding: horizontalPadding
+            )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -180,6 +196,7 @@ struct NewPlaylistRail: View {
     /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
         AM.Layout.shelfLabelAllowance
+    @State private var availableWidth: CGFloat = 390
     let title: String
     let playlists: [Playlist]
 
@@ -211,6 +228,10 @@ struct NewPlaylistRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: 190, labelAllowance: labelAllowance))
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 }
