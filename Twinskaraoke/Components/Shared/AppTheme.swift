@@ -221,13 +221,24 @@ nonisolated extension Color {
 }
 
 enum AM {
+    /// Continuous corner radii, ramped by element size the way Apple Music's
+    /// are. A 44pt row thumbnail and a 340pt player hero should not share a
+    /// corner, which is what the old flat 7/8/10 ramp gave them.
     enum Radius {
-        static let thumb: CGFloat = 7
-        static let card: CGFloat = 8
-        static let hero: CGFloat = 10
-        static let tile: CGFloat = 8
+        static let thumb: CGFloat = 6
+        static let card: CGFloat = 10
+        static let tile: CGFloat = 10
+        /// Large artwork surfaces: the full-screen player, the radio and wide
+        /// heroes, playlist and browse headers.
+        ///
+        /// `ArtworkMorphLayer` lerps `thumb -> hero` while `PlayerArtworkView`
+        /// draws at `hero`, so the flying artwork lands on exactly the corner
+        /// it turns into. Those two must keep reading the same token — split
+        /// this in half and the morph ends on a different shape than the
+        /// artwork underneath it.
+        static let hero: CGFloat = 16
         static let popup: CGFloat = 6
-        static let sheet: CGFloat = 16
+        static let sheet: CGFloat = 20
     }
 
     enum Spacing {
@@ -239,6 +250,11 @@ enum AM {
         static let xxl: CGFloat = 28
         static let screenMargin: CGFloat = 16
         static let shelfSpacing: CGFloat = 20
+        /// A section header to the content it labels. One value for every
+        /// shelf and grid, so the rhythm does not drift per section.
+        static let sectionHeaderGap: CGFloat = 10
+        /// One section to the next.
+        static let sectionGap: CGFloat = 28
         static let shelfTile: CGFloat = 162
         static let compactShelfTile: CGFloat = 132
     }
@@ -323,8 +339,13 @@ enum AM {
         static let songGridColumns = adaptiveGridColumns(minimum: 154)
         static let categoryGridColumns = adaptiveGridColumns(minimum: 160, spacing: Spacing.m)
 
+        /// Tile plus its caption block plus the section header above it.
+        /// Retuned from +100 when the type ramp moved: the header dropped from
+        /// 28pt to 22pt and the tile labels from headline+caption to a matched
+        /// subheadline pair, so the old constant left ~14pt of dead air under
+        /// every shelf.
         static func mediaShelfHeight(tileWidth: CGFloat) -> CGFloat {
-            tileWidth + 100
+            tileWidth + 90
         }
 
         static func compactMediaShelfHeight(tileWidth: CGFloat) -> CGFloat {
@@ -335,17 +356,40 @@ enum AM {
         static let compactMediaShelfHeight = compactMediaShelfHeight(tileWidth: 152)
     }
 
+    /// The type ramp, calibrated against Apple Music rather than assembled a
+    /// call site at a time. Pick by role — the sizes and weights *are* the
+    /// design, and a raw `.font(.headline)` next to one of these is how the
+    /// interface drifts.
     enum Font {
-        static let sectionHeader = SwiftUI.Font.title.bold()
-        static let groupHeader = SwiftUI.Font.headline.bold()
-        static let tileTitle = SwiftUI.Font.headline
-        static let tileCaption = SwiftUI.Font.caption
+        /// A heading that carries a whole screen, below the navigation title.
+        static let screenTitle = SwiftUI.Font.largeTitle.bold()
+        /// Shelf and section headings: "Recently Added", "Made For You".
+        /// 22pt, not the 28pt `.title` this used to be — Apple Music's shelf
+        /// headers sit close to the content they label.
+        static let sectionHeader = SwiftUI.Font.title2.bold()
+        /// One level under `sectionHeader`.
+        static let groupHeader = SwiftUI.Font.title3.weight(.semibold)
+
+        /// Tile title and caption are the *same size* and separate on colour
+        /// alone. That is what makes an Apple Music shelf read as a grid of
+        /// items rather than a grid of headlines with footnotes under them.
+        static let tileTitle = SwiftUI.Font.subheadline
+        static let tileCaption = SwiftUI.Font.subheadline
+
         static let rowTitle = SwiftUI.Font.body
         static let rowSubtitle = SwiftUI.Font.subheadline
-        static let nowPlayingTitle = SwiftUI.Font.title.bold()
-        static let nowPlayingArtist = SwiftUI.Font.headline
+        static let rowCompactTitle = SwiftUI.Font.subheadline
+        static let rowCompactSubtitle = SwiftUI.Font.footnote
+
+        static let nowPlayingTitle = SwiftUI.Font.title2.bold()
+        static let nowPlayingArtist = SwiftUI.Font.title3
+
+        /// Labels under round player controls and on action strips.
+        static let controlLabel = SwiftUI.Font.footnote.weight(.semibold)
+        /// Counts and status pills.
+        static let badge = SwiftUI.Font.caption2.weight(.semibold)
         static let timecode = SwiftUI.Font.caption.monospacedDigit()
-        static let chevron = SwiftUI.Font.headline.bold()
+        static let chevron = SwiftUI.Font.subheadline.weight(.semibold)
     }
 
     enum Shadow {
@@ -514,17 +558,36 @@ private struct ToolbarIconLabel: View {
     }
 }
 
+/// The one section header. Every shelf, grid and panel heading goes through
+/// this — there used to be three hand-rolled variants that disagreed on the
+/// chevron's size, weight and colour.
+///
+/// The chevron carries no hit frame of its own on purpose. The whole row is
+/// the `NavigationLink`'s target via `contentShape`, so a 44x44 box around a
+/// 17pt glyph would only inflate the header's height without widening
+/// anything you can actually tap.
 struct AMSectionHeader<Destination: View>: View {
     let title: String
     let destination: Destination?
-    init(_ title: String, destination: Destination) {
+    var horizontalPadding: CGFloat = AM.Spacing.screenMargin
+
+    init(
+        _ title: String,
+        destination: Destination,
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) {
         self.title = title
         self.destination = destination
+        self.horizontalPadding = horizontalPadding
     }
 
-    init(_ title: String) where Destination == EmptyView {
+    init(
+        _ title: String,
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) where Destination == EmptyView {
         self.title = title
         destination = nil
+        self.horizontalPadding = horizontalPadding
     }
 
     var body: some View {
@@ -538,22 +601,23 @@ struct AMSectionHeader<Destination: View>: View {
                 headerRow(showChevron: false)
             }
         }
-        .padding(.horizontal, AM.Spacing.screenMargin)
+        .padding(.horizontal, horizontalPadding)
     }
 
     private func headerRow(showChevron: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
+        HStack(spacing: AM.Spacing.xs) {
             Text(title)
                 .font(AM.Font.sectionHeader)
                 .foregroundStyle(.primary)
             if showChevron {
                 Image(systemName: "chevron.right")
-                    .font(.headline.bold())
-                    .foregroundStyle(.secondary)
+                    .font(AM.Font.chevron)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(.top, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
