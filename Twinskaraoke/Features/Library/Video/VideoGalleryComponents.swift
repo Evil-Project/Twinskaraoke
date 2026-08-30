@@ -200,7 +200,7 @@ struct VideoContextPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VideoThumbnail(video: video, cornerRadius: 12)
+            VideoThumbnail(video: video, cornerRadius: AM.Radius.card)
                 .frame(width: 252)
             VStack(alignment: .leading, spacing: 4) {
                 if isFeatured {
@@ -413,7 +413,7 @@ private struct SimilarVideoRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            VideoThumbnail(video: video, cornerRadius: 8)
+            VideoThumbnail(video: video, cornerRadius: AM.Radius.card)
                 .frame(width: 140)
             VStack(alignment: .leading, spacing: 4) {
                 Text(video.displayTitle)

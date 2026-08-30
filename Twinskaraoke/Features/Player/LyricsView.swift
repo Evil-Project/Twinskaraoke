@@ -365,7 +365,7 @@ private struct IntroDots: View {
             color: isActive ? .primary : .primary.opacity(0.4)
         )
         .opacity(isActive ? 1.0 : 0.3)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: isActive)
+        .animation(reduceMotion ? nil : AppMotion.easeInOut(duration: 0.4), value: isActive)
     }
 
 }

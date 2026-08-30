@@ -16,14 +16,14 @@ struct QueueRow: View {
                     ZStack(alignment: .topLeading) {
                         RemoteArtworkImage(
                             url: audioManager.displayImageURL(for: song, variant: .row),
-                            cornerRadius: 7,
+                            cornerRadius: AM.Radius.thumb,
                             lowResURL: song.thumbnailURL
                         )
                             .frame(width: 50, height: 50)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                         if isPlayingNext {
                             Text("NEXT")
-                                .font(.caption2.weight(.heavy))
+                                .font(AM.Font.badge)
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -33,11 +33,11 @@ struct QueueRow: View {
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(song.title)
-                            .font(.body.weight(.medium))
+                            .font(AM.Font.rowTitle.weight(.medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         Text(song.displayArtist)
-                            .font(.subheadline)
+                            .font(AM.Font.rowSubtitle)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -75,7 +75,7 @@ struct QueueRow: View {
                 }
             } label: {
                 Label("More actions", systemImage: "ellipsis")
-                    .font(.headline.weight(.semibold))
+                    .font(AM.Font.groupHeader)
                     .foregroundStyle(.secondary)
                     .labelStyle(.iconOnly)
                     .frame(width: 44, height: 44)
@@ -120,7 +120,7 @@ struct QueueModeButton: View {
                     Image(systemName: symbol)
                 }
             }
-            .font(.headline.weight(.semibold))
+            .font(AM.Font.groupHeader)
             .foregroundStyle(isActive ? Color.appControlActiveForeground : .primary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 44)

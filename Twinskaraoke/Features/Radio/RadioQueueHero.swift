@@ -12,7 +12,7 @@ struct RadioQueueHero: View {
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
             ZStack(alignment: .bottomLeading) {
-                RadioQueueArtwork(song: song, cornerRadius: 10)
+                RadioQueueArtwork(song: song, cornerRadius: AM.Radius.card)
                     .frame(width: 72, height: 72)
                     .amShadow(isPlaying ? AM.Shadow.heroPlaying : AM.Shadow.heroIdle)
 

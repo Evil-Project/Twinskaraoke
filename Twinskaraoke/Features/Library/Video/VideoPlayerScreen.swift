@@ -288,7 +288,7 @@ private struct VideoPlayerSurface: View {
                     onToggleFullScreen: onToggleFullScreen
                 )
                 .opacity(visibilityTracker.isUserInterfaceHidden ? 0 : 1)
-                .animation(.easeInOut(duration: 0.18), value: visibilityTracker.isUserInterfaceHidden)
+                .animation(AppMotion.easeInOut(duration: 0.18), value: visibilityTracker.isUserInterfaceHidden)
             }
         }
         .contentShape(Rectangle())
@@ -307,7 +307,7 @@ private struct VideoPlayerSurface: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: resumedFrom)
+        .animation(AppMotion.quick, value: resumedFrom)
     }
 }
 

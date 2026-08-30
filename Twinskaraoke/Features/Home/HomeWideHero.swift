@@ -133,22 +133,22 @@ private struct WideSongHeroCard: View {
                 HStack(alignment: .bottom, spacing: AM.Spacing.xl) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(eyebrow)
-                            .font(.caption.bold())
+                            .font(AM.Font.eyebrow)
                             .foregroundStyle(.white.opacity(0.72))
                             .textCase(.uppercase)
                         Text(title)
-                            .font(.largeTitle.bold())
+                            .font(AM.Font.screenTitle)
                             .foregroundStyle(.white)
                             .lineLimit(2)
                             .minimumScaleFactor(0.72)
                         Text(subtitle)
-                            .font(.subheadline)
+                            .font(AM.Font.rowSubtitle)
                             .foregroundStyle(.white.opacity(0.82))
                             .lineLimit(2)
                     }
                     Spacer(minLength: AM.Spacing.l)
                     Image(systemName: "play.fill")
-                        .font(.title3.bold())
+                        .font(AM.Font.groupHeader)
                         .foregroundStyle(.black)
                         .frame(width: 54, height: 54)
                         .background(.white, in: Circle())
@@ -206,10 +206,10 @@ private struct WideHeroModuleTitle: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.title3.bold())
+                .font(AM.Font.groupHeader)
                 .foregroundStyle(.primary)
             Text(subtitle)
-                .font(.subheadline)
+                .font(AM.Font.rowSubtitle)
                 .foregroundStyle(.secondary)
         }
         .padding(.bottom, 2)
@@ -260,11 +260,11 @@ private struct WideHeroActionRowContent: View {
             .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
+                    .font(AM.Font.rowTitle.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(AM.Font.rowSubtitle)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }

@@ -149,7 +149,7 @@ private struct SearchResultsSummaryHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Songs")
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                 Spacer(minLength: 12)
                 Text(resultCountText)
@@ -311,18 +311,14 @@ private struct BrowseCategoriesView: View {
 
     private var wideBrowseBoard: some View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
-            VStack(alignment: .leading, spacing: AM.Spacing.l) {
-                Text("Featured")
-                    .font(AM.Font.sectionHeader)
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(String(localized: "Featured"), horizontalPadding: 0)
                 featuredGrid(horizontalPadding: 0)
             }
             .frame(width: 390, alignment: .topLeading)
 
-            VStack(alignment: .leading, spacing: AM.Spacing.l) {
-                Text("Genres")
-                    .font(AM.Font.sectionHeader)
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(String(localized: "Genres"), horizontalPadding: 0)
                 genresGridContent
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
@@ -338,7 +334,7 @@ private struct BrowseCategoriesView: View {
 
     private var featuredSectionContent: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.m) {
-            AMSectionHeader("Featured")
+            AMSectionHeader(String(localized: "Featured"))
             featuredGrid
         }
         .accessibilityIdentifier("SearchBrowse.Featured")
@@ -394,7 +390,7 @@ private struct BrowseCategoriesView: View {
 
     private var genresSection: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.m) {
-            AMSectionHeader("Genres")
+            AMSectionHeader(String(localized: "Genres"))
             genresGridContent
                 .padding(.horizontal, sectionHorizontalPadding)
             if genresVM.isLoadingMore {
@@ -485,7 +481,9 @@ private struct PublicPlaylistsCollectionView: View {
 
     var body: some View {
         PlaylistListView(
-            title: "Public Playlists",
+            // "Twinskaraoke Top 100" next door is a product name and stays as
+            // typed; this one is a description and should translate.
+            title: String(localized: "Public Playlists"),
             playlists: viewModel.playlists,
             apiURL: { startIndex, pageSize in
                 viewModel.urlForList(startIndex: startIndex, pageSize: pageSize)
@@ -538,7 +536,7 @@ private struct GenreDetailLoadingView: View {
 
                 VStack(spacing: 8) {
                     Text(genre.name)
-                        .font(.title2.bold())
+                        .font(AM.Font.sectionHeader)
                         .multilineTextAlignment(.center)
                     Text("Loading songs")
                         .font(.subheadline)
@@ -637,7 +635,7 @@ private struct SearchNoResultsStateView: View {
             SearchStateGlyph()
             VStack(spacing: AM.Spacing.s) {
                 Text("No Results")
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 Text("No songs matched \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\".")
@@ -649,7 +647,7 @@ private struct SearchNoResultsStateView: View {
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
                 Text("Explore instead")
-                    .font(.caption.weight(.semibold))
+                    .font(AM.Font.eyebrow)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 LazyVGrid(
@@ -709,7 +707,7 @@ private struct SearchRecoveryStateView: View {
 
             VStack(spacing: AM.Spacing.s) {
                 Text(title)
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 Text(message)
@@ -792,7 +790,10 @@ private struct SearchStateGlyph: View {
 
 
     private var pulseAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.9, dampingFraction: 0.78)
+        // Deliberately slower than any AppMotion role: this is a perpetual
+        // loading pulse, and the interaction springs would drive it at roughly
+        // twice the rate, which reads as agitation rather than waiting.
+        reduceMotion ? nil : AppMotion.spring(response: 0.9, dampingFraction: 0.78)
             .repeatForever(autoreverses: true)
     }
 }
@@ -809,7 +810,7 @@ private struct SearchCategoryLoadingView: View {
 
                 VStack(spacing: 8) {
                     Text(title)
-                        .font(.title2.bold())
+                        .font(AM.Font.sectionHeader)
                         .multilineTextAlignment(.center)
                     Text("Loading songs")
                         .font(.subheadline)

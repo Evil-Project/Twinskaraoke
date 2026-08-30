@@ -6,16 +6,16 @@ struct ArtThumbnail: View {
         Group {
             if let url = art.imageURL {
                 RemoteArtworkImage(
-                    url: url, cornerRadius: 8, lowResURL: art.blurPreviewURL,
+                    url: url, cornerRadius: AM.Radius.card, lowResURL: art.blurPreviewURL,
                     transparentBackground: true
                 )
             } else {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
             }
         }
         .aspectRatio(1, contentMode: .fill)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
         .overlay(alignment: .bottomTrailing) {
             if let upvotes = art.upvotes, upvotes > 0 {
                 Label("\(upvotes)", systemImage: "heart.fill")

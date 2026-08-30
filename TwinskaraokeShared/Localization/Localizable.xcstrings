@@ -3644,6 +3644,9 @@
     "Behavior" : {
 
     },
+    "Best New Songs" : {
+
+    },
     "Broadcasting" : {
       "localizations" : {
         "de" : {
@@ -8807,6 +8810,9 @@
     "Language Support" : {
 
     },
+    "Latest Single" : {
+
+    },
     "Latest Video" : {
       "localizations" : {
         "de" : {
@@ -10508,6 +10514,9 @@
         }
       }
     },
+    "Made for You" : {
+
+    },
     "More" : {
       "localizations" : {
         "de" : {
@@ -10663,6 +10672,9 @@
           }
         }
       }
+    },
+    "More to Explore" : {
+
     },
     "More Watchalongs" : {
 
@@ -10875,6 +10887,9 @@
         }
       }
     },
+    "New & Recent" : {
+
+    },
     "New Code" : {
 
     },
@@ -10981,6 +10996,12 @@
           }
         }
       }
+    },
+    "New Releases" : {
+
+    },
+    "New This Week" : {
+
     },
     "Next" : {
 
@@ -15505,6 +15526,9 @@
       }
     },
     "Recently Played" : {
+
+    },
+    "Recently Released" : {
 
     },
     "Refresh" : {
@@ -21061,6 +21085,9 @@
       }
     },
     "This video couldn't be played" : {
+
+    },
+    "Top Picks for You" : {
 
     },
     "Trending" : {

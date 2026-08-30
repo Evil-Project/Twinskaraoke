@@ -5,6 +5,19 @@ struct NewFeaturedRail: View {
     let secondary: Song?
     let songs: [Song]
 
+    /// The kicker/title/subtitle block above each card's artwork. Split out of
+    /// the old flat 316 so it can scale with the text, which a fixed total
+    /// could not — it clipped the subtitle at the larger accessibility sizes.
+    @ScaledMetric(relativeTo: .subheadline) private var cardTextAllowance: CGFloat = 73
+    @State private var availableWidth: CGFloat = 390
+
+    /// The artwork half is measured, not assumed. Pinning it to 243 — the
+    /// widest card's 420 * 0.56 — left ~40pt of dead space under every card on
+    /// a phone, where the card clamps far below that.
+    private var cardArtworkHeight: CGFloat {
+        featureCardWidth(for: availableWidth) * NewFeatureCard.artworkWidthRatio
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = featureCardWidth(for: proxy.size.width)
@@ -18,7 +31,7 @@ struct NewFeaturedRail: View {
                             song: primary,
                             context: songs,
                             width: cardWidth,
-                            artworkSize: cardWidth * 0.56
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
                     }
                     if let secondary {
@@ -29,14 +42,15 @@ struct NewFeaturedRail: View {
                             song: secondary,
                             context: songs,
                             width: cardWidth,
-                            artworkSize: cardWidth * 0.56
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
                     }
                 }
                 .padding(.horizontal, AM.Spacing.screenMargin)
             }
         }
-        .frame(height: 316)
+        .trackingWidth(into: $availableWidth)
+        .frame(height: cardArtworkHeight + AM.Spacing.s + cardTextAllowance)
     }
 
     private func featureCardWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -45,6 +59,10 @@ struct NewFeaturedRail: View {
 }
 
 private struct NewFeatureCard: View {
+    /// The artwork's height as a fraction of the card's width. Read by
+    /// NewFeaturedRail too, so the rail's frame matches what the card draws.
+    static let artworkWidthRatio: CGFloat = 0.56
+
     let kicker: String
     let title: String
     let subtitle: String
@@ -106,14 +124,21 @@ private struct NewFeatureCard: View {
 }
 
 struct NewSongRail: View {
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
+    @State private var availableWidth: CGFloat = 390
     let title: String
     let songs: [Song]
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(
+                    title,
+                    destination: BrowseSongCollectionView(title: title, songs: songs)
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -128,7 +153,11 @@ struct NewSongRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight)
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 }
 
@@ -138,8 +167,12 @@ struct NewSongListPreview: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            AMSectionHeader(
+                title,
+                destination: BrowseSongCollectionView(title: title, songs: songs),
+                horizontalPadding: horizontalPadding
+            )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -160,14 +193,21 @@ struct NewSongListPreview: View {
 
 struct NewPlaylistRail: View {
     @Namespace private var zoomNamespace
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
+    @State private var availableWidth: CGFloat = 390
     let title: String
     let playlists: [Playlist]
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(title, destination: PlaylistListView(title: title, playlists: playlists))
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(
+                    title,
+                    destination: PlaylistListView(title: title, playlists: playlists)
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(playlists) { playlist in
@@ -188,6 +228,10 @@ struct NewPlaylistRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight)
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 }

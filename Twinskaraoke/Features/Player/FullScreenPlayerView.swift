@@ -292,7 +292,7 @@ private struct PlayerFavoriteButton: View {
 /// surfaces.
 private struct PlayerMoreMenu: View {
     let song: Song
-    var font: Font = .headline.bold()
+    var font: Font = AM.Font.playerGlyph
     var size: CGFloat = 44
     var showsChrome: Bool = true
     let onAddToPlaylist: () -> Void
@@ -738,13 +738,13 @@ struct FullScreenPlayerView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
-                    .font(.headline.bold())
+                    .font(AM.Font.nowPlayingTitleCompact)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .contentTransition(.opacity)
                 Text(song.displayArtist)
-                    .font(.subheadline)
+                    .font(AM.Font.nowPlayingArtistCompact)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .contentTransition(.opacity)
@@ -855,20 +855,20 @@ struct FullScreenPlayerView: View {
                 HStack(spacing: 12) {
                     RemoteArtworkImage(
                         url: audioManager.displayImageURL(for: song, variant: .thumbnail),
-                        cornerRadius: 8,
+                        cornerRadius: AM.Radius.thumb,
                         contentMode: .fill,
                         lowResURL: song.thumbnailURL
                     )
                     .frame(width: metrics.lyricsArtworkSize, height: metrics.lyricsArtworkSize)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                     .id(song.id)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(song.title)
-                            .font(metrics.lyricsTitleSize <= 15 ? .subheadline.bold() : .headline.bold())
+                            .font(metrics.lyricsTitleSize <= 15 ? .subheadline.bold() : AM.Font.nowPlayingTitleCompact)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         Text(song.displayArtist)
-                            .font(metrics.lyricsSubtitleSize <= 12 ? .caption : .subheadline)
+                            .font(metrics.lyricsSubtitleSize <= 12 ? .caption : AM.Font.nowPlayingArtistCompact)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -896,7 +896,7 @@ struct FullScreenPlayerView: View {
     private func padLyricsHeader(song _: Song) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text("Lyrics")
-                .font(.title2.bold())
+                .font(AM.Font.sectionHeader)
                 .foregroundStyle(.primary)
                 .accessibilityIdentifier("FullScreenPlayer.wideLyricsTitle")
 
@@ -908,7 +908,7 @@ struct FullScreenPlayerView: View {
                 }
             } label: {
                 Image(systemName: "chevron.down")
-                    .font(.headline.bold())
+                    .font(AM.Font.playerGlyph)
                     .foregroundStyle(playerTitleIconColor())
                     .playerTitleButtonChrome(true, size: 44)
             }
@@ -929,14 +929,14 @@ struct FullScreenPlayerView: View {
                 MarqueeText(
                     text: song.title,
                     font: compact || metrics.titleSize <= 20
-                        ? .headline.bold() : AM.Font.nowPlayingTitle,
+                        ? AM.Font.nowPlayingTitleCompact : AM.Font.nowPlayingTitle,
                     color: .primary,
                     isPaused: !presentation.isExpanded
                 )
                 MarqueeText(
                     text: song.displayArtist,
                     font: compact || metrics.artistSize <= 15
-                        ? .subheadline : AM.Font.nowPlayingArtist,
+                        ? AM.Font.nowPlayingArtistCompact : AM.Font.nowPlayingArtist,
                     color: .secondary,
                     isPaused: !presentation.isExpanded
                 )
@@ -1178,7 +1178,7 @@ struct FullScreenPlayerView: View {
                     }
                 }
                 Image(systemName: showTranslatedLyrics ? "globe.badge.chevron.backward" : "globe")
-                    .font(.headline)
+                    .font(AM.Font.playerGlyph)
                     .foregroundStyle(showTranslatedLyrics ? Color.appAccent : .secondary)
             }
             .frame(width: 44, height: 44)

@@ -172,13 +172,13 @@ struct MiniPlayerBar: View {
     private static let marqueeGap: CGFloat = 28
 
     private var titleFont: Font {
-        isInline ? .caption.weight(.semibold) : .subheadline.weight(.semibold)
+        isInline ? .caption.weight(.semibold) : AM.Font.rowCompactTitle.weight(.semibold)
     }
 
     /// Explicitly `.regular`: the artist should never inherit the title's
     /// weight, which is the whole contrast the pair is built on.
     private var subtitleFont: Font {
-        isInline ? .caption2.weight(.regular) : .caption.weight(.regular)
+        isInline ? .caption2.weight(.regular) : AM.Font.rowCompactSubtitle.weight(.regular)
     }
 
     /// Upward only, and judged on where the finger ended rather than on

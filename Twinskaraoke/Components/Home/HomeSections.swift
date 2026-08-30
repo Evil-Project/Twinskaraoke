@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PlaylistCarousel: View {
     @Namespace private var zoomNamespace
+    /// Localizable: every caller passes a literal. The destination needs a
+    /// resolved `String` for its navigation title, which `String(localized:)`
+    /// gives us from the same value.
     let title: String
     let playlists: [Playlist]
     var isLoadingMore: Bool = false
@@ -9,13 +12,22 @@ struct PlaylistCarousel: View {
     var apiURL: ((Int, Int) -> String)?
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.s) {
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
-                    title, destination: PlaylistListView(title: title, playlists: playlists, apiURL: apiURL)
+                    title,
+                    destination: PlaylistListView(
+                        title: title,
+                        playlists: playlists,
+                        apiURL: apiURL
+                    ),
+                    horizontalPadding: horizontalPadding
                 )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -42,20 +54,14 @@ struct PlaylistCarousel: View {
                     .padding(.horizontal, horizontalPadding)
                 }
             }
-            .onAppear {
-                updateAvailableWidth(proxy.size.width)
-            }
-            .onChange(of: proxy.size.width) { _, width in
-                updateAvailableWidth(width)
-            }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: AM.Layout.shelfTileWidth(for: availableWidth)))
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 
-    private func updateAvailableWidth(_ width: CGFloat) {
-        guard width > 0, abs(width - availableWidth) > 0.5 else { return }
-        availableWidth = width
-    }
 }
 
 struct HomeSongSection: View {
@@ -63,12 +69,29 @@ struct HomeSongSection: View {
     let songs: [Song]
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
+
+    init(
+        title: String,
+        songs: [Song],
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) {
+        self.title = title
+        self.songs = songs
+        self.horizontalPadding = horizontalPadding
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.s) {
-                AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(
+                    title,
+                    destination: BrowseSongCollectionView(title: title, songs: songs),
+                    horizontalPadding: horizontalPadding
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -83,20 +106,14 @@ struct HomeSongSection: View {
                     .padding(.horizontal, horizontalPadding)
                 }
             }
-            .onAppear {
-                updateAvailableWidth(proxy.size.width)
-            }
-            .onChange(of: proxy.size.width) { _, width in
-                updateAvailableWidth(width)
-            }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: AM.Layout.shelfTileWidth(for: availableWidth)))
+        .trackingWidth(into: $availableWidth)
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 
-    private func updateAvailableWidth(_ width: CGFloat) {
-        guard width > 0, abs(width - availableWidth) > 0.5 else { return }
-        availableWidth = width
-    }
 }
 
 struct WideSongListPanel: View {
@@ -104,21 +121,13 @@ struct WideSongListPanel: View {
     let songs: [Song]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            NavigationLink(destination: BrowseSongCollectionView(title: title, songs: songs)) {
-                HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
-                    Text(title)
-                        .font(AM.Font.sectionHeader)
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.right")
-                        .font(AM.Font.chevron)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 44, height: 44)
-                        .accessibilityHidden(true)
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            // The panel supplies its own margins, so the header adds none.
+            AMSectionHeader(
+                title,
+                destination: BrowseSongCollectionView(title: title, songs: songs),
+                horizontalPadding: 0
+            )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -145,8 +154,8 @@ struct LatestSingleSection: View {
     @State private var showAddToPlaylist = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.m) {
-            AMSectionHeader("Latest Single")
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            AMSectionHeader(String(localized: "Latest Single"), horizontalPadding: horizontalPadding)
             Button {
                 play()
             } label: {

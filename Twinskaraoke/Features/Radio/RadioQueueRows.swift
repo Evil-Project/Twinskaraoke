@@ -7,7 +7,7 @@ struct RadioQueueTrackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RadioQueueArtwork(song: song, cornerRadius: 7)
+            RadioQueueArtwork(song: song, cornerRadius: AM.Radius.thumb)
                 .frame(width: 54, height: 54)
                 .overlay(alignment: .topLeading) {
                     if isCurrent {

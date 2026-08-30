@@ -617,9 +617,9 @@ struct PlaylistListRow: View {
     let playlist: Playlist
     var body: some View {
         HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist, cornerRadius: 6)
+            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.thumb)
                 .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
                     .font(.subheadline)
@@ -744,18 +744,22 @@ struct PlaylistGridCell: View {
         VStack(alignment: .leading, spacing: AM.Spacing.s) {
             artwork
                 .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-            Text(playlist.name)
-                .font(AM.Font.tileTitle)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            PlaylistSongCountLabel(
-                playlist: playlist,
-                fallbackText: prefersDetailCount ? nil : "Playlist",
-                prefersDetailCount: prefersDetailCount
-            )
-                .font(AM.Font.tileCaption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            // Same two-level structure as MusicGridCard: the label pair sits
+            // tight and is set away from the artwork as a unit.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(playlist.name)
+                    .font(AM.Font.tileTitle)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                PlaylistSongCountLabel(
+                    playlist: playlist,
+                    fallbackText: prefersDetailCount ? nil : "Playlist",
+                    prefersDetailCount: prefersDetailCount
+                )
+                    .font(AM.Font.tileCaption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
@@ -779,14 +783,9 @@ struct RecentlyAddedSection: View {
     var headerHorizontalPadding: CGFloat = AM.Spacing.screenMargin
     private let cols = AM.Layout.songGridColumns
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Recently Added")
-                .font(AM.Font.sectionHeader)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, headerHorizontalPadding)
-                .padding(.top, 2)
-            LazyVGrid(columns: cols, spacing: 22) {
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            AMSectionHeader(String(localized: "Recently Added"), horizontalPadding: headerHorizontalPadding)
+            LazyVGrid(columns: cols, spacing: AM.Spacing.xl) {
                 ForEach(songs) { song in
                     MusicGridCard(song: song, context: songs, fillsWidth: true)
                 }
@@ -803,7 +802,7 @@ struct PlaylistContextPreview: View {
 
     var body: some View {
         ContextPreviewCard {
-            PlaylistArtwork(playlist: playlist, cornerRadius: 12)
+            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.hero)
                 .frame(width: 220, height: 220)
         } label: {
             VStack(alignment: .leading, spacing: 3) {

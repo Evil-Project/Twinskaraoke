@@ -182,9 +182,9 @@ private struct AddToPlaylistSongPreview: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            RemoteArtworkImage(url: song.thumbnailURL ?? song.imageURL, cornerRadius: 10)
+            RemoteArtworkImage(url: song.thumbnailURL ?? song.imageURL, cornerRadius: AM.Radius.card)
                 .frame(width: 74, height: 74)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
                 .shadow(color: Color.appShadow, radius: 10, y: 6)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -217,9 +217,9 @@ private struct AddToPlaylistRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist.asPlaylist(), cornerRadius: 7)
+            PlaylistArtwork(playlist: playlist.asPlaylist(), cornerRadius: AM.Radius.thumb)
                 .frame(width: 50, height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(playlist.name)
@@ -332,9 +332,9 @@ private struct AddToPlaylistPreview: View {
 
     var body: some View {
         ContextPreviewCard {
-            PlaylistArtwork(playlist: playlist.asPlaylist(), cornerRadius: 10)
+            PlaylistArtwork(playlist: playlist.asPlaylist(), cornerRadius: AM.Radius.card)
                 .frame(width: 220, height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(playlist.isPublic ? "Public Playlist" : "Private Playlist")

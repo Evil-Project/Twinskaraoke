@@ -67,7 +67,7 @@ struct RandomSongsView: View {
         .task {
             await viewModel.loadIfNeeded()
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: viewModel.isLoading)
+        .animation(reduceMotion ? nil : AppMotion.quick, value: viewModel.isLoading)
     }
 
     @ViewBuilder

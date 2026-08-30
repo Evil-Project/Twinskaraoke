@@ -151,7 +151,7 @@ struct ZoomableImageViewer: View {
         if reduceMotion {
             showOverlay.toggle()
         } else {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(AppMotion.easeInOut(duration: 0.25)) {
                 showOverlay.toggle()
             }
         }

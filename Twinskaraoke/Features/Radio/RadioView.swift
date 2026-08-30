@@ -243,12 +243,12 @@ struct RadioView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Featured Episode")
-                    .font(.caption.bold())
+                    .font(AM.Font.eyebrow)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .accessibilityIdentifier("Radio.FeaturedEpisode.Label")
                 Text(song?.displayTitle ?? np?.station.name ?? "Twinskaraoke Radio")
-                    .font(.title.bold())
+                    .font(AM.Font.heroTitle)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                     .accessibilityIdentifier("Radio.FeaturedEpisode.Title")
@@ -278,31 +278,31 @@ struct RadioView: View {
                         if let art = next.art, let url = URL(string: art) {
                             RemoteArtworkImage(
                                 url: ArtworkURLBuilder.variantURL(from: url, variant: .row) ?? url,
-                                cornerRadius: 6,
+                                cornerRadius: AM.Radius.thumb,
                                 fixedDisplaySize: CGSize(width: 48, height: 48)
                             )
                             .frame(width: 48, height: 48)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                         } else {
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous)
                                 .fill(Color.secondary.opacity(0.15))
                                 .frame(width: 48, height: 48)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Up Next")
-                                .font(.caption.weight(.semibold))
+                                .font(AM.Font.eyebrow)
                                 .foregroundStyle(.secondary)
                             Text(next.title ?? next.text ?? "")
-                                .font(.body.weight(.semibold))
+                                .font(AM.Font.rowTitle.weight(.semibold))
                                 .lineLimit(1)
                             Text(next.artist ?? "")
-                                .font(.subheadline)
+                                .font(AM.Font.rowSubtitle)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.headline.weight(.semibold))
+                            .font(AM.Font.chevron)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 16)
@@ -421,7 +421,7 @@ struct RadioView: View {
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            RadioSectionHeader("New & Recent")
+            AMSectionHeader(String(localized: "New & Recent"), horizontalPadding: 0)
                 .padding(.horizontal, horizontalPadding)
             LazyVStack(spacing: 0) {
                 ForEach(history.prefix(10).enumerated().map { PositionedRadioHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
@@ -470,24 +470,6 @@ private struct PositionedRadioHistoryItem: Identifiable {
     }
 }
 
-private struct RadioSectionHeader: View {
-    let title: String
-
-    init(_ title: String) {
-        self.title = title
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
-            Text(title)
-                .font(AM.Font.sectionHeader)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-        .padding(.top, 2)
-    }
-}
-
 private struct RadioLiveBadge: View {
     let isActive: Bool
 
@@ -505,7 +487,7 @@ private struct RadioLiveBadge: View {
             .frame(width: 12, height: 12)
 
             Text("LIVE")
-                .font(.caption.bold())
+                .font(AM.Font.eyebrow)
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 9)
@@ -565,7 +547,7 @@ private struct RadioStatusPill: View {
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
+            .font(AM.Font.eyebrow)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
             .foregroundStyle(tint)
@@ -585,7 +567,7 @@ private struct RadioRefreshBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(message)
-                .font(.subheadline)
+                .font(AM.Font.rowSubtitle)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
             Spacer(minLength: 8)
@@ -649,27 +631,27 @@ private struct RadioStationContextPreview: View {
                 if let artworkURL {
                     RemoteArtworkImage(
                         url: ArtworkURLBuilder.variantURL(from: artworkURL, variant: .card) ?? artworkURL,
-                        cornerRadius: 10,
+                        cornerRadius: AM.Radius.hero,
                         lowResURL: ArtworkURLBuilder.variantURL(from: artworkURL, variant: .thumbnail)
                     )
                 } else {
-                    MusicArtworkPlaceholder(cornerRadius: 10)
+                    MusicArtworkPlaceholder(cornerRadius: AM.Radius.hero)
                 }
             }
             .frame(width: 220, height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Live Station")
-                    .font(.caption.bold())
+                    .font(AM.Font.eyebrow)
                     .foregroundStyle(Color.appAccent)
                     .textCase(.uppercase)
                 Text(title)
-                    .font(.headline.weight(.semibold))
+                    .font(AM.Font.rowTitle.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(AM.Font.rowSubtitle)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
@@ -696,28 +678,28 @@ private struct RadioHistoryRow: View {
             if let art = song.art, let url = URL(string: art) {
                 RemoteArtworkImage(
                     url: ArtworkURLBuilder.variantURL(from: url, variant: .row) ?? url,
-                    cornerRadius: 6,
+                    cornerRadius: AM.Radius.thumb,
                     fixedDisplaySize: CGSize(width: 48, height: 48)
                 )
                 .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
             } else {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous)
                     .fill(Color.secondary.opacity(0.15))
                     .frame(width: 48, height: 48)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title ?? song.text ?? "")
-                    .font(.body.weight(.semibold))
+                    .font(AM.Font.rowTitle.weight(.semibold))
                     .lineLimit(1)
                 Text(song.artist ?? "")
-                    .font(.subheadline)
+                    .font(AM.Font.rowSubtitle)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.headline.weight(.semibold))
+                .font(AM.Font.chevron)
                 .foregroundStyle(.secondary)
         }
     }
