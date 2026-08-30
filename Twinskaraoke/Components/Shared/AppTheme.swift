@@ -337,13 +337,22 @@ enum AM {
         static let songGridColumns = adaptiveGridColumns(minimum: 154)
         static let categoryGridColumns = adaptiveGridColumns(minimum: 160, spacing: Spacing.m)
 
-        /// Tile plus its caption block plus the section header above it.
-        /// Retuned from +100 when the type ramp moved: the header dropped from
-        /// 28pt to 22pt and the tile labels from headline+caption to a matched
-        /// subheadline pair, so the old constant left ~14pt of dead air under
-        /// every shelf.
-        static func mediaShelfHeight(tileWidth: CGFloat) -> CGFloat {
-            tileWidth + 90
+        /// Everything a shelf needs above and below its artwork: the section
+        /// header, the gap under it, and the tile's two label lines.
+        ///
+        /// At the default text size this is 90 — retuned from 100 when the type
+        /// ramp moved, since the header dropped 28pt to 22pt and the tile labels
+        /// from headline+caption to a matched subheadline pair.
+        ///
+        /// Shelves scale it with `@ScaledMetric`. A shelf's height is fixed
+        /// because it lives in a `GeometryReader`, so nothing else can grow it,
+        /// and at Accessibility L the labels need roughly half again this much —
+        /// a bare constant clipped tile titles through the baseline and dropped
+        /// the caption line entirely.
+        static let shelfLabelAllowance: CGFloat = 90
+
+        static func mediaShelfHeight(tileWidth: CGFloat, labelAllowance: CGFloat = shelfLabelAllowance) -> CGFloat {
+            tileWidth + labelAllowance
         }
 
         static func compactMediaShelfHeight(tileWidth: CGFloat) -> CGFloat {
@@ -576,54 +585,43 @@ private struct ToolbarIconLabel: View {
 /// the `NavigationLink`'s target via `contentShape`, so a 44x44 box around a
 /// 17pt glyph would only inflate the header's height without widening
 /// anything you can actually tap.
+/// The one section header. Every shelf, grid and panel heading goes through
+/// this — there used to be three hand-rolled variants that disagreed on the
+/// chevron's size, weight and colour.
+///
+/// The title is an **already-localized** `String`: callers pass
+/// `String(localized: "…")`. That is deliberate. This component cannot take a
+/// `LocalizedStringKey` (shelves must hand the same text to a destination's
+/// `navigationTitle`, and a key cannot be read back out) and
+/// `LocalizedStringResource` was worse — verified on a clean build, literals
+/// reaching a custom initializer that way are never extracted into the string
+/// catalog at all, so the headings silently shipped as English. Resolving at
+/// the call site is the form Xcode does extract.
+///
+/// The chevron carries no hit frame of its own on purpose. The whole row is
+/// the `NavigationLink`'s target via `contentShape`, so a 44x44 box around a
+/// 17pt glyph would only inflate the header's height without widening
+/// anything you can actually tap.
 struct AMSectionHeader<Destination: View>: View {
-    /// Held as a `Text` so the two entry points can differ in *how* the title
-    /// resolves. `Text(LocalizedStringKey)` is looked up in the string catalog;
-    /// `Text(verbatim:)` is not, and neither is the `Text(String)` this
-    /// component used to build — which is how "Recently Added" quietly lost its
-    /// translations the moment it moved out of a literal `Text` and into here.
-    private let title: Text
+    let title: String
     let destination: Destination?
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
-    /// For literal titles, which is most of them. Extracted for localization.
     init(
-        _ titleKey: LocalizedStringKey,
+        _ title: String,
         destination: Destination,
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) {
-        title = Text(titleKey)
+        self.title = title
         self.destination = destination
         self.horizontalPadding = horizontalPadding
     }
 
     init(
-        _ titleKey: LocalizedStringKey,
+        _ title: String,
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) where Destination == EmptyView {
-        title = Text(titleKey)
-        destination = nil
-        self.horizontalPadding = horizontalPadding
-    }
-
-    /// For titles that arrive as a runtime `String` — a shelf whose name came
-    /// from a view model. Nothing to look up, so say so at the call site
-    /// instead of silently getting the non-localizing overload.
-    init(
-        verbatim title: String,
-        destination: Destination,
-        horizontalPadding: CGFloat = AM.Spacing.screenMargin
-    ) {
-        self.title = Text(verbatim: title)
-        self.destination = destination
-        self.horizontalPadding = horizontalPadding
-    }
-
-    init(
-        verbatim title: String,
-        horizontalPadding: CGFloat = AM.Spacing.screenMargin
-    ) where Destination == EmptyView {
-        self.title = Text(verbatim: title)
+        self.title = title
         destination = nil
         self.horizontalPadding = horizontalPadding
     }
@@ -644,7 +642,9 @@ struct AMSectionHeader<Destination: View>: View {
 
     private func headerRow(showChevron: Bool) -> some View {
         HStack(spacing: AM.Spacing.xs) {
-            title
+            // `verbatim`: the string arrived translated, or is server data.
+            // Either way there is nothing left to look up.
+            Text(verbatim: title)
                 .font(AM.Font.sectionHeader)
                 .foregroundStyle(.primary)
             if showChevron {

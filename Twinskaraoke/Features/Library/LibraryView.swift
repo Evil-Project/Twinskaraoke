@@ -784,7 +784,7 @@ struct RecentlyAddedSection: View {
     private let cols = AM.Layout.songGridColumns
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
-            AMSectionHeader("Recently Added", horizontalPadding: headerHorizontalPadding)
+            AMSectionHeader(String(localized: "Recently Added"), horizontalPadding: headerHorizontalPadding)
             LazyVGrid(columns: cols, spacing: AM.Spacing.xl) {
                 ForEach(songs) { song in
                     MusicGridCard(song: song, context: songs, fillsWidth: true)

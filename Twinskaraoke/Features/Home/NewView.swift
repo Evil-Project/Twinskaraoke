@@ -77,27 +77,27 @@ struct NewView: View {
             }
 
             if !viewModel.newReleases.isEmpty {
-                NewSongRail(title: "Up Next", songs: Array(viewModel.newReleases.prefix(8)))
+                NewSongRail(title: String(localized: "Up Next"), songs: Array(viewModel.newReleases.prefix(8)))
             }
 
             if !viewModel.trending.isEmpty {
-                NewSongListPreview(title: "Best New Songs", songs: Array(viewModel.trending.prefix(5)))
+                NewSongListPreview(title: String(localized: "Best New Songs"), songs: Array(viewModel.trending.prefix(5)))
             }
 
             if !viewModel.recentPlaylists.isEmpty {
-                NewPlaylistRail(title: "New This Week", playlists: viewModel.recentPlaylists)
+                NewPlaylistRail(title: String(localized: "New This Week"), playlists: viewModel.recentPlaylists)
             }
 
             if !viewModel.newReleases.isEmpty {
-                NewSongRail(title: "New Releases", songs: viewModel.newReleases)
+                NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
             }
 
             if !recentlyPlayed.playlists.isEmpty {
-                NewPlaylistRail(title: "Recently Released", playlists: recentlyPlayed.playlists)
+                NewPlaylistRail(title: String(localized: "Recently Released"), playlists: recentlyPlayed.playlists)
             }
 
             if !viewModel.trending.isEmpty {
-                NewSongRail(title: "More to Explore", songs: viewModel.trending)
+                NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
             }
         }
     }
@@ -122,23 +122,23 @@ struct NewView: View {
             HStack(alignment: .top, spacing: AM.Spacing.xxl) {
                 VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
                     if !viewModel.newReleases.isEmpty {
-                        NewSongRail(title: "Up Next", songs: Array(viewModel.newReleases.prefix(8)))
+                        NewSongRail(title: String(localized: "Up Next"), songs: Array(viewModel.newReleases.prefix(8)))
                     }
 
                     if !viewModel.recentPlaylists.isEmpty {
-                        NewPlaylistRail(title: "New This Week", playlists: viewModel.recentPlaylists)
+                        NewPlaylistRail(title: String(localized: "New This Week"), playlists: viewModel.recentPlaylists)
                     }
 
                     if !viewModel.newReleases.isEmpty {
-                        NewSongRail(title: "New Releases", songs: viewModel.newReleases)
+                        NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
                     }
 
                     if !recentlyPlayed.playlists.isEmpty {
-                        NewPlaylistRail(title: "Recently Released", playlists: recentlyPlayed.playlists)
+                        NewPlaylistRail(title: String(localized: "Recently Released"), playlists: recentlyPlayed.playlists)
                     }
 
                     if !viewModel.trending.isEmpty {
-                        NewSongRail(title: "More to Explore", songs: viewModel.trending)
+                        NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
                     }
                 }
                 .frame(minWidth: 520, maxWidth: .infinity, alignment: .topLeading)
@@ -147,7 +147,7 @@ struct NewView: View {
                 VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
                     if !viewModel.trending.isEmpty {
                         NewSongListPreview(
-                            title: "Best New Songs",
+                            title: String(localized: "Best New Songs"),
                             songs: Array(viewModel.trending.prefix(5)),
                             horizontalPadding: 0
                         )

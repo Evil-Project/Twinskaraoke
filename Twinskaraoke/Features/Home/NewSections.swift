@@ -106,14 +106,20 @@ private struct NewFeatureCard: View {
 }
 
 struct NewSongRail: View {
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
     let title: String
     let songs: [Song]
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(
+                    title,
+                    destination: BrowseSongCollectionView(title: title, songs: songs)
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -128,7 +134,7 @@ struct NewSongRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight)
+        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: 190, labelAllowance: labelAllowance))
     }
 }
 
@@ -138,8 +144,11 @@ struct NewSongListPreview: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            AMSectionHeader(
+                    title,
+                    destination: BrowseSongCollectionView(title: title, songs: songs)
+                )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -160,14 +169,20 @@ struct NewSongListPreview: View {
 
 struct NewPlaylistRail: View {
     @Namespace private var zoomNamespace
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
     let title: String
     let playlists: [Playlist]
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                AMSectionHeader(verbatim: title, destination: PlaylistListView(title: title, playlists: playlists))
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+                AMSectionHeader(
+                    title,
+                    destination: PlaylistListView(title: title, playlists: playlists)
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(playlists) { playlist in
@@ -188,6 +203,6 @@ struct NewPlaylistRail: View {
                 }
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight)
+        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: 190, labelAllowance: labelAllowance))
     }
 }

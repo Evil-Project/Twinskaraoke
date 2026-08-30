@@ -338,7 +338,7 @@ private struct BrowseCategoriesView: View {
 
     private var featuredSectionContent: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.m) {
-            AMSectionHeader("Featured")
+            AMSectionHeader(String(localized: "Featured"))
             featuredGrid
         }
         .accessibilityIdentifier("SearchBrowse.Featured")
@@ -394,7 +394,7 @@ private struct BrowseCategoriesView: View {
 
     private var genresSection: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.m) {
-            AMSectionHeader("Genres")
+            AMSectionHeader(String(localized: "Genres"))
             genresGridContent
                 .padding(.horizontal, sectionHorizontalPadding)
             if genresVM.isLoadingMore {
@@ -485,7 +485,9 @@ private struct PublicPlaylistsCollectionView: View {
 
     var body: some View {
         PlaylistListView(
-            title: "Public Playlists",
+            // "Twinskaraoke Top 100" next door is a product name and stays as
+            // typed; this one is a description and should translate.
+            title: String(localized: "Public Playlists"),
             playlists: viewModel.playlists,
             apiURL: { startIndex, pageSize in
                 viewModel.urlForList(startIndex: startIndex, pageSize: pageSize)

@@ -79,13 +79,13 @@ struct HomeView: View {
                 
 
             if !recentlyPlayed.playlists.isEmpty {
-                PlaylistCarousel(title: "Recently Played", playlists: recentlyPlayed.playlists)
+                PlaylistCarousel(title: String(localized: "Recently Played"), playlists: recentlyPlayed.playlists)
                     .accessibilityIdentifier("Home.RecentlyPlayed")
                     .shelfEntrance(index: 1)
             }
 
             if !viewModel.suggestions.isEmpty {
-                HomeSongSection(title: "Made for You", songs: viewModel.suggestions)
+                HomeSongSection(title: String(localized: "Made for You"), songs: viewModel.suggestions)
                     .shelfEntrance(index: 2)
             }
 
@@ -93,12 +93,12 @@ struct HomeView: View {
                 .shelfEntrance(index: 3)
             
             if !viewModel.newReleases.isEmpty {
-                HomeSongSection(title: "New Releases", songs: viewModel.newReleases)
+                HomeSongSection(title: String(localized: "New Releases"), songs: viewModel.newReleases)
                     .shelfEntrance(index: 4)
             }
 
             if !viewModel.trending.isEmpty {
-                HomeSongSection(title: "More to Explore", songs: viewModel.trending)
+                HomeSongSection(title: String(localized: "More to Explore"), songs: viewModel.trending)
                     .shelfEntrance(index: 5)
             }
         }
@@ -121,7 +121,7 @@ struct HomeView: View {
 
                     if !recentlyPlayed.playlists.isEmpty {
                         PlaylistCarousel(
-                            title: "Recently Played",
+                            title: String(localized: "Recently Played"),
                             playlists: recentlyPlayed.playlists,
                             horizontalPadding: 0
                         )
@@ -129,7 +129,7 @@ struct HomeView: View {
                     }
 
                     if !viewModel.suggestions.isEmpty {
-                        HomeSongSection(title: "Made for You", songs: viewModel.suggestions, horizontalPadding: 0)
+                        HomeSongSection(title: String(localized: "Made for You"), songs: viewModel.suggestions, horizontalPadding: 0)
                     }
                 }
                 .frame(minWidth: 520, maxWidth: .infinity, alignment: .topLeading)
@@ -140,11 +140,11 @@ struct HomeView: View {
                     latestSingleSection(horizontalPadding: 0)
 
                     if !viewModel.newReleases.isEmpty {
-                        WideSongListPanel(title: "New Releases", songs: Array(viewModel.newReleases.prefix(6)))
+                        WideSongListPanel(title: String(localized: "New Releases"), songs: Array(viewModel.newReleases.prefix(6)))
                     }
 
                     if !viewModel.trending.isEmpty {
-                        WideSongListPanel(title: "More to Explore", songs: Array(viewModel.trending.prefix(6)))
+                        WideSongListPanel(title: String(localized: "More to Explore"), songs: Array(viewModel.trending.prefix(6)))
                     }
                 }
                 .frame(
@@ -210,7 +210,7 @@ struct HomeView: View {
     private func topPicksShelf(horizontalPadding: CGFloat = AM.Spacing.screenMargin) -> some View {
         if !viewModel.recentPlaylists.isEmpty {
             PlaylistCarousel(
-                title: "Top Picks for You",
+                title: String(localized: "Top Picks for You"),
                 playlists: viewModel.recentPlaylists,
                 isLoadingMore: viewModel.isLoadingMoreTopPicks,
                 onAppearItem: { viewModel.loadMoreTopPicksIfNeeded(current: $0) },

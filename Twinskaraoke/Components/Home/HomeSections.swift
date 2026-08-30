@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PlaylistCarousel: View {
     @Namespace private var zoomNamespace
+    /// Localizable: every caller passes a literal. The destination needs a
+    /// resolved `String` for its navigation title, which `String(localized:)`
+    /// gives us from the same value.
     let title: String
     let playlists: [Playlist]
     var isLoadingMore: Bool = false
@@ -9,14 +12,21 @@ struct PlaylistCarousel: View {
     var apiURL: ((Int, Int) -> String)?
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
-                    verbatim: title,
-                    destination: PlaylistListView(title: title, playlists: playlists, apiURL: apiURL)
+                    title,
+                    destination: PlaylistListView(
+                        title: title,
+                        playlists: playlists,
+                        apiURL: apiURL
+                    )
                 )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -50,7 +60,10 @@ struct PlaylistCarousel: View {
                 updateAvailableWidth(width)
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: AM.Layout.shelfTileWidth(for: availableWidth)))
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 
     private func updateAvailableWidth(_ width: CGFloat) {
@@ -64,12 +77,28 @@ struct HomeSongSection: View {
     let songs: [Song]
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
+    /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
+        AM.Layout.shelfLabelAllowance
+
+    init(
+        title: String,
+        songs: [Song],
+        horizontalPadding: CGFloat = AM.Spacing.screenMargin
+    ) {
+        self.title = title
+        self.songs = songs
+        self.horizontalPadding = horizontalPadding
+    }
 
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
-                AMSectionHeader(verbatim: title, destination: BrowseSongCollectionView(title: title, songs: songs))
+                AMSectionHeader(
+                    title,
+                    destination: BrowseSongCollectionView(title: title, songs: songs)
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                         ForEach(songs) { song in
@@ -91,7 +120,10 @@ struct HomeSongSection: View {
                 updateAvailableWidth(width)
             }
         }
-        .frame(height: AM.Layout.mediaShelfHeight(tileWidth: AM.Layout.shelfTileWidth(for: availableWidth)))
+        .frame(height: AM.Layout.mediaShelfHeight(
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
+            labelAllowance: labelAllowance
+        ))
     }
 
     private func updateAvailableWidth(_ width: CGFloat) {
@@ -108,7 +140,7 @@ struct WideSongListPanel: View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
             // The panel supplies its own margins, so the header adds none.
             AMSectionHeader(
-                verbatim: title,
+                title,
                 destination: BrowseSongCollectionView(title: title, songs: songs),
                 horizontalPadding: 0
             )
@@ -139,7 +171,7 @@ struct LatestSingleSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
-            AMSectionHeader("Latest Single")
+            AMSectionHeader(String(localized: "Latest Single"))
             Button {
                 play()
             } label: {
