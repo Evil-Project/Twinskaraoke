@@ -13,7 +13,7 @@ struct PlaylistCarousel: View {
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.s) {
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
                     title, destination: PlaylistListView(title: title, playlists: playlists, apiURL: apiURL)
                 )
@@ -67,7 +67,7 @@ struct HomeSongSection: View {
     var body: some View {
         GeometryReader { proxy in
             let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
-            VStack(alignment: .leading, spacing: AM.Spacing.s) {
+            VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(title, destination: BrowseSongCollectionView(title: title, songs: songs))
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
@@ -104,21 +104,13 @@ struct WideSongListPanel: View {
     let songs: [Song]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            NavigationLink(destination: BrowseSongCollectionView(title: title, songs: songs)) {
-                HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
-                    Text(title)
-                        .font(AM.Font.sectionHeader)
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.right")
-                        .font(AM.Font.chevron)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 44, height: 44)
-                        .accessibilityHidden(true)
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
+            // The panel supplies its own margins, so the header adds none.
+            AMSectionHeader(
+                title,
+                destination: BrowseSongCollectionView(title: title, songs: songs),
+                horizontalPadding: 0
+            )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
                     Button {
@@ -145,7 +137,7 @@ struct LatestSingleSection: View {
     @State private var showAddToPlaylist = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.m) {
+        VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
             AMSectionHeader("Latest Single")
             Button {
                 play()
