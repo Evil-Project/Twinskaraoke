@@ -617,9 +617,9 @@ struct PlaylistListRow: View {
     let playlist: Playlist
     var body: some View {
         HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist, cornerRadius: 6)
+            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.thumb)
                 .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
                     .font(.subheadline)

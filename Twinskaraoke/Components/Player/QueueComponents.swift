@@ -16,11 +16,11 @@ struct QueueRow: View {
                     ZStack(alignment: .topLeading) {
                         RemoteArtworkImage(
                             url: audioManager.displayImageURL(for: song, variant: .row),
-                            cornerRadius: 7,
+                            cornerRadius: AM.Radius.thumb,
                             lowResURL: song.thumbnailURL
                         )
                             .frame(width: 50, height: 50)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                         if isPlayingNext {
                             Text("NEXT")
                                 .font(AM.Font.badge)

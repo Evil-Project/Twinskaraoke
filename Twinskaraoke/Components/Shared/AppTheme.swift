@@ -367,6 +367,12 @@ enum AM {
         /// 22pt, not the 28pt `.title` this used to be — Apple Music's shelf
         /// headers sit close to the content they label.
         static let sectionHeader = SwiftUI.Font.title2.bold()
+        /// The title on a featured card that is smaller than the full-width
+        /// hero — the radio's featured episode, a promoted playlist.
+        static let heroTitle = SwiftUI.Font.title.bold()
+        /// The small uppercase kicker over a hero or featured title.
+        /// Always paired with `.textCase(.uppercase)` and a secondary colour.
+        static let eyebrow = SwiftUI.Font.caption.weight(.semibold)
         /// One level under `sectionHeader`.
         static let groupHeader = SwiftUI.Font.title3.weight(.semibold)
 

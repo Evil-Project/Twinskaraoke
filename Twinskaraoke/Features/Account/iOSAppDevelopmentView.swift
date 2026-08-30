@@ -47,7 +47,7 @@ struct iOSAppDevelopmentView: View {
                             .foregroundStyle(.white)
                             .frame(width: 28, height: 28)
                             .background(Color.black)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                         VStack(alignment: .leading, spacing: 2) {
                             Text("github.com/Evil-Project/Twinskaraoke")
                                 .font(.body)

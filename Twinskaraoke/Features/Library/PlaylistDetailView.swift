@@ -899,9 +899,9 @@ private struct PlaylistDetailContextPreview: View {
 
     var body: some View {
         ContextPreviewCard {
-            PlaylistArtworkContent(playlist: playlist, coverURLs: coverURLs, cornerRadius: 10)
+            PlaylistArtworkContent(playlist: playlist, coverURLs: coverURLs, cornerRadius: AM.Radius.card)
                 .frame(width: 220, height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(playlist.isFavorites ? "Favorites" : "Playlist")

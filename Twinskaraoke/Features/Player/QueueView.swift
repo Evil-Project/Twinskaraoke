@@ -213,11 +213,11 @@ struct QueueView: View {
             HStack(spacing: 12) {
                 RemoteArtworkImage(
                     url: audioManager.displayImageURL(for: current, variant: .row),
-                    cornerRadius: 6,
+                    cornerRadius: AM.Radius.thumb,
                     lowResURL: current.thumbnailURL
                 )
                     .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Now Playing")
                         .font(AM.Font.badge)

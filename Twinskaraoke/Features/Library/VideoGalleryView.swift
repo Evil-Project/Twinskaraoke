@@ -266,7 +266,7 @@ private struct VideoGalleryCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VideoThumbnail(video: video, cornerRadius: 10)
+            VideoThumbnail(video: video, cornerRadius: AM.Radius.card)
                 .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
             VStack(alignment: .leading, spacing: 2) {
                 Text(video.displayTitle)

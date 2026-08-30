@@ -195,7 +195,7 @@ struct BrowseSongCollectionView: View {
                     .padding(.vertical, 10)
                     .background(Color.primary.opacity(0.08))
                     .foregroundStyle(Color.appAccent)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Play \(title)")
@@ -210,7 +210,7 @@ struct BrowseSongCollectionView: View {
                     .padding(.vertical, 10)
                     .background(Color.primary.opacity(0.08))
                     .foregroundStyle(Color.appAccent)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Shuffle \(title)")

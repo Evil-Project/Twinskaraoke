@@ -149,7 +149,7 @@ private struct SearchResultsSummaryHeader: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Songs")
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                 Spacer(minLength: 12)
                 Text(resultCountText)
@@ -538,7 +538,7 @@ private struct GenreDetailLoadingView: View {
 
                 VStack(spacing: 8) {
                     Text(genre.name)
-                        .font(.title2.bold())
+                        .font(AM.Font.sectionHeader)
                         .multilineTextAlignment(.center)
                     Text("Loading songs")
                         .font(.subheadline)
@@ -637,7 +637,7 @@ private struct SearchNoResultsStateView: View {
             SearchStateGlyph()
             VStack(spacing: AM.Spacing.s) {
                 Text("No Results")
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 Text("No songs matched \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\".")
@@ -649,7 +649,7 @@ private struct SearchNoResultsStateView: View {
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
                 Text("Explore instead")
-                    .font(.caption.weight(.semibold))
+                    .font(AM.Font.eyebrow)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 LazyVGrid(
@@ -709,7 +709,7 @@ private struct SearchRecoveryStateView: View {
 
             VStack(spacing: AM.Spacing.s) {
                 Text(title)
-                    .font(.title2.bold())
+                    .font(AM.Font.sectionHeader)
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 Text(message)
@@ -809,7 +809,7 @@ private struct SearchCategoryLoadingView: View {
 
                 VStack(spacing: 8) {
                     Text(title)
-                        .font(.title2.bold())
+                        .font(AM.Font.sectionHeader)
                         .multilineTextAlignment(.center)
                     Text("Loading songs")
                         .font(.subheadline)

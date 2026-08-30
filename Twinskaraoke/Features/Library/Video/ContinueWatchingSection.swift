@@ -85,7 +85,7 @@ private struct ContinueWatchingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VideoThumbnail(video: video, cornerRadius: 10)
+            VideoThumbnail(video: video, cornerRadius: AM.Radius.card)
                 .frame(width: 208)
                 .overlay(alignment: .bottomLeading) {
                     if let remaining = point.remaining {
