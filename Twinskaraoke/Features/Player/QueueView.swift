@@ -161,7 +161,7 @@ struct QueueView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Playing Next")
-                    .font(.headline.weight(.semibold))
+                    .font(AM.Font.groupHeader)
                     .foregroundStyle(.primary)
                 Text(upNextCount == 1 ? "1 song queued" : "\(upNextCount) songs queued")
                     .font(.caption)
@@ -181,7 +181,7 @@ struct QueueView: View {
                     }
                 } label: {
                     Text("Clear")
-                        .font(.subheadline.weight(.semibold))
+                        .font(AM.Font.rowCompactTitle.weight(.semibold))
                         .foregroundStyle(Color.appAccent)
                         .padding(.horizontal, 12)
                         .frame(minWidth: 44, minHeight: 44)
@@ -220,15 +220,15 @@ struct QueueView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Now Playing")
-                        .font(.caption2.weight(.semibold))
+                        .font(AM.Font.badge)
                         .foregroundStyle(Color.appAccent)
                         .textCase(.uppercase)
                     Text(current.title)
-                        .font(.headline.weight(.semibold))
+                        .font(AM.Font.groupHeader)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text(current.displayArtist)
-                        .font(.subheadline)
+                        .font(AM.Font.rowSubtitle)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

@@ -383,6 +383,14 @@ enum AM {
 
         static let nowPlayingTitle = SwiftUI.Font.title2.bold()
         static let nowPlayingArtist = SwiftUI.Font.title3
+        /// The player's title pair where the layout is tight — the iPad control
+        /// bar, the lyrics header, and any phone geometry short enough that the
+        /// full pair would crowd the transport.
+        static let nowPlayingTitleCompact = SwiftUI.Font.headline.bold()
+        static let nowPlayingArtistCompact = SwiftUI.Font.subheadline
+        /// Glyphs on the player's round chrome buttons — favourite, more,
+        /// the lyrics chevron, the translation globe.
+        static let playerGlyph = SwiftUI.Font.headline.weight(.semibold)
 
         /// Labels under round player controls and on action strips.
         static let controlLabel = SwiftUI.Font.footnote.weight(.semibold)
