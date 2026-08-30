@@ -73,7 +73,7 @@ struct HomeView: View {
     }
 
     private var compactHomeOverview: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             topPicksShelf()
                 .shelfEntrance(index: 0)
                 

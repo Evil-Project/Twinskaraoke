@@ -67,7 +67,7 @@ struct NewView: View {
     }
 
     private var compactNewOverview: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             if !viewModel.newReleases.isEmpty {
                 NewFeaturedRail(
                     primary: viewModel.newReleases.first,

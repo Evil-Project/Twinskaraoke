@@ -253,8 +253,6 @@ enum AM {
         /// A section header to the content it labels. One value for every
         /// shelf and grid, so the rhythm does not drift per section.
         static let sectionHeaderGap: CGFloat = 10
-        /// One section to the next.
-        static let sectionGap: CGFloat = 28
         static let shelfTile: CGFloat = 162
         static let compactShelfTile: CGFloat = 132
     }
@@ -398,8 +396,6 @@ enum AM {
         /// the lyrics chevron, the translation globe.
         static let playerGlyph = SwiftUI.Font.headline.weight(.semibold)
 
-        /// Labels under round player controls and on action strips.
-        static let controlLabel = SwiftUI.Font.footnote.weight(.semibold)
         /// Counts and status pills.
         static let badge = SwiftUI.Font.caption2.weight(.semibold)
         static let timecode = SwiftUI.Font.caption.monospacedDigit()
