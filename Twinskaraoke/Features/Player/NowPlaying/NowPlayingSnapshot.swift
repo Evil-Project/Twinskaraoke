@@ -36,7 +36,10 @@ final class NowPlayingSnapshotState {
     }
 
     var artwork: UIImage? {
-        snapshot.artwork
+        #if DEBUG
+        if PlayerClosingTestArtwork.enabled, hasCurrentSong { return PlayerClosingTestArtwork.image }
+        #endif
+        return snapshot.artwork
     }
 
     var isPlaying: Bool {

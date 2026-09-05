@@ -16,6 +16,30 @@ struct ArtworkMorphGeometryTests {
         ArtworkMorphLayer.Geometry.rect(from: bar, to: player, progress: progress)
     }
 
+    @Test("Moving into the clipped player preserves the original opening path")
+    func convertsWindowPathIntoPlayerSurface() {
+        let height: CGFloat = 900
+        for step in 0...20 {
+            let progress = Double(step) / 20
+            let offset = (1 - progress) * height
+            let local = ArtworkMorphLayer.Geometry.rect(
+                from: bar, to: player, progress: progress, surfaceOffset: offset)
+            let window = local.offsetBy(dx: 0, dy: offset)
+            let original = rect(progress)
+            #expect(abs(window.minY - original.minY) < 0.001)
+            #expect(window.size == original.size)
+            #expect(window.minX == original.minX)
+            // The view clips this local rect before the parent translates it.
+            let visible = local.intersection(CGRect(x: 0, y: 0, width: 400, height: height))
+            if !visible.isNull {
+                #expect(visible.offsetBy(dx: 0, dy: offset).minY >= offset)
+            }
+        }
+        let initial = ArtworkMorphLayer.Geometry.rect(
+            from: bar, to: player, progress: 0, surfaceOffset: height)
+        #expect(initial.maxY < 0) // Native thumbnail remains visible instead.
+    }
+
     @Test("At rest collapsed, it sits exactly on the mini player's artwork")
     func startsOnTheBar() {
         let start = rect(0)

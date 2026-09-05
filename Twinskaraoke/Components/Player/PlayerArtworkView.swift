@@ -63,6 +63,13 @@ struct PlayerArtworkView: View {
                 contentMode: .fill,
                 lowResURL: audioManager.displayImageURL(for: song, variant: .thumbnail)
             )
+            .overlay {
+                #if DEBUG
+                if PlayerClosingTestArtwork.enabled {
+                    Image(uiImage: PlayerClosingTestArtwork.image).resizable().scaledToFill()
+                }
+                #endif
+            }
             .frame(width: size, height: size)
             // The morph target, reported from the artwork itself rather than
             // from the body: the body carries `.frame(maxWidth: .infinity)`, so
@@ -72,7 +79,9 @@ struct PlayerArtworkView: View {
             // here it covers all five call sites (compact, both iPad layouts,
             // radio), and only one is ever on screen.
             .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .global)
+                // The expanded destination must stay fixed while the entire
+                // player moves. A global frame includes its animated offset.
+                proxy.frame(in: .named("FullPlayerSurface"))
             } action: { frame in
                 NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
             }

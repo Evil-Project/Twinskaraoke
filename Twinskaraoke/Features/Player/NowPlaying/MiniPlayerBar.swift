@@ -9,13 +9,10 @@ import SwiftUI
 /// what the library this replaces reached for private API to approximate, and
 /// none of them are ours to get wrong any more.
 ///
-/// The interaction is the other half of the point. Opening used to be
-/// unobservable: LNPopupController owned the bar's gestures and surfaced only
-/// "the popup is now open", so `PopupOpenIntentGate` had to reconstruct intent
-/// from raw touches — 173 lines of hit-zone arithmetic to work out whether the
-/// user had meant to tap the play button. Here the play button is a button. A
-/// tap on it is a tap on it, because SwiftUI resolves child gestures before the
-/// container's, and the bar's own tap never sees that touch.
+/// The root owns the opening gesture so native accessory rehosting cannot
+/// replace its recognizer during a contact. This content reports its bounds
+/// and transport bounds: control taps remain local, while upward drags can
+/// start anywhere in the bar.
 struct MiniPlayerBar: View {
     /// `.inline` once the tab bar has minimized and the accessory has merged
     /// into it, `.expanded` at full size, `nil` outside a `TabView` — which is
@@ -53,6 +50,7 @@ struct MiniPlayerBar: View {
                 isRadioMode: snapshot.isRadioMode,
                 showsNext: !isInline
             )
+            .background(MiniPlayerTouchRegion(isTransport: true))
         }
         .padding(.horizontal, 12)
         // Leading-anchored and clipped so the contents stay put and never spill
@@ -65,22 +63,17 @@ struct MiniPlayerBar: View {
         // expanded, and no content alignment could have moved it; that came from
         // forcing the tab bar open and is gone with the coordinator.
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: isInline ? 48 : 58)
         .clipped()
         // The shape change itself is deliberately not animated: the system is
         // already animating the container, and putting the contents on a
         // second, unrelated curve made the move read as two movements.
         .animation(nil, value: isInline)
-        // The whole bar is one big open affordance, but only where a child has
-        // not already claimed the touch. `contentShape` is what makes the gaps
-        // between the artwork, the titles and the buttons tappable at all —
-        // without it a tap on empty space falls straight through to the tab bar.
+        // Include the gaps and vertical padding in the visible touch region.
         .contentShape(.rect)
-        .onTapGesture {
-            presentation.expand()
-        }
-        // Flicking up opens too, the way it did before. Plain `.gesture`, so a
-        // drag that starts on the play button still belongs to the button.
-        .gesture(openDrag)
+        // The root's window recognizer owns the contact across native accessory
+        // host changes. This marker supplies its bounds; control taps stay local.
+        .background(MiniPlayerTouchRegion())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("MiniPlayerBar")
         .accessibilityLabel("Now Playing")
@@ -98,9 +91,11 @@ struct MiniPlayerBar: View {
             proxy.frame(in: .global)
         } action: { frame in
             ShimejiMiniPlayerTracker.shared.report(frame: frame)
+            presentation.reportBarFrame(frame)
         }
         .onDisappear {
             ShimejiMiniPlayerTracker.shared.report(frame: nil)
+            presentation.reportBarFrame(nil)
         }
     }
 
@@ -124,9 +119,11 @@ struct MiniPlayerBar: View {
         } action: { frame in
             presentation.reportBarArtworkFrame(frame)
         }
-        // Hidden while the flying artwork stands in for it, so the two are
-        // never on screen at the same time.
-        .opacity(presentation.isMorphingArtwork ? 0 : 1)
+        // Keep the thumbnail until the advancing player background covers it;
+        // the opening morph is now clipped to that background.
+        // During the release-only landing, one cover moves into this slot.
+        // Restore the native image at the exact endpoint, without a crossfade.
+        .opacity(presentation.isSettlingArtwork ? 0 : 1)
         .accessibilityHidden(true)
     }
 
@@ -179,18 +176,6 @@ struct MiniPlayerBar: View {
     /// weight, which is the whole contrast the pair is built on.
     private var subtitleFont: Font {
         isInline ? .caption2.weight(.regular) : AM.Font.rowCompactSubtitle.weight(.regular)
-    }
-
-    /// Upward only, and judged on where the finger ended rather than on
-    /// velocity: opening is a cheap, reversible action, so it should be easy to
-    /// trigger. Dismissal is the one that needs a considered predicate — see
-    /// `PlayerDismissMetrics`.
-    private var openDrag: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onEnded { value in
-                guard value.translation.height < -20 else { return }
-                presentation.expand()
-            }
     }
 
     private var accessibilityValue: String {

@@ -25,6 +25,32 @@ final class NowPlayingPresentation {
     /// continuously while a drag is in flight and animated to an endpoint when
     /// one commits.
     private(set) var progress: Double = 0
+    enum DragSource { case miniPlayer, fullPlayer }
+    private(set) var dragSource: DragSource?
+    /// Retained through settlement/cancellation. Interactive closing keeps the
+    /// real cover attached; only a committed close can start the landing morph.
+    private var artworkTransitionSource: DragSource?
+    private(set) var isSettlingArtwork = false
+    var isDragging: Bool { dragSource != nil }
+
+    /// The mini player can receive a fresh contact as soon as closing commits.
+    /// Spring completion may arrive after it is already visible; rejecting a
+    /// touch during that tail loses the entire gesture, even after completion.
+    var canBeginMiniPlayerContact: Bool { !isExpanded && !isDragging }
+
+    func cancelDrag(from source: DragSource) {
+        guard dragSource == source else { return }
+        dragSource = nil
+        animate(to: isExpanded ? 1 : 0)
+    }
+
+    func animationDidComplete(token: Int) {
+        PlayerGestureTrace.record("animation completion token=\(token) current=\(animationToken) progress=\(progress)")
+        guard token == animationToken else { return }
+        isAnimatingTransition = false
+        artworkTransitionSource = nil
+        isSettlingArtwork = false
+    }
 
     /// Whether the player is open as a matter of intent. See the type's
     /// documentation for why this is not `progress > 0.5`.
@@ -42,15 +68,16 @@ final class NowPlayingPresentation {
         progress > 0 && progress < 1
     }
 
-    /// Where the mini player's artwork sits, in global coordinates, and where
-    /// the full player's sits. The morph interpolates between them off
+    /// The mini artwork in window coordinates and the full artwork in the
+    /// stationary full-player coordinate space. The morph interpolates off
     /// `progress`, so it tracks the finger rather than running on its own
     /// clock — which is why this is measured rather than left to
     /// `matchedGeometryEffect`, which only animates state changes.
     private(set) var barArtworkFrame: CGRect?
+    private(set) var barFrame: CGRect?
     private(set) var playerArtworkFrame: CGRect?
 
-    /// Whether the flying artwork is standing in for the two real ones. Both
+    /// Whether a transition image stands in for the full artwork. Both
     /// frames have to be known: before the first layout pass of either, there
     /// is nothing to interpolate, and a morph from `.zero` reads as the artwork
     /// flying in from the top-left corner.
@@ -68,21 +95,27 @@ final class NowPlayingPresentation {
     /// which SwiftUI interpolates for us. Only the question of *whether it is
     /// on screen* has to be held open for the duration.
     var isMorphingArtwork: Bool {
-        (isTransitioning || isAnimatingTransition)
+        (artworkTransitionSource == .miniPlayer || isSettlingArtwork)
+            && (isTransitioning || isAnimatingTransition)
             && barArtworkFrame != nil
             && playerArtworkFrame != nil
     }
 
-    /// True from the start of an animated open or close until the spring has
-    /// settled. Nothing observes the animation's completion, so it is timed.
+    /// Cleared by the rendering transaction's completion, including Reduce Motion.
     private(set) var isAnimatingTransition = false
-    @ObservationIgnored private var settleTask: Task<Void, Never>?
 
-    /// A little longer than `AppMotion.gentle` takes to come to rest. Ending
-    /// early would swap the flying artwork for the real one mid-flight, which
-    /// is the one visible seam this is meant to remove; ending late costs
-    /// nothing, because by then the two are in the same place.
-    private static let settleDuration = Duration.milliseconds(700)
+    var isClosingTransition: Bool {
+        isAnimatingTransition && artworkTransitionSource == .fullPlayer && animationTarget == 0
+    }
+
+    func prepareClosingSettlement() {
+        guard isClosingTransition, barFrame != nil, barArtworkFrame != nil, playerArtworkFrame != nil else { return }
+        isSettlingArtwork = true
+    }
+
+    func reportBarFrame(_ frame: CGRect?) {
+        barFrame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+    }
 
     func reportBarArtworkFrame(_ frame: CGRect?) {
         barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
@@ -92,12 +125,14 @@ final class NowPlayingPresentation {
         playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    private init() {}
+    init() {}
 
     // MARK: - Intent
 
     func expand() {
-        guard !isExpanded else { return }
+        guard !isExpanded, !isDragging else { return }
+        artworkTransitionSource = .miniPlayer
+        isSettlingArtwork = false
         AppPerformance.event("Player Expand")
         AppHaptic.commit.play()
         isExpanded = true
@@ -105,7 +140,9 @@ final class NowPlayingPresentation {
     }
 
     func collapse() {
-        guard isExpanded else { return }
+        guard isExpanded, !isDragging else { return }
+        artworkTransitionSource = .fullPlayer
+        isSettlingArtwork = false
         AppPerformance.event("Player Collapse")
         AppHaptic.dismiss.play()
         isExpanded = false
@@ -117,13 +154,21 @@ final class NowPlayingPresentation {
     /// Tracks the finger. Deliberately unanimated: an animation here would
     /// lag the drag by its own duration, which is the "indirect" feel we
     /// already rejected once while trying to tune the old library.
-    func drag(to progress: Double) {
+    func drag(to progress: Double, from source: DragSource) {
+        // Both surfaces stay mounted. A recognizer from the inactive surface
+        // must never overwrite (or finish) the other surface's contact.
+        guard isExpanded == (source == .fullPlayer),
+              dragSource == nil || dragSource == source else { return }
+        if dragSource == nil {
+            dragSource = source
+            artworkTransitionSource = source
+            isSettlingArtwork = false
+        }
         // Guarded rather than assigned unconditionally: this runs on every
         // frame of the drag, and an observable write per frame invalidates
         // every view reading the presentation for no change at all.
         if isAnimatingTransition {
-            settleTask?.cancel()
-            settleTask = nil
+            animationToken &+= 1
             isAnimatingTransition = false
         }
         self.progress = min(1, max(0, progress))
@@ -135,7 +180,9 @@ final class NowPlayingPresentation {
     /// an abandoned drag stays silent — it is not an outcome, and marking it
     /// as one makes the player feel like it did something the user did not ask
     /// for.
-    func endDrag(dismissing: Bool) {
+    func endDrag(dismissing: Bool, from source: DragSource) {
+        guard dragSource == source else { return }
+        dragSource = nil
         let wasExpanded = isExpanded
         isExpanded = !dismissing
         if wasExpanded != isExpanded {
@@ -150,9 +197,10 @@ final class NowPlayingPresentation {
     /// left to show.
     func dismissImmediately() {
         AppPerformance.event("Player Immediate Dismiss")
-        settleTask?.cancel()
-        settleTask = nil
         isAnimatingTransition = false
+        dragSource = nil
+        artworkTransitionSource = nil
+        isSettlingArtwork = false
         isExpanded = false
         progress = 0
     }
@@ -187,21 +235,14 @@ final class NowPlayingPresentation {
 
     /// Applied by `NowPlayingOverlay` inside its own animation.
     func applyAnimationTarget() {
+        PlayerGestureTrace.record("animation apply token=\(animationToken) target=\(animationTarget)")
         progress = animationTarget
     }
 
     private func animate(to target: Double) {
-        settleTask?.cancel()
-        settleTask = nil
         isAnimatingTransition = true
         animationTarget = target
         animationToken &+= 1
-        settleTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.settleDuration)
-            guard !Task.isCancelled else { return }
-            self?.isAnimatingTransition = false
-            self?.settleTask = nil
-        }
     }
 }
 

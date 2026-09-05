@@ -85,6 +85,13 @@ struct RadioPlayerLayout: View {
             // splitting the free width — the title scrolled from about half the
             // row while the other half sat empty.
             .padding(.trailing, 8)
+            Menu {
+                SleepTimerMenu()
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("More")
             if canFavoriteRadioSong, let songID = radioFavoriteID {
                 Button {
                     toggleRadioFavorite(songID)

@@ -11,6 +11,12 @@ import Testing
 /// is that exact case.
 @Suite("Player dismissal metrics")
 struct PlayerDismissMetricsTests {
+    @Test func openingTracksFingerAndClampsToScreen() {
+        #expect(PlayerDismissMetrics.openingProgress(translation: -225, height: 900) == 0.25)
+        #expect(PlayerDismissMetrics.openingProgress(translation: 20, height: 900) == 0)
+        #expect(PlayerDismissMetrics.openingProgress(translation: -1000, height: 900) == 1)
+        #expect(PlayerDismissMetrics.openingProgress(translation: -100, height: 0) == 0)
+    }
     /// A full-screen player on a modern phone. The thresholds are fractions of
     /// this, so the numbers below read as real gestures rather than ratios:
     /// the projection must reach 225pt to commit.

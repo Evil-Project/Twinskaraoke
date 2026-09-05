@@ -1,6 +1,30 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld minutes" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%lld Minuten" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld minutes" } }
+      }
+    },
+    "Cancel Sleep Timer" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schlaftimer abbrechen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel Sleep Timer" } }
+      }
+    },
+    "Sleep Timer" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schlaftimer" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sleep Timer" } }
+      }
+    },
+    "Sleep timer remaining" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verbleibende Zeit des Schlaftimers" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sleep timer remaining" } }
+      }
+    },
     "" : {
 
     },

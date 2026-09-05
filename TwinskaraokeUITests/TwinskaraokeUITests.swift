@@ -542,6 +542,181 @@ final class TwinskaraokeUITests: XCTestCase {
   /// commits on distance instead.
   ///
   /// Repeated, because a stuck presentation only shows on the second open.
+  func testPlayerSwipeUpAndSleepTimer() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    let tabs = XCTAttachment(screenshot: app.screenshot())
+    tabs.name = "Search tab layout"
+    tabs.lifetime = .keepAlways
+    add(tabs)
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+    let mini = app.descendants(matching: .any)["MiniPlayerBar"].firstMatch
+    XCTAssertTrue(mini.waitForExistence(timeout: 8))
+    let start = mini.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+    let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.25))
+    start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 400, thenHoldForDuration: 0.1)
+    let handle = app.buttons["PlayerDismissHandle"]
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    XCTAssertGreaterThan(handle.frame.midY, isRunningOnPad ? 0 : 60)
+    XCTAssertGreaterThanOrEqual(handle.frame.height, 44)
+    let playerShot = XCTAttachment(screenshot: app.screenshot())
+    playerShot.name = "Full player safe area"
+    playerShot.lifetime = .keepAlways
+    add(playerShot)
+    app.buttons["More"].firstMatch.tap()
+    app.buttons["SleepTimerMenu"].firstMatch.tap()
+    app.buttons["15 minutes"].firstMatch.tap()
+    let status = app.buttons["SleepTimerStatus"]
+    XCTAssertTrue(status.waitForExistence(timeout: 5))
+    handle.tap()
+    XCTAssertTrue(waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) })
+    openMiniPlayer(in: app)
+    XCTAssertTrue(status.waitForExistence(timeout: 5))
+    status.tap()
+    app.buttons["Cancel Sleep Timer"].firstMatch.tap()
+    XCTAssertTrue(waitUntil(timeout: 5) { !status.exists })
+  }
+
+  func testPlayerMovesBeforeFingerIsReleased() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "home", "-UITestPlayerTracking"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app
+    )
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    let start = mini.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+    let lifted = start.withOffset(CGVector(dx: 0, dy: -app.frame.height * 0.4))
+    start.press(forDuration: 0.4, thenDragTo: lifted, withVelocity: 180, thenHoldForDuration: 1)
+    let handle = app.buttons["PlayerDismissHandle"]
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    let probe = app.descendants(matching: .any)["PlayerTrackingProbe"].firstMatch
+    let opened = try XCTUnwrap(probe.value as? String)
+    XCTAssertGreaterThan(Int(opened.split(separator: ",")[0]) ?? 0, 100,
+                         "The player must visibly move while the opening finger is still down.")
+    XCTAssertGreaterThan(Int(opened.split(separator: ",")[2]) ?? 0, 5,
+                         "Opening must traverse intermediate positions, not jump to the endpoint.")
+
+    // Less than the commit threshold, with a hold to remove release velocity.
+    // The player returns to expanded, leaving the probe accessible for inspection.
+    let top = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    top.press(forDuration: 0.4, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 150)),
+              withVelocity: 150, thenHoldForDuration: 1)
+    XCTAssertTrue(waitUntil(timeout: 5) { handle.isHittable })
+    let closed = try XCTUnwrap(probe.value as? String)
+    XCTAssertGreaterThan(Int(closed.split(separator: ",")[1]) ?? 0, 80,
+                         "The player must visibly move while the closing finger is still down.")
+    XCTAssertGreaterThan(Int(closed.split(separator: ",")[3]) ?? 0, 5,
+                         "Closing must traverse intermediate positions before release.")
+  }
+
+  func testPlayerArtworkSettlesIntoMiniPlayerAfterRelease() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "home",
+                           "-UITestPlayerTracking", "-UITestPlayerClosingArtwork"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    mini.tap()
+    let handle = app.buttons["PlayerDismissHandle"]
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.2, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 180)),
+                withVelocity: 700, thenHoldForDuration: 0)
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    mini.tap()
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    let probe = app.descendants(matching: .any)["PlayerTrackingProbe"].firstMatch
+    let measurements = try XCTUnwrap(probe.value as? String).split(separator: ",")
+    XCTAssertEqual(measurements.count, 6)
+    XCTAssertGreaterThan(Int(measurements[4]) ?? 0, 8,
+                         "Closing must render intermediate settlement frames, not jump to the pill.")
+    XCTAssertGreaterThan(Int(measurements[5]) ?? 0, 1,
+                         "The rendered artwork should dip below its resting thumbnail position before settling.")
+  }
+
+  func testShortMiniPlayerFlicksAndDragsExpand() throws {
+    try checkShortMiniPlayerGestures(competingGesture: false)
+  }
+
+  func testMiniPlayerOpensDespiteAncestorPressGesture() throws {
+    try checkShortMiniPlayerGestures(competingGesture: true)
+  }
+
+  private func checkShortMiniPlayerGestures(competingGesture: Bool) throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "home"]
+    if competingGesture { app.launchArguments.append("-UITestPlayerGestureCompetition") }
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    let handle = app.buttons["PlayerDismissHandle"]
+    for (distance, speed, hold, x, y) in [
+      (40.0, 600.0, 0.0, 0.35, 0.5), (85.0, 100.0, 0.5, 0.35, 0.05),
+      (40.0, 600.0, 0.0, 0.35, 0.95), (85.0, 100.0, 0.5, 0.05, 0.5),
+      (40.0, 600.0, 0.0, 0.35, 0.05), (85.0, 100.0, 0.5, 0.35, 0.95)
+    ] {
+      XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+      let start = mini.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
+      start.press(forDuration: 0.5, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -distance)),
+                  withVelocity: XCUIGestureVelocity(rawValue: speed), thenHoldForDuration: hold)
+      XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable },
+                    "A deliberate short upward flick or drag should open the player.")
+      handle.tap()
+    }
+  }
+
+  func testHeldTinyMiniPlayerDragsDoNotExpand() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    for distance in [6.0, 10.0, 18.0, 6.0, 10.0, 18.0] {
+      XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+      let start = mini.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+      start.press(forDuration: 0.8, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -distance)),
+                  withVelocity: 30, thenHoldForDuration: 0.8)
+      XCTAssertTrue(waitUntil(timeout: 5) { mini.isHittable },
+                    "A held \(distance)-point drag must return to the mini player, not maximize.")
+      XCTAssertFalse(app.buttons["PlayerDismissHandle"].isHittable)
+    }
+    // A normal tap must still work after cancelled drags.
+    mini.tap()
+    XCTAssertTrue(waitUntil(timeout: 8) { app.buttons["PlayerDismissHandle"].isHittable })
+  }
+
+  func testMiniPlayerTransportTapDoesNotExpand() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    let play = mini.buttons.matching(NSPredicate(format: "label == 'Play' OR label == 'Pause'")).firstMatch
+    XCTAssertTrue(play.waitForExistence(timeout: 5))
+    play.tap()
+    XCTAssertTrue(mini.isHittable)
+    XCTAssertFalse(app.buttons["PlayerDismissHandle"].isHittable)
+    // The same area must still support opening when the contact becomes a drag.
+    let start = play.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.5, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -100)),
+                withVelocity: 150, thenHoldForDuration: 0.5)
+    XCTAssertTrue(waitUntil(timeout: 8) { app.buttons["PlayerDismissHandle"].isHittable })
+  }
+
   func testDraggingDownDismissesTheFullScreenPlayer() throws {
     let app = launchApp(initialSection: "home")
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
@@ -567,8 +742,8 @@ final class TwinskaraokeUITests: XCTestCase {
 
       // Started below the grabber, so this is the drag itself rather than the
       // dismiss button, which never had the bug.
-      let start = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18))
-      let end = player.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+      let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18))
+      let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
       start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 400, thenHoldForDuration: 0.1)
 
       // The mini player becoming tappable again is the assertion that means

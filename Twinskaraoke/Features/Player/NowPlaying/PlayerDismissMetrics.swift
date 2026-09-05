@@ -25,6 +25,18 @@ import CoreGraphics
 /// LNPopupController's own drag style, a reversal cancels. One term gets all
 /// four cases right; two terms get the fourth one wrong.
 nonisolated enum PlayerDismissMetrics {
+    /// Opening starts in a small bottom accessory: it should not require the
+    /// quarter-screen pull used to dismiss the full player. Still decide from
+    /// projection so reversing direction can cancel, and reject tiny jitter.
+    static func shouldOpen(translation: CGFloat, predictedTranslation: CGFloat, height: CGFloat) -> Bool {
+        guard height > 0, translation <= -20 else { return false }
+        return -predictedTranslation >= min(80, height * 0.1)
+    }
+
+    static func openingProgress(translation: CGFloat, height: CGFloat) -> Double {
+        guard height > 0 else { return 0 }
+        return Double(min(1, max(0, -translation / height)))
+    }
     /// How far the drag must be *projected* to land, as a fraction of the
     /// player's height.
     ///

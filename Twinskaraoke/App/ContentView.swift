@@ -13,6 +13,7 @@ struct ContentView: View {
 }
 
 private struct PopupHostView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var homeViewModel = HomeViewModel()
@@ -40,6 +41,19 @@ private struct PopupHostView: View {
             }
         }
         .environment(homeViewModel)
+        .background(MiniPlayerGesture())
+        #if DEBUG
+        .background {
+            if ProcessInfo.processInfo.arguments.contains("-UITestPlayerGestureCompetition") {
+                PlayerGestureCompetitionProbe()
+            }
+        }
+        #endif
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                AudioPlayerManager.shared.sleepTimer.checkExpiry()
+            }
+        }
         .onAppear {
             // Warm the account-scoped state that the shared song context
             // menu reads. Both used to load only when Library (or the
