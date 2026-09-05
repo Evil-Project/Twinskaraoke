@@ -961,7 +961,7 @@ final class AVEnginePlayback {
         pendingCrossfadeURL = url
 
         let token = suppressionToken
-        Task {
+        Task { [self] in
             do {
                 try await self.ensureCrossfadePrepared(
                     for: url, token: token, loadGeneration: loadGeneration

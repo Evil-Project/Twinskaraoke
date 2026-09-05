@@ -64,7 +64,7 @@ private func armObservation(
     guard token.isActive else { return }
     withObservationTracking {
         track()
-    } onChange: {
+    } onChange: { [weak token] in
         // onChange runs in the mutating context, before the value is written,
         // and is not main-actor isolated. Hop so observers see the new value.
         Task { @MainActor [weak token] in

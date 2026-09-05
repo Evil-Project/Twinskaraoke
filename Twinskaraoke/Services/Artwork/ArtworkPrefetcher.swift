@@ -193,7 +193,7 @@ final class ArtworkPrefetcher {
             options: [.lowPriority],
             context: ImageCacheConfig.prefetchContext,
             progress: nil
-        ) { finished, skipped in
+        ) { [weak self] finished, skipped in
             Task { @MainActor [weak self] in
                 DebugLogger.log(
                     "Artwork warm complete for \(reason): finished=\(finished), skipped=\(skipped)",
