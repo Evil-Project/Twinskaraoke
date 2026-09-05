@@ -177,7 +177,7 @@ final nonisolated class FallbackArtProvider: @unchecked Sendable {
         attempt: Int = 1,
         completion: @escaping @Sendable (Data?, URLResponse?, Error?) -> Void
     ) {
-        session.dataTask(with: request) { data, response, error in
+        session.dataTask(with: request) { [weak self] data, response, error in
             let shouldRetry = error != nil || (response as? HTTPURLResponse).map { !((200 ... 299).contains($0.statusCode)) } ?? true
 
             if shouldRetry, attempt < maxAttempts {

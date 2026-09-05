@@ -372,7 +372,7 @@ class AudioManager {
     private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
         let token = UUID()
         downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { tempURL, response, error in
+        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { [weak self] tempURL, response, error in
             // URLSession deletes the downloaded file the moment this handler
             // returns, so the header check and the move have to happen here
             // rather than after a hop to the main queue. Doing them over there

@@ -5,7 +5,7 @@ import SwiftUI
 /// `animatableData` puts the interpolation in the drawing layer: the view's
 /// frame never changes, so nothing here participates in the layout animations
 /// that carry the full player's movement to its children.
-private struct ProgressFill: Shape {
+nonisolated private struct ProgressFill: Shape {
     var fraction: Double
 
     var animatableData: Double {
