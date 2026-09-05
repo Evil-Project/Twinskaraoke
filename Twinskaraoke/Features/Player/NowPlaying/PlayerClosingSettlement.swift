@@ -80,7 +80,7 @@ extension EnvironmentValues {
 
 /// Animatable evaluation is important: calculating just the endpoint frames in
 /// a normal View would produce a straight interpolation and lose the dip.
-struct PlayerClosingSettlement: AnimatableModifier {
+struct PlayerClosingSettlement: ViewModifier, Animatable {
     let transition: PlayerClosingGeometry.Transition?
     var phase: Double
     let canvas: CGSize

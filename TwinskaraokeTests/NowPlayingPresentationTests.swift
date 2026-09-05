@@ -192,6 +192,23 @@ struct NowPlayingPresentationTests {
         #expect(!state.isAnimatingTransition)
     }
 
+    @Test func immediateDismissalReleasesAnActiveDrag() {
+        let state = stateWithArtwork()
+        state.expand()
+        state.applyAnimationTarget()
+        state.animationDidComplete(token: state.animationToken)
+        state.drag(to: 0.6, from: .fullPlayer)
+        state.dismissImmediately()
+        #expect(state.dragSource == nil)
+        #expect(!state.isSettlingArtwork)
+        #expect(!state.isMorphingArtwork)
+        #expect(!state.isExpanded)
+        #expect(state.progress == 0)
+        #expect(state.canBeginMiniPlayerContact)
+        state.drag(to: 0.1, from: .miniPlayer)
+        #expect(state.dragSource == .miniPlayer)
+    }
+
     @Test func inactiveRecognizerCannotAcquireADrag() {
         let state = NowPlayingPresentation()
         state.drag(to: 1, from: .fullPlayer)

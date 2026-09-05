@@ -577,6 +577,16 @@ final class TwinskaraokeUITests: XCTestCase {
     openMiniPlayer(in: app)
     XCTAssertTrue(status.waitForExistence(timeout: 5))
     status.tap()
+    XCTAssertTrue(app.buttons["30 minutes"].waitForExistence(timeout: 5))
+    for minutes in [15, 30, 45, 60] {
+      XCTAssertTrue(app.buttons["\(minutes) minutes"].firstMatch.isHittable,
+                    "Countdown presets must be directly available without a submenu.")
+    }
+    XCTAssertEqual(app.buttons.matching(identifier: "Cancel Sleep Timer").count, 1)
+    app.buttons["30 minutes"].firstMatch.tap()
+    XCTAssertTrue(status.waitForExistence(timeout: 5))
+    status.tap()
+    XCTAssertTrue(app.buttons["Cancel Sleep Timer"].firstMatch.waitForExistence(timeout: 5))
     app.buttons["Cancel Sleep Timer"].firstMatch.tap()
     XCTAssertTrue(waitUntil(timeout: 5) { !status.exists })
   }
@@ -598,10 +608,14 @@ final class TwinskaraokeUITests: XCTestCase {
     let handle = app.buttons["PlayerDismissHandle"]
     XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
     let probe = app.descendants(matching: .any)["PlayerTrackingProbe"].firstMatch
-    let opened = try XCTUnwrap(probe.value as? String)
-    XCTAssertGreaterThan(Int(opened.split(separator: ",")[0]) ?? 0, 100,
+    let opened = try XCTUnwrap(probe.value as? String).split(separator: ",")
+    guard opened.count == 6 else {
+      XCTFail("The opening tracking probe must report six measurements.")
+      return
+    }
+    XCTAssertGreaterThan(Int(opened[0]) ?? 0, 100,
                          "The player must visibly move while the opening finger is still down.")
-    XCTAssertGreaterThan(Int(opened.split(separator: ",")[2]) ?? 0, 5,
+    XCTAssertGreaterThan(Int(opened[2]) ?? 0, 5,
                          "Opening must traverse intermediate positions, not jump to the endpoint.")
 
     // Less than the commit threshold, with a hold to remove release velocity.
@@ -610,10 +624,14 @@ final class TwinskaraokeUITests: XCTestCase {
     top.press(forDuration: 0.4, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 150)),
               withVelocity: 150, thenHoldForDuration: 1)
     XCTAssertTrue(waitUntil(timeout: 5) { handle.isHittable })
-    let closed = try XCTUnwrap(probe.value as? String)
-    XCTAssertGreaterThan(Int(closed.split(separator: ",")[1]) ?? 0, 80,
+    let closed = try XCTUnwrap(probe.value as? String).split(separator: ",")
+    guard closed.count == 6 else {
+      XCTFail("The closing tracking probe must report six measurements.")
+      return
+    }
+    XCTAssertGreaterThan(Int(closed[1]) ?? 0, 80,
                          "The player must visibly move while the closing finger is still down.")
-    XCTAssertGreaterThan(Int(closed.split(separator: ",")[3]) ?? 0, 5,
+    XCTAssertGreaterThan(Int(closed[3]) ?? 0, 5,
                          "Closing must traverse intermediate positions before release.")
   }
 
@@ -638,7 +656,10 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
     let probe = app.descendants(matching: .any)["PlayerTrackingProbe"].firstMatch
     let measurements = try XCTUnwrap(probe.value as? String).split(separator: ",")
-    XCTAssertEqual(measurements.count, 6)
+    guard measurements.count == 6 else {
+      XCTFail("The landing tracking probe must report six measurements.")
+      return
+    }
     XCTAssertGreaterThan(Int(measurements[4]) ?? 0, 8,
                          "Closing must render intermediate settlement frames, not jump to the pill.")
     XCTAssertGreaterThan(Int(measurements[5]) ?? 0, 1,

@@ -1,10 +1,21 @@
 import SwiftUI
 
 struct SleepTimerMenu: View {
+    var body: some View {
+        Menu {
+            SleepTimerActions()
+        } label: {
+            Label("Sleep Timer", systemImage: "moon.zzz")
+        }
+        .accessibilityIdentifier("SleepTimerMenu")
+    }
+}
+
+private struct SleepTimerActions: View {
     @Environment(AudioPlayerManager.self) private var audioManager
 
     var body: some View {
-        Menu {
+        Group {
             ForEach([15, 30, 45, 60], id: \.self) { minutes in
                 Button("\(minutes) minutes") {
                     audioManager.sleepTimer.start(minutes: minutes)
@@ -15,10 +26,7 @@ struct SleepTimerMenu: View {
                     audioManager.sleepTimer.cancel()
                 }
             }
-        } label: {
-            Label("Sleep Timer", systemImage: "moon.zzz")
         }
-        .accessibilityIdentifier("SleepTimerMenu")
     }
 }
 
@@ -28,10 +36,7 @@ struct SleepTimerStatus: View {
     var body: some View {
         if let deadline = audioManager.sleepTimer.deadline {
             Menu {
-                SleepTimerMenu()
-                Button("Cancel Sleep Timer", role: .destructive) {
-                    audioManager.sleepTimer.cancel()
-                }
+                SleepTimerActions()
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "moon.zzz")
