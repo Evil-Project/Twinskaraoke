@@ -299,6 +299,8 @@ private struct PlayerMoreMenu: View {
 
     var body: some View {
         Menu {
+            SleepTimerMenu()
+            Divider()
             SongActionsMenuItems(song: song, onAddToPlaylist: onAddToPlaylist)
         } label: {
             Image(systemName: "ellipsis")
@@ -317,6 +319,7 @@ struct FullScreenPlayerView: View {
     private let presentation = NowPlayingPresentation.shared
     private let favorites = FavoritesManager.shared
     @Environment(\.playerSafeAreaInsets) private var injectedSafeAreaInsets
+    @Environment(\.playerClosingContentOpacity) private var closingContentOpacity
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingQueue = false
@@ -368,14 +371,21 @@ struct FullScreenPlayerView: View {
                                 musicLayout(song: song, metrics: metrics)
                             }
                         }
-                        .padding(.top, safeTop + 6)
+                        .padding(.top, safeTop + 44)
                         .padding(.bottom, max(0, safeBottom - 8))
                         dismissBar
-                            .padding(.top, 6)
+                            .padding(.top, safeTop)
+                        SleepTimerStatus()
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.trailing, 20)
+                            .padding(.top, safeTop + 4)
                     }
                     .frame(width: geo.size.width, height: geo.size.height)
                 }
-                .background(backgroundView(song: song))
+                .opacity(closingContentOpacity)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: closingContentOpacity)
+                .background(backgroundView(song: song).accessibilityHidden(true))
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("FullScreenPlayer")
             }
         }
@@ -837,11 +847,13 @@ struct FullScreenPlayerView: View {
         } label: {
             Capsule()
                 .fill(Color.primary.opacity(0.35))
-                .frame(width: 40, height: 5)
-                .frame(width: 44, height: 44)
+                .frame(width: 50, height: 5)
+                .frame(width: 60, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.7, haptic: nil))
         .accessibilityLabel("Dismiss player")
+        .accessibilityIdentifier("PlayerDismissHandle")
         .accessibilityHint("Collapses the full-screen player.")
     }
 

@@ -173,7 +173,10 @@ import SwiftUI
         /// Retries on later runloop turns: the SwiftUI view that calls this can
         /// reach its window before `TabView`'s backing controller is in place.
         func attach(to window: UIWindow, remainingAttempts: Int = 10) {
-            guard tabBarController == nil else { return }
+            if let tabBarController {
+                Self.keepSearchProminent(in: tabBarController)
+                return
+            }
             guard let controller = Self.tabBarController(in: window.rootViewController) else {
                 guard remainingAttempts > 0 else { return }
                 Task { @MainActor [weak self] in
@@ -184,6 +187,7 @@ import SwiftUI
 
             tabBarController = controller
             controller.tabBarMinimizeBehavior = mode.uiKit
+            Self.keepSearchProminent(in: controller)
 
             // The installer view can be re-added to the same controller — an iPad
             // resizing between the sidebar and tab shells does exactly that — and
@@ -208,6 +212,17 @@ import SwiftUI
             recognizer.delaysTouchesEnded = false
             recognizer.delegate = target
             controller.view.addGestureRecognizer(recognizer)
+        }
+
+        /// iOS 27 separates tab prominence from search behavior. Use the public
+        /// ObjC setter dynamically so builds with the iOS 26 SDK can opt in too.
+        /// https://developer.apple.com/documentation/uikit/uitabbarcontroller/prominenttabidentifier
+        private static func keepSearchProminent(in controller: UITabBarController) {
+            guard #available(iOS 27.0, *),
+                  let search = controller.tabs.first(where: { $0 is UISearchTab }) else { return }
+            let setter = NSSelectorFromString("setProminentTabIdentifier:")
+            guard controller.responds(to: setter) else { return }
+            controller.perform(setter, with: search.identifier as NSString)
         }
 
         /// The pan finds the scroll view under the touch, resets the accumulator
@@ -385,7 +400,12 @@ import SwiftUI
             InstallerView()
         }
 
-        func updateUIView(_: UIView, context _: Context) {}
+        func updateUIView(_ view: UIView, context _: Context) {
+            guard let window = view.window else { return }
+            Task { @MainActor in
+                TabBarMinimizeCoordinator.shared.attach(to: window)
+            }
+        }
     }
 
     private final class InstallerView: UIView {

@@ -319,6 +319,10 @@ final class AudioPlayerManager {
     }
 
     var upcomingSong: Song?
+    @ObservationIgnored private(set) lazy var sleepTimer = SleepTimer { [weak self] in
+        // Also clears interruption-resume intent when audio is already paused.
+        self?.pauseCurrentPlayback(source: "sleepTimer")
+    }
     private(set) var preparedStemSongID: String?
     #if canImport(UIKit)
         var nowPlayingArtwork: UIImage?
@@ -2734,6 +2738,7 @@ final class AudioPlayerManager {
                 handlingAudioSessionInterruption = false
             }
         case .ended:
+            sleepTimer.checkExpiry()
             guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else {
                 wasPlayingBeforeInterruption = false
                 return
