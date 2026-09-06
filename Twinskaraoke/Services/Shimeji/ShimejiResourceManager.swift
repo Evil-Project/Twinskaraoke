@@ -16,6 +16,8 @@ final class ShimejiResourceManager: NSObject {
 
     static let packURL = URL(string: "https://sb.sillyprootsoda.com/shimeji_nwero.zip")!
 
+    private static let removedByUserKey = "nk.shimeji.packRemovedByUser"
+
     enum State: Equatable {
         case notDownloaded
         case downloading(progress: Double)
@@ -32,18 +34,33 @@ final class ShimejiResourceManager: NSObject {
     @ObservationIgnored private var installationTask: Task<Void, Never>?
     private var operationGeneration: UInt = 0
 
-    @ObservationIgnored private lazy var packDirectory: URL = {
+    @ObservationIgnored private let packDirectory: URL
+    @ObservationIgnored private let defaults: UserDefaults
+
+    private static var defaultPackDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("ShimejiPack", isDirectory: true)
-    }()
+    }
 
     private var manifestURL: URL {
         packDirectory.appendingPathComponent("manifest.json")
     }
 
-    override init() {
+    /// The parameters exist so tests can point an instance at a throwaway
+    /// pack directory and defaults suite; the app only ever uses `shared`.
+    init(packDirectory: URL? = nil, defaults: UserDefaults = .standard) {
+        self.packDirectory = packDirectory ?? Self.defaultPackDirectory
+        self.defaults = defaults
         super.init()
         loadFromDiskIfAvailable()
+    }
+
+    /// Survives relaunches so that removing the pack stays removed: without
+    /// it, the settings screen's automatic download pulls it straight back
+    /// down the next time the screen appears.
+    private(set) var wasRemovedByUser: Bool {
+        get { defaults.bool(forKey: Self.removedByUserKey) }
+        set { defaults.set(newValue, forKey: Self.removedByUserKey) }
     }
 
     /// Called at app launch (and whenever the experiment toggle turns on) to
@@ -54,6 +71,8 @@ final class ShimejiResourceManager: NSObject {
             let data = try Data(contentsOf: manifestURL)
             manifest = try JSONDecoder().decode(ShimejiManifest.self, from: data)
             state = .ready
+            // A pack that is back on disk makes the removal flag stale.
+            wasRemovedByUser = false
         } catch {
             DebugLogger.log("Shimeji: failed to load cached manifest — \(error)", category: .cache)
         }
@@ -66,7 +85,20 @@ final class ShimejiResourceManager: NSObject {
             .appendingPathComponent(frame)
     }
 
+    /// Automatic entry point (screen appearance, experiment toggle). Heals a
+    /// missing pack, but leaves an explicitly removed one alone.
+    func downloadIfNeeded() {
+        guard !wasRemovedByUser else { return }
+        startDownload()
+    }
+
+    /// Explicit user request, which also clears an earlier removal.
     func download() {
+        wasRemovedByUser = false
+        startDownload()
+    }
+
+    private func startDownload() {
         guard case .notDownloaded = state else { return }
         state = .downloading(progress: 0)
         let generation = operationGeneration
@@ -250,5 +282,6 @@ final class ShimejiResourceManager: NSObject {
         try? FileManager.default.removeItem(at: packDirectory)
         manifest = nil
         state = .notDownloaded
+        wasRemovedByUser = true
     }
 }

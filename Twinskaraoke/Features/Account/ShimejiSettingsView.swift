@@ -22,9 +22,7 @@ struct ShimejiSettingsView: View {
         .scrollContentBackground(.hidden)
         .groupedScreenBackground()
         .onAppear {
-            if case .notDownloaded = resources.state {
-                resources.download()
-            }
+            resources.downloadIfNeeded()
         }
     }
 
@@ -33,10 +31,18 @@ struct ShimejiSettingsView: View {
         Section {
             switch resources.state {
             case .notDownloaded:
+                // Idle, not pending: nothing is running until this is tapped,
+                // so the row has to offer the action rather than a spinner.
                 HStack {
-                    Text("Waiting to download…")
+                    Text("Not downloaded")
+                        .foregroundStyle(.secondary)
                     Spacer()
-                    ProgressView()
+                    Button("Download") {
+                        AppHaptic.selection.play()
+                        resources.download()
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.appAccent)
                 }
             case let .downloading(progress):
                 VStack(alignment: .leading, spacing: 6) {
