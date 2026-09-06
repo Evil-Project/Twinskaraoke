@@ -45,7 +45,19 @@ jobs:
             -scheme "Twinskaraoke" \
             -destination "platform=iOS Simulator,id=$udid" \
             -only-testing:TwinskaraokeTests \
+            -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Preserve iOS test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-diagnostics
+          path: |
+            ${{ runner.temp }}/ios-tests.xcresult
+            ~/Library/Logs/DiagnosticReports
+            ~/Library/Developer/CoreSimulator/Devices/*/data/Library/Logs/CrashReporter
+          if-no-files-found: warn
 
   watch-tests:
     name: watchOS Tests
