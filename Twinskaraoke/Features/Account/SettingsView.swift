@@ -362,7 +362,9 @@ struct SettingsView: View {
             set: { newValue in
                 shimejiEnabled = newValue
                 newValue ? AppHaptic.success.play() : AppHaptic.dismiss.play()
-                if newValue, case .notDownloaded = ShimejiResourceManager.shared.state {
+                // Turning the experiment on is an explicit ask for the
+                // characters, so it overrides an earlier pack removal.
+                if newValue {
                     ShimejiResourceManager.shared.download()
                 }
             }
