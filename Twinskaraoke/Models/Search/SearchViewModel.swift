@@ -620,6 +620,14 @@ final class SearchViewModel {
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var lastDispatchedQuery = ""
 
+    @ObservationIgnored private let loadSongs: @MainActor (String) async throws -> [Song]
+
+    init(loadSongs: @escaping @MainActor (String) async throws -> [Song] = {
+        try await KaraokeAPIClient.searchSongs(query: $0, pageSize: 30)
+    }) {
+        self.loadSongs = loadSongs
+    }
+
     /// Replaces the former `$searchText.debounce().removeDuplicates()` pipeline:
     /// `@Observable` has no publisher projection, so the 500ms coalescing and
     /// the duplicate-query suppression are done here instead. Trimming still
@@ -628,13 +636,18 @@ final class SearchViewModel {
     /// search request.
     private func scheduleSearch() {
         searchDebounceTask?.cancel()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query != lastDispatchedQuery else { return }
+        // Invalidate immediately: the previous response must not appear under
+        // the new query while its debounce is pending.
+        clearSearch()
+        lastDispatchedQuery = ""
+        guard !query.isEmpty else { return }
         searchDebounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled, let self else { return }
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard query != lastDispatchedQuery else { return }
             lastDispatchedQuery = query
-            if query.isEmpty { clearSearch() } else { search(query) }
+            search(query)
         }
     }
 
@@ -660,7 +673,7 @@ final class SearchViewModel {
         searchTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let songs = try await KaraokeAPIClient.searchSongs(query: trimmedQuery, pageSize: 30)
+                let songs = try await loadSongs(trimmedQuery)
                 guard !Task.isCancelled else { return }
                 applySearchResponse(songs, token: token)
             } catch is CancellationError {
@@ -704,6 +717,7 @@ final class SearchViewModel {
     }
 
     deinit {
+        searchDebounceTask?.cancel()
         searchTask?.cancel()
     }
 }

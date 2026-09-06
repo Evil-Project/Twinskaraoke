@@ -33,7 +33,11 @@ jobs:
               end
             end
           ')
+          test -n "$udid"
           echo "Using simulator UDID: $udid"
+          # Wait for a usable simulator before launching the test host. Keep
+          # one worker below so Xcode uses this booted device, not cold clones.
+          xcrun simctl bootstatus "$udid" -b
           # -skipPackagePluginValidation: Pillarbox ships PillarboxPackageInfoPlugin,
           # an SPM build tool plugin, and Xcode will not run a plugin that has not
           # been trusted. Trust is normally granted through a prompt in the GUI,
@@ -45,7 +49,20 @@ jobs:
             -scheme "Twinskaraoke" \
             -destination "platform=iOS Simulator,id=$udid" \
             -only-testing:TwinskaraokeTests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Preserve iOS test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-diagnostics
+          path: |
+            ${{ runner.temp }}/ios-tests.xcresult
+            ~/Library/Logs/DiagnosticReports
+            ~/Library/Developer/CoreSimulator/Devices/*/data/Library/Logs/CrashReporter
+          if-no-files-found: warn
 
   watch-tests:
     name: watchOS Tests

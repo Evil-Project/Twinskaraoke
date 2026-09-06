@@ -45,6 +45,7 @@ final class FavoritesManager {
     }
 
     func toggle(songID: String) {
+        guard CredentialStore.isAuthenticated else { return }
         guard !inFlight.contains(songID) else { return }
         let wasFavorite = favoriteIDs.contains(songID)
         if wasFavorite {
@@ -82,7 +83,7 @@ final class FavoritesManager {
     }
 
     private func load() async {
-        guard CredentialStore.isAuthenticated else { return }
+        guard CredentialStore.isAuthenticated, !isLoading else { return }
         let generation = stateGeneration
         let revision = mutationRevision
         isLoading = true
@@ -241,6 +242,8 @@ final class FavoritesManager {
         )
         else { return false }
         req.httpMethod = "PUT"
-        return (try? await KaraokeAPIClient.data(for: req)) != nil
+        // This endpoint flips membership, so repeating a successful write
+        // after a lost response would undo the user's change.
+        return (try? await KaraokeAPIClient.data(for: req, allowsRetry: false)) != nil
     }
 }

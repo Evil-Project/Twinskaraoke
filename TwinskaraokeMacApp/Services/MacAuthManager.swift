@@ -58,7 +58,7 @@ final class MacAuthManager {
     /// `TVAuthManager.refreshAccount` — same endpoints, same partial-failure
     /// handling, so one endpoint being down doesn't blank the whole screen.
     func refreshAccount() async {
-        guard isLoggedIn, CredentialStore.token != nil, !isRefreshingProfile else { return }
+        guard isLoggedIn, let token = CredentialStore.token, !isRefreshingProfile else { return }
         isRefreshingProfile = true
         profileError = nil
         defer { isRefreshingProfile = false }
@@ -66,6 +66,7 @@ final class MacAuthManager {
         async let fetchedProfile = try? Self.authorizedData(path: "/api/badge/profile")
         async let fetchedLimits = try? Self.authorizedData(path: "/api/user/upload-limits")
         let (profileData, limitsData) = await (fetchedProfile, fetchedLimits)
+        guard !Task.isCancelled, isLoggedIn, CredentialStore.token == token else { return }
 
         var didFail = false
         if let profileData {

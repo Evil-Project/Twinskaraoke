@@ -38,17 +38,18 @@ final class SearchViewModel {
     /// the duplicate-query suppression are done here instead.
     private func scheduleSearch() {
         searchDebounceTask?.cancel()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query != lastDispatchedQuery else { return }
+        // Invalidate immediately: the previous response must not appear under
+        // the new query while its debounce is pending.
+        clearSearch()
+        lastDispatchedQuery = ""
+        guard !query.isEmpty else { return }
         searchDebounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled, let self else { return }
-            let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard text != lastDispatchedQuery else { return }
-            lastDispatchedQuery = text
-            if text.isEmpty {
-                clearSearch()
-            } else {
-                performSearch(query: text)
-            }
+            lastDispatchedQuery = query
+            performSearch(query: query)
         }
     }
 

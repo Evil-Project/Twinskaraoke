@@ -16,7 +16,14 @@ final class RadioController {
     private var pollTimer: Timer?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     private var lastMetadataSignature: String?
-    private init() {}
+    @ObservationIgnored private let loadMetadata: @MainActor () async throws -> Data
+
+    init(loadMetadata: @escaping @MainActor () async throws -> Data = {
+        let (data, _) = try await URLSession.shared.data(from: RadioController.metadataURL)
+        return data
+    }) {
+        self.loadMetadata = loadMetadata
+    }
     func start() {
         if AppRuntime.isUITestMode {
             pollTimer?.invalidate()
@@ -43,6 +50,7 @@ final class RadioController {
         pollTimer = nil
         refreshTask?.cancel()
         refreshTask = nil
+        isRefreshing = false
     }
 
     func playLiveStream(retry: Int = 0) {
@@ -81,21 +89,25 @@ final class RadioController {
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             await performRefresh()
-            refreshTask = nil
+            if !Task.isCancelled { refreshTask = nil }
         }
         refreshTask = task
         await task.value
     }
 
     private func performRefresh() async {
+        guard !Task.isCancelled else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            if !Task.isCancelled { isRefreshing = false }
+        }
 
         let maxRetries = 3
 
         for attempt in 0 ..< maxRetries {
             do {
-                let (data, _) = try await URLSession.shared.data(from: Self.metadataURL)
+                let data = try await loadMetadata()
+                try Task.checkCancellation()
                 let np = try JSONDecoder().decode(RadioNowPlaying.self, from: data)
                 nowPlaying = np
                 prefetchArtwork(from: np)

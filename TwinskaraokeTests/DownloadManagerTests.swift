@@ -4,6 +4,57 @@ import Testing
 
 @Suite("Download validation")
 struct DownloadManagerTests {
+    @Test("Cancelled promotion discards only its own files", arguments: [false, true])
+    func cancelledPromotionDoesNotPublishOrDeleteRetry(hasReplacement: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let promotion = DownloadCachePromotion(
+            stagedAudio: directory.appendingPathComponent("main.promoting-old.mp3"),
+            stagedSource: directory.appendingPathComponent("main.source.promoting-old"),
+            audio: directory.appendingPathComponent("main.mp3"),
+            source: directory.appendingPathComponent("main.source"),
+            directory: directory
+        )
+        try Data("cancelled".utf8).write(to: promotion.stagedAudio)
+        try Data("old-source".utf8).write(to: promotion.stagedSource)
+        if hasReplacement {
+            try Data("replacement".utf8).write(to: promotion.audio)
+            try Data("new-source".utf8).write(to: promotion.source)
+        }
+        #expect(try !promotion.commit(ifCurrent: false))
+        #expect(!FileManager.default.fileExists(atPath: promotion.stagedAudio.path))
+        #expect(!FileManager.default.fileExists(atPath: promotion.stagedSource.path))
+        if hasReplacement {
+            #expect(try Data(contentsOf: promotion.audio) == Data("replacement".utf8))
+            #expect(try Data(contentsOf: promotion.source) == Data("new-source".utf8))
+        } else {
+            #expect(!FileManager.default.fileExists(atPath: promotion.audio.path))
+            #expect(!FileManager.default.fileExists(atPath: promotion.source.path))
+        }
+    }
+
+    @Test("Accepted promotion publishes its audio and source together")
+    func acceptedPromotionPublishesFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let promotion = DownloadCachePromotion(
+            stagedAudio: directory.appendingPathComponent("main.promoting-current.mp3"),
+            stagedSource: directory.appendingPathComponent("main.source.promoting-current"),
+            audio: directory.appendingPathComponent("main.mp3"),
+            source: directory.appendingPathComponent("main.source"),
+            directory: directory
+        )
+        try Data("audio".utf8).write(to: promotion.stagedAudio)
+        try Data("source".utf8).write(to: promotion.stagedSource)
+        #expect(try promotion.commit(ifCurrent: true))
+        #expect(try Data(contentsOf: promotion.audio) == Data("audio".utf8))
+        #expect(try Data(contentsOf: promotion.source) == Data("source".utf8))
+        #expect(!FileManager.default.fileExists(atPath: promotion.stagedAudio.path))
+        #expect(!FileManager.default.fileExists(atPath: promotion.stagedSource.path))
+    }
+
     @Test("Fallback artwork selection is stable and bounded")
     func fallbackArtworkSelectionIsDeterministic() {
         let first = FallbackArtProvider.fallbackIndex(for: "song-without-art", count: 12)

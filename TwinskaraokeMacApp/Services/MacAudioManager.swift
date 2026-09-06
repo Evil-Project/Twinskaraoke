@@ -85,7 +85,10 @@ final class MacAudioManager {
     // MARK: - Transport
 
     func play(song: Song, context: [Song] = []) {
-        let playbackQueue = context.isEmpty ? [song] : context
+        var playbackQueue = context.isEmpty ? [song] : context
+        if !playbackQueue.contains(where: { $0.id == song.id }) {
+            playbackQueue.insert(song, at: 0)
+        }
         let index = playbackQueue.firstIndex { $0.id == song.id } ?? 0
         queue = playbackQueue
         currentIndex = index
@@ -140,12 +143,13 @@ final class MacAudioManager {
     }
 
     func seek(to seconds: Double) {
-        guard let player, duration > 0 else { return }
+        guard let player, seconds.isFinite, duration.isFinite, duration > 0 else { return }
         let clamped = min(max(seconds, 0), duration)
-        player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600)) { [weak self] _ in
+        player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600)) { [weak self] finished in
             Task { @MainActor in
-                self?.currentTime = clamped
-                self?.updateNowPlayingPlaybackState()
+                guard finished, let self, self.player === player else { return }
+                self.currentTime = clamped
+                self.updateNowPlayingPlaybackState()
             }
         }
     }
@@ -160,20 +164,21 @@ final class MacAudioManager {
 
     private func startCurrent() {
         guard queue.indices.contains(currentIndex) else { return }
+        wantsPlaybackWhenReady = true
         let song = queue[currentIndex]
         currentSong = song
         playbackError = nil
+
+        teardownPlayer()
+        currentTime = 0
+        duration = 0
 
         guard let url = song.audioURL else {
             handleFailure("This song has no playable audio.")
             return
         }
 
-        teardownPlayer()
         isLoading = true
-        wantsPlaybackWhenReady = true
-        currentTime = 0
-        duration = 0
 
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
@@ -182,7 +187,7 @@ final class MacAudioManager {
 
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.player === player else { return }
                 switch item.status {
                 case .readyToPlay:
                     self.isLoading = false
@@ -208,7 +213,7 @@ final class MacAudioManager {
             queue: .main
         ) { [weak self] time in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.player === player else { return }
                 self.currentTime = time.seconds.isFinite ? time.seconds : 0
                 if self.duration == 0, let itemDuration = self.player?.currentItem?.duration.seconds,
                    itemDuration.isFinite, itemDuration > 0 {
@@ -222,7 +227,10 @@ final class MacAudioManager {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.handleReachedEnd() }
+            Task { @MainActor in
+                guard let self, self.player === player else { return }
+                self.handleReachedEnd()
+            }
         }
     }
 
@@ -230,13 +238,6 @@ final class MacAudioManager {
         if playbackMode == .songLoop {
             seek(to: 0)
             resume()
-            return
-        }
-        // Single-song queue with no loop: stop rather than restart.
-        if queue.count <= 1, playbackMode != .shuffle {
-            isPlaying = false
-            currentTime = 0
-            updateNowPlayingPlaybackState()
             return
         }
         playNext()
@@ -248,16 +249,24 @@ final class MacAudioManager {
         playbackError = message
         failedIndices.insert(currentIndex)
         // Every remaining track failed — stop instead of cycling the queue.
-        guard failedIndices.count < queue.count, queue.count > 1 else { return }
-        playNext()
+        guard failedIndices.count < queue.count, queue.count > 1 else {
+            teardownPlayer()
+            updateNowPlayingPlaybackState()
+            return
+        }
+        // Yield between invalid items instead of recursively exhausting a
+        // potentially large queue on one stack. Ignore superseded failures.
+        let failedSong = currentSong?.id
+        let failedIndex = currentIndex
+        Task { @MainActor [weak self] in
+            guard let self, self.currentSong?.id == failedSong,
+                  self.currentIndex == failedIndex, self.playbackError != nil,
+                  self.wantsPlaybackWhenReady else { return }
+            self.playNext()
+        }
     }
 
-    /// Excludes indices already known to have failed, not just the current one.
-    /// `handleFailure` -> `playNext` -> `startCurrent` -> `handleFailure` runs on
-    /// one call stack for songs with no audio URL, and the recursion only ends
-    /// when `failedIndices` covers the queue. Re-picking a failed index made no
-    /// progress, so a queue with several unplayable songs could recurse without
-    /// bound.
+    /// Avoid revisiting failed indices while searching for playable audio.
     private func randomIndex(excluding excluded: Int?) -> Int {
         let candidates = queue.indices.filter { $0 != excluded && !failedIndices.contains($0) }
         if let pick = candidates.randomElement() { return pick }
