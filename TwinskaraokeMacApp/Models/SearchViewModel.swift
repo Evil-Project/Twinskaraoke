@@ -9,6 +9,7 @@ final class MacSearchViewModel {
     private(set) var isSearching = false
     private(set) var errorMessage: String?
 
+    private var queryToken = 0
     private var searchTask: Task<Void, Never>?
     private static let debounce = Duration.milliseconds(300)
 
@@ -16,6 +17,11 @@ final class MacSearchViewModel {
     /// previous task also cancels its in-flight URLSession work.
     func queryChanged() {
         searchTask?.cancel()
+        queryToken &+= 1
+        let token = queryToken
+        isSearching = false
+        errorMessage = nil
+        results = []
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard trimmed.count >= 2 else {
@@ -28,21 +34,24 @@ final class MacSearchViewModel {
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: Self.debounce)
             guard !Task.isCancelled else { return }
-            await self?.performSearch(trimmed)
+            await self?.performSearch(trimmed, token: token)
         }
     }
 
-    private func performSearch(_ text: String) async {
+    private func performSearch(_ text: String, token: Int) async {
         isSearching = true
         errorMessage = nil
-        defer { isSearching = false }
+        defer {
+            if queryToken == token { isSearching = false }
+        }
         do {
             let songs = try await KaraokeAPIClient.searchSongs(query: text, pageSize: 50)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, queryToken == token else { return }
             results = songs
         } catch is CancellationError {
             return
         } catch {
+            guard !Task.isCancelled, queryToken == token else { return }
             results = []
             errorMessage = "Search failed. Please try again."
         }
@@ -50,6 +59,8 @@ final class MacSearchViewModel {
 
     func clear() {
         searchTask?.cancel()
+        queryToken &+= 1
+        isSearching = false
         query = ""
         results = []
         errorMessage = nil

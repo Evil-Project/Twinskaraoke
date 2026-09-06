@@ -161,7 +161,7 @@ final class AudioManager {
             .sink { [weak self] dur in
                 guard let self, self.player === player else { return }
                 let seconds = CMTimeGetSeconds(dur)
-                if !seconds.isNaN, seconds > 0 {
+                if seconds.isFinite, seconds > 0 {
                     duration = seconds
                 }
             }
@@ -196,7 +196,7 @@ final class AudioManager {
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.player === player else { return }
                 let seconds = CMTimeGetSeconds(time)
                 if seconds.isFinite, !seconds.isNaN {
                     currentTime = max(0, seconds)
@@ -207,7 +207,10 @@ final class AudioManager {
         endTimeObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.playEnded() }
+            Task { @MainActor [weak self] in
+                guard let self, self.player === player else { return }
+                self.playEnded()
+            }
         }
     }
 
@@ -354,8 +357,10 @@ final class AudioManager {
     }
 
     func seek(to time: Double) {
-        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
-        currentTime = time
+        guard let player, time.isFinite, duration.isFinite, duration > 0 else { return }
+        let clamped = min(max(time, 0), duration)
+        player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600))
+        currentTime = clamped
         updateNowPlayingInfo()
     }
 

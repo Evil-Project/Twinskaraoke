@@ -252,7 +252,7 @@ final class TVAuthManager {
     }
 
     func refreshAccount() async {
-        guard isLoggedIn, CredentialStore.token != nil, !isRefreshing else { return }
+        guard isLoggedIn, let token = CredentialStore.token, !isRefreshing else { return }
         isRefreshing = true
         profileError = nil
         defer { isRefreshing = false }
@@ -260,6 +260,7 @@ final class TVAuthManager {
         async let fetchedProfile = try? Self.authorizedData(path: "/api/badge/profile")
         async let fetchedLimits = try? Self.authorizedData(path: "/api/user/upload-limits")
         let (profileData, limitsData) = await (fetchedProfile, fetchedLimits)
+        guard !Task.isCancelled, isLoggedIn, CredentialStore.token == token else { return }
 
         var didFail = false
         if let profileData {

@@ -40,7 +40,7 @@ final class RadioController {
                 try? await Task.sleep(for: interval)
                 guard let self, self.shouldKeepPolling else { break }
             }
-            self?.clearPollTask()
+            if !Task.isCancelled { self?.clearPollTask() }
         }
     }
 
@@ -99,15 +99,18 @@ final class RadioController {
         }
         let task = Task { @MainActor [weak self] in
             await self?.performRefresh()
-            self?.refreshTask = nil
+            if !Task.isCancelled { self?.refreshTask = nil }
         }
         refreshTask = task
         await task.value
     }
 
     private func performRefresh() async {
+        guard !Task.isCancelled else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
+        defer {
+            if !Task.isCancelled { isRefreshing = false }
+        }
 
         do {
             var request = URLRequest(url: RadioStation.metadataURL)

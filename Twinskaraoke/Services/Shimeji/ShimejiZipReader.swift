@@ -23,8 +23,23 @@ nonisolated enum ShimejiZipReader {
         let entries = try readCentralDirectory(data)
 
         let fm = FileManager.default
+        let root = destinationDirectory.standardizedFileURL.resolvingSymlinksInPath()
         for entry in entries where !entry.isDirectory {
-            let destination = destinationDirectory.appendingPathComponent(entry.path)
+            let components = entry.path.split(separator: "/")
+            guard !components.contains("..") else { throw ZipError.corruptArchive }
+            var candidate = root
+            for component in components {
+                candidate.appendPathComponent(String(component))
+                if (try? fm.destinationOfSymbolicLink(atPath: candidate.path)) != nil {
+                    throw ZipError.corruptArchive
+                }
+            }
+            let destination = root.appendingPathComponent(entry.path)
+                .standardizedFileURL.resolvingSymlinksInPath()
+            guard !entry.path.hasPrefix("/"), !entry.path.contains("\0"),
+                  destination.path.hasPrefix(root.path + "/") else {
+                throw ZipError.corruptArchive
+            }
             try fm.createDirectory(
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true
@@ -150,6 +165,7 @@ nonisolated enum ShimejiZipReader {
 
         switch entry.compressionMethod {
         case 0:
+            guard compressed.count == entry.uncompressedSize else { throw ZipError.corruptArchive }
             return compressed
         case 8:
             return try inflateRaw(compressed, uncompressedSize: entry.uncompressedSize)
@@ -164,6 +180,7 @@ nonisolated enum ShimejiZipReader {
     /// method-8 entries contain.
     private static func inflateRaw(_ compressed: Data, uncompressedSize: Int) throws -> Data {
         guard uncompressedSize > 0 else { return Data() }
+        guard !compressed.isEmpty else { throw ZipError.decompressionFailed }
         var output = Data(count: uncompressedSize)
         let writtenCount: Int = output.withUnsafeMutableBytes { destRaw in
             compressed.withUnsafeBytes { srcRaw in

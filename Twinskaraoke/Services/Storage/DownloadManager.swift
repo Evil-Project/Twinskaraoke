@@ -601,6 +601,10 @@ final class DownloadManager {
         token: UUID,
         promoted: Bool
     ) {
+        // A cancelled promotion may finish after the same song is queued
+        // again. It must not remove the replacement task's concurrency slot.
+        let isCurrentTask = taskRegistry.performIfActive(songID: song.id, token: token) { true } ?? false
+        guard isCurrentTask else { return }
         cachePromotionTasks.removeValue(forKey: song.id)
         if promoted {
             DebugLogger.log("Download promoted from playback cache: \(song.id)", category: .cache)
@@ -608,8 +612,7 @@ final class DownloadManager {
             return
         }
 
-        let isCurrentTask = taskRegistry.performIfActive(songID: song.id, token: token) { true } ?? false
-        guard isCurrentTask, inProgress.contains(song.id) else {
+        guard inProgress.contains(song.id) else {
             startQueuedDownloadsIfPossible()
             logDownloadQueueCompletionIfNeeded()
             return
