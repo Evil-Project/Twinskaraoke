@@ -44,6 +44,37 @@ private nonisolated final class DownloadTaskRegistry: @unchecked Sendable {
     }
 }
 
+/// Owns temporary promotion files until the main actor accepts their request.
+nonisolated struct DownloadCachePromotion: Sendable {
+    let stagedAudio: URL
+    let stagedSource: URL
+    let audio: URL
+    let source: URL
+    let directory: URL
+
+    /// Stale work discards only its own staging files, preserving any retry.
+    func commit(ifCurrent isCurrent: Bool) throws -> Bool {
+        let fm = FileManager.default
+        defer {
+            try? fm.removeItem(at: stagedAudio)
+            try? fm.removeItem(at: stagedSource)
+        }
+        guard isCurrent else { return false }
+        try DownloadManager.commitDownloadedAudioFile(at: stagedAudio, to: audio, in: directory)
+        do {
+            if fm.fileExists(atPath: source.path) {
+                _ = try fm.replaceItemAt(source, withItemAt: stagedSource)
+            } else {
+                try fm.moveItem(at: stagedSource, to: source)
+            }
+        } catch {
+            try? fm.removeItem(at: audio)
+            throw error
+        }
+        return true
+    }
+}
+
 struct SongDownloadStatus: Equatable, Sendable {
     let isDownloaded: Bool
     let isDownloading: Bool
@@ -531,13 +562,13 @@ final class DownloadManager {
         for song: Song,
         remoteURL: URL,
         token: UUID
-    ) -> Bool {
+    ) -> DownloadCachePromotion? {
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         guard let cachedURL = AudioCacheStore.playableMainURL(
             for: song.id,
             expectedRemoteURL: remoteURL,
             expectedDuration: expectedDuration
-        ), !Task.isCancelled else { return false }
+        ), !Task.isCancelled else { return nil }
 
         let songFiles = files(for: song.id, sourceURL: remoteURL)
         let stagedAudio = Self.promotionStagingURL(
@@ -549,9 +580,12 @@ final class DownloadManager {
             "main.source.promoting-\(token.uuidString)"
         )
         let fm = FileManager.default
+        var keepStaging = false
         defer {
-            try? fm.removeItem(at: stagedAudio)
-            try? fm.removeItem(at: stagedSource)
+            if !keepStaging {
+                try? fm.removeItem(at: stagedAudio)
+                try? fm.removeItem(at: stagedSource)
+            }
         }
 
         do {
@@ -560,38 +594,21 @@ final class DownloadManager {
             guard !Task.isCancelled,
                   Self.isValidDownloadedAudio(at: stagedAudio, expectedDuration: expectedDuration),
                   let sourceData = remoteURL.absoluteString.data(using: .utf8)
-            else { return false }
+            else { return nil }
             try sourceData.write(to: stagedSource, options: [.atomic])
 
-            return try taskRegistry.performIfActive(songID: song.id, token: token) {
-                try Self.commitDownloadedAudioFile(
-                    at: stagedAudio,
-                    to: songFiles.audio,
-                    in: songFiles.directory
-                )
-                if fm.fileExists(atPath: songFiles.source.path) {
-                    do {
-                        _ = try fm.replaceItemAt(songFiles.source, withItemAt: stagedSource)
-                    } catch {
-                        try? fm.removeItem(at: songFiles.audio)
-                        throw error
-                    }
-                } else {
-                    do {
-                        try fm.moveItem(at: stagedSource, to: songFiles.source)
-                    } catch {
-                        try? fm.removeItem(at: songFiles.audio)
-                        throw error
-                    }
-                }
-                return true
-            } ?? false
+            keepStaging = true
+            return DownloadCachePromotion(
+                stagedAudio: stagedAudio, stagedSource: stagedSource,
+                audio: songFiles.audio, source: songFiles.source,
+                directory: songFiles.directory
+            )
         } catch {
             DebugLogger.log(
                 "Playback cache promotion failed for \(song.id): \(error.localizedDescription)",
                 category: .cache
             )
-            return false
+            return nil
         }
     }
 
@@ -599,14 +616,17 @@ final class DownloadManager {
         song: Song,
         remoteURL: URL,
         token: UUID,
-        promoted: Bool
+        promoted: DownloadCachePromotion?
     ) {
         // A cancelled promotion may finish after the same song is queued
         // again. It must not remove the replacement task's concurrency slot.
         let isCurrentTask = taskRegistry.performIfActive(songID: song.id, token: token) { true } ?? false
+        // No suspension between token validation, publishing files, and
+        // finishing the download: cancel/retry cannot interleave here.
+        let committed = (try? promoted?.commit(ifCurrent: isCurrentTask)) ?? false
         guard isCurrentTask else { return }
         cachePromotionTasks.removeValue(forKey: song.id)
-        if promoted {
+        if committed {
             DebugLogger.log("Download promoted from playback cache: \(song.id)", category: .cache)
             finishDownload(songID: song.id, song: song, moved: true, token: token)
             return

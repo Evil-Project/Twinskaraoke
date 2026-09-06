@@ -1,4 +1,5 @@
 import Compression
+import Darwin
 import Foundation
 
 /// A minimal, dependency-free ZIP reader. iOS has no built-in ZIP archive
@@ -18,34 +19,67 @@ nonisolated enum ShimejiZipReader {
 
     /// Extracts every file entry in `zipURL` into `destinationDirectory`,
     /// recreating the archive's internal folder structure.
-    static func extract(zipURL: URL, to destinationDirectory: URL) throws {
+    static func extract(
+        zipURL: URL,
+        to destinationDirectory: URL,
+        beforeWritingFile: ((String) throws -> Void)? = nil
+    ) throws {
         let data = try Data(contentsOf: zipURL, options: .mappedIfSafe)
         let entries = try readCentralDirectory(data)
-
-        let fm = FileManager.default
         let root = destinationDirectory.standardizedFileURL.resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let rootFD = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard rootFD >= 0 else { throw ZipError.corruptArchive }
+        defer { close(rootFD) }
+
         for entry in entries where !entry.isDirectory {
-            let components = entry.path.split(separator: "/")
-            guard !components.contains("..") else { throw ZipError.corruptArchive }
-            var candidate = root
-            for component in components {
-                candidate.appendPathComponent(String(component))
-                if (try? fm.destinationOfSymbolicLink(atPath: candidate.path)) != nil {
-                    throw ZipError.corruptArchive
-                }
-            }
-            let destination = root.appendingPathComponent(entry.path)
-                .standardizedFileURL.resolvingSymlinksInPath()
-            guard !entry.path.hasPrefix("/"), !entry.path.contains("\0"),
-                  destination.path.hasPrefix(root.path + "/") else {
+            guard !entry.path.hasPrefix("/"), !entry.path.contains("\0") else {
                 throw ZipError.corruptArchive
             }
-            try fm.createDirectory(
-                at: destination.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
+            let components = entry.path.split(separator: "/").filter { $0 != "." }
+            guard !components.isEmpty, !components.contains("..") else { throw ZipError.corruptArchive }
             let fileData = try extractFileData(data, entry: entry)
-            try fileData.write(to: destination, options: .atomic)
+            try writeFile(fileData, components: components, rootFD: rootFD) {
+                try beforeWritingFile?(entry.path)
+            }
+        }
+    }
+
+    /// Each directory is opened relative to its already-open parent, without
+    /// following links. Replacing a pathname cannot redirect the held handle.
+    private static func writeFile(
+        _ data: Data,
+        components: [Substring],
+        rootFD: Int32,
+        beforeWriting: () throws -> Void
+    ) throws {
+        var directoryFD = dup(rootFD)
+        guard directoryFD >= 0 else { throw ZipError.corruptArchive }
+        defer { close(directoryFD) }
+        for component in components.dropLast() {
+            let name = String(component)
+            guard mkdirat(directoryFD, name, 0o700) == 0 || errno == EEXIST else {
+                throw ZipError.corruptArchive
+            }
+            let childFD = openat(directoryFD, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+            guard childFD >= 0 else { throw ZipError.corruptArchive }
+            close(directoryFD)
+            directoryFD = childFD
+        }
+        try beforeWriting()
+        let temporaryName = ".extract-" + UUID().uuidString
+        let fileFD = openat(directoryFD, temporaryName, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard fileFD >= 0 else { throw ZipError.corruptArchive }
+        let handle = FileHandle(fileDescriptor: fileFD, closeOnDealloc: false)
+        defer {
+            try? handle.close()
+            unlinkat(directoryFD, temporaryName, 0)
+        }
+        try handle.write(contentsOf: data)
+        // renameat replaces an existing final symlink rather than following it.
+        guard let filename = components.last,
+              renameat(directoryFD, temporaryName, directoryFD, String(filename)) == 0 else {
+            throw ZipError.corruptArchive
         }
     }
 

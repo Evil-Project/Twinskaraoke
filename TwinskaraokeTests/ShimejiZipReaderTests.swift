@@ -35,6 +35,22 @@ struct ShimejiZipReaderTests {
         }
     }
 
+    @Test("Replacing an opened directory with a symlink cannot redirect a write")
+    func replacedDirectoryCannotRedirectWrite() throws {
+        try withArchive(valid) { archive, root in
+            let fm = FileManager.default
+            let outside = root.deletingLastPathComponent().appendingPathComponent("outside")
+            try fm.createDirectory(at: outside, withIntermediateDirectories: true)
+            try ShimejiZipReader.extract(zipURL: archive, to: root) { _ in
+                let directory = root.appendingPathComponent("img")
+                try fm.moveItem(at: directory, to: root.appendingPathComponent("original-img"))
+                try fm.createSymbolicLink(at: directory, withDestinationURL: outside)
+            }
+            #expect(!fm.fileExists(atPath: outside.appendingPathComponent("frame.txt").path))
+            #expect(try String(contentsOf: root.appendingPathComponent("original-img/frame.txt"), encoding: .utf8) == "sprite")
+        }
+    }
+
     private func withArchive(_ encoded: String, body: (URL, URL) throws -> Void) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let root = directory.appendingPathComponent("pack")

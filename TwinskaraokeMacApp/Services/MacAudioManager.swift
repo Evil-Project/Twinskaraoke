@@ -164,6 +164,7 @@ final class MacAudioManager {
 
     private func startCurrent() {
         guard queue.indices.contains(currentIndex) else { return }
+        wantsPlaybackWhenReady = true
         let song = queue[currentIndex]
         currentSong = song
         playbackError = nil
@@ -178,7 +179,6 @@ final class MacAudioManager {
         }
 
         isLoading = true
-        wantsPlaybackWhenReady = true
 
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
@@ -260,7 +260,8 @@ final class MacAudioManager {
         let failedIndex = currentIndex
         Task { @MainActor [weak self] in
             guard let self, self.currentSong?.id == failedSong,
-                  self.currentIndex == failedIndex, self.playbackError != nil else { return }
+                  self.currentIndex == failedIndex, self.playbackError != nil,
+                  self.wantsPlaybackWhenReady else { return }
             self.playNext()
         }
     }
