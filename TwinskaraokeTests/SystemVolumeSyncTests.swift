@@ -130,3 +130,21 @@ struct ScrubHapticFeedbackTests {
         #expect(feedback.update(0.5) == nil)
     }
 }
+
+@Suite("Player pan control ownership")
+@MainActor
+struct PlayerPanControlTests {
+    @Test("Dismissal ignores touches inside native slider controls")
+    func sliderOwnsDescendantTouches() {
+        let slider = UISlider()
+        let child = UIView()
+        slider.addSubview(child)
+        #expect(!PlayerPanGesture.Coordinator.acceptsTouch(in: slider))
+        #expect(!PlayerPanGesture.Coordinator.acceptsTouch(in: child))
+    }
+
+    @Test("Player background still accepts dismissal touches")
+    func backgroundAcceptsTouches() {
+        #expect(PlayerPanGesture.Coordinator.acceptsTouch(in: UIView()))
+    }
+}

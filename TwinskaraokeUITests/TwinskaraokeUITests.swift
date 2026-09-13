@@ -977,12 +977,19 @@ final class TwinskaraokeUITests: XCTestCase {
     slider.adjust(toNormalizedSliderPosition: 0.6)
     // Catalog fixtures contain no audio file: exercise native interaction and
     // presentation ownership without asserting an engine playback timestamp.
-    XCTAssertTrue(slider.isHittable)
-    XCTAssertTrue(app.buttons["Playing Next"].exists, "Scrubbing must not dismiss the player.")
+    let remainsHittable = waitUntil(timeout: 5) { slider.isHittable }
+    // Capture before asserting: continueAfterFailure is false, and CI disables
+    // automatic diagnostics to avoid Xcode's lengthy collection timeout.
+    let hierarchy = XCTAttachment(string: app.debugDescription)
+    hierarchy.name = "Player hierarchy after native scrubbing"
+    hierarchy.lifetime = .keepAlways
+    add(hierarchy)
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = "Native player controls"
     attachment.lifetime = .keepAlways
     add(attachment)
+    XCTAssertTrue(app.buttons["Playing Next"].exists, "Scrubbing must not dismiss the player.")
+    XCTAssertTrue(remainsHittable, "Playback slider must remain interactive after scrubbing.")
   }
 
   func testHomeSongOpensFullScreenPlayerControls() throws {

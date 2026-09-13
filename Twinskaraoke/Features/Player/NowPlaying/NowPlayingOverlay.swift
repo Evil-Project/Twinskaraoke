@@ -201,7 +201,9 @@ struct NowPlayingOverlay: View {
     // MARK: - The dismissal gesture
 
     private func dismissDrag(height: CGFloat) -> PlayerPanGesture {
-        PlayerPanGesture(canBegin: { presentation.isExpanded && !presentation.isDragging }) { translation in
+        PlayerPanGesture(canBegin: {
+            presentation.isExpanded && !presentation.isDragging && !AudioPlayerManager.shared.isEditingProgress
+        }) { translation in
             guard presentation.isExpanded else { return }
             withTransaction(Transaction(animation: nil)) {
                 let travel = PlayerDismissMetrics.dragOffset(
