@@ -964,7 +964,20 @@ final class TwinskaraokeUITests: XCTestCase {
   }
 
   func testNativePlaybackSliderDoesNotDismissPlayer() throws {
-    let app = launchApp(initialSection: "home")
+    continueAfterFailure = true
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "home", "-UITestScrubTracking"]
+    app.launch()
+    defer {
+      let hierarchy = XCTAttachment(string: app.debugDescription)
+      hierarchy.name = "Player hierarchy after native scrubbing"
+      hierarchy.lifetime = .keepAlways
+      add(hierarchy)
+      let screenshot = XCTAttachment(screenshot: app.screenshot())
+      screenshot.name = "Native player controls"
+      screenshot.lifetime = .keepAlways
+      add(screenshot)
+    }
     openVisibleItem(
       "Wake Me Up Before You Go-Go",
       identifier: "HomeSongSection.Made for You.ui-home-song-1",
@@ -974,22 +987,20 @@ final class TwinskaraokeUITests: XCTestCase {
     let slider = app.sliders["Playback position"]
     XCTAssertTrue(slider.waitForExistence(timeout: 8))
     XCTAssertTrue(slider.isEnabled)
+    let probe = app.descendants(matching: .any)["NativeScrubValueProbe"].firstMatch
+    func reached(_ target: Double) -> Bool {
+      guard let text = probe.value as? String, let value = Double(text) else { return false }
+      return abs(value - target) < 0.08
+    }
     slider.adjust(toNormalizedSliderPosition: 0.6)
-    // Catalog fixtures contain no audio file: exercise native interaction and
-    // presentation ownership without asserting an engine playback timestamp.
-    let remainsHittable = waitUntil(timeout: 5) { slider.isHittable }
-    // Capture before asserting: continueAfterFailure is false, and CI disables
-    // automatic diagnostics to avoid Xcode's lengthy collection timeout.
-    let hierarchy = XCTAttachment(string: app.debugDescription)
-    hierarchy.name = "Player hierarchy after native scrubbing"
-    hierarchy.lifetime = .keepAlways
-    add(hierarchy)
-    let attachment = XCTAttachment(screenshot: app.screenshot())
-    attachment.name = "Native player controls"
-    attachment.lifetime = .keepAlways
-    add(attachment)
-    XCTAssertTrue(app.buttons["Playing Next"].exists, "Scrubbing must not dismiss the player.")
-    XCTAssertTrue(remainsHittable, "Playback slider must remain interactive after scrubbing.")
+    XCTAssertTrue(waitUntil(timeout: 5) { reached(0.6) }, "First scrub must update the bound progress.")
+    // iOS 27 reports this thumb-free slider as non-hittable after adjustment,
+    // despite the visible track. Verify continued interaction with a real drag.
+    slider.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5))
+      .press(forDuration: 0.15, thenDragTo:
+        slider.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.55)))
+    XCTAssertTrue(waitUntil(timeout: 5) { reached(0.25) }, "A second scrub must still change progress.")
+    XCTAssertTrue(app.buttons["Playing Next"].isHittable, "Scrubbing must leave the player open and interactive.")
   }
 
   func testHomeSongOpensFullScreenPlayerControls() throws {

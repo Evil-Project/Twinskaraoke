@@ -10,12 +10,18 @@ struct AppleMusicProgressBar: View {
     var accessibilityHint: String = "Swipe up or down to adjust."
     var scrubValueText: String?
     @State private var scrubHaptics = ScrubHapticFeedback()
+    #if DEBUG
+    @State private var lastScrubbedValue: Double = 0
+    #endif
 
     var body: some View {
         Slider(
             value: Binding(
                 get: { min(1, max(0, progress)) },
                 set: { value in
+                    #if DEBUG
+                    lastScrubbedValue = value
+                    #endif
                     scrubHaptics.update(value)?.play()
                     progress = value
                     // Accessibility adjustments do not begin a drag session.
@@ -44,6 +50,13 @@ struct AppleMusicProgressBar: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValueText ?? "\(Int(progress * 100)) percent")
         .accessibilityHint(accessibilityHint)
+        .background {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-UITestScrubTracking") {
+                NativeScrubValueProbe(value: lastScrubbedValue)
+            }
+            #endif
+        }
         .overlay(alignment: .top) {
             if isScrubbing, let scrubValueText {
                 Text(scrubValueText)
