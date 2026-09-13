@@ -34,6 +34,7 @@
         func updateUIView(_ view: SystemVolumeContainer, context: Context) {
             view.reduceMotion = reduceMotion
             style(view.volumeView, coordinator: context.coordinator)
+            view.setNeedsLayout()
         }
 
         private func style(_ view: MPVolumeView, coordinator: Coordinator) {
@@ -87,6 +88,9 @@
         override func layoutSubviews() {
             super.layoutSubviews()
             volumeView.bounds = CGRect(origin: .zero, size: bounds.size)
+            // Its first track geometry depends on its own layout at the final size.
+            // Measuring before this pass leaves the initial position stale until a touch.
+            volumeView.layoutIfNeeded()
             let track = volumeView.volumeSliderRect(forBounds: volumeView.bounds)
             let scale: CGFloat = isPressed ? 12.0 / 7.0 : 1
             // MPVolumeView places its track above the midpoint of a tall view.
@@ -114,7 +118,20 @@
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if window == nil { setPressed(false) }
+            guard window != nil else {
+                setPressed(false)
+                return
+            }
+            volumeView.setNeedsLayout()
+            setNeedsLayout()
+            // Window attachment can finish installing the native control after this callback.
+            // Reconcile once on the next main-queue turn, without waiting for interaction.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.window != nil else { return }
+                self.volumeView.setNeedsLayout()
+                self.setNeedsLayout()
+                self.layoutIfNeeded()
+            }
         }
     }
 

@@ -33,6 +33,30 @@ struct SystemVolumeSyncTests {
         #expect(observer?.delaysTouchesEnded == false)
     }
 
+    @Test("First window layout centers volume without a touch")
+    @MainActor
+    func firstWindowLayoutCentersTrack() async {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let controller = UIViewController()
+        window.rootViewController = controller
+        let container = SystemVolumeContainer()
+        controller.view.addSubview(container)
+        container.frame = CGRect(x: 32, y: 200, width: 326, height: 44)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        controller.view.layoutIfNeeded()
+        let volume = container.volumeView
+        volume.layoutIfNeeded()
+        let track = volume.volumeSliderRect(forBounds: volume.bounds)
+        let midpoint = track.isEmpty ? CGPoint(x: volume.bounds.midX, y: volume.bounds.midY)
+            : CGPoint(x: track.midX, y: track.midY)
+        #expect(abs(volume.convert(midpoint, to: container).y - container.bounds.midY) < 0.01)
+        #expect(!container.isPressed)
+    }
+
     @Test("Removing the volume control clears its pressed appearance")
     @MainActor
     func removalClearsPressedState() {
