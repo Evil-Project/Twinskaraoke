@@ -1000,7 +1000,13 @@ final class TwinskaraokeUITests: XCTestCase {
       .press(forDuration: 0.15, thenDragTo:
         slider.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.55)))
     XCTAssertTrue(waitUntil(timeout: 5) { reached(0.25) }, "A second scrub must still change progress.")
-    XCTAssertTrue(app.buttons["Playing Next"].isHittable, "Scrubbing must leave the player open and interactive.")
+    let queueButton = app.buttons["PlayerToolbar.PlayingNext"]
+    XCTAssertTrue(queueButton.exists, "Scrubbing must leave the player open.")
+    // Use the visible control's center rather than XCTest's hit-point estimate,
+    // then prove that the app handled the touch by observing the queue sheet.
+    queueButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    XCTAssertTrue(app.buttons["Queue.Reorder"].waitForExistence(timeout: 8),
+                  "Playing Next must still open the queue after repeated scrubbing.")
   }
 
   func testHomeSongOpensFullScreenPlayerControls() throws {
