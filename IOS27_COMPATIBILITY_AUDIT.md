@@ -162,6 +162,10 @@ The previous [green run for c275f86](https://github.com/Mag1cByt3s/Twinskaraoke/
 
 Local Xcode 26.6 / iOS 26.5: Debug app build passed, then all **272 unit tests** passed (289 parameterized executions, zero failures). A second run passed those 272 tests plus the swipe-back UI regression. After adding two transfer-receipt tests and deferring completions while protected data is unavailable, the full download suite passed **25 tests** (26 executions). The subsequent stale-event-batch regression also passed with the full download suite (**26 tests**, 27 executions). An earlier individual-test filter selected zero tests and is not counted as validation.
 
-Hosted iOS 27 build/analyzer/navigation validation is pending for the final patch. Real system-termination/background-session delivery, signing, physical volume routes, and inference performance require the device checklist.
+Hosted iOS 27 build/analyzer/navigation validation passed for source commit `2224b60`; see the final result below. Real system-termination/background-session delivery, signing, physical volume routes, and inference performance require the device checklist.
 
 The first complete hosted run, [d55cc58](https://github.com/Mag1cByt3s/Twinskaraoke/actions/runs/34724539014), passed Release build/analyze and all **275 unit tests**. Three UI checks passed; the new swipe-back regression failed because native zoom still accepted an outgoing-row tap. The subsequent standard-push change addresses that behavior. The direct job log contained 16,271 lines; the CLI's cached run log was incomplete and was not used to diagnose the failure. Compiler warnings were limited to App Intents metadata extraction.
+
+## Final hosted result
+
+[Run 34749091694](https://github.com/Mag1cByt3s/Twinskaraoke/actions/runs/34749091694) passed for `2224b6093bb1b33c62e38a27297a601e04a205d2`: Release build and static analysis, all **275 unit tests**, and all **four UI tests**, including the previously failing swipe-back/no-accidental-playback regression. The complete direct job log (16,314 lines) contains no compiler errors; warnings concern App Intents metadata extraction only. The runner remains Xcode 27 beta 6 (`27A5252f`) with the preview runtime, so exact-RC and signed-device verification remain outstanding. This documentation-only update does not change the tested source.
