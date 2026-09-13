@@ -68,6 +68,11 @@ struct ZoomNavigationLink<Destination: View, Label: View>: View {
         self.label = label
     }
 
+    private var needsDismissalGuard: Bool {
+        if #available(iOS 27, *) { return true }
+        return !reduceMotion
+    }
+
     var body: some View {
         NavigationLink {
             destination()
@@ -78,7 +83,7 @@ struct ZoomNavigationLink<Destination: View, Label: View>: View {
                 )
                 // Keeps the push off iOS 26's broken interactive-pop path; see
                 // ZoomPushDismissal for the defect and what it costs.
-                .zoomPushDismissal(isEnabled: !reduceMotion)
+                .zoomPushDismissal(isEnabled: needsDismissalGuard)
         } label: {
             label()
         }
