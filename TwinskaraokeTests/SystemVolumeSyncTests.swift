@@ -93,3 +93,40 @@ struct SystemVolumeSyncTests {
         #expect(volume == currentVolume)
     }
 }
+
+@Suite("Native scrub haptic feedback")
+struct ScrubHapticFeedbackTests {
+    @Test("Playback updates are silent outside a gesture")
+    func idleUpdatesAreSilent() {
+        var feedback = ScrubHapticFeedback()
+        #expect(feedback.update(0.3) == nil)
+        #expect(feedback.update(1) == nil)
+        #expect(feedback.end() == nil)
+    }
+
+    @Test("Grab, detents, and release retain the original scrub texture")
+    func scrubSequence() {
+        var feedback = ScrubHapticFeedback()
+        #expect(feedback.begin() == .grab)
+        #expect(feedback.begin() == nil)
+        #expect(feedback.update(0.3) == nil)
+        #expect(feedback.update(0.31) == nil)
+        #expect(feedback.update(0.33) == .detent)
+        #expect(feedback.end() == .commit)
+        #expect(feedback.update(0.5) == nil)
+    }
+
+    @Test("Edges latch and rearm after returning to the interior")
+    func edgeFeedback() {
+        var feedback = ScrubHapticFeedback()
+        _ = feedback.begin()
+        #expect(feedback.update(0) == .boundary)
+        #expect(feedback.update(0) == nil)
+        #expect(feedback.update(0.03) == .detent)
+        #expect(feedback.update(1) == .boundary)
+        #expect(feedback.update(1) == nil)
+        #expect(feedback.end(cancelled: true) == nil)
+        #expect(feedback.begin() == .grab)
+        #expect(feedback.update(0.5) == nil)
+    }
+}

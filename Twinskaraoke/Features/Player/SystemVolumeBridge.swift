@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+    import AVFAudio
     import MediaPlayer
     import SwiftUI
     import UIKit.UIGestureRecognizerSubclass
@@ -72,6 +73,8 @@
         let volumeView = MPVolumeView(frame: .zero)
         var reduceMotion = false
         private(set) var isPressed = false
+        private var scrubHaptics = ScrubHapticFeedback()
+        private var volumeObservation: NSKeyValueObservation?
 
         init() {
             super.init(frame: .zero)
@@ -80,7 +83,19 @@
             addSubview(volumeView)
             let observer = VolumeTouchObserver()
             observer.onPressed = { [weak self] pressed in self?.setPressed(pressed) }
+            observer.onCancelled = { [weak self] in
+                guard let self else { return }
+                _ = self.scrubHaptics.end(cancelled: true)
+                self.setPressed(false)
+            }
             addGestureRecognizer(observer)
+            volumeObservation = AVAudioSession.sharedInstance().observe(\.outputVolume, options: [.new]) {
+                [weak self] _, change in
+                guard let value = change.newValue else { return }
+                Task { @MainActor [weak self] in
+                    self?.scrubHaptics.update(Double(value))?.play()
+                }
+            }
         }
 
         required init?(coder: NSCoder) { nil }
@@ -105,6 +120,14 @@
 
         func setPressed(_ pressed: Bool) {
             guard isPressed != pressed else { return }
+            if pressed {
+                AppHaptic.detent.prepare()
+                scrubHaptics.begin()?.play()
+                // Seed the first notch without a second impact on top of the grab.
+                _ = scrubHaptics.update(Double(AVAudioSession.sharedInstance().outputVolume))
+            } else {
+                scrubHaptics.end()?.play()
+            }
             isPressed = pressed
             setNeedsLayout()
             if reduceMotion {
@@ -119,6 +142,7 @@
         override func didMoveToWindow() {
             super.didMoveToWindow()
             guard window != nil else {
+                _ = scrubHaptics.end(cancelled: true)
                 setPressed(false)
                 return
             }
@@ -138,6 +162,7 @@
     /// Observe contact without recognizing a competing gesture or consuming slider touches.
     private final class VolumeTouchObserver: UIGestureRecognizer {
         var onPressed: ((Bool) -> Void)?
+        var onCancelled: (() -> Void)?
 
         init() {
             super.init(target: nil, action: nil)
@@ -159,13 +184,13 @@
         }
 
         override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-            onPressed?(false)
+            onCancelled?()
             state = .failed
         }
 
         override func reset() {
             super.reset()
-            onPressed?(false)
+            onCancelled?()
         }
     }
 #endif

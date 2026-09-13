@@ -676,7 +676,7 @@ private struct StrengthSlider: View {
     var valueDescription: String?
 
     var body: some View {
-        NativeLevelSlider(value: Binding(get: { Double(value) }, set: { value = Float($0) }))
+        NativeLevelSlider(value: Binding(get: { Double(value) }, set: { value = Float($0) }), hapticStep: 0.05)
             .tint(.appAccent)
             .frame(minHeight: 44)
             .accessibilityLabel(title)
@@ -759,7 +759,8 @@ private struct EqualizerBand: View {
             NativeLevelSlider(
                 value: Binding(get: { Double(value) }, set: { value = Float($0) }),
                 range: Double(range.lowerBound)...Double(range.upperBound),
-                neutralValue: 0
+                neutralValue: 0,
+                hapticStep: 1
             )
             .tint(.appAccent)
             .environment(\.layoutDirection, .leftToRight)
