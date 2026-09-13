@@ -61,4 +61,4 @@ The URL-encoding security test now injects an absent credential instead of readi
 - During separation, lock/unlock, stop playback, cancel, and start another song. Old work must not publish stems or write into a deleted job directory. Measure CPU-only separation time and memory on iOS 27.
 - Adjust the visible native volume slider, hardware buttons, Bluetooth and AirPlay routes, and VoiceOver controls.
 - Open two iPad windows. Video rotation, overlay placement, sprite dragging, and mini-player floors must remain in the owning window. Backgrounding a window must stop its overlay animation.
-- Exercise native iOS 27 zoom pushes, completed/cancelled swipe-back, and rapid taps. Navigation must remain responsive and gestures must not start playback.
+- Exercise standard iOS 27 artwork/detail pushes, completed/cancelled swipe-back, and rapid taps. Navigation must remain responsive and gestures must not start playback.

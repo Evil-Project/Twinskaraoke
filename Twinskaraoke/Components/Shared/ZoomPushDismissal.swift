@@ -126,8 +126,8 @@ final class InteractiveDismissalSuppressor {
     /// call site. Flip it if a future iOS renames the classes, or if the
     /// dependency is ever considered a submission risk.
     static var isEnabled: Bool {
-        // iOS 27 owns zoom dismissal; legacy gesture-class matching must not
-        // disable or replace recognizers in its rebuilt navigation hierarchy.
+        // iOS 27 uses standard push navigation. Private zoom recognizer
+        // matching must not touch its navigation hierarchy.
         if #available(iOS 27, *) { return false }
         return true
     }
@@ -364,14 +364,10 @@ private struct ZoomDismissalBridge: UIViewRepresentable {
                         onArrived?()
                         return
                     }
-                    // Installed only where the system gesture is suppressed: the
-                    // replacement stands in for it, so the escape hatch has to
-                    // turn off both or neither. On the screen's own view, so it
-                    // dies with the screen instead of outliving it on the
-                    // navigation view.
-                    if InteractiveDismissalSuppressor.isEnabled {
-                        swipeBack?.install(on: host.view)
-                    }
+                    // Own horizontal content drags on both navigation paths.
+                    // iOS 27 uses a standard push, with no private suppression;
+                    // this pan still cancels row taps before committing Back.
+                    swipeBack?.install(on: host.view)
                     reportArrival(host: host)
                     return
                 }

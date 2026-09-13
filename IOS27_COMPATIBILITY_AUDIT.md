@@ -2,7 +2,7 @@
 
 ## Result
 
-The remaining source findings are addressed on `fix/ios-27-launch-restoration`: separation compute/cancellation, persistent background downloads, nondestructive cache probes, native volume and iOS 27 zoom interaction, and scene-owned orientation/overlays. Full RC compatibility still requires an exact-RC runner and signed-device integration checks; simulator success cannot establish those results.
+The remaining source findings are addressed on `fix/ios-27-launch-restoration`: separation compute/cancellation, persistent background downloads, nondestructive cache probes, native volume and standard iOS 27 push navigation, and scene-owned orientation/overlays. Full RC compatibility still requires an exact-RC runner and signed-device integration checks; simulator success cannot establish those results.
 
 This pass inventories all 217 Swift files in the iOS app and shared source directories (about 51,400 lines; 31 imported module names), inspects the corresponding build settings/resources, and reviews the phone/watch session bridge and pinned dependency implementations. The inventory is repository-wide static inspection; it is not a claim that every code path was executed or formally verified. Standalone Mac/TV feature parity is outside this iOS audit; Release builds also verify that shared code compiles for those targets.
 
@@ -44,7 +44,7 @@ Disposable playback/stem-cache probes now preserve files after unreadable header
 
 The player displays MPVolumeView directly. It no longer searches the view's internal UISlider hierarchy or synthesizes slider events. System routing, volume buttons, and accessibility are owned by the native control. [MPVolumeView](https://developer.apple.com/documentation/mediaplayer/mpvolumeview)
 
-On iOS 27 the legacy zoom-dismissal suppressor and replacement pan are disabled; native SwiftUI/UIKit zoom navigation owns interaction. The older iOS 26 workaround remains version-gated. CI now includes the existing swipe-back/no-accidental-playback regression alongside navigation checks. `ClearPresentationBackground` has no active call sites.
+On iOS 27 artwork destinations use standard push navigation, with the app's horizontal content-swipe guard cancelling row touches before Back. The legacy private-name zoom recognizer suppressor is disabled on iOS 27; the older iOS 26 workaround remains version-gated. Simply restoring native zoom was tested and rejected: hosted run 34724539014 reproduced accidental playback from a tap during dismissal. The existing swipe-back regression remains enabled in CI. `ClearPresentationBackground` has no active call sites.
 
 ### Scene ownership
 
@@ -62,7 +62,7 @@ Audio playback, interruptions, media-services reset, AirPlay/Bluetooth, lock-scr
 | --- | --- | --- |
 | SwiftUI/UIKit lifecycle | `TwinskaraokeApp`, `ContentView`, scene manifest, `LaunchScreen.storyboard`, build-generated plist keys | Required scene and launch setup present. Verify built artifact and RC launch. |
 | SwiftUI state/Observation | All state declarations and six explicit `State(initialValue:)` assignments; observation bridge; main-actor models | Explicit initializers have no competing declaration value. No `@Entry` defaults or document-protocol migration trigger found. Swift 6.4 preview compilation passed; exact RC compiler validation remains pending. |
-| Tabs/navigation/search | All root enum cases, selection binding, sidebar selection, tab role, mini-player accessory, UIKit coordinator | Selection constrained to visible root cases. Typed API path added; iOS 27 uses native zoom dismissal. |
+| Tabs/navigation/search | All root enum cases, selection binding, sidebar selection, tab role, mini-player accessory, UIKit coordinator | Selection constrained to visible root cases. Typed API path added; iOS 27 uses standard push navigation with a content-swipe guard. |
 | Text/menus/presentation | Text selection, gestures, menu content, custom presentation and trait APIs | No `.textSelection(.enabled)`, custom `UIPresentationController`, or overridden presentation trait chain found. Menu appearance changes remain a visual check. |
 | Foundation/network | Shared request/data/decoding helpers, direct URLSession call sites, URL/path escaping, account-scoped caches | Credential bypasses fixed. No `canOpenURL` calls or broad ATS exception found. Live endpoints not exercised. |
 | Security/AuthenticationServices/CryptoKit | Keychain status handling, token cache, committed-session marker, browser continuation cancellation, QR approval, watch handoff | Unavailable credentials preserved; signed-device restoration still required. |
@@ -163,3 +163,5 @@ The previous [green run for c275f86](https://github.com/Mag1cByt3s/Twinskaraoke/
 Local Xcode 26.6 / iOS 26.5: Debug app build passed, then all **272 unit tests** passed (289 parameterized executions, zero failures). A second run passed those 272 tests plus the swipe-back UI regression. After adding two transfer-receipt tests and deferring completions while protected data is unavailable, the full download suite passed **25 tests** (26 executions). The subsequent stale-event-batch regression also passed with the full download suite (**26 tests**, 27 executions). An earlier individual-test filter selected zero tests and is not counted as validation.
 
 Hosted iOS 27 build/analyzer/navigation validation is pending for the final patch. Real system-termination/background-session delivery, signing, physical volume routes, and inference performance require the device checklist.
+
+The first complete hosted run, [d55cc58](https://github.com/Mag1cByt3s/Twinskaraoke/actions/runs/34724539014), passed Release build/analyze and all **275 unit tests**. Three UI checks passed; the new swipe-back regression failed because native zoom still accepted an outgoing-row tap. The subsequent standard-push change addresses that behavior. The direct job log contained 16,271 lines; the CLI's cached run log was incomplete and was not used to diagnose the failure. Compiler warnings were limited to App Intents metadata extraction.

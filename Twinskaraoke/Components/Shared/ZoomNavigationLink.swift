@@ -98,7 +98,9 @@ extension View {
         in namespace: Namespace.ID,
         isEnabled: Bool
     ) -> some View {
-        if isEnabled {
+        if #available(iOS 27, *) {
+            self
+        } else if isEnabled {
             matchedTransitionSource(id: id, in: namespace)
         } else {
             self
@@ -111,7 +113,11 @@ extension View {
         in namespace: Namespace.ID,
         isEnabled: Bool
     ) -> some View {
-        if isEnabled {
+        if #available(iOS 27, *) {
+            // The preview still delivers taps to outgoing zoom destinations.
+            // Use the supported standard push until that regression is fixed.
+            navigationTransition(.automatic)
+        } else if isEnabled {
             navigationTransition(.zoom(sourceID: id, in: namespace))
         } else {
             self
