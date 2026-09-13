@@ -42,7 +42,7 @@ Disposable playback/stem-cache probes now preserve files after unreadable header
 
 ### Public controls and navigation
 
-The player displays MPVolumeView directly. It no longer searches the view's internal UISlider hierarchy or synthesizes slider events. System routing, volume buttons, and accessibility are owned by the native control. [MPVolumeView](https://developer.apple.com/documentation/mediaplayer/mpvolumeview)
+The player displays MPVolumeView with documented track/thumbnail image customization: a thin continuous track and an invisible thumb with the normal system touch target. It no longer searches the view's internal UISlider hierarchy or synthesizes slider events. System routing, volume buttons, and accessibility are owned by the native control. [MPVolumeView](https://developer.apple.com/documentation/mediaplayer/mpvolumeview)
 
 On iOS 27 artwork destinations use standard push navigation, with the app's horizontal content-swipe guard cancelling row touches before Back. The legacy private-name zoom recognizer suppressor is disabled on iOS 27; the older iOS 26 workaround remains version-gated. Simply restoring native zoom was tested and rejected: hosted run 34724539014 reproduced accidental playback from a tap during dismissal. The existing swipe-back regression remains enabled in CI. `ClearPresentationBackground` has no active call sites.
 
@@ -169,3 +169,11 @@ The first complete hosted run, [d55cc58](https://github.com/Mag1cByt3s/Twinskara
 ## Final hosted result
 
 [Run 34749091694](https://github.com/Mag1cByt3s/Twinskaraoke/actions/runs/34749091694) passed for `2224b6093bb1b33c62e38a27297a601e04a205d2`: Release build and static analysis, all **275 unit tests**, and all **four UI tests**, including the previously failing swipe-back/no-accidental-playback regression. The complete direct job log (16,314 lines) contains no compiler errors; warnings concern App Intents metadata extraction only. The runner remains Xcode 27 beta 6 (`27A5252f`) with the preview runtime, so exact-RC and signed-device verification remain outstanding. This documentation-only update does not change the tested source.
+
+## Native-control follow-up
+
+Music seeking, equalizer bands, effect strength, and karaoke level now use SwiftUI Slider with `sliderThumbVisibility(.hidden)` on all supported iOS versions. Video already uses SwiftUI Slider through Pillarbox and now hides its thumb as well. Crossfade retains whole-second values without the stepped initializer, so it does not add tick marks. Custom detent haptics and hand-drawn slider gestures were removed. Audio levels still throttle live changes and commit the final value on release. Buttons, toggles, pickers, menus, steppers, text fields, and loading indicators already use native controls. Artwork gestures, sprite dragging, and the tested navigation/presentation gestures serve different interactions and are not slider replacements.
+
+Public APIs: [Slider thumb visibility](https://developer.apple.com/documentation/swiftui/view/sliderthumbvisibility(_:)), [MPVolumeView customization](https://developer.apple.com/documentation/mediaplayer/mpvolumeview).
+
+Native-control validation on iOS 26.5: Debug compilation passed, settings persistence/transition-choice UI regression passed, and the native playback-slider interaction/UI-presentation test passed. Screenshot inspection confirms a continuous playback bar without ticks or a thumb. The audio-free catalog fixture cannot verify an engine playback timestamp; that assertion was removed after confirming the fixture limitation, and the test is explicitly scoped to control interaction and presentation. System volume rendering/routing still requires a physical device. These two UI checks are now included in the iOS 27 workflow.

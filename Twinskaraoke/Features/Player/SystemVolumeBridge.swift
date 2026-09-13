@@ -12,13 +12,51 @@
         }
     }
 
-    /// Let the system own volume interaction, routing, and accessibility.
-    /// MPVolumeView's internal slider hierarchy is not a supported API.
+    /// Native system volume with documented track and thumb customization.
     struct SystemVolumeBridge: UIViewRepresentable {
-        func makeUIView(context _: Context) -> MPVolumeView {
-            MPVolumeView(frame: .zero)
+        @Environment(\.colorScheme) private var colorScheme
+
+        final class Coordinator {
+            var colorScheme: ColorScheme?
         }
 
-        func updateUIView(_: MPVolumeView, context _: Context) {}
+        func makeCoordinator() -> Coordinator { Coordinator() }
+
+        func makeUIView(context: Context) -> MPVolumeView {
+            let view = MPVolumeView(frame: .zero)
+            style(view, coordinator: context.coordinator)
+            return view
+        }
+
+        func updateUIView(_ view: MPVolumeView, context: Context) {
+            style(view, coordinator: context.coordinator)
+        }
+
+        private func style(_ view: MPVolumeView, coordinator: Coordinator) {
+            guard coordinator.colorScheme != colorScheme else { return }
+            coordinator.colorScheme = colorScheme
+            let foreground = colorScheme == .dark ? UIColor.white : UIColor.black
+            // Preserve the system's touch target, but draw no visible knob.
+            let thumb = UIGraphicsImageRenderer(size: CGSize(width: 28, height: 28)).image { _ in }
+            for state: UIControl.State in [.normal, .highlighted, .disabled] {
+                let height: CGFloat = state == .highlighted ? 12 : 7
+                let opacity: CGFloat = state == .disabled ? 0.4 : 1
+                view.setVolumeThumbImage(thumb, for: state)
+                view.setMinimumVolumeSliderImage(
+                    trackImage(color: foreground.withAlphaComponent(opacity), height: height), for: state
+                )
+                view.setMaximumVolumeSliderImage(
+                    trackImage(color: foreground.withAlphaComponent(0.18 * opacity), height: height), for: state
+                )
+            }
+        }
+
+        private func trackImage(color: UIColor, height: CGFloat) -> UIImage {
+            let size = CGSize(width: height * 2 + 1, height: height)
+            return UIGraphicsImageRenderer(size: size).image { _ in
+                color.setFill()
+                UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: height / 2).fill()
+            }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: height, bottom: 0, right: height))
+        }
     }
 #endif

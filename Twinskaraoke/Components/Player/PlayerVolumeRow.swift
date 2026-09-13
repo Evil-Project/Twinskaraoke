@@ -5,9 +5,19 @@ struct PlayerVolumeRow: View {
 
     var body: some View {
         #if canImport(UIKit)
-            SystemVolumeBridge()
-                .frame(height: 32)
-                .padding(.horizontal, horizontalPadding)
+            HStack(spacing: 12) {
+                Image(systemName: "speaker.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                SystemVolumeBridge()
+                    .frame(height: 44)
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, horizontalPadding)
         #endif
     }
 }

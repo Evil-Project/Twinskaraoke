@@ -963,6 +963,28 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Clear queue"].exists)
   }
 
+  func testNativePlaybackSliderDoesNotDismissPlayer() throws {
+    let app = launchApp(initialSection: "home")
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+    openMiniPlayer(in: app)
+    let slider = app.sliders["Playback position"]
+    XCTAssertTrue(slider.waitForExistence(timeout: 8))
+    XCTAssertTrue(slider.isEnabled)
+    slider.adjust(toNormalizedSliderPosition: 0.6)
+    // Catalog fixtures contain no audio file: exercise native interaction and
+    // presentation ownership without asserting an engine playback timestamp.
+    XCTAssertTrue(slider.isHittable)
+    XCTAssertTrue(app.buttons["Playing Next"].exists, "Scrubbing must not dismiss the player.")
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "Native player controls"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
   func testHomeSongOpensFullScreenPlayerControls() throws {
     let app = launchApp(initialSection: "home")
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))

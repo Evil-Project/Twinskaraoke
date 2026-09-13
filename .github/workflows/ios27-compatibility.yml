@@ -75,6 +75,8 @@ jobs:
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAdaptiveMusicShellShowsSidebarOrTabs \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testLibraryAndSearchDrillDownNavigation \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSwipingBackFromPlaylistDetailStartsNoPlayback \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativePlaybackSliderDoesNotDismissPlayer \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSettingsPersistAutoplayAndEnforceTransitionChoice \
             -resultBundlePath "$RUNNER_TEMP/ios27-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/ios27-tests.log"
       - name: Report validation scope
