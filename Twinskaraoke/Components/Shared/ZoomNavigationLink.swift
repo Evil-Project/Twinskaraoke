@@ -86,6 +86,7 @@ struct ZoomNavigationLink<Destination: View, Label: View>: View {
                 .zoomPushDismissal(isEnabled: needsDismissalGuard)
         } label: {
             label()
+                .contentShape(Rectangle())
         }
         .zoomTransitionSource(id: id, in: namespace, isEnabled: !reduceMotion)
     }

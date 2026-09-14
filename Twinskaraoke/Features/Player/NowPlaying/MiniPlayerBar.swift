@@ -59,10 +59,6 @@ struct MiniPlayerBar: View {
         // the start of the transition, so for a moment the contents are
         // expanded-shaped inside an inline-sized accessory.
         //
-        // Defensive only. The shift that used to be visible on expansion was the
-        // *container's*, measured at x=84 w=234 inline against x=21 w=360
-        // expanded, and no content alignment could have moved it; that came from
-        // forcing the tab bar open and is gone with the coordinator.
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: isInline ? 48 : 58)
         .clipped()

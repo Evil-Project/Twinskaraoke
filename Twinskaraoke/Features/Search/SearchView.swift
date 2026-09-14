@@ -445,6 +445,7 @@ private struct BrowseCategoriesView: View {
                         genresVM.loadMoreIfNeeded(current: genre)
                         genresVM.loadPreviewIfNeeded(for: genre)
                     }
+                    .onDisappear { genresVM.cancelQueuedPreview(for: genre) }
                 }
             }
             .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -518,6 +519,7 @@ struct GenreDetailView: View {
     let genre: GenreSummary
     let viewModel: GenresViewModel
     let palette: [Color]
+    @State private var detailOwner = UUID()
 
     var body: some View {
         let loadedSongs = viewModel.allSongs[genre.id]
@@ -537,8 +539,10 @@ struct GenreDetailView: View {
         // purge cancels in-flight detail tasks without changing allSongs, so a
         // nil-entry key would never change and the load would never restart.
         .task(id: viewModel.detailGeneration) {
+            viewModel.retainDetail(genre.id, owner: detailOwner)
             viewModel.loadDetailIfNeeded(for: genre)
         }
+        .onDisappear { viewModel.releaseDetail(owner: detailOwner) }
     }
 }
 

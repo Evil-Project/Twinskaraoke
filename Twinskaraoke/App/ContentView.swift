@@ -146,14 +146,9 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // Declared once and never varied. The system's own reveal distance is
-        // long — roughly 440pt — so `TabBarMinimizeCoordinator` still brings the
-        // bar back after a short scroll up, but it does that by assigning
-        // `tabBarMinimizeBehavior` on the controller directly and never through
-        // this modifier. Changing the *declared* value is what used to leave the
-        // mini player at the wrong width for about a second; see that type.
+        // One owner for minimization and accessory geometry: SwiftUI/the system.
         .tabBarMinimizeBehavior(.onScrollDown)
-        .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
+        .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {

@@ -259,6 +259,8 @@ final class GenresViewModel {
     @ObservationIgnored private var page = 0
     @ObservationIgnored private let pageSize = 50
     @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var activeDetails: [UUID: String] = [:]
+    @ObservationIgnored private var requestedDetailIDs = Set<String>()
     @ObservationIgnored private var genreDetailOrder: [String] = []
     @ObservationIgnored private let maxCachedGenreDetails = 30
     @ObservationIgnored private var detailRequestsInFlight = Set<String>()
@@ -333,16 +335,18 @@ final class GenresViewModel {
         }
     }
 
-    private func clearCachedGenreDetails() {
+    func clearCachedGenreDetails() {
         detailGeneration &+= 1
         detailTasks.values.forEach { $0.cancel() }
         detailTasks.removeAll()
         detailRequestsInFlight.removeAll()
         pendingDetailOrder.removeAll()
         pendingDetails.removeAll()
-        allSongs.removeAll()
-        firstSongs.removeAll()
-        genreDetailOrder.removeAll()
+        let visible = Set(activeDetails.values)
+        allSongs = allSongs.filter { visible.contains($0.key) }
+        firstSongs = firstSongs.filter { visible.contains($0.key) }
+        genreDetailOrder.removeAll { !visible.contains($0) }
+        requestedDetailIDs = visible
     }
 
     private func applyUITestFixture() {
@@ -425,14 +429,39 @@ final class GenresViewModel {
     }
 
     func loadPreviewIfNeeded(for genre: GenreSummary) {
-        guard artworkURLs[genre.id] == nil else { return }
+        guard activeDetails.isEmpty, artworkURLs[genre.id] == nil else { return }
         enqueueDetail(for: genre, priority: false)
     }
 
     func loadDetailIfNeeded(for genre: GenreSummary) {
-        guard allSongs[genre.id] == nil else { return }
+        requestedDetailIDs.insert(genre.id)
+        if allSongs[genre.id] != nil {
+            genreDetailOrder.removeAll { $0 == genre.id }
+            genreDetailOrder.append(genre.id)
+            return
+        }
         failedDetailIDs.remove(genre.id)
         enqueueDetail(for: genre, priority: true)
+    }
+
+    func retainDetail(_ genreID: String, owner: UUID) {
+        activeDetails[owner] = genreID
+        // A pushed detail screen should not inherit a backlog of tile requests.
+        let visible = Set(activeDetails.values)
+        pendingDetailOrder.removeAll { !visible.contains($0) }
+        pendingDetails = pendingDetails.filter { visible.contains($0.key) }
+    }
+
+    func releaseDetail(owner: UUID) {
+        guard let id = activeDetails.removeValue(forKey: owner) else { return }
+        if !activeDetails.values.contains(id) { requestedDetailIDs.remove(id) }
+        trimDetailCache()
+    }
+
+    func cancelQueuedPreview(for genre: GenreSummary) {
+        guard !requestedDetailIDs.contains(genre.id), !activeDetails.values.contains(genre.id) else { return }
+        pendingDetailOrder.removeAll { $0 == genre.id }
+        pendingDetails.removeValue(forKey: genre.id)
     }
 
     private func enqueueDetail(for genre: GenreSummary, priority: Bool) {
@@ -449,6 +478,11 @@ final class GenresViewModel {
                 pendingDetailOrder.insert(genre.id, at: 0)
             }
             return
+        }
+        if !priority, pendingDetailOrder.count >= 12,
+           let oldest = pendingDetailOrder.first(where: { !requestedDetailIDs.contains($0) }) {
+            pendingDetailOrder.removeAll { $0 == oldest }
+            pendingDetails.removeValue(forKey: oldest)
         }
         pendingDetails[genre.id] = genre
         if priority {
@@ -509,7 +543,7 @@ final class GenresViewModel {
 
         detailFailureDates.removeValue(forKey: genre.id)
         failedDetailIDs.remove(genre.id)
-        allSongs[genre.id] = songs
+        cacheDetailSongs(songs, for: genre.id, retainFullDetail: requestedDetailIDs.contains(genre.id))
         if let first = songs.first {
             firstSongs[genre.id] = first
         }
@@ -520,10 +554,23 @@ final class GenresViewModel {
             genresNeedingFallback.insert(genre.id)
             artworkURLs[genre.id] = FallbackArtProvider.shared.randomURL
         }
-        genreDetailOrder.removeAll { $0 == genre.id }
-        genreDetailOrder.append(genre.id)
+    }
+
+    func cacheDetailSongs(_ songs: [Song], for id: String, retainFullDetail: Bool) {
+        // The endpoint returns a full list, but tile requests retain only one song/art.
+        if let first = songs.first { firstSongs[id] = first }
+        guard retainFullDetail else { return }
+        allSongs[id] = songs
+        genreDetailOrder.removeAll { $0 == id }
+        genreDetailOrder.append(id)
+        trimDetailCache()
+    }
+
+    private func trimDetailCache() {
+        let visible = Set(activeDetails.values)
         while genreDetailOrder.count > maxCachedGenreDetails {
-            let oldest = genreDetailOrder.removeFirst()
+            guard let index = genreDetailOrder.firstIndex(where: { !visible.contains($0) }) else { break }
+            let oldest = genreDetailOrder.remove(at: index)
             allSongs.removeValue(forKey: oldest)
             firstSongs.removeValue(forKey: oldest)
         }

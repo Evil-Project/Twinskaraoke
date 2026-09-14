@@ -92,3 +92,57 @@ struct SearchLifecycleTests {
         try #require(!model.isSearching, "Search did not complete within five seconds")
     }
 }
+
+
+@Suite("Visible genre cache lifetime")
+@MainActor
+struct GenreCacheLifetimeTests {
+    private var songs: [Song] {
+        [UITestFixtures.song(id: "genre-song", title: "Song", artist: "Artist")]
+    }
+
+    @Test("Visible genre survives more than thirty later detail responses")
+    func visibleGenreSurvivesEviction() {
+        let model = GenresViewModel()
+        let owner = UUID()
+        model.retainDetail("visible", owner: owner)
+        model.cacheDetailSongs(songs, for: "visible", retainFullDetail: true)
+        for index in 0..<40 {
+            model.cacheDetailSongs(songs, for: "other-\(index)", retainFullDetail: true)
+        }
+        #expect(model.allSongs["visible"] == songs)
+        #expect(model.allSongs.count == 30)
+        model.releaseDetail(owner: owner)
+        model.cacheDetailSongs(songs, for: "new", retainFullDetail: true)
+        #expect(model.allSongs["visible"] == nil)
+    }
+
+    @Test("Tile responses never retain their full detail arrays")
+    func previewDoesNotPopulateDetailCache() {
+        let model = GenresViewModel()
+        for index in 0..<64 {
+            model.cacheDetailSongs(songs, for: "preview-\(index)", retainFullDetail: false)
+        }
+        #expect(model.allSongs.isEmpty)
+        #expect(model.firstSongs.count == 64)
+    }
+
+    @Test("Memory pressure preserves visible data and respects multiple owners")
+    func memoryPressureKeepsVisibleLists() {
+        let model = GenresViewModel()
+        let first = UUID(), second = UUID()
+        model.retainDetail("visible", owner: first)
+        model.retainDetail("visible", owner: second)
+        model.cacheDetailSongs(songs, for: "visible", retainFullDetail: true)
+        model.cacheDetailSongs(songs, for: "background", retainFullDetail: true)
+        model.releaseDetail(owner: first)
+        let generation = model.detailGeneration
+        model.clearCachedGenreDetails()
+        #expect(model.detailGeneration != generation)
+        #expect(model.allSongs["visible"] == songs)
+        #expect(model.allSongs["background"] == nil)
+        model.releaseDetail(owner: second)
+        model.clearCachedGenreDetails()
+        #expect(model.allSongs.isEmpty)
+    }
+}
