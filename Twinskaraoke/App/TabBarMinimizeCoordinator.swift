@@ -238,11 +238,8 @@ import SwiftUI
             guard let controller else { return }
 
             tabBarController = controller
-            // Let iOS 27 manage minimization until its new lifecycle is verified.
-            if #available(iOS 27.0, *) {
-                Self.keepSearchProminent(in: controller)
-                return
-            }
+            // Keep short upward-scroll restoration on every supported OS.
+            // The SwiftUI declaration stays constant so the accessory is not rebuilt.
             controller.tabBarMinimizeBehavior = mode.uiKit
             Self.keepSearchProminent(in: controller)
 
@@ -444,6 +441,11 @@ import SwiftUI
             guard mode != next else { return }
             mode = next
             tabBarController?.tabBarMinimizeBehavior = next.uiKit
+            if let controller = tabBarController {
+                Self.keepSearchProminent(in: controller)
+                controller.view.setNeedsLayout()
+                DebugLogger.log("Tab reveal mode=\(next), controller=\(ObjectIdentifier(controller)), tabFrame=\(controller.tabBar.frame)", category: .ui)
+            }
         }
 
         private static func tabBarController(in controller: UIViewController?) -> UITabBarController? {

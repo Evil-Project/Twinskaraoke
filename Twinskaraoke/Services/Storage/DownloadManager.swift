@@ -133,10 +133,11 @@ final class DownloadManager {
         let metadata: URL
     }
 
-    private struct ValidDownloadCacheEntry {
+    nonisolated struct ValidDownloadCacheEntry: Codable, Sendable {
         let source: String?
         let expectedDuration: TimeInterval?
         let modifiedAt: Date?
+        var byteCount: Int?
     }
 
     enum RestorationState: Equatable { case notStarted, restoring, ready, failed }
@@ -169,6 +170,8 @@ final class DownloadManager {
     private var failedInCurrentQueue = 0
     private var cancelledInCurrentQueue = 0
     private var pendingWiFiRepairs: [String: Song] = [:]
+    private var validationBatchGeneration = 0
+    private var cancellationGenerations: [String: Int] = [:]
     private var validDownloadCache: [String: ValidDownloadCacheEntry] = [:]
     private var downloadedMetadata: [String: Song] = [:]
     private var isWiFiAvailable = false
@@ -408,11 +411,11 @@ final class DownloadManager {
     }
 
     private nonisolated static func downloadedByteCount(at url: URL) -> Int {
-        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?.intValue ?? 0
     }
 
     private nonisolated static func modificationDate(at url: URL) -> Date? {
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
     }
 
     func isDownloaded(_ songID: String) -> Bool {
@@ -493,23 +496,30 @@ final class DownloadManager {
     }
 
     private func prewarmValidationCache(for songs: [Song]) {
+        let batchGeneration = validationBatchGeneration
+        let generations = Dictionary(songs.map { ($0.id, cancellationGenerations[$0.id, default: 0]) },
+            uniquingKeysWith: { _, new in new })
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let entries = self.validateDownloadsForCachePrewarm(songs)
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                for (songID, entry) in entries where self.validDownloadCache[songID] == nil {
+                guard self.validationBatchGeneration == batchGeneration else { return }
+                for (songID, entry) in entries where self.validDownloadCache[songID] == nil
+                    && self.cancellationGenerations[songID, default: 0] == generations[songID] {
                     self.validDownloadCache[songID] = entry
                 }
-                self.enqueueDownloads(songs)
+                self.enqueueDownloads(songs.filter {
+                    self.cancellationGenerations[$0.id, default: 0] == generations[$0.id]
+                })
             }
         }
     }
 
     /// Mirrors the early-exit checks in playableURL so warmed cache entries
     /// make it return the audio file without AVAudioFile on the main actor.
-    /// Missing, stale, or invalid downloads get no entry and fall back to the
-    /// on-main validation and repair path.
+    /// Missing, stale, or invalid downloads get no entry and can be downloaded
+    /// again without repeating the decoder probe on the main actor.
     private nonisolated func validateDownloadsForCachePrewarm(
         _ songs: [Song]
     ) -> [String: ValidDownloadCacheEntry] {
@@ -537,7 +547,8 @@ final class DownloadManager {
             entries[song.id] = ValidDownloadCacheEntry(
                 source: cachedSource ?? expectedSource,
                 expectedDuration: expectedDuration,
-                modifiedAt: Self.modificationDate(at: songFiles.audio)
+                modifiedAt: Self.modificationDate(at: songFiles.audio),
+                byteCount: Self.downloadedByteCount(at: songFiles.audio)
             )
         }
         return entries
@@ -666,7 +677,7 @@ final class DownloadManager {
 
         for song in songs {
             guard song.audioURL != nil else { continue }
-            if downloadedIDs.contains(song.id), playableURL(for: song) != nil { continue }
+            if downloadedIDs.contains(song.id), immediatelyPlayableURL(for: song) != nil { continue }
             guard !nextInProgress.contains(song.id) else { continue }
 
             pendingDownloads[song.id] = PendingDownload(song: song, token: UUID())
@@ -705,7 +716,7 @@ final class DownloadManager {
             drainedCount += 1
             guard let song = queuedDownloads.removeValue(forKey: songID) else { continue }
             guard inProgress.contains(songID) else { continue }
-            if downloadedIDs.contains(songID), playableURL(for: song) != nil {
+            if downloadedIDs.contains(songID), immediatelyPlayableURL(for: song) != nil {
                 pendingDownloads.removeValue(forKey: songID)
                 _ = persistPendingDownloads()
                 updatePublishedState { $0.inProgress.remove(songID) }
@@ -981,13 +992,10 @@ final class DownloadManager {
         if moved {
             writeMetadata(for: song)
             downloadedMetadata[songID] = song
-            validDownloadCache[songID] = ValidDownloadCacheEntry(
+            cacheValidDownload(songID: songID,
+                audioURL: files(for: songID, sourceURL: song.audioURL).audio,
                 source: song.audioURL?.absoluteString,
-                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil,
-                modifiedAt: Self.modificationDate(
-                    at: files(for: songID, sourceURL: song.audioURL).audio
-                )
-            )
+                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil)
             completedInCurrentQueue += 1
             // A downloaded song should never need the network again — but the
             // audio was the only thing being persisted, so its artwork was
@@ -1029,11 +1037,24 @@ final class DownloadManager {
         logDownloadQueueCompletionIfNeeded()
     }
 
-    private func cancelWork(songID: String) {
+    func cancel(songs: [Song]) {
+        let ids = Set(songs.map(\.id))
+        let active = inProgress.intersection(ids)
+        for id in ids { cancelWork(songID: id, persist: false) }
+        _ = persistPendingDownloads()
+        cancelledInCurrentQueue += active.count
+        updatePublishedState { $0.inProgress.subtract(ids) }
+        startQueuedDownloadsIfPossible()
+        logDownloadQueueCompletionIfNeeded()
+    }
+
+    private func cancelWork(songID: String, persist: Bool = true) {
+        cancellationGenerations[songID, default: 0] += 1
+        pendingWiFiRepairs.removeValue(forKey: songID)
         if !pendingJournalLoaded { cancelledBeforePendingRestore.insert(songID) }
         deferredDownloadRequests.removeValue(forKey: songID)
         pendingDownloads.removeValue(forKey: songID)
-        _ = persistPendingDownloads()
+        if persist { _ = persistPendingDownloads() }
         taskRegistry.cancel(songID: songID)
         cachePromotionTasks[songID]?.cancel()
         cachePromotionTasks.removeValue(forKey: songID)
@@ -1160,6 +1181,7 @@ final class DownloadManager {
             DebugLogger.log("Could not recreate downloads directory: \(error)", category: .cache)
         }
 
+        validationBatchGeneration += 1
         for task in tasks.values {
             task.cancel()
         }
@@ -1473,7 +1495,8 @@ final class DownloadManager {
         )
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         let expectedSource = song.audioURL?.absoluteString
-        guard FileManager.default.fileExists(atPath: songFiles.audio.path),
+        guard cachedSource == nil || expectedSource == nil || Self.sameAudioResource(cachedSource!, expectedSource!),
+              FileManager.default.fileExists(atPath: songFiles.audio.path),
               hasCachedValidation(
                   for: song.id,
                   audioURL: songFiles.audio,
@@ -1491,10 +1514,15 @@ final class DownloadManager {
         source: String?,
         expectedDuration: TimeInterval?
     ) -> Bool {
+        if validDownloadCache[songID] == nil {
+            let receipt = audioURL.deletingLastPathComponent().appendingPathComponent("validation.json")
+            if let data = try? Data(contentsOf: receipt),
+               let cached = try? JSONDecoder().decode(ValidDownloadCacheEntry.self, from: data) {
+                validDownloadCache[songID] = cached
+            }
+        }
         guard let cached = validDownloadCache[songID] else { return false }
-        return cached.source == source
-            && cached.expectedDuration == expectedDuration
-            && cached.modifiedAt == Self.modificationDate(at: audioURL)
+        return Self.validationMatches(cached, audioURL: audioURL, source: source, expectedDuration: expectedDuration)
     }
 
     private func cacheValidDownload(
@@ -1506,8 +1534,60 @@ final class DownloadManager {
         validDownloadCache[songID] = ValidDownloadCacheEntry(
             source: source,
             expectedDuration: expectedDuration,
-            modifiedAt: Self.modificationDate(at: audioURL)
+            modifiedAt: Self.modificationDate(at: audioURL),
+            byteCount: Self.downloadedByteCount(at: audioURL)
         )
+        do {
+            try JSONEncoder().encode(validDownloadCache[songID]).write(
+                to: audioURL.deletingLastPathComponent().appendingPathComponent("validation.json"), options: .atomic)
+        } catch {
+            DebugLogger.log("Download validation receipt write for \(songID): \(error)", category: .cache)
+        }
+    }
+
+    nonisolated static func validationMatches(_ cached: ValidDownloadCacheEntry, audioURL: URL,
+        source: String?, expectedDuration: TimeInterval?) -> Bool {
+        let sameSource = cached.source == source || (cached.source != nil && source != nil
+            && sameAudioResource(cached.source!, source!))
+        guard sameSource, cached.expectedDuration == expectedDuration,
+              let modified = cached.modifiedAt, modified == modificationDate(at: audioURL) else { return false }
+        return cached.byteCount.map { $0 > 0 && $0 == downloadedByteCount(at: audioURL) } ?? true
+    }
+
+    /// Resolve committed downloads before consulting the separate streaming cache.
+    /// Older installs have no receipt, so validate only the requested track off-main.
+    func resolvedPlaybackURL(for song: Song) async throws -> URL? {
+        if let ready = immediatelyPlayableURL(for: song) { return ready }
+        let generation = cancellationGenerations[song.id, default: 0]
+        let batchGeneration = validationBatchGeneration
+        if downloadedIDs.contains(song.id), !UIApplication.shared.isProtectedDataAvailable {
+            throw CocoaError(.fileReadNoPermission)
+        }
+        let sourceURL = readSourceURL(for: song.id).flatMap(URL.init(string:)) ?? song.audioURL
+        if let sourceURL, let expected = song.audioURL,
+           !Self.sameAudioResource(sourceURL.absoluteString, expected.absoluteString) { return nil }
+        guard FileManager.default.fileExists(atPath: files(for: song.id, sourceURL: sourceURL).audio.path) else { return nil }
+        let started = ContinuousClock.now
+        let entries = await Task.detached(priority: .userInitiated) {
+            self.validateDownloadsForCachePrewarm([song])
+        }.value
+        try Task.checkCancellation()
+        guard cancellationGenerations[song.id, default: 0] == generation,
+              validationBatchGeneration == batchGeneration else { throw CancellationError() }
+        guard let entry = entries[song.id] else {
+            DebugLogger.log("Keeping unreadable download without network fallback: \(song.id)", category: .cache)
+            throw CocoaError(.fileReadUnknown)
+        }
+        let resolvedSourceURL = entry.source.flatMap(URL.init(string:)) ?? song.audioURL
+        let audio = files(for: song.id, sourceURL: resolvedSourceURL).audio
+        guard Self.validationMatches(entry, audioURL: audio, source: entry.source,
+            expectedDuration: entry.expectedDuration) else { return nil }
+        cacheValidDownload(songID: song.id, audioURL: audio, source: entry.source,
+            expectedDuration: entry.expectedDuration)
+        downloadedMetadata[song.id] = song
+        updatePublishedState { $0.downloadedIDs.insert(song.id) }
+        DebugLogger.log("Downloaded playback resolved: \(song.id), elapsed=\(started.duration(to: .now))", category: .playback)
+        return audio
     }
 
     /// Returns true only when the on-disk download is conclusively invalid and was removed.

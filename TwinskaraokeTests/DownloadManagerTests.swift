@@ -5,6 +5,61 @@ import Synchronization
 
 @Suite("Download validation")
 struct DownloadManagerTests {
+    @Test("A saved download bypasses the streaming cache and network")
+    @MainActor
+    func downloadTakesPlaybackPriority() async throws {
+        let saved = URL(fileURLWithPath: "/Downloads/song/main.mp3")
+        var touchedRemote = false
+        let resolved = try await AudioPlayerManager.resolvePlaybackFile(download: { saved }, remoteCache: {
+            touchedRemote = true
+            return URL(fileURLWithPath: "/AudioCache/song/main.mp3")
+        })
+        #expect(resolved == saved)
+        #expect(!touchedRemote)
+    }
+
+    @Test("A download access error cannot silently become a network request")
+    @MainActor
+    func downloadErrorDoesNotFallThrough() async {
+        var touchedRemote = false
+        do {
+            _ = try await AudioPlayerManager.resolvePlaybackFile(download: {
+                throw CocoaError(.fileReadNoPermission)
+            }, remoteCache: {
+                touchedRemote = true
+                return URL(fileURLWithPath: "/unused")
+            })
+            Issue.record("Expected the download access error")
+        } catch { }
+        #expect(!touchedRemote)
+    }
+
+    @Test("Persisted validation survives relaunch but rejects changed or missing audio")
+    func persistedValidationReceipt() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let audio = directory.appendingPathComponent("main.mp3")
+        try Data([1, 2, 3]).write(to: audio)
+        let modified = try audio.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let entry = DownloadManager.ValidDownloadCacheEntry(source: "https://example.com/song.mp3?token=old",
+            expectedDuration: 180, modifiedAt: modified, byteCount: 3)
+        let restored = try JSONDecoder().decode(DownloadManager.ValidDownloadCacheEntry.self,
+            from: JSONEncoder().encode(entry))
+        #expect(DownloadManager.validationMatches(restored, audioURL: audio,
+            source: "https://example.com/song.mp3?token=new", expectedDuration: 180))
+        #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
+            source: "https://example.com/other.mp3", expectedDuration: 180))
+        #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
+            source: restored.source, expectedDuration: 200))
+        try Data([1, 2, 3, 4]).write(to: audio)
+        #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
+            source: restored.source, expectedDuration: 180))
+        try FileManager.default.removeItem(at: audio)
+        #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
+            source: restored.source, expectedDuration: 180))
+    }
+
     @Test("Cancelled promotion discards only its own files", arguments: [false, true])
     func cancelledPromotionDoesNotPublishOrDeleteRetry(hasReplacement: Bool) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

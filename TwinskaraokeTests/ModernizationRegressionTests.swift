@@ -230,9 +230,8 @@ struct ModernizationRegressionTests {
         #expect(recognizerCount(in: controller) == 0)
     }
 
-    // iOS 27 uses system minimization; older systems retain the custom reveal.
+    // All supported systems retain the short upward-scroll reveal.
     private var expectedRecognizerCount: Int {
-        if #available(iOS 27.0, *) { return 0 }
         return 1
     }
 

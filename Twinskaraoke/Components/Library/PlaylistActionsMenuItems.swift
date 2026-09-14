@@ -59,6 +59,12 @@ struct PlaylistActionsMenuItems: View {
         if !songs.isEmpty {
             if inFlightCount > 0 {
                 Label("Downloading \(inFlightCount)…", systemImage: "arrow.down.circle")
+                Button(role: .destructive) {
+                    downloads.cancel(songs: songs)
+                    AppHaptic.dismiss.play()
+                } label: {
+                    Label("Cancel Playlist Download", systemImage: "xmark.circle")
+                }
             } else if allDownloaded {
                 Button(role: .destructive) {
                     AppHaptic.warning.play()

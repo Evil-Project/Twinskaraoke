@@ -776,6 +776,7 @@ struct PlaylistGridCell: View {
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder private var artwork: some View {

@@ -963,6 +963,33 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertFalse(app.buttons["Clear queue"].exists)
   }
 
+  func testPlaybackSessionRestoresPausedAfterRelaunch() throws {
+    let app = XCUIApplication()
+    let arguments = ["-UITestMode", "1", "-UITestInitialSection", "home", "-UITestPlaybackSession"]
+    app.launchArguments = arguments + ["-UITestResetPlaybackSession"]
+    app.launch()
+    openVisibleItem("Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    openMiniPlayer(in: app)
+    let slider = app.sliders["Playback position"]
+    XCTAssertTrue(slider.waitForExistence(timeout: 8))
+    slider.adjust(toNormalizedSliderPosition: 0.4)
+    XCUIDevice.shared.press(.home)
+    app.terminate()
+    app.launchArguments = arguments
+    app.launch()
+    XCTAssertTrue(app.buttons["MiniPlayerBar"].waitForExistence(timeout: 8),
+      "The previous song must return without selecting it again.")
+    openMiniPlayer(in: app)
+    let restored = app.sliders["Playback position"]
+    XCTAssertTrue(restored.waitForExistence(timeout: 8))
+    XCTAssertTrue(waitUntil(timeout: 5) {
+      let value = restored.value as? String ?? ""
+      return value.contains("elapsed") && !value.hasPrefix("0:00")
+    }, "The saved playback position must survive relaunch.")
+    XCTAssertTrue(app.buttons["Play"].exists, "Restoration must not automatically start audio.")
+  }
+
   func testNativePlaybackSliderDoesNotDismissPlayer() throws {
     continueAfterFailure = true
     let app = XCUIApplication()
