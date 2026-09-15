@@ -113,10 +113,25 @@ final class AudioSessionController: AudioSessionManaging {
                 return
             }
             #endif
-            // Older SDKs do not expose async activation on iOS. Keep their
-            // existing behavior; the iOS 27 build takes the async API above.
+            // Older SDKs cannot name the iOS async API, including when their
+            // binary runs on iOS 27. Never block the main actor in that fallback.
+            Self.activateInBackground({ try session.setActive(true) }, completion: completion)
+        }
+    }
+
+    private nonisolated static let activationQueue = DispatchQueue(
+        label: "Twinskaraoke.audio-session.activation", qos: .userInitiated
+    )
+
+    /// Serialize synchronous activation attempts without blocking UI work.
+    /// Completion is delivered off-main; activateIfNeeded restores actor isolation.
+    nonisolated static func activateInBackground(
+        _ operation: @escaping @Sendable () throws -> Void,
+        completion: @escaping @Sendable (Bool, (any Error)?) -> Void
+    ) {
+        activationQueue.async {
             do {
-                try session.setActive(true)
+                try operation()
                 completion(true, nil)
             } catch { completion(false, error) }
         }

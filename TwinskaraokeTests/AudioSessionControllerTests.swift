@@ -5,6 +5,31 @@ import Testing
 @MainActor
 @Suite("Audio session activation")
 struct AudioSessionControllerTests {
+    @Test func synchronousFallbackRunsOffMainThread() async {
+        let succeeded = await withCheckedContinuation { continuation in
+            AudioSessionController.activateInBackground({
+                #expect(!Thread.isMainThread)
+            }, completion: { activated, error in
+                #expect(error == nil)
+                continuation.resume(returning: activated)
+            })
+        }
+        #expect(succeeded)
+    }
+
+    @Test func synchronousFallbackPreservesActivationError() async {
+        let result = await withCheckedContinuation { continuation in
+            AudioSessionController.activateInBackground({
+                throw NSError(domain: "activation-fixture", code: 42)
+            }, completion: { activated, error in
+                continuation.resume(returning: (activated, error as NSError?))
+            })
+        }
+        #expect(!result.0)
+        #expect(result.1?.domain == "activation-fixture")
+        #expect(result.1?.code == 42)
+    }
+
     private final class ActivationProbe {
         var completions: [@Sendable (Bool, (any Error)?) -> Void] = []
         var configurations = 0
