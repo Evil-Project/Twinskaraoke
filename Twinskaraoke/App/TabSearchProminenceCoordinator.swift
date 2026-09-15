@@ -7,21 +7,28 @@ final class TabSearchProminenceCoordinator {
     private(set) weak var controller: UITabBarController?
     private var attachmentTask: Task<Void, Never>?
     private var generation = 0
+    private weak var attachedWindow: UIWindow?
 
     isolated deinit { attachmentTask?.cancel() }
 
     func attach(to window: UIWindow) {
+        // Layout and SwiftUI updates can request attachment repeatedly in one
+        // frame. Coalesce them, and never mutate UIKit presentation mid-layout.
+        guard attachedWindow !== window || attachmentTask == nil else { return }
+        attachedWindow = window
         generation += 1
         attachmentTask?.cancel()
         let token = generation
-        resolve(in: window)
         // Tabs can be installed after their controller. No transition timers.
         attachmentTask = Task { @MainActor [weak self, weak window] in
+            guard let self, let window, generation == token, !Task.isCancelled else { return }
+            resolve(in: window)
             for _ in 0..<10 {
                 try? await Task.sleep(for: .milliseconds(100))
-                guard !Task.isCancelled, let self, let window, generation == token else { return }
+                guard !Task.isCancelled, generation == token else { return }
                 resolve(in: window)
             }
+            attachmentTask = nil
         }
     }
 
@@ -30,6 +37,7 @@ final class TabSearchProminenceCoordinator {
         attachmentTask?.cancel()
         attachmentTask = nil
         controller = nil
+        attachedWindow = nil
     }
 
     private func resolve(in window: UIWindow) {
@@ -49,7 +57,9 @@ final class TabSearchProminenceCoordinator {
     private static func keepSearchProminent(in controller: UITabBarController) {
         guard #available(iOS 27.0, *),
               let search = controller.tabs.first(where: { $0 is UISearchTab }) as? UISearchTab else { return }
-        search.automaticallyActivatesSearch = true
+        if !search.automaticallyActivatesSearch {
+            search.automaticallyActivatesSearch = true
+        }
         #if compiler(>=6.4)
         let current = controller.prominentTabIdentifier
         guard current != search.identifier else { return }

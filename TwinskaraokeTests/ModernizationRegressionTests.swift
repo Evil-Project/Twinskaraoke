@@ -118,7 +118,7 @@ struct ModernizationRegressionTests {
     }
 
     @Test("Search prominence never changes system minimization or installs a pan")
-    func prominencePreservesSystemOwnership() throws {
+    func prominencePreservesSystemOwnership() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         let controller = UITabBarController()
@@ -129,7 +129,8 @@ struct ModernizationRegressionTests {
         let second = TabSearchProminenceCoordinator()
         first.attach(to: window)
         second.attach(to: window)
-        #expect(first.controller === controller)
+        #expect(first.controller == nil) // No presentation mutation during attachment/layout.
+        try await waitUntil { first.controller === controller && second.controller === controller }
         #expect(controller.tabBarMinimizeBehavior == .never)
         #expect((controller.view.gestureRecognizers?.count ?? 0) == initialRecognizers)
         first.detach()
@@ -146,10 +147,10 @@ struct ModernizationRegressionTests {
         window.rootViewController = first
         let coordinator = TabSearchProminenceCoordinator()
         coordinator.attach(to: window)
-        #expect(coordinator.controller === first)
+        try await waitUntil { coordinator.controller === first }
         window.rootViewController = replacement
         coordinator.attach(to: window)
-        #expect(coordinator.controller === replacement)
+        try await waitUntil { coordinator.controller === replacement }
         coordinator.detach()
         try await Task.sleep(for: .milliseconds(150))
         #expect(coordinator.controller == nil)
