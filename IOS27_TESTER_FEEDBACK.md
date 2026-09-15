@@ -94,3 +94,24 @@ reveals and first-swipe minimization between them. The same assertion is include
 in iOS 27 CI. Device testing should include rapid direction changes with actual
 artwork/transport controls to check native accessory geometry on iOS 27; simulator
 placement assertions alone cannot establish that every animation frame is correct.
+
+
+## Threshold reveal animation follow-up (2026-09-15)
+
+The tester confirmed threshold reveal returns on iOS 27 but reported a snapping,
+two-stage accessory expansion. The reveal state previously changed without an
+explicit animation transaction, and MiniPlayerBar cleared animation whenever
+native accessory placement changed. Scroll-idle could also restore the policy
+before a reveal animation completed.
+
+The reveal now requests one SwiftUI smooth animation, respecting Reduce Motion.
+MiniPlayerBar inherits that transaction instead of suppressing it or adding a
+separate curve. Hand-back requires both scroll-idle and SwiftUI animation
+completion (`.removed`); new contacts cannot truncate an in-flight reveal and
+reset invalidates stale completions. No UIKit geometry changes or timer were added.
+
+Fourteen state/regression tests passed locally. The repeated reveal UI test now
+waits for both expanded placement and completion/hand-back before starting its
+next cycle; this passed on iOS 26.5. These checks verify lifecycle and placement,
+not frame-by-frame smoothness on an iOS 27 device. The reported iOS 27 visual
+artifact still needs confirmation against this build.

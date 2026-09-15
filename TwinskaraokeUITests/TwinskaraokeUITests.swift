@@ -22,6 +22,9 @@ final class TwinskaraokeUITests: XCTestCase {
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)),
                 withVelocity: 250, thenHoldForDuration: 0)
     XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "expanded" })
+    XCTAssertTrue(waitUntil(timeout: 5) {
+      app.staticTexts["NativeReveal.Offset"].value as? String == "native"
+    }, "The reveal must finish and restore native scrolling before the next cycle.")
     scroll.swipeUp()
     XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "inline" })
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)),

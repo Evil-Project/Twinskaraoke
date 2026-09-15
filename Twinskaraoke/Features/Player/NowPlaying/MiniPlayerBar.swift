@@ -62,10 +62,9 @@ struct MiniPlayerBar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: isInline ? 48 : 58)
         .clipped()
-        // The shape change itself is deliberately not animated: the system is
-        // already animating the container, and putting the contents on a
-        // second, unrelated curve made the move read as two movements.
-        .animation(nil, value: isInline)
+        // Inherit the tab transition's transaction. Clearing animation here
+        // makes the forced reveal snap its content into the moving container.
+        // Do not add a separate content animation with a competing duration.
         // Include the gaps and vertical padding in the visible touch region.
         .contentShape(.rect)
         // The root's window recognizer owns the contact across native accessory

@@ -424,6 +424,7 @@ private struct NativeTabRevealProbe: View {
                     .navigationTitle("Native reveal")
                     .overlay(alignment: .topTrailing) {
                         Text("\(offset)").accessibilityIdentifier("NativeReveal.Offset")
+                            .accessibilityValue(useThreshold && reveal.isRevealed ? "revealing" : "native")
                             .allowsHitTesting(false)
                     }
                 }

@@ -7,6 +7,64 @@ import UIKit
 @MainActor
 @Suite("Modernization regressions")
 struct ModernizationRegressionTests {
+    @Test func revealWaitsForAnimationBeforeHandBack() {
+        var completion: (() -> Void)?
+        let state = TabScrollRevealState { animation, changes, finished in
+            #expect(animation != nil)
+            changes()
+            completion = finished
+        }
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        #expect(state.isRevealed)
+        completion?()
+        #expect(!state.isRevealed)
+    }
+
+    @Test func newContactCannotCutOffRevealAnimation() {
+        var completion: (() -> Void)?
+        let state = TabScrollRevealState { _, changes, finished in
+            changes()
+            completion = finished
+        }
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        state.begin(owner: owner, offset: 400)
+        #expect(state.isRevealed)
+        completion?()
+        #expect(state.isRevealed)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        #expect(!state.isRevealed)
+    }
+
+    @Test func reduceMotionAndStaleAnimationCompletion() {
+        var completions: [() -> Void] = []
+        let state = TabScrollRevealState { animation, changes, finished in
+            #expect(animation == nil)
+            changes()
+            completions.append(finished)
+        }
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400, reduceMotion: true)
+        state.reset()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400, reduceMotion: true)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        completions[0]()
+        #expect(state.isRevealed)
+        completions[1]()
+        #expect(!state.isRevealed)
+    }
+
     @Test func thresholdRevealLatchesUntilNextScrollContact() {
         let state = TabScrollRevealState()
         let owner = UUID()

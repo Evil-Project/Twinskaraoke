@@ -122,6 +122,7 @@ private struct SmoothScrollingModifier: ViewModifier {
     let bounceBehavior: ScrollBounceBehavior
     @State private var scrollID = UUID()
     @Environment(\.tabScrollReveal) private var tabScrollReveal
+    @Environment(\.appReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         let configured = content
@@ -139,7 +140,7 @@ private struct SmoothScrollingModifier: ViewModifier {
                 }
             }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
-                tabScrollReveal?.moved(owner: scrollID, offset: offset)
+                tabScrollReveal?.moved(owner: scrollID, offset: offset, reduceMotion: reduceMotion)
             }
             .onDisappear {
                 ScrollPerformanceState.shared.update(id: scrollID, isScrolling: false)

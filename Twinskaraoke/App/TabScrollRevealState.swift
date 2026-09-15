@@ -2,7 +2,7 @@ import SwiftUI
 import Observation
 
 /// SwiftUI is the sole owner of the tab-bar behavior. A reveal stays latched
-/// through the scroll interaction and deceleration; no timers or UIKit mutations.
+/// through scrolling and its reveal animation; no timers or UIKit mutations.
 @Observable
 final class TabScrollRevealState {
     private(set) var isRevealed = false
@@ -10,7 +10,17 @@ final class TabScrollRevealState {
     @ObservationIgnored private var latestOwner: UUID?
     @ObservationIgnored private var origin: CGFloat = 0
     @ObservationIgnored private var changedThisGesture = false
+    @ObservationIgnored private var animationInFlight = false
+    @ObservationIgnored private var handBackRequested = false
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private let animate: (Animation?, () -> Void, @escaping () -> Void) -> Void
     static let threshold: CGFloat = 72
+
+    init(animate: @escaping (Animation?, () -> Void, @escaping () -> Void) -> Void = { animation, changes, completion in
+        withAnimation(animation, completionCriteria: .removed, changes, completion: completion)
+    }) {
+        self.animate = animate
+    }
 
     func begin(owner: UUID, offset: CGFloat) {
         guard self.owner != owner else { return }
@@ -18,17 +28,28 @@ final class TabScrollRevealState {
         latestOwner = owner
         // Rearm before scrolling starts, so UIKit can observe the whole next
         // gesture. Restoring onScrollDown does not itself request minimization.
-        isRevealed = false
+        if !animationInFlight { isRevealed = false }
         origin = offset
         changedThisGesture = false
     }
 
-    func moved(owner: UUID, offset: CGFloat) {
+    func moved(owner: UUID, offset: CGFloat, reduceMotion: Bool = false) {
         guard self.owner == owner, !changedThisGesture, offset.isFinite else { return }
         origin = max(origin, offset)
         guard origin - offset >= Self.threshold else { return }
-        isRevealed = true
         changedThisGesture = true
+        guard !isRevealed else { return }
+        generation += 1
+        let token = generation
+        animationInFlight = true
+        handBackRequested = false
+        animate(reduceMotion ? nil : .smooth(duration: 0.35), {
+            isRevealed = true
+        }, { [weak self] in
+            guard let self, generation == token else { return }
+            animationInFlight = false
+            finishHandBackIfReady()
+        })
     }
 
     func end(owner: UUID) {
@@ -37,12 +58,25 @@ final class TabScrollRevealState {
 
     func settled(owner: UUID) {
         guard self.owner == nil, latestOwner == owner else { return }
-        isRevealed = false
+        handBackRequested = true
+        finishHandBackIfReady()
+    }
+
+    private func finishHandBackIfReady() {
+        guard handBackRequested, owner == nil, !animationInFlight else { return }
+        handBackRequested = false
+        // Changing policy does not request a second visual transition.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { isRevealed = false }
     }
 
     func reset() {
         owner = nil
         latestOwner = nil
+        generation += 1
+        animationInFlight = false
+        handBackRequested = false
         isRevealed = false
     }
 }
