@@ -7,6 +7,30 @@ import UIKit
 @MainActor
 @Suite("Modernization regressions")
 struct ModernizationRegressionTests {
+    @Test func stalePlatformDriverCannotDetachItsReplacement() {
+        let state = TabScrollRevealState()
+        let old = UUID()
+        let replacement = UUID()
+        var calls = 0
+        state.installAnimationDriver(owner: old) { _, changes, completion in
+            changes()
+            completion()
+        }
+        state.installAnimationDriver(owner: replacement) { _, changes, completion in
+            calls += 1
+            changes()
+            completion()
+        }
+        state.removeAnimationDriver(owner: old)
+        let scroll = UUID()
+        state.begin(owner: scroll, offset: 500)
+        state.moved(owner: scroll, offset: 400)
+        #expect(calls == 1)
+        #expect(state.isRevealed)
+        state.removeAnimationDriver(owner: replacement)
+        #expect(!state.isRevealed)
+    }
+
     @Test func revealWaitsForAnimationBeforeHandBack() {
         var completion: (() -> Void)?
         let state = TabScrollRevealState { animation, changes, finished in

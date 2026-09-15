@@ -156,8 +156,8 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // One owner for minimization and accessory geometry: SwiftUI/the system.
-        .tabBarMinimizeBehavior(tabScrollReveal.isRevealed ? .never : .onScrollDown)
+        // One platform-specific owner for minimization; native accessory geometry.
+        .modifier(ThresholdTabBehavior(state: tabScrollReveal))
         .environment(\.tabScrollReveal, tabScrollReveal)
         .onChange(of: selectedSection) { _, _ in tabScrollReveal.reset() }
         .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
@@ -432,7 +432,7 @@ private struct NativeTabRevealProbe: View {
             Tab("Library", systemImage: "music.note.list") { Text("Library") }
             Tab("Search", systemImage: "magnifyingglass", role: .search) { Text("Search") }
         }
-        .tabBarMinimizeBehavior(useThreshold && reveal.isRevealed ? .never : .onScrollDown)
+        .modifier(ThresholdTabBehavior(state: useThreshold ? reveal : nil))
         .environment(\.tabScrollReveal, useThreshold ? reveal : nil)
         .tabViewBottomAccessory { NativeTabRevealAccessory() }
     }
@@ -448,9 +448,19 @@ private struct NativeRevealScrolling: ViewModifier {
 private struct NativeTabRevealAccessory: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     var body: some View {
-        Text(placement == .inline ? "inline" : "expanded")
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .accessibilityIdentifier("NativeReveal.Placement")
+        HStack {
+            Image(systemName: "music.note")
+                .frame(width: placement == .inline ? 30 : 40, height: placement == .inline ? 30 : 40)
+                .background(.blue, in: RoundedRectangle(cornerRadius: 6))
+            Text(placement == .inline ? "inline" : "expanded")
+                .accessibilityIdentifier("NativeReveal.Placement")
+            Spacer()
+            Image(systemName: "play.fill")
+            if placement != .inline { Image(systemName: "forward.end.fill") }
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: placement == .inline ? 48 : 58)
+        .clipped()
     }
 }
 #endif

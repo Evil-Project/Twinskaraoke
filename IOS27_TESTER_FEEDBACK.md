@@ -115,3 +115,24 @@ waits for both expanded placement and completion/hand-back before starting its
 next cycle; this passed on iOS 26.5. These checks verify lifecycle and placement,
 not frame-by-frame smoothness on an iOS 27 device. The reported iOS 27 visual
 artifact still needs confirmation against this build.
+
+
+## iOS 27 native batch transition candidate (2026-09-15)
+
+The tester reported no visual improvement from the SwiftUI animation change.
+Final-placement assertions were insufficient evidence of animation quality.
+
+`ThresholdTabBehavior` now selects one owner per platform: iOS 26 retains the
+working SwiftUI modifier, while iOS 27 omits that modifier and installs a native
+UIKit driver. The iOS 27 driver synchronously updates the reveal state and native
+minimization policy inside `UITabBarController.performBatchUpdates`. Core Animation
+completion gates hand-back along with scroll-idle. This tests Apple's documented
+batching of tab changes into one animated layout pass; smooth accessory expansion
+on iOS 27 is not yet established. Older SDK builds invoke the same public API by
+its Objective-C selector after checking availability.
+
+The local iOS 26.5 regression suite and repeated reveal UI test passed. CI now
+records the iOS 27 reveal test to `ios27-reveal.mp4`, using an accessory whose
+height/artwork/control layout changes with native placement. Review that recording
+and the actual device before calling the visual issue fixed. No UIKit frame writes,
+forced layout, fixed-duration hand-back timers, or custom tab-bar drawing are used.
