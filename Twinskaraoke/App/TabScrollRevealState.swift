@@ -1,8 +1,8 @@
 import SwiftUI
 import Observation
 
-/// The installed platform driver owns the tab-bar behavior. A reveal stays latched
-/// through scrolling and its reveal animation; no fixed-delay hand-back.
+/// SwiftUI is the sole owner of the tab-bar behavior. A reveal stays latched
+/// through scrolling and its reveal animation; no timers or UIKit mutations.
 @Observable
 final class TabScrollRevealState {
     private(set) var isRevealed = false
@@ -13,24 +13,8 @@ final class TabScrollRevealState {
     @ObservationIgnored private var animationInFlight = false
     @ObservationIgnored private var handBackRequested = false
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var animate: (Animation?, () -> Void, @escaping () -> Void) -> Void
-    @ObservationIgnored private var animationDriver: UUID?
+    @ObservationIgnored private let animate: (Animation?, () -> Void, @escaping () -> Void) -> Void
     static let threshold: CGFloat = 72
-
-    func installAnimationDriver(owner: UUID,
-        animate: @escaping (Animation?, () -> Void, @escaping () -> Void) -> Void) {
-        animationDriver = owner
-        self.animate = animate
-    }
-
-    func removeAnimationDriver(owner: UUID) {
-        guard animationDriver == owner else { return }
-        animationDriver = nil
-        reset()
-        animate = { animation, changes, completion in
-            withAnimation(animation, completionCriteria: .removed, changes, completion: completion)
-        }
-    }
 
     init(animate: @escaping (Animation?, () -> Void, @escaping () -> Void) -> Void = { animation, changes, completion in
         withAnimation(animation, completionCriteria: .removed, changes, completion: completion)

@@ -156,8 +156,8 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // One platform-specific owner for minimization; native accessory geometry.
-        .modifier(ThresholdTabBehavior(state: tabScrollReveal))
+        // SwiftUI owns both scroll tracking and native accessory minimization.
+        .tabBarMinimizeBehavior(tabScrollReveal.isRevealed ? .never : .onScrollDown)
         .environment(\.tabScrollReveal, tabScrollReveal)
         .onChange(of: selectedSection) { _, _ in tabScrollReveal.reset() }
         .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
@@ -432,7 +432,7 @@ private struct NativeTabRevealProbe: View {
             Tab("Library", systemImage: "music.note.list") { Text("Library") }
             Tab("Search", systemImage: "magnifyingglass", role: .search) { Text("Search") }
         }
-        .modifier(ThresholdTabBehavior(state: useThreshold ? reveal : nil))
+        .tabBarMinimizeBehavior(useThreshold && reveal.isRevealed ? .never : .onScrollDown)
         .environment(\.tabScrollReveal, useThreshold ? reveal : nil)
         .tabViewBottomAccessory { NativeTabRevealAccessory() }
     }

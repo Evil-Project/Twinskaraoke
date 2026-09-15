@@ -136,3 +136,16 @@ records the iOS 27 reveal test to `ios27-reveal.mp4`, using an accessory whose
 height/artwork/control layout changes with native placement. Review that recording
 and the actual device before calling the visual issue fixed. No UIKit frame writes,
 forced layout, fixed-duration hand-back timers, or custom tab-bar drawing are used.
+
+
+## Native batch driver reverted after device regression (2026-09-15)
+
+The tester reports that commit 78cae06 prevents downward-scroll minimization on
+iOS 27. The native driver is removed and the SwiftUI minimization modifier is
+restored on all iOS versions, returning production behavior to d7beb57. The
+72-point reveal remains. The richer diagnostic accessory and CI recording remain
+so future work can capture the unresolved iOS 27 upward animation artifact.
+
+The previous local passing tests exercised only the iOS 26 path and did not
+validate the new iOS 27 driver. Do not treat those results as evidence that the
+iOS 27 regression was absent. The upward animation issue is still open.
