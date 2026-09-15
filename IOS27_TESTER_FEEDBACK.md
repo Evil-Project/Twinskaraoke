@@ -47,3 +47,32 @@ A separate confirmed source defect affected genre screens: full-detail responses
 Tile requests now retain just preview metadata rather than populating the full-song cache. Pending previews are bounded, removed when their tiles disappear, and dropped when entering a genre; new previews pause while a detail is visible. Already-running preview requests remain bounded by the existing four-request concurrency limit. The API response still contains full songs, so this reduces retained data and queued work rather than claiming a new server-side preview endpoint. Full detail loads remain prioritized, and existing detail reads refresh their cache recency.
 
 Validation: all 288 unit tests passed (`/private/tmp/genre-tab-ownership.xcresult`). Regressions cover 40 later cache entries with the visible list retained, preview-only responses, memory pressure with multiple owners, and attachment/teardown leaving minimization untouched. Both Search navigation and mini-player interaction UI checks passed (`/private/tmp/genre-tab-ui.xcresult`). Device reproduction and hosted iOS 27 verification remain outstanding for this follow-up.
+
+
+## Native upward-scroll reveal investigation (2026-09-15)
+
+The app still declares `tabBarMinimizeBehavior(.onScrollDown)`. Its scroll
+optimization modifier configures bounce, keyboard dismissal, and performance
+observation; it does not replace the native scroll recognizer. The root player
+gesture accepts touches only inside the mini-player, while the zoom back gesture
+requires predominantly horizontal movement.
+
+An isolated DEBUG screen (`-UITestNativeTabReveal`) contains only SwiftUI tabs,
+a NavigationStack, a 200-row ScrollView, and a native bottom accessory. It excludes
+the app's Search coordinator, player gestures, zoom dismissal, and scroll modifiers.
+`testNativeTabRevealDiagnostic` records placement and inset-normalized scroll offset
+as persistent XCTest attachments. It reports behavior rather than treating an
+undocumented reveal threshold as a test assertion.
+
+Local iOS 26.5 simulator result (`/private/tmp/native-reveal.xcresult`):
+- Initial: offset 0, expanded.
+- After five forward swipes: offset 3515, inline.
+- After a 140-point reverse drag: offset 3385, still inline.
+- After another long reverse swipe: offset 2661, still inline.
+
+Thus the short-reverse behavior is absent even without app customization on the
+local runtime. This does not establish iOS 27 behavior; the same diagnostic is now
+included in its CI workflow. No production reveal behavior changed. Apple's UIKit
+documentation describes expansion on scrolling back up but exposes no distance
+parameter; the SwiftUI documentation describes minimization without specifying
+an expansion threshold. Do not reintroduce the old timed UIKit behavior toggles.

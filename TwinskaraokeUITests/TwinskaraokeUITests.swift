@@ -9,6 +9,35 @@ final class TwinskaraokeUITests: XCTestCase {
     continueAfterFailure = false
   }
 
+  func testNativeTabRevealDiagnostic() throws {
+    let app = XCUIApplication()
+    app.launchArguments += ["-UITestMode", "1", "-UITestNativeTabReveal"]
+    app.launch()
+    let scroll = app.scrollViews["NativeReveal.Scroll"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+    func record(_ stage: String) {
+      let placement = app.staticTexts["NativeReveal.Placement"].label
+      let offset = app.staticTexts["NativeReveal.Offset"].label
+      let note = "Native reveal \(stage): offset=\(offset), placement=\(placement)"
+      print(note)
+      let attachment = XCTAttachment(string: note)
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+    record("initial")
+    for _ in 0..<5 { scroll.swipeUp() }
+    record("scrolled down")
+    let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 140)),
+                withVelocity: 250, thenHoldForDuration: 0)
+    record("140-point reverse")
+    scroll.swipeDown()
+    record("long reverse")
+    // Diagnostic only: record native policy rather than asserting an
+    // undocumented threshold. The offset proves whether we reached the top.
+    XCTAssertTrue(scroll.exists)
+  }
+
   func testAppLaunches() throws {
     let app = launchApp()
 

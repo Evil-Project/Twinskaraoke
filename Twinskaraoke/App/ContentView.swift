@@ -7,8 +7,17 @@ import Observation
 
 struct ContentView: View {
     var body: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-UITestNativeTabReveal") {
+            NativeTabRevealProbe()
+        } else {
+            PopupHostView()
+                .environment(AudioPlayerManager.shared)
+        }
+        #else
         PopupHostView()
             .environment(AudioPlayerManager.shared)
+        #endif
     }
 }
 
@@ -383,3 +392,48 @@ private extension RootSection {
 #Preview {
     ContentView()
 }
+
+#if DEBUG
+/// Isolates the OS scroll/reveal behavior from the app's gestures and bridges.
+private struct NativeTabRevealProbe: View {
+    @State private var offset = 0
+    var body: some View {
+        TabView {
+            Tab("Home", systemImage: "house") {
+                NavigationStack {
+                    ScrollView {
+                        LazyVStack {
+                            ForEach(0..<200) { row in
+                                Text("Row \(row)")
+                                    .frame(maxWidth: .infinity, minHeight: 60)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("NativeReveal.Scroll")
+                    .onScrollGeometryChange(for: Int.self) {
+                        Int($0.contentOffset.y + $0.contentInsets.top)
+                    } action: { _, value in offset = value }
+                    .navigationTitle("Native reveal")
+                    .overlay(alignment: .topTrailing) {
+                        Text("\(offset)").accessibilityIdentifier("NativeReveal.Offset")
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+            Tab("Library", systemImage: "music.note.list") { Text("Library") }
+            Tab("Search", systemImage: "magnifyingglass", role: .search) { Text("Search") }
+        }
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewBottomAccessory { NativeTabRevealAccessory() }
+    }
+}
+
+private struct NativeTabRevealAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    var body: some View {
+        Text(placement == .inline ? "inline" : "expanded")
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .accessibilityIdentifier("NativeReveal.Placement")
+    }
+}
+#endif
