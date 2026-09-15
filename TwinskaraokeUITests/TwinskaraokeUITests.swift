@@ -9,6 +9,26 @@ final class TwinskaraokeUITests: XCTestCase {
     continueAfterFailure = false
   }
 
+  func testThresholdTabReveal() throws {
+    let app = XCUIApplication()
+    app.launchArguments += ["-UITestMode", "1", "-UITestNativeTabReveal", "-UITestThresholdTabReveal"]
+    app.launch()
+    let scroll = app.scrollViews["NativeReveal.Scroll"]
+    let placement = app.staticTexts["NativeReveal.Placement"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+    for _ in 0..<4 { scroll.swipeUp() }
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "inline" })
+    let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)),
+                withVelocity: 250, thenHoldForDuration: 0)
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "expanded" })
+    scroll.swipeUp()
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "inline" })
+    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)),
+                withVelocity: 250, thenHoldForDuration: 0)
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "expanded" })
+  }
+
   func testNativeTabRevealDiagnostic() throws {
     let app = XCUIApplication()
     app.launchArguments += ["-UITestMode", "1", "-UITestNativeTabReveal"]

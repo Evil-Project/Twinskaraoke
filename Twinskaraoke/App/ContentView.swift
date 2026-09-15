@@ -28,6 +28,7 @@ private struct PopupHostView: View {
     @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
+    @State private var tabScrollReveal = TabScrollRevealState()
     private let nowPlaying = NowPlayingSnapshotState.shared
     // The mini player is presented from the root and sits above every pushed
     // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
@@ -156,7 +157,9 @@ private struct PopupHostView: View {
             MiniPlayerBar()
         }
         // One owner for minimization and accessory geometry: SwiftUI/the system.
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabBarMinimizeBehavior(tabScrollReveal.isRevealed ? .never : .onScrollDown)
+        .environment(\.tabScrollReveal, tabScrollReveal)
+        .onChange(of: selectedSection) { _, _ in tabScrollReveal.reset() }
         .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 
@@ -397,6 +400,10 @@ private extension RootSection {
 /// Isolates the OS scroll/reveal behavior from the app's gestures and bridges.
 private struct NativeTabRevealProbe: View {
     @State private var offset = 0
+    @State private var reveal = TabScrollRevealState()
+    private var useThreshold: Bool {
+        ProcessInfo.processInfo.arguments.contains("-UITestThresholdTabReveal")
+    }
     var body: some View {
         TabView {
             Tab("Home", systemImage: "house") {
@@ -409,6 +416,7 @@ private struct NativeTabRevealProbe: View {
                             }
                         }
                     }
+                    .modifier(NativeRevealScrolling(isEnabled: useThreshold))
                     .accessibilityIdentifier("NativeReveal.Scroll")
                     .onScrollGeometryChange(for: Int.self) {
                         Int($0.contentOffset.y + $0.contentInsets.top)
@@ -423,8 +431,16 @@ private struct NativeTabRevealProbe: View {
             Tab("Library", systemImage: "music.note.list") { Text("Library") }
             Tab("Search", systemImage: "magnifyingglass", role: .search) { Text("Search") }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabBarMinimizeBehavior(useThreshold && reveal.isRevealed ? .never : .onScrollDown)
+        .environment(\.tabScrollReveal, useThreshold ? reveal : nil)
         .tabViewBottomAccessory { NativeTabRevealAccessory() }
+    }
+}
+
+private struct NativeRevealScrolling: ViewModifier {
+    let isEnabled: Bool
+    func body(content: Content) -> some View {
+        if isEnabled { content.smoothScrolling() } else { content }
     }
 }
 

@@ -76,3 +76,21 @@ included in its CI workflow. No production reveal behavior changed. Apple's UIKi
 documentation describes expansion on scrolling back up but exposes no distance
 parameter; the SwiftUI documentation describes minimization without specifying
 an expansion threshold. Do not reintroduce the old timed UIKit behavior toggles.
+
+
+## Restored threshold reveal (2026-09-15)
+
+Upward movement of 72 points now requests expansion through a root-owned SwiftUI
+`TabBarMinimizeBehavior` value. Shared scroll modifiers observe scroll geometry
+and phase without adding gesture recognizers. The reveal is latched throughout
+the gesture and deceleration; native `.onScrollDown` resumes when that scroll
+reaches idle (or a new contact starts). No UIKit behavior assignment, forced
+layout, fixed-delay hand-back, or custom accessory animation is used.
+
+Experiments found that restoring the native policy midway through the next drag
+misses its initial scroll event and needs a second downward swipe. Releasing at
+scroll completion fixes this. The local iOS 26.5 UI test verified two threshold
+reveals and first-swipe minimization between them. The same assertion is included
+in iOS 27 CI. Device testing should include rapid direction changes with actual
+artwork/transport controls to check native accessory geometry on iOS 27; simulator
+placement assertions alone cannot establish that every animation frame is correct.

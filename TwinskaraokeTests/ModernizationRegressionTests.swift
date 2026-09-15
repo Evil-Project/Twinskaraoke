@@ -7,6 +7,58 @@ import UIKit
 @MainActor
 @Suite("Modernization regressions")
 struct ModernizationRegressionTests {
+    @Test func thresholdRevealLatchesUntilNextScrollContact() {
+        let state = TabScrollRevealState()
+        let owner = UUID()
+        state.begin(owner: owner, offset: 1000)
+        state.moved(owner: owner, offset: 929)
+        #expect(!state.isRevealed)
+        state.moved(owner: owner, offset: 928)
+        #expect(state.isRevealed)
+        state.moved(owner: owner, offset: 1200)
+        #expect(state.isRevealed) // Inset changes/reversal cannot hand back mid-gesture.
+        state.end(owner: owner)
+        state.moved(owner: owner, offset: 1400)
+        #expect(state.isRevealed) // Deceleration/layout is not a new gesture.
+        state.begin(owner: owner, offset: 900)
+        #expect(!state.isRevealed) // Native minimization sees the next whole gesture.
+        state.moved(owner: owner, offset: 972)
+        #expect(!state.isRevealed)
+        state.moved(owner: owner, offset: 900)
+        #expect(state.isRevealed)
+        state.begin(owner: owner, offset: 900) // tracking -> interacting, same contact
+        #expect(state.isRevealed)
+
+    }
+
+    @Test func thresholdRevealHandsBackOnlyAfterItsScrollSettles() {
+        let state = TabScrollRevealState()
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        state.settled(owner: owner)
+        #expect(state.isRevealed) // Still interacting.
+        state.end(owner: owner)
+        state.settled(owner: UUID())
+        #expect(state.isRevealed) // Another scroll view cannot release it.
+        state.settled(owner: owner)
+        #expect(!state.isRevealed)
+    }
+
+    @Test func thresholdRevealIgnoresOtherScrollViewsAndResets() {
+        let state = TabScrollRevealState()
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: UUID(), offset: 0)
+        #expect(!state.isRevealed)
+        state.moved(owner: owner, offset: 600)
+        state.moved(owner: owner, offset: 528)
+        #expect(state.isRevealed)
+        state.reset()
+        state.moved(owner: owner, offset: 0)
+        #expect(!state.isRevealed)
+    }
+
     @Observable
     final class State {
         var value = 0
