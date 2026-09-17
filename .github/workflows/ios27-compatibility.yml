@@ -72,8 +72,6 @@ jobs:
             -skipPackagePluginValidation -parallel-testing-enabled NO -collect-test-diagnostics never \
             -only-testing:TwinskaraokeTests \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAppLaunches \
-            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativeTabRevealDiagnostic \
-            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativeRevealOnScrollUp \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAdaptiveMusicShellShowsSidebarOrTabs \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testLibraryAndSearchDrillDownNavigation \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSwipingBackFromPlaylistDetailStartsNoPlayback \
@@ -82,19 +80,6 @@ jobs:
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSettingsPersistAutoplayAndEnforceTransitionChoice \
             -resultBundlePath "$RUNNER_TEMP/ios27-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/ios27-tests.log"
-      - name: Record threshold reveal transitions
-        run: |
-          set -o pipefail
-          xcrun simctl io "$IOS27_SIMULATOR" recordVideo --codec=h264 "$RUNNER_TEMP/ios27-reveal.mp4" > "$RUNNER_TEMP/ios27-recording.log" 2>&1 &
-          recording_pid=$!
-          trap 'kill -INT "$recording_pid" 2>/dev/null || true; wait "$recording_pid" || true' EXIT
-          xcodebuild test-without-building \
-            -project Twinskaraoke.xcodeproj -scheme Twinskaraoke \
-            -destination "platform=iOS Simulator,id=$IOS27_SIMULATOR" \
-            -parallel-testing-enabled NO -collect-test-diagnostics never \
-            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testThresholdTabReveal \
-            -resultBundlePath "$RUNNER_TEMP/ios27-reveal.xcresult" \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/ios27-reveal.log"
       - name: Report validation scope
         if: always()
         run: |
@@ -120,5 +105,4 @@ jobs:
             ${{ runner.temp }}/runtimes.json
             ${{ runner.temp }}/ios27-*.log
             ${{ runner.temp }}/ios27-*.xcresult
-            ${{ runner.temp }}/ios27-reveal.mp4
           if-no-files-found: warn

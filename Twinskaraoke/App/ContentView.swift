@@ -7,17 +7,8 @@ import Observation
 
 struct ContentView: View {
     var body: some View {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-UITestNativeTabReveal") {
-            IsolatedTabRevealProbe()
-        } else {
-            PopupHostView()
-                .environment(AudioPlayerManager.shared)
-        }
-        #else
         PopupHostView()
             .environment(AudioPlayerManager.shared)
-        #endif
     }
 }
 
@@ -28,11 +19,6 @@ private struct PopupHostView: View {
     @State private var homeViewModel = HomeViewModel()
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
-    @State private var tabScrollReveal = TabScrollRevealState()
-    /// Device-only comparison switch for the iOS 27 reveal animation; see
-    /// `TabRevealStrategy`. Defaults to the shipping behaviour.
-    @AppStorage(TabRevealStrategy.storageKey)
-    private var tabRevealStrategyRaw = TabRevealStrategy.automatic.rawValue
     private let nowPlaying = NowPlayingSnapshotState.shared
     // The mini player is presented from the root and sits above every pushed
     // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
@@ -40,7 +26,6 @@ private struct PopupHostView: View {
     private let videoFullScreen = VideoFullScreenState.shared
 
     init() {
-        TabRevealStrategy.migrateStoredSelectionIfNeeded()
         _selectedSection = State(initialValue: Self.initialSection)
     }
 
@@ -161,13 +146,13 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // SwiftUI owns scroll tracking; the strategy owns who performs the
-        // reveal. `.declared` is the shipping path.
-        .modifier(ThresholdTabBehavior(
-            state: tabScrollReveal,
-            strategy: (TabRevealStrategy(rawValue: tabRevealStrategyRaw) ?? .automatic).resolved
-        ))
-        .onChange(of: selectedSection) { _, _ in tabScrollReveal.reset() }
+        // The system owns minimization entirely. A short-scroll-up reveal was
+        // built on top of this once, by flipping the policy to `.never` to
+        // force an expansion; iOS 27 applies that flip with no transition at
+        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
+        // every comparable app restore at the scroll edge, which is what this
+        // does now.
+        .tabBarMinimizeBehavior(.onScrollDown)
         .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 

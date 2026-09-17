@@ -121,30 +121,16 @@ private struct ScrollEdgeHapticModifier: ViewModifier {
 private struct SmoothScrollingModifier: ViewModifier {
     let bounceBehavior: ScrollBounceBehavior
     @State private var scrollID = UUID()
-    @Environment(\.tabScrollReveal) private var tabScrollReveal
-    @Environment(\.appReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        let configured = content
+        content
             .scrollBounceBehavior(bounceBehavior)
             .scrollDismissesKeyboard(.interactively)
-
-        configured
-            .onScrollPhaseChange { _, phase, context in
+            .onScrollPhaseChange { _, phase, _ in
                 ScrollPerformanceState.shared.update(id: scrollID, isScrolling: phase.isScrolling)
-                if phase == .tracking || phase == .interacting {
-                    tabScrollReveal?.begin(owner: scrollID, offset: context.geometry.contentOffset.y)
-                } else {
-                    tabScrollReveal?.end(owner: scrollID)
-                    if phase == .idle { tabScrollReveal?.settled(owner: scrollID) }
-                }
-            }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
-                tabScrollReveal?.moved(owner: scrollID, offset: offset, reduceMotion: reduceMotion)
             }
             .onDisappear {
                 ScrollPerformanceState.shared.update(id: scrollID, isScrolling: false)
-                tabScrollReveal?.end(owner: scrollID)
             }
     }
 }
