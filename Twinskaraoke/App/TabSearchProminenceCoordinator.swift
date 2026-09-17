@@ -1,8 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// Only maintains Search prominence. SwiftUI exclusively owns minimization and
-/// accessory placement; this bridge must never change tabBarMinimizeBehavior.
+/// Only turns on the Search tab's auto-activation. SwiftUI exclusively owns
+/// minimization and accessory placement; this bridge must never change
+/// tabBarMinimizeBehavior.
 final class TabSearchProminenceCoordinator {
     private(set) weak var controller: UITabBarController?
     private var attachmentTask: Task<Void, Never>?
@@ -54,25 +55,22 @@ final class TabSearchProminenceCoordinator {
         return find(in: root.presentedViewController)
     }
 
+    /// Turns on the search tab's own auto-activation. Prominence then follows
+    /// from it rather than being assigned: `prominentTabIdentifier` documents
+    /// that a nil identifier gives the prominent treatment to a `UISearchTab`
+    /// whose `automaticallyActivatesSearch` is on, so writing the identifier
+    /// ourselves only restated the default — at the cost of a Swift-version
+    /// conditional and a selector dance for an iOS 27-only property.
+    ///
+    /// `automaticallyActivatesSearch` is iOS 26.0, not 27.0. Gating it behind
+    /// `#available(iOS 27.0, *)` — as this did — meant it never ran at all on
+    /// the 26.5 deployment target: the field did not take focus when Search was
+    /// selected, and cancelling search did not restore the previous tab.
     private static func keepSearchProminent(in controller: UITabBarController) {
-        guard #available(iOS 27.0, *),
-              let search = controller.tabs.first(where: { $0 is UISearchTab }) as? UISearchTab else { return }
-        if !search.automaticallyActivatesSearch {
-            search.automaticallyActivatesSearch = true
-        }
-        #if compiler(>=6.4)
-        let current = controller.prominentTabIdentifier
-        guard current != search.identifier else { return }
-        controller.prominentTabIdentifier = search.identifier
-        #else
-        let setter = NSSelectorFromString("setProminentTabIdentifier:")
-        let getter = NSSelectorFromString("prominentTabIdentifier")
-        guard controller.responds(to: setter), controller.responds(to: getter) else { return }
-        let current = controller.perform(getter)?.takeUnretainedValue() as? String
-        guard current != search.identifier else { return }
-        controller.perform(setter, with: search.identifier as NSString)
-        #endif
-        DebugLogger.log("Search prominence controller=\(ObjectIdentifier(controller)), tabs=\(controller.tabs.map { String(describing: type(of: $0)) + ":" + $0.identifier }), automatic=\(search.automaticallyActivatesSearch), previous=\(current ?? "nil"), assigned=\(search.identifier)", category: .ui)
+        guard let search = controller.tabs.first(where: { $0 is UISearchTab }) as? UISearchTab,
+              !search.automaticallyActivatesSearch else { return }
+        search.automaticallyActivatesSearch = true
+        DebugLogger.log("Search auto-activation controller=\(ObjectIdentifier(controller)), tabs=\(controller.tabs.map { String(describing: type(of: $0)) + ":" + $0.identifier }), assigned=\(search.identifier)", category: .ui)
     }
 
 }

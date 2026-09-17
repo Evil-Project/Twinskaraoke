@@ -24,7 +24,18 @@ struct IsolatedTabRevealProbe: View {
 
     @State private var reveal = TabScrollRevealState()
     @State private var offset = 0
-    private var strategy: TabRevealStrategy { TabRevealStrategy.current.resolved }
+    private var strategy: TabRevealStrategy {
+        // The UI test names the strategy it wants on the command line. Nothing
+        // read that argument, so the probe silently fell back to the per-OS
+        // default instead: `testThresholdTabReveal` exercised the threshold on
+        // iOS 26 and `.nativeOnly` on iOS 27, where there is no threshold
+        // reveal to observe. The test then failed on iOS 27 for a real reason
+        // about the wrong subject.
+        if ProcessInfo.processInfo.arguments.contains("-UITestThresholdTabReveal") {
+            return .declared
+        }
+        return TabRevealStrategy.current.resolved
+    }
 
     var body: some View {
         TabView {

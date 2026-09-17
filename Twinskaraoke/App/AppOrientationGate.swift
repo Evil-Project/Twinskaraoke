@@ -9,9 +9,23 @@ import SwiftUI
         static let shared = AppOrientationGate()
         private var owners: [ObjectIdentifier: Set<UUID>] = [:]
 
+        /// The mask that applies when nothing holds a landscape lease.
+        ///
+        /// `application(_:supportedInterfaceOrientationsFor:)` overrides
+        /// `UISupportedInterfaceOrientations`, so returning `.portrait` for
+        /// every idiom quietly cancelled the four orientations the Info.plist
+        /// declares for iPad — locking the entire iPad app to portrait outside
+        /// the video player, sidebar shell included. iPhone stays portrait; it
+        /// is the one that declares a narrow set and means it.
+        private var baseOrientations: UIInterfaceOrientationMask {
+            UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
+        }
+
         func supportedOrientations(in scene: UIWindowScene?) -> UIInterfaceOrientationMask {
-            guard let scene, owners[ObjectIdentifier(scene)]?.isEmpty == false else { return .portrait }
-            return .allButUpsideDown
+            guard let scene, owners[ObjectIdentifier(scene)]?.isEmpty == false else { return baseOrientations }
+            // Union, not a replacement: a lease widens iPhone to landscape and
+            // must never narrow iPad back out of upside-down.
+            return baseOrientations.union(.allButUpsideDown)
         }
 
         func setLandscapeAllowed(_ allowed: Bool, owner: UUID, in scene: UIWindowScene) {
@@ -23,7 +37,10 @@ import SwiftUI
                 window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
             if !allowed, owners[key] == nil {
-                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+                // Back to whatever this idiom allows, not unconditionally
+                // portrait — on iPad that would yank the window upright on
+                // leaving a video.
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: baseOrientations))
             }
         }
     }
