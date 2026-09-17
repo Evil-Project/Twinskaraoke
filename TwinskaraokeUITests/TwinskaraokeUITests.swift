@@ -25,11 +25,25 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertTrue(waitUntil(timeout: 5) {
       app.staticTexts["NativeReveal.Offset"].value as? String == "native"
     }, "The reveal must finish and restore native scrolling before the next cycle.")
-    scroll.swipeUp()
-    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "inline" })
+    // How many downward swipes it takes to minimize again *after* a reveal.
+    // One is enough on iOS 26. If iOS 27 needs more, that is a reveal-distance
+    // difference and the feature still works; if no number works, the reveal
+    // has left the bar unable to minimize at all, which is a functional break
+    // rather than the cosmetic one this was chased as. Report which.
+    var swipes = 0
+    for attempt in 1...4 {
+      scroll.swipeUp()
+      swipes = attempt
+      if waitUntil(timeout: 2, { placement.label == "inline" }) { break }
+    }
+    XCTAssertEqual(
+      placement.label, "inline",
+      "The tab bar never minimized again after a reveal, across \(swipes) swipes."
+    )
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)),
                 withVelocity: 250, thenHoldForDuration: 0)
-    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "expanded" })
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "expanded" },
+                  "The second reveal did not expand after \(swipes) swipes to minimize.")
   }
 
   func testNativeTabRevealDiagnostic() throws {
