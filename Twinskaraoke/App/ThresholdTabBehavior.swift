@@ -48,9 +48,20 @@ enum TabRevealStrategy: Int, CaseIterable, Identifiable, Sendable {
     /// The shipping default: whichever of the above is right for the OS.
     ///
     /// iOS 26 performs the policy flip's expansion properly, so it keeps the
-    /// 72-point reveal. iOS 27 does not — proven against a bare tab bar with a
-    /// bare accessory and none of this app around it, which glitches exactly the
-    /// same way — so it takes the native reveal and no flip at all.
+    /// 72-point reveal unaided.
+    ///
+    /// iOS 27 does not animate a policy-flip expansion at all — proven against a
+    /// bare tab bar with a bare accessory and none of this app around it, which
+    /// glitches identically. There is no API to ask it to: `tabBarMinimizeBehavior`
+    /// is unchanged since iOS 26 and carries no threshold, no state and no
+    /// restoration behaviour, and iOS 27's new `UIBarMinimization` family
+    /// (`minimizationBehavior`/`restorationBehavior`/`safeAreaAdjustment`) hangs off
+    /// `UINavigationItem`, so it reaches navigation bars only. `nativeOnly` was the
+    /// safe answer and gave up the short reveal with it, because UIKit's own reveal
+    /// on iOS 27 fires only at the top of the scroll view.
+    ///
+    /// So iOS 27 supplies the missing transition from the app instead. See
+    /// `adoptedTransition` and `TabRevealTransition`.
     case automatic = 6
 
     var id: Int { rawValue }
@@ -109,7 +120,7 @@ enum TabRevealStrategy: Int, CaseIterable, Identifiable, Sendable {
     /// else, and only by OS version.
     var resolved: TabRevealStrategy {
         guard self == .automatic else { return self }
-        if #available(iOS 27.0, *) { return .nativeOnly }
+        if #available(iOS 27.0, *) { return .adoptedTransition }
         return .declared
     }
 }
