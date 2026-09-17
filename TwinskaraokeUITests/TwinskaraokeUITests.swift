@@ -46,6 +46,84 @@ final class TwinskaraokeUITests: XCTestCase {
                   "The second reveal did not expand after \(swipes) swipes to minimize.")
   }
 
+  /// What gesture does UIKit's own restore actually want?
+  ///
+  /// `TabBarMinimizeBehavior` documents `.onScrollDown` as minimizing the bar
+  /// "as soon as someone scrolls down through a feed, and restores it when they
+  /// scroll back up", while IOS27_TESTER_FEEDBACK.md records the native reveal
+  /// firing "only at the top of the scroll view". Neither says what counts as
+  /// scrolling back up, and that is the whole question: if a plain flick
+  /// restores the bar away from the scroll edge, the short reveal needs no
+  /// policy flipping at all and none of its animation problems come with it.
+  ///
+  /// Escalating gestures, no flip installed, nothing of this app around the tab
+  /// bar, starting far from the top. Prints the table either way.
+  func testNativeRevealOnScrollUp() throws {
+    let app = XCUIApplication()
+    app.launchArguments += ["-UITestMode", "1", "-UITestNativeTabReveal", "-UITestNativeRevealOnly"]
+    app.launch()
+    let scroll = app.scrollViews["NativeReveal.Scroll"]
+    let placement = app.staticTexts["NativeReveal.Placement"]
+    let offsetText = app.staticTexts["NativeReveal.Offset"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+    for _ in 0..<4 { scroll.swipeUp() }
+    XCTAssertTrue(waitUntil(timeout: 5) { placement.label == "inline" },
+                  "The bar never minimized, so there is nothing to restore.")
+    XCTAssertGreaterThan(scrollOffset(offsetText), 400,
+                         "Must be well away from the scroll edge for this to mean anything.")
+
+    let origin = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+    func reverse(_ points: CGFloat, velocity: XCUIGestureVelocity) {
+      origin.press(forDuration: 0.05,
+                   thenDragTo: origin.withOffset(CGVector(dx: 0, dy: points)),
+                   withVelocity: velocity, thenHoldForDuration: 0)
+    }
+
+    // Each attempt starts minimized; re-minimize between them so one attempt
+    // cannot inherit another's restore.
+    let attempts: [(String, () -> Void)] = [
+      ("160pt slow drag", { reverse(160, velocity: 250) }),
+      ("160pt flick", { reverse(160, velocity: 2500) }),
+      ("400pt drag", { reverse(400, velocity: 800) }),
+      ("full swipeDown flick", { scroll.swipeDown() }),
+    ]
+
+    var rows: [String] = []
+    var restoredBy: String?
+    for (name, gesture) in attempts {
+      guard waitUntil(timeout: 3, { placement.label == "inline" }) else {
+        rows.append("\(name): skipped, bar was not minimized beforehand")
+        continue
+      }
+      let before = scrollOffset(offsetText)
+      gesture()
+      let restored = waitUntil(timeout: 3) { placement.label == "expanded" }
+      let after = scrollOffset(offsetText)
+      rows.append("\(name): restored=\(restored) offset \(before) -> \(after)")
+      if restored, restoredBy == nil, after > 200 { restoredBy = name }
+      if restored { for _ in 0..<3 { scroll.swipeUp() } }
+    }
+
+    let table = "native restore characterisation\n" + rows.joined(separator: "\n")
+    print(table)
+    let attachment = XCTAttachment(string: table)
+    attachment.lifetime = .keepAlways
+    add(attachment)
+
+    // Recorded, not asserted: whether a reversal short of the scroll edge
+    // restores the bar is the thing being measured, and on iOS 26.5 the answer
+    // is no for every gesture tried — only the flick that reached offset 0 did.
+    // Asserting the documented behaviour would pin the suite red against the OS.
+    // What is worth guarding is that the edge restore works at all.
+    XCTAssertTrue(
+      rows.contains { $0.hasPrefix("full swipeDown flick") && $0.contains("restored=true") },
+      "Even reaching the scroll edge no longer restores the tab bar.\n\(table)"
+    )
+    if restoredBy == nil {
+      print("native restore is scroll-edge-only on this OS; a short reveal needs the policy flip")
+    }
+  }
+
   func testNativeTabRevealDiagnostic() throws {
     let app = XCUIApplication()
     app.launchArguments += ["-UITestMode", "1", "-UITestNativeTabReveal"]
@@ -400,6 +478,11 @@ final class TwinskaraokeUITests: XCTestCase {
   private func miniPlayerIsHittable(in app: XCUIApplication) -> Bool {
     app.buttons["MiniPlayerBar"].firstMatch.isHittable
       || app.otherElements["MiniPlayerBar"].firstMatch.isHittable
+  }
+
+  /// The probe's offset readout, ignoring the locale's grouping separator.
+  private func scrollOffset(_ element: XCUIElement) -> Int {
+    Int(element.label.filter { $0.isNumber || $0 == "-" }) ?? 0
   }
 
   private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {

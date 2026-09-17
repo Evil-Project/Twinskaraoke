@@ -60,8 +60,17 @@ enum TabRevealStrategy: Int, CaseIterable, Identifiable, Sendable {
     /// safe answer and gave up the short reveal with it, because UIKit's own reveal
     /// on iOS 27 fires only at the top of the scroll view.
     ///
-    /// So iOS 27 supplies the missing transition from the app instead. See
-    /// `adoptedTransition` and `TabRevealTransition`.
+    /// `adoptedTransition` was tried and withdrawn: on an iOS 27 device it
+    /// oscillates between expanded and inline several times a second, and the
+    /// accessory tears — the container collapses toward inline width while the
+    /// tab bar stays expanded and the forward button is left outside it. It
+    /// animates every descendant layer independently against a layout UIKit is
+    /// still re-running underneath, so the children chase stale targets. The
+    /// iOS 27 CI simulator showed none of this, which is the same simulator/
+    /// device split the rest of this investigation ran into.
+    ///
+    /// So iOS 27 is back on `nativeOnly` while the documented native restore is
+    /// tested directly — see `testNativeRevealOnScrollUp`.
     case automatic = 6
 
     var id: Int { rawValue }
@@ -120,7 +129,7 @@ enum TabRevealStrategy: Int, CaseIterable, Identifiable, Sendable {
     /// else, and only by OS version.
     var resolved: TabRevealStrategy {
         guard self == .automatic else { return self }
-        if #available(iOS 27.0, *) { return .adoptedTransition }
+        if #available(iOS 27.0, *) { return .nativeOnly }
         return .declared
     }
 }

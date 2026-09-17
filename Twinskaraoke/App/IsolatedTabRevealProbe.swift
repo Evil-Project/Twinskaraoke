@@ -29,8 +29,16 @@ struct IsolatedTabRevealProbe: View {
         // argument before, so the probe fell through to whatever Developer had
         // stored — and a diagnostic strategy left selected there silently
         // changes what the test measures.
-        if ProcessInfo.processInfo.arguments.contains("-UITestThresholdTabReveal") {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-UITestThresholdTabReveal") {
             return TabRevealStrategy.automatic.resolved
+        }
+        // Pins the no-flip path so a test can ask the one question this app
+        // cannot answer by reading documentation: does UIKit's own restore fire
+        // on a short scroll-up, as `TabBarMinimizeBehavior` documents, or only
+        // at the scroll edge, as the device notes claim?
+        if arguments.contains("-UITestNativeRevealOnly") {
+            return .nativeOnly
         }
         return TabRevealStrategy.current.resolved
     }

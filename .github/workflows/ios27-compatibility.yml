@@ -73,6 +73,7 @@ jobs:
             -only-testing:TwinskaraokeTests \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAppLaunches \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativeTabRevealDiagnostic \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativeRevealOnScrollUp \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAdaptiveMusicShellShowsSidebarOrTabs \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testLibraryAndSearchDrillDownNavigation \
             -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSwipingBackFromPlaylistDetailStartsNoPlayback \
