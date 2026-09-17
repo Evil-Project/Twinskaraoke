@@ -89,6 +89,12 @@ struct MiniPlayerBar: View {
             shimejiEngine.miniPlayerY = frame.height > 0 ? frame.minY : nil
             presentation.reportBarFrame(frame)
         }
+        // The placement flip is the accessory's half of the tab transition;
+        // putting it on the probe's timeline is what tells a container that
+        // moves without its contents from contents that move without it.
+        .onChange(of: isInline) { _, inline in
+            TabRevealProbe.note("placement -> \(inline ? "inline" : "expanded")")
+        }
         .onDisappear {
             shimejiEngine.miniPlayerY = nil
             presentation.reportBarFrame(nil)

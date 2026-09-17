@@ -103,6 +103,59 @@ struct ModernizationRegressionTests {
         #expect(!state.isRevealed)
     }
 
+    @Test func installedDriverOwnsTheRevealWithoutPublishingIt() {
+        let state = TabScrollRevealState()
+        var calls: [(revealed: Bool, reduceMotion: Bool)] = []
+        var completion: (() -> Void)?
+        let driver = UUID()
+        state.installDriver(owner: driver) { revealed, reduceMotion, finished in
+            calls.append((revealed, reduceMotion))
+            completion = finished
+        }
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        #expect(calls.map(\.revealed) == [true])
+        // Publishing the reveal is a SwiftUI update pass, which can re-apply the
+        // declared behaviour inside the window where `.never` must hold.
+        #expect(!state.isRevealed)
+        #expect(state.revealed)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        #expect(calls.count == 1) // The driver's transition is still running.
+        completion?()
+        #expect(calls.map(\.revealed) == [true, false])
+        #expect(!state.revealed)
+    }
+
+    @Test func lateHandBackWaitsForTheNextGestureInsteadOfIdle() {
+        let state = TabScrollRevealState()
+        state.handsBackOnIdle = false
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        state.end(owner: owner)
+        state.settled(owner: owner)
+        #expect(state.isRevealed) // Settling no longer restores the policy.
+        state.begin(owner: UUID(), offset: 400)
+        #expect(!state.isRevealed)
+    }
+
+    @Test func removingTheDriverRestoresTheDeclaredPath() {
+        let state = TabScrollRevealState()
+        let driver = UUID()
+        state.installDriver(owner: driver) { _, _, finished in finished() }
+        state.removeDriver(owner: UUID()) // Not the installer.
+        let owner = UUID()
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        #expect(!state.isRevealed)
+        state.removeDriver(owner: driver)
+        state.begin(owner: owner, offset: 500)
+        state.moved(owner: owner, offset: 400)
+        #expect(state.isRevealed)
+    }
+
     @Test func thresholdRevealIgnoresOtherScrollViewsAndResets() {
         let state = TabScrollRevealState()
         let owner = UUID()

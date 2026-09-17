@@ -9,7 +9,7 @@ struct ContentView: View {
     var body: some View {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-UITestNativeTabReveal") {
-            NativeTabRevealProbe()
+            IsolatedTabRevealProbe()
         } else {
             PopupHostView()
                 .environment(AudioPlayerManager.shared)
@@ -29,6 +29,10 @@ private struct PopupHostView: View {
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
     @State private var tabScrollReveal = TabScrollRevealState()
+    /// Device-only comparison switch for the iOS 27 reveal animation; see
+    /// `TabRevealStrategy`. Defaults to the shipping behaviour.
+    @AppStorage(TabRevealStrategy.storageKey)
+    private var tabRevealStrategyRaw = TabRevealStrategy.automatic.rawValue
     private let nowPlaying = NowPlayingSnapshotState.shared
     // The mini player is presented from the root and sits above every pushed
     // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
@@ -36,6 +40,7 @@ private struct PopupHostView: View {
     private let videoFullScreen = VideoFullScreenState.shared
 
     init() {
+        TabRevealStrategy.migrateStoredSelectionIfNeeded()
         _selectedSection = State(initialValue: Self.initialSection)
     }
 
@@ -156,9 +161,12 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // SwiftUI owns both scroll tracking and native accessory minimization.
-        .tabBarMinimizeBehavior(tabScrollReveal.isRevealed ? .never : .onScrollDown)
-        .environment(\.tabScrollReveal, tabScrollReveal)
+        // SwiftUI owns scroll tracking; the strategy owns who performs the
+        // reveal. `.declared` is the shipping path.
+        .modifier(ThresholdTabBehavior(
+            state: tabScrollReveal,
+            strategy: (TabRevealStrategy(rawValue: tabRevealStrategyRaw) ?? .automatic).resolved
+        ))
         .onChange(of: selectedSection) { _, _ in tabScrollReveal.reset() }
         .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
@@ -396,71 +404,3 @@ private extension RootSection {
     ContentView()
 }
 
-#if DEBUG
-/// Isolates the OS scroll/reveal behavior from the app's gestures and bridges.
-private struct NativeTabRevealProbe: View {
-    @State private var offset = 0
-    @State private var reveal = TabScrollRevealState()
-    private var useThreshold: Bool {
-        ProcessInfo.processInfo.arguments.contains("-UITestThresholdTabReveal")
-    }
-    var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house") {
-                NavigationStack {
-                    ScrollView {
-                        LazyVStack {
-                            ForEach(0..<200) { row in
-                                Text("Row \(row)")
-                                    .frame(maxWidth: .infinity, minHeight: 60)
-                            }
-                        }
-                    }
-                    .modifier(NativeRevealScrolling(isEnabled: useThreshold))
-                    .accessibilityIdentifier("NativeReveal.Scroll")
-                    .onScrollGeometryChange(for: Int.self) {
-                        Int($0.contentOffset.y + $0.contentInsets.top)
-                    } action: { _, value in offset = value }
-                    .navigationTitle("Native reveal")
-                    .overlay(alignment: .topTrailing) {
-                        Text("\(offset)").accessibilityIdentifier("NativeReveal.Offset")
-                            .accessibilityValue(useThreshold && reveal.isRevealed ? "revealing" : "native")
-                            .allowsHitTesting(false)
-                    }
-                }
-            }
-            Tab("Library", systemImage: "music.note.list") { Text("Library") }
-            Tab("Search", systemImage: "magnifyingglass", role: .search) { Text("Search") }
-        }
-        .tabBarMinimizeBehavior(useThreshold && reveal.isRevealed ? .never : .onScrollDown)
-        .environment(\.tabScrollReveal, useThreshold ? reveal : nil)
-        .tabViewBottomAccessory { NativeTabRevealAccessory() }
-    }
-}
-
-private struct NativeRevealScrolling: ViewModifier {
-    let isEnabled: Bool
-    func body(content: Content) -> some View {
-        if isEnabled { content.smoothScrolling() } else { content }
-    }
-}
-
-private struct NativeTabRevealAccessory: View {
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-    var body: some View {
-        HStack {
-            Image(systemName: "music.note")
-                .frame(width: placement == .inline ? 30 : 40, height: placement == .inline ? 30 : 40)
-                .background(.blue, in: RoundedRectangle(cornerRadius: 6))
-            Text(placement == .inline ? "inline" : "expanded")
-                .accessibilityIdentifier("NativeReveal.Placement")
-            Spacer()
-            Image(systemName: "play.fill")
-            if placement != .inline { Image(systemName: "forward.end.fill") }
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: placement == .inline ? 48 : 58)
-        .clipped()
-    }
-}
-#endif
