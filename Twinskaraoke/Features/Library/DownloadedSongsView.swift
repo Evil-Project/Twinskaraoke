@@ -325,14 +325,12 @@ struct DownloadedSongsView: View {
 private struct DownloadedEmptyStateView: View {
     let onRefresh: () -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
     @State private var hasAppeared = false
 
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            MusicEmptyStateMark()
-                .scaleEffect(reduceMotion ? 1 : (isPulsing ? 1.03 : 0.98))
+            PulsingMusicEmptyStateMark()
                 .scaleEffect(hasAppeared ? 1 : 0.94)
                 .opacity(hasAppeared ? 1 : 0)
 
@@ -371,22 +369,9 @@ private struct DownloadedEmptyStateView: View {
         .onAppear {
             if reduceMotion {
                 hasAppeared = true
-                isPulsing = false
             } else {
                 withAnimation(AppMotion.standard) {
                     hasAppeared = true
-                }
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            }
-        }
-        .onChange(of: reduceMotion) { _, newValue in
-            if newValue {
-                isPulsing = false
-            } else {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    isPulsing = true
                 }
             }
         }

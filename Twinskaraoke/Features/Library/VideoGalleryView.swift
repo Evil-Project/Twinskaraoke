@@ -306,13 +306,11 @@ private struct VideoGalleryStateView: View {
     let buttonTitle: String
     let onRefresh: () -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
     @State private var hasAppeared = false
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            MusicEmptyStateMark()
-                .scaleEffect(reduceMotion ? 1 : (isPulsing ? 1.03 : 0.98))
+            PulsingMusicEmptyStateMark()
                 .scaleEffect(reduceMotion ? 1 : (hasAppeared ? 1 : 0.94))
                 .opacity(hasAppeared ? 1 : 0)
 
@@ -352,26 +350,10 @@ private struct VideoGalleryStateView: View {
         .onAppear {
             guard !reduceMotion else {
                 hasAppeared = true
-                isPulsing = false
                 return
             }
             withAnimation(AppMotion.standard) {
                 hasAppeared = true
-            }
-            withAnimation(.easeInOut(duration: 1.45).repeatForever(autoreverses: true)) {
-                isPulsing = true
-            }
-        }
-        .onChange(of: reduceMotion) { _, reduceMotion in
-            if reduceMotion {
-                withAnimation(nil) {
-                    isPulsing = false
-                    hasAppeared = true
-                }
-            } else {
-                withAnimation(.easeInOut(duration: 1.45).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
             }
         }
         .accessibilityElement(children: .contain)

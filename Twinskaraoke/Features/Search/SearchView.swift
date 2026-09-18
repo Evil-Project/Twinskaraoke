@@ -655,7 +655,7 @@ private struct SearchNoResultsStateView: View {
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            SearchStateGlyph()
+            PulsingMusicEmptyStateMark()
             VStack(spacing: AM.Spacing.s) {
                 Text("No Results")
                     .font(AM.Font.sectionHeader)
@@ -724,7 +724,7 @@ private struct SearchRecoveryStateView: View {
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            SearchStateGlyph()
+            PulsingMusicEmptyStateMark()
                 .scaleEffect(hasAppeared ? 1 : 0.94)
                 .opacity(hasAppeared ? 1 : 0)
 
@@ -781,45 +781,6 @@ private struct SearchRecoveryStateView: View {
     }
 }
 
-private struct SearchStateGlyph: View {
-    @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
-
-    var body: some View {
-        MusicEmptyStateMark()
-            .scaleEffect(reduceMotion ? 1 : (isPulsing ? 1.03 : 0.98))
-            .onAppear {
-                guard !reduceMotion else {
-                    isPulsing = false
-                    return
-                }
-                withOptionalAnimation(pulseAnimation) {
-                    isPulsing = true
-                }
-            }
-            .onChange(of: reduceMotion) { _, reduceMotion in
-                if reduceMotion {
-                    withOptionalAnimation(nil) {
-                        isPulsing = false
-                    }
-                } else {
-                    withOptionalAnimation(pulseAnimation) {
-                        isPulsing = true
-                    }
-                }
-            }
-            .accessibilityHidden(true)
-    }
-
-
-    private var pulseAnimation: Animation? {
-        // Deliberately slower than any AppMotion role: this is a perpetual
-        // loading pulse, and the interaction springs would drive it at roughly
-        // twice the rate, which reads as agitation rather than waiting.
-        reduceMotion ? nil : AppMotion.spring(response: 0.9, dampingFraction: 0.78)
-            .repeatForever(autoreverses: true)
-    }
-}
 
 private struct SearchCategoryLoadingView: View {
     let title: String

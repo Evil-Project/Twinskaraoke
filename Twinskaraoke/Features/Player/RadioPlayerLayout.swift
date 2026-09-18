@@ -46,11 +46,7 @@ struct RadioPlayerLayout: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.appAccent)
-                        .frame(width: 7, height: 7)
-                        .scaleEffect(reduceMotion ? 1.0 : (audioManager.isPlaying ? 1.0 : 0.6))
-                        .animation(liveDotAnimation, value: audioManager.isPlaying)
+                    RadioLiveDot(isPlaying: audioManager.isPlaying)
                     Text("LIVE RADIO")
                         .font(.caption.bold())
                         .foregroundStyle(Color.appAccent)
@@ -184,18 +180,67 @@ struct RadioPlayerLayout: View {
         }
     }
 
-    private var liveDotAnimation: Animation? {
-        guard !reduceMotion else { return nil }
-        return audioManager.isPlaying
-            ? AppMotion.standard.repeatForever(autoreverses: true)
-            : AppMotion.snap
-    }
-
     private var radioFavoriteID: String? {
         radio.nowPlaying?.nowPlaying?.song.resolvedSongID
     }
 
     private var canFavoriteRadioSong: Bool {
         radioFavoriteID != nil
+    }
+}
+
+/// The "LIVE RADIO" dot, breathing while the stream plays.
+///
+/// Sampled from an `ActiveAnimationClock` rather than a `repeatForever`
+/// animation keyed on `isPlaying`: that only ever started on a *change*, so
+/// opening the player while the stream was already playing left the dot sitting
+/// still. The clock also freezes the pulse while the app is backgrounded or the
+/// layout is parked below the screen, and resumes it in phase.
+private struct RadioLiveDot: View {
+    let isPlaying: Bool
+    @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var animationClock = ActiveAnimationClock()
+    @State private var isVisible = false
+
+    /// Seconds for one full out-and-back pulse.
+    private static let period: TimeInterval = 1.1
+
+    private var shouldAnimate: Bool {
+        isPlaying && isVisible && !reduceEffects && scenePhase == .active
+    }
+
+    var body: some View {
+        TimelineView(
+            .animation(
+                minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                paused: !shouldAnimate
+            )
+        ) { context in
+            let elapsed = animationClock.elapsed(at: context.date)
+            let phase = (1 - cos(elapsed * 2 * .pi / Self.period)) / 2
+            Circle()
+                .fill(Color.appAccent)
+                .frame(width: 7, height: 7)
+                .scaleEffect(scale(phase: phase))
+                // Scoped to `isPlaying` so the per-frame phase ticks stay
+                // unanimated; only the settle to the idle dot eases.
+                .animation(reduceMotion ? nil : AppMotion.snap, value: isPlaying)
+        }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            animationClock.setRunning(false, at: .now)
+        }
+        .onChange(of: shouldAnimate, initial: true) { _, running in
+            animationClock.setRunning(running, at: .now)
+        }
+    }
+
+    private func scale(phase: Double) -> CGFloat {
+        guard !reduceEffects else { return 1.0 }
+        guard isPlaying else { return 0.6 }
+        return 0.6 + 0.4 * phase
     }
 }
