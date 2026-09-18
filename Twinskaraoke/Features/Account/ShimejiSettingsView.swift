@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ShimejiSettingsView: View {
+    @Environment(ShimejiEngine.self) private var shimejiEngine
     private let resources = ShimejiResourceManager.shared
     @State private var spawnSettings = ShimejiSpawnSettings.load()
     @AppStorage("nk.shimeji.canClimb") private var canClimb: Bool = true
@@ -177,7 +178,7 @@ struct ShimejiSettingsView: View {
     private func persistAndRespawn() {
         spawnSettings.save()
         if let manifest = resources.manifest {
-            ShimejiEngine.shared.respawn(manifest: manifest)
+            shimejiEngine.respawn(manifest: manifest)
         }
     }
 }

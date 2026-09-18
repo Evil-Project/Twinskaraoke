@@ -581,7 +581,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
-				D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */,
+				D0C385962FB0BD870055284E /* XCLocalSwiftPackageReference "swift-spleeter" */,
 				D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1566,13 +1566,9 @@
 				minimumVersion = 3.1.4;
 			};
 		};
-		D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/jiyimeta/swift-spleeter";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.2.0;
-			};
+		D0C385962FB0BD870055284E /* XCLocalSwiftPackageReference "swift-spleeter" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Vendor/swift-spleeter";
 		};
 		D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1592,7 +1588,7 @@
 		};
 		D0C385972FB0BD870055284E /* Spleeter */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */;
+			package = D0C385962FB0BD870055284E /* XCLocalSwiftPackageReference "swift-spleeter" */;
 			productName = Spleeter;
 		};
 		D0E1CB012FC2000100000002 /* PillarboxPlayer */ = {

@@ -102,6 +102,19 @@ struct LibraryView: View {
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistDetailView(playlist: playlist)
             }
+            .safeAreaInset(edge: .top) {
+                if let message = viewModel.errorMessage ?? viewModel.favoritesErrorMessage {
+                    Text(message).font(.footnote).padding()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                viewModel.fetchPlaylists()
+                viewModel.fetchFavoriteSongs()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+                viewModel.fetchPlaylists()
+                viewModel.fetchFavoriteSongs()
+            }
             .onAppear {
                 favorites.loadIfNeeded()
                 viewModel.fetchPlaylists()
@@ -763,6 +776,7 @@ struct PlaylistGridCell: View {
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder private var artwork: some View {

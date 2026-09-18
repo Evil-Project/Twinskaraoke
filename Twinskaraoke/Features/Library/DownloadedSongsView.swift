@@ -21,7 +21,18 @@ struct DownloadedSongsView: View {
         GeometryReader { geo in
             let viewportSize = sanitizedViewportSize(geo.size)
             ScrollView {
-                if localSongs.isEmpty {
+                if localSongs.isEmpty, downloads.restorationState == .restoring || downloads.restorationState == .notStarted {
+                    ProgressView("Restoring downloads…")
+                        .frame(width: viewportSize.width, height: max(viewportSize.height - 100, 1))
+                } else if localSongs.isEmpty, downloads.restorationState == .failed {
+                    ContentUnavailableView {
+                        Label("Downloads unavailable", systemImage: "arrow.clockwise")
+                    } description: {
+                        Text("Your saved files could not be read. Try again after unlocking your device.")
+                    } actions: {
+                        Button("Retry") { downloads.retryRestoration() }
+                    }
+                } else if localSongs.isEmpty {
                     DownloadedEmptyStateView {
                         refresh()
                     }
@@ -105,9 +116,11 @@ struct DownloadedSongsView: View {
         .scrollIndicators(.hidden)
         .refreshable {
             AppHaptic.selection.play()
+            downloads.retryRestoration()
             refresh()
         }
         .onAppear { refreshImmediately() }
+        .onChange(of: downloads.restorationState) { _, _ in scheduleRefresh() }
         .onChange(of: downloads.downloadedIDs) { _, _ in scheduleRefresh() }
         .onDisappear {
             refreshTask?.cancel()
@@ -312,14 +325,12 @@ struct DownloadedSongsView: View {
 private struct DownloadedEmptyStateView: View {
     let onRefresh: () -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
     @State private var hasAppeared = false
 
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            MusicEmptyStateMark()
-                .scaleEffect(reduceMotion ? 1 : (isPulsing ? 1.03 : 0.98))
+            PulsingMusicEmptyStateMark()
                 .scaleEffect(hasAppeared ? 1 : 0.94)
                 .opacity(hasAppeared ? 1 : 0)
 
@@ -358,22 +369,9 @@ private struct DownloadedEmptyStateView: View {
         .onAppear {
             if reduceMotion {
                 hasAppeared = true
-                isPulsing = false
             } else {
                 withAnimation(AppMotion.standard) {
                     hasAppeared = true
-                }
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    isPulsing = true
-                }
-            }
-        }
-        .onChange(of: reduceMotion) { _, newValue in
-            if newValue {
-                isPulsing = false
-            } else {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    isPulsing = true
                 }
             }
         }

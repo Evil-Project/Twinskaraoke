@@ -5,7 +5,7 @@ import Foundation
 /// Keeping every mutation here makes shuffle restoration and Up Next editing
 /// deterministic and independently testable. `AudioPlayerManager` remains the
 /// observable facade used by views.
-nonisolated struct PlaybackQueueState: Equatable, Sendable {
+nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     enum Advance: Equatable, Sendable {
         case replayCurrent
         case play(Song)
@@ -156,5 +156,59 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable {
         let currentIndex = updated.firstIndex(where: { $0.id == current.id }) ?? 0
         updated.insert(song, at: min(currentIndex + 1, updated.count))
         return updated
+    }
+}
+
+
+nonisolated struct PlaybackSessionSnapshot: Codable {
+    var version = 1
+    let song: Song
+    let queue: PlaybackQueueState
+    let position: TimeInterval
+    let repeatMode: RepeatMode
+    let wasPlaying: Bool
+
+    var resumePosition: TimeInterval {
+        guard position.isFinite else { return 0 }
+        return min(max(0, position), max(0, Double(song.duration)))
+    }
+}
+
+nonisolated enum PlaybackSessionStore {
+    private static let io = DispatchQueue(label: "PlaybackSessionStore", qos: .utility)
+    static var url: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(ProcessInfo.processInfo.arguments.contains("-UITestPlaybackSession")
+                ? "playback-session-uitest.json" : "playback-session.json")
+    }
+
+    static func load() async -> PlaybackSessionSnapshot? {
+        await withCheckedContinuation { continuation in
+            io.async {
+                do {
+                    if ProcessInfo.processInfo.arguments.contains("-UITestResetPlaybackSession") {
+                        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    let snapshot = try JSONDecoder().decode(PlaybackSessionSnapshot.self, from: Data(contentsOf: url))
+                    continuation.resume(returning: snapshot.version == 1 ? snapshot : nil)
+                } catch {
+                    DebugLogger.log("Playback session read: \(error)", category: .playback)
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    static func save(_ snapshot: PlaybackSessionSnapshot) {
+        io.async {
+            do {
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
+            } catch {
+                DebugLogger.log("Playback session write: \(error)", category: .playback)
+            }
+        }
     }
 }

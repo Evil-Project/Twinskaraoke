@@ -52,7 +52,15 @@ private struct PopupHostView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 AudioPlayerManager.shared.sleepTimer.checkExpiry()
+                DownloadManager.shared.retryRestoration()
+                FavoritesManager.shared.loadIfNeeded()
+                UserPlaylistsManager.shared.loadIfNeeded()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            DownloadManager.shared.retryRestoration()
+            FavoritesManager.shared.loadIfNeeded()
+            UserPlaylistsManager.shared.loadIfNeeded()
         }
         .onAppear {
             // Warm the account-scoped state that the shared song context
@@ -138,14 +146,14 @@ private struct PopupHostView: View {
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
-        // Declared once and never varied. The system's own reveal distance is
-        // long — roughly 440pt — so `TabBarMinimizeCoordinator` still brings the
-        // bar back after a short scroll up, but it does that by assigning
-        // `tabBarMinimizeBehavior` on the controller directly and never through
-        // this modifier. Changing the *declared* value is what used to leave the
-        // mini player at the wrong width for about a second; see that type.
+        // The system owns minimization entirely. A short-scroll-up reveal was
+        // built on top of this once, by flipping the policy to `.never` to
+        // force an expansion; iOS 27 applies that flip with no transition at
+        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
+        // every comparable app restore at the scroll edge, which is what this
+        // does now.
         .tabBarMinimizeBehavior(.onScrollDown)
-        .background(TabBarMinimizeInstaller().frame(width: 0, height: 0))
+        .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {
@@ -380,3 +388,4 @@ private extension RootSection {
 #Preview {
     ContentView()
 }
+

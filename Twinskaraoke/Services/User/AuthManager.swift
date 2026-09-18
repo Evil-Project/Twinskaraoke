@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import Security
 import Observation
+import UIKit
 
 @MainActor
 private final class WebAuthenticationPresentationContextProvider:
@@ -33,6 +34,8 @@ final class AuthManager: NSObject {
     private var webAuthenticationSession: ASWebAuthenticationSession?
     private var webAuthenticationContextProvider: WebAuthenticationPresentationContextProvider?
     private var sessionExpiredObserver: NSObjectProtocol?
+    private var restorationObservers: [NSObjectProtocol] = []
+    private(set) var isRestoringSession = true
     private var loginGeneration = UUID()
     @ObservationIgnored private var webAuthenticationContinuation: CheckedContinuation<URL, Error>?
     @ObservationIgnored private let requestData: @MainActor (URLRequest) async throws -> (Data, URLResponse)
@@ -68,6 +71,15 @@ final class AuthManager: NSObject {
         self.requestData = requestData
         super.init()
         loadPersisted()
+        restorationObservers = [UIApplication.didBecomeActiveNotification,
+                                UIApplication.protectedDataDidBecomeAvailableNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isRestoringSession else { return }
+                    self.loadPersisted()
+                }
+            }
+        }
         sessionExpiredObserver = NotificationCenter.default.addObserver(
             forName: .karaokeSessionExpired,
             object: nil,
@@ -82,6 +94,7 @@ final class AuthManager: NSObject {
     isolated deinit {
         // AccountView mints a fresh AuthManager per visit; without removal
         // the block-based observer would accumulate for the app's lifetime.
+        restorationObservers.forEach(NotificationCenter.default.removeObserver)
         if let sessionExpiredObserver {
             NotificationCenter.default.removeObserver(sessionExpiredObserver)
         }
@@ -94,7 +107,14 @@ final class AuthManager: NSObject {
     }
 
     private func loadPersisted() {
-        let token = CredentialStore.token
+        let result = CredentialStore.readToken()
+        if case .unavailable(let status) = result {
+            isRestoringSession = true
+            DebugLogger.log("Session restoration deferred: OSStatus=\(status)", category: .network)
+            return
+        }
+        isRestoringSession = false
+        let token = result.token
         let username = defaults.string(forKey: K.username)
         let commitMarker = defaults.object(forKey: K.sessionCommitted) as? Bool
         guard Self.persistedSessionIsComplete(
@@ -115,6 +135,7 @@ final class AuthManager: NSObject {
         currentUsername = username
         currentUserId = defaults.string(forKey: K.userId)
         currentAvatar = defaults.string(forKey: K.avatar)
+        isRestoringSession = false
         isLoggedIn = true
     }
 
@@ -143,6 +164,7 @@ final class AuthManager: NSObject {
         currentUserId = userId
         currentUsername = username
         currentAvatar = avatar
+        isRestoringSession = false
         isLoggedIn = true
         isLoading = false
         errorMessage = nil
@@ -449,7 +471,7 @@ final class AuthManager: NSObject {
     func approveQRSession(sessionId: String) async throws {
         // Trust the Keychain token, not the in-memory flags, so a stale
         // AuthManager state can't approve a session with the wrong identity.
-        guard let token = CredentialStore.token else { throw AuthError.notSignedIn }
+        guard let token = try CredentialStore.requestToken() else { throw AuthError.notSignedIn }
         let (data, resp) = try await postJSON(
             url: "\(StorageHost.api)/api/auth/approve-qr",
             body: ["sessionId": sessionId],
@@ -464,6 +486,7 @@ final class AuthManager: NSObject {
     }
 
     func logout() {
+        isRestoringSession = false
         loginGeneration = UUID()
         cancelWebAuthentication()
         isLoading = false
@@ -484,9 +507,16 @@ final class AuthManager: NSObject {
     /// one `AuthManager` — `AccountView` mints a fresh one per visit — and
     /// because the Keychain is the only trustworthy record of being signed in.
     /// `generation` is filled in by the publisher.
-    nonisolated static func persistedDescriptor() -> WatchSessionLink.Descriptor {
+    nonisolated static func persistedDescriptor() -> WatchSessionLink.Descriptor? {
         let defaults = UserDefaults.standard
-        let token = CredentialStore.token
+        let result = CredentialStore.readToken()
+        guard case .unavailable = result else {
+            return persistedDescriptor(token: result.token, defaults: defaults)
+        }
+        return nil
+    }
+
+    private nonisolated static func persistedDescriptor(token: String?, defaults: UserDefaults) -> WatchSessionLink.Descriptor {
         let username = defaults.string(forKey: K.username)
         guard persistedSessionIsComplete(
             token: token,

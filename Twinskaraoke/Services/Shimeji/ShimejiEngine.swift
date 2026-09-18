@@ -69,7 +69,6 @@ final class ShimejiInstance: Identifiable {
 @MainActor
 @Observable
 final class ShimejiEngine: NSObject {
-    static let shared = ShimejiEngine()
     /// Rendered sprite size in points; shared with ShimejiSpriteView (visual
     /// size) and the overlay window's hitTest (touch target) so both agree
     /// on where a sprite actually is on screen.
@@ -124,7 +123,7 @@ final class ShimejiEngine: NSObject {
 
     private var playbackObservation: ObservationToken?
 
-    override private init() {
+    override init() {
         super.init()
         observePlaybackState()
     }

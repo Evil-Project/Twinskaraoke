@@ -25,6 +25,7 @@ final class UserPlaylistsManager {
             return
         }
         guard force || !loaded else { return }
+        if case .unavailable = CredentialStore.readToken() { return }
         guard CredentialStore.isAuthenticated else {
             playlists = []
             loaded = false

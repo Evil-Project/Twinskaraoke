@@ -76,7 +76,8 @@ struct SecurityRegressionTests {
     @Test("API path segments are encoded exactly once")
     func apiPathSegmentsAreEncodedExactlyOnce() throws {
         let request = try KaraokeAPIClient.request(
-            pathSegments: ["api", "songs", "a b/c%?", "lyrics"]
+            pathSegments: ["api", "songs", "a b/c%?", "lyrics"],
+            readToken: { nil }
         )
 
         #expect(request.url?.absoluteString.contains("/api/songs/a%20b%2Fc%25%3F/lyrics") == true)

@@ -12,9 +12,12 @@ final class PlaylistListLoader {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private let fetchData: @MainActor (URLRequest) async throws -> Data
 
-    init(fetchData: @escaping @MainActor (URLRequest) async throws -> Data = {
+    @ObservationIgnored private let readToken: () throws -> String?
+
+    init(readToken: @escaping () throws -> String? = CredentialStore.requestToken, fetchData: @escaping @MainActor (URLRequest) async throws -> Data = {
         try await KaraokeAPIClient.data(for: $0)
     }) {
+        self.readToken = readToken
         self.fetchData = fetchData
     }
 
@@ -49,16 +52,17 @@ final class PlaylistListLoader {
             isLoadingMore = false
             return
         }
-        var request = URLRequest(url: url)
-        if let token = CredentialStore.token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        GuestIdentity.applyIfNeeded(to: &request)
         // Routed through KaraokeAPIClient.data so 401s trigger the
         // session-expired flow and transient failures get retried.
         let fetchData = self.fetchData
+        let readToken = self.readToken
         loadTask = Task { [weak self] in
             do {
+                var request = URLRequest(url: url)
+                if let token = try readToken() {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+                GuestIdentity.applyIfNeeded(to: &request)
                 let data = try await fetchData(request)
                 try Task.checkCancellation()
                 guard let self else { return }

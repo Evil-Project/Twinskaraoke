@@ -6,7 +6,7 @@ struct EqualizerBars: View {
     @Environment(\.appReduceEffects) private var reduceEffects
     @Environment(\.scenePhase) private var scenePhase
     private let scrollState = ScrollPerformanceState.shared
-    @State private var animationClock = EqualizerAnimationClock()
+    @State private var animationClock = ActiveAnimationClock()
     @State private var isVisible: Bool = false
 
     var body: some View {
@@ -56,24 +56,5 @@ struct EqualizerBars: View {
     private var shouldAnimateBars: Bool {
         isAnimating && isVisible && !reduceEffects && scenePhase == .active
             && (!pausesWhileScrolling || !scrollState.isScrolling)
-    }
-}
-
-/// Counts only active animation time, preserving phase across scrolling and scene pauses.
-nonisolated struct EqualizerAnimationClock {
-    private var accumulated: TimeInterval = 0
-    private var activeSince: Date?
-
-    func elapsed(at date: Date) -> TimeInterval {
-        accumulated + (activeSince.map { max(0, date.timeIntervalSince($0)) } ?? 0)
-    }
-
-    mutating func setRunning(_ running: Bool, at date: Date) {
-        if running {
-            if activeSince == nil { activeSince = date }
-        } else {
-            accumulated = elapsed(at: date)
-            activeSince = nil
-        }
     }
 }

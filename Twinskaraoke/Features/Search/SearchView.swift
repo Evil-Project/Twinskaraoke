@@ -299,7 +299,13 @@ private struct BrowseCategoriesView: View {
             async let playlists: Void = publicPlaylistsVM.refreshPublicPlaylists()
             _ = await (genres, topChart, playlists)
         }
-        .onAppear {
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                publicPlaylistsVM.loadIfNeeded()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+                publicPlaylistsVM.loadIfNeeded()
+            }
+            .onAppear {
             genresVM.loadIfNeeded()
             topChartVM.loadIfNeeded()
             publicPlaylistsVM.loadIfNeeded()
@@ -372,9 +378,9 @@ private struct BrowseCategoriesView: View {
             ) {
                 SearchFeaturedShortcutTile(
                     title: "Public Playlists",
-                    subtitle: publicPlaylistsVM.playlists.isEmpty
-                        ? "Community mixes"
-                        : "\(publicPlaylistsVM.playlists.count) playlists",
+                    subtitle: publicPlaylistsVM.errorMessage ?? (publicPlaylistsVM.isLoadingMore && publicPlaylistsVM.playlists.isEmpty
+                        ? "Loading playlists…"
+                        : publicPlaylistsVM.playlists.isEmpty ? "Community mixes" : "\(publicPlaylistsVM.playlists.count) playlists"),
                     gradient: [
                         Color(red: 0.19, green: 0.55, blue: 0.96),
                         Color(red: 0.12, green: 0.22, blue: 0.58),
@@ -439,6 +445,7 @@ private struct BrowseCategoriesView: View {
                         genresVM.loadMoreIfNeeded(current: genre)
                         genresVM.loadPreviewIfNeeded(for: genre)
                     }
+                    .onDisappear { genresVM.cancelQueuedPreview(for: genre) }
                 }
             }
             .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -492,6 +499,16 @@ private struct PublicPlaylistsCollectionView: View {
                 viewModel.urlForList(startIndex: startIndex, pageSize: pageSize)
             }
         )
+        .safeAreaInset(edge: .top) {
+            if let message = viewModel.errorMessage {
+                VStack {
+                    Text(message).font(.footnote)
+                    Button("Retry") { viewModel.loadIfNeeded() }
+                }
+                .padding()
+            }
+        }
+        .refreshable { await viewModel.refreshPublicPlaylists() }
         .task {
             viewModel.loadIfNeeded()
         }
@@ -502,6 +519,7 @@ struct GenreDetailView: View {
     let genre: GenreSummary
     let viewModel: GenresViewModel
     let palette: [Color]
+    @State private var detailOwner = UUID()
 
     var body: some View {
         let loadedSongs = viewModel.allSongs[genre.id]
@@ -521,8 +539,10 @@ struct GenreDetailView: View {
         // purge cancels in-flight detail tasks without changing allSongs, so a
         // nil-entry key would never change and the load would never restart.
         .task(id: viewModel.detailGeneration) {
+            viewModel.retainDetail(genre.id, owner: detailOwner)
             viewModel.loadDetailIfNeeded(for: genre)
         }
+        .onDisappear { viewModel.releaseDetail(owner: detailOwner) }
     }
 }
 
@@ -635,7 +655,7 @@ private struct SearchNoResultsStateView: View {
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            SearchStateGlyph()
+            PulsingMusicEmptyStateMark()
             VStack(spacing: AM.Spacing.s) {
                 Text("No Results")
                     .font(AM.Font.sectionHeader)
@@ -704,7 +724,7 @@ private struct SearchRecoveryStateView: View {
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
-            SearchStateGlyph()
+            PulsingMusicEmptyStateMark()
                 .scaleEffect(hasAppeared ? 1 : 0.94)
                 .opacity(hasAppeared ? 1 : 0)
 
@@ -761,45 +781,6 @@ private struct SearchRecoveryStateView: View {
     }
 }
 
-private struct SearchStateGlyph: View {
-    @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
-
-    var body: some View {
-        MusicEmptyStateMark()
-            .scaleEffect(reduceMotion ? 1 : (isPulsing ? 1.03 : 0.98))
-            .onAppear {
-                guard !reduceMotion else {
-                    isPulsing = false
-                    return
-                }
-                withOptionalAnimation(pulseAnimation) {
-                    isPulsing = true
-                }
-            }
-            .onChange(of: reduceMotion) { _, reduceMotion in
-                if reduceMotion {
-                    withOptionalAnimation(nil) {
-                        isPulsing = false
-                    }
-                } else {
-                    withOptionalAnimation(pulseAnimation) {
-                        isPulsing = true
-                    }
-                }
-            }
-            .accessibilityHidden(true)
-    }
-
-
-    private var pulseAnimation: Animation? {
-        // Deliberately slower than any AppMotion role: this is a perpetual
-        // loading pulse, and the interaction springs would drive it at roughly
-        // twice the rate, which reads as agitation rather than waiting.
-        reduceMotion ? nil : AppMotion.spring(response: 0.9, dampingFraction: 0.78)
-            .repeatForever(autoreverses: true)
-    }
-}
 
 private struct SearchCategoryLoadingView: View {
     let title: String

@@ -116,10 +116,9 @@ nonisolated enum AudioCacheStore {
                     expectedDuration: expectedDuration
                 ) else {
                     DebugLogger.log(
-                        "Discarding audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
+                        "Deferring audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
                         category: .cache
                     )
-                    removeSongCache(for: songID)
                     return nil
                 }
             }
@@ -153,10 +152,9 @@ nonisolated enum AudioCacheStore {
                     expectedDuration: expectedDuration
                 ) else {
                     DebugLogger.log(
-                        "Discarding immediate audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
+                        "Deferring immediate audio cache for \(songID) due to duration mismatch: expected \(expectedDuration)s, got \(actualDuration)s",
                         category: .cache
                     )
-                    removeSongCache(for: songID)
                     return nil
                 }
             }
@@ -184,8 +182,7 @@ nonisolated enum AudioCacheStore {
             expectedDuration: expectedDuration
         )
         else {
-            DebugLogger.log("Removing invalid stem cache for \(songID)", category: .cache)
-            removeStemCache(for: songID)
+            DebugLogger.log("Deferring invalid stem cache for \(songID)", category: .cache)
             return nil
         }
         return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
@@ -214,8 +211,7 @@ nonisolated enum AudioCacheStore {
             expectedDuration: expectedDuration
         )
         else {
-            DebugLogger.log("Removing invalid stem cache for \(songID)", category: .cache)
-            removeStemCache(for: songID)
+            DebugLogger.log("Deferring invalid stem cache for \(songID)", category: .cache)
             return nil
         }
         touch(vocals)
@@ -465,18 +461,16 @@ nonisolated enum AudioCacheStore {
         guard let expectedRemoteURL else { return true }
         guard let cachedSource = readMainSourceURL(for: songID) else {
             DebugLogger.log(
-                "Discarding legacy audio cache without source metadata for \(songID)",
+                "Deferring legacy audio cache without source metadata for \(songID)",
                 category: .cache
             )
-            removeSongCache(for: songID)
             return false
         }
-        guard cachedSource == expectedRemoteURL.absoluteString else {
+        guard DownloadManager.sameAudioResource(cachedSource, expectedRemoteURL.absoluteString) else {
             DebugLogger.log(
-                "Discarding stale audio cache for \(songID) due to source mismatch",
+                "Deferring stale audio cache for \(songID) due to source mismatch",
                 category: .cache
             )
-            removeSongCache(for: songID)
             return false
         }
         return true
@@ -496,11 +490,18 @@ nonisolated enum AudioCacheStore {
 
     private static func readMainSourceURL(for songID: String) -> String? {
         let sourceURL = files(for: songID).mainSource
-        guard let data = try? Data(contentsOf: sourceURL),
-              let rawValue = String(data: data, encoding: .utf8)
-        else { return nil }
-        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
+        do {
+            let data = try Data(contentsOf: sourceURL)
+            guard let rawValue = String(data: data, encoding: .utf8) else {
+                DebugLogger.log("Invalid cache source encoding: \(sourceURL.path)", category: .cache)
+                return nil
+            }
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        } catch {
+            DebugLogger.log("Cache source read failed at \(sourceURL.path): \(error)", category: .cache)
+            return nil
+        }
     }
 
     private static let minimumPlayableFileSize = 4096
@@ -529,9 +530,7 @@ nonisolated enum AudioCacheStore {
         do {
             try decompressFileIfNeeded(from: compressed, to: url)
             if !isValidAudioFile(at: url) {
-                DebugLogger.log("Removing broken compressed cache: \(url.lastPathComponent)", category: .cache)
-                try? fm.removeItem(at: url)
-                try? fm.removeItem(at: compressed)
+                DebugLogger.log("Deferring unreadable compressed cache: \(url.lastPathComponent)", category: .cache)
                 return nil
             }
             touch(url)
@@ -542,19 +541,14 @@ nonisolated enum AudioCacheStore {
             return url
         } catch {
             DebugLogger.log("Audio cache decompress failed for \(url.lastPathComponent): \(error)", category: .cache)
-            try? fm.removeItem(at: url)
-            try? fm.removeItem(at: compressed)
             return nil
         }
     }
 
-    /// Validate, touch, and hand out an existing playable file; removes it (and
-    /// any compressed sibling) when broken.
+    /// A failed probe is not proof of corruption. Preserve files for a later retry.
     private static func validateAndHandOut(_ url: URL) -> URL? {
         if !isValidAudioFile(at: url) {
-            DebugLogger.log("Removing broken cache file: \(url.lastPathComponent)", category: .cache)
-            try? fm.removeItem(at: url)
-            try? fm.removeItem(at: compressedURL(for: url))
+            DebugLogger.log("Deferring unreadable cache file: \(url.lastPathComponent)", category: .cache)
             return nil
         }
         touch(url)
@@ -577,7 +571,7 @@ nonisolated enum AudioCacheStore {
         }()
         probeMemoLock.lock()
         if validityMemo.count >= probeMemoLimit { validityMemo.removeAll() }
-        validityMemo[path] = (modified, valid)
+        if valid { validityMemo[path] = (modified, valid) }
         probeMemoLock.unlock()
         return valid
     }
@@ -592,16 +586,19 @@ nonisolated enum AudioCacheStore {
         }
         probeMemoLock.unlock()
         var duration: TimeInterval = 0
-        if let file = try? AVAudioFile(forReading: url) {
+        do {
+            let file = try AVAudioFile(forReading: url)
             let sampleRate = file.fileFormat.sampleRate
             if sampleRate > 0 {
                 let candidate = Double(file.length) / sampleRate
                 if candidate.isFinite, candidate > 0 { duration = candidate }
             }
+        } catch {
+            DebugLogger.log("Audio duration probe \(url.path): \(error)", category: .cache)
         }
         probeMemoLock.lock()
         if durationMemo.count >= probeMemoLimit { durationMemo.removeAll() }
-        durationMemo[path] = (modified, duration)
+        if duration > 0 { durationMemo[path] = (modified, duration) }
         probeMemoLock.unlock()
         return duration
     }

@@ -674,113 +674,21 @@ private struct StrengthSlider: View {
     @Binding var value: Float
     var title: LocalizedStringKey = "Strength"
     var valueDescription: String?
-    var step: Float = 0.05
 
-    @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var lastFeedbackStep: Int?
-    // In-drag value is local so per-frame drag updates don't publish through
-    // the bound model; commits are throttled to ~10Hz for live audio feedback
-    // and finalized on drag end.
-    @State private var dragValue: Float?
-    @State private var lastCommitUptime: TimeInterval = 0
-
-    private var clampedValue: Float {
-        min(1, max(0, dragValue ?? value))
-    }
-
-    private var percent: Int {
-        Int((clampedValue * 100).rounded())
+    var body: some View {
+        NativeLevelSlider(value: Binding(get: { Double(value) }, set: { value = Float($0) }), hapticStep: 0.05)
+            .tint(.appAccent)
+            .frame(minHeight: 44)
+            .accessibilityLabel(title)
+            .accessibilityValue(accessibilityValueText)
     }
 
     private var accessibilityValueText: Text {
+        let percent = Int((min(1, max(0, value)) * 100).rounded())
         if let valueDescription {
             return Text("\(Text(LocalizedStringKey(valueDescription))), \(percent) percent")
         }
         return Text("\(percent) percent")
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.15))
-                Capsule()
-                    .fill(Color.appAccent)
-                    .frame(width: max(8, geo.size.width * CGFloat(clampedValue)))
-                    .animation(sliderAnimation, value: clampedValue)
-                Circle()
-                    .fill(Color.appAccent)
-                    .frame(width: 18, height: 18)
-                    .shadow(color: Color.appAccent.opacity(0.24), radius: 6, y: 2)
-                    .offset(x: max(0, geo.size.width * CGFloat(clampedValue) - 9))
-                    .animation(sliderAnimation, value: clampedValue)
-            }
-            .frame(height: 6)
-            .frame(maxHeight: .infinity, alignment: .center)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        let v = max(0, min(1, drag.location.x / max(1, geo.size.width)))
-                        dragValue = Float(v)
-                        playStepFeedback(for: Float(v))
-                        let now = ProcessInfo.processInfo.systemUptime
-                        if now - lastCommitUptime >= 0.1 {
-                            lastCommitUptime = now
-                            commitValue(Float(v))
-                        }
-                    }
-                    .onEnded { _ in
-                        if let final = dragValue {
-                            commitValue(final)
-                        }
-                        dragValue = nil
-                        lastCommitUptime = 0
-                        lastFeedbackStep = nil
-                    }
-            )
-        }
-        .frame(height: 44)
-        .accessibilityElement()
-        .accessibilityLabel(title)
-        .accessibilityValue(accessibilityValueText)
-        .accessibilityHint("Swipe up or down to adjust.")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                setValue(clampedValue + step, feedback: true)
-            case .decrement:
-                setValue(clampedValue - step, feedback: true)
-            @unknown default:
-                break
-            }
-        }
-    }
-
-    private func setValue(_ newValue: Float, feedback: Bool) {
-        let clamped = min(1, max(0, newValue))
-        guard abs(clamped - value) > 0.001 else { return }
-        value = clamped
-        if feedback {
-            playStepFeedback(for: clamped)
-        }
-    }
-
-    private func commitValue(_ newValue: Float) {
-        let clamped = min(1, max(0, newValue))
-        guard abs(clamped - value) > 0.001 else { return }
-        value = clamped
-    }
-
-    private func playStepFeedback(for value: Float) {
-        let feedbackStep = Int((value * 20).rounded())
-        guard feedbackStep != lastFeedbackStep else { return }
-        lastFeedbackStep = feedbackStep
-        AppHaptic.detent.play()
-    }
-
-    private var sliderAnimation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(response: 0.28, dampingFraction: 0.82)
     }
 }
 
@@ -846,120 +754,22 @@ private struct EqualizerBand: View {
     let range: ClosedRange<Float>
     var title: LocalizedStringKey
 
-    @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var lastFeedbackStep: Int?
-    // In-drag value is local so per-frame drag updates don't rewrite the whole
-    // eqGainsDB array (UserDefaults + engine gains) every frame; commits are
-    // throttled to ~10Hz for live audio feedback and finalized on drag end.
-    @State private var dragValue: Float?
-    @State private var lastCommitUptime: TimeInterval = 0
-
-    private var clampedValue: Float {
-        min(range.upperBound, max(range.lowerBound, dragValue ?? value))
-    }
-
-    private var valueText: String {
-        if abs(clampedValue) < 0.05 {
-            return "0 decibels"
-        }
-        return String(format: "%+.0f decibels", clampedValue)
-    }
-
     var body: some View {
-        GeometryReader { geo in
-            let span = range.upperBound - range.lowerBound
-            let normalized = (clampedValue - range.lowerBound) / span
-            let trackHeight = geo.size.height
-            let knobY = trackHeight - CGFloat(normalized) * trackHeight
-            let zeroY = trackHeight - CGFloat((0 - range.lowerBound) / span) * trackHeight
-            ZStack(alignment: .top) {
-                Capsule()
-                    .fill(Color.primary.opacity(0.15))
-                    .frame(width: 4)
-                    .frame(maxWidth: .infinity)
-                if clampedValue >= 0 {
-                    Capsule()
-                        .fill(Color.appAccent)
-                        .frame(width: 4, height: max(0, zeroY - knobY))
-                        .offset(y: knobY)
-                } else {
-                    Capsule()
-                        .fill(Color.appAccent)
-                        .frame(width: 4, height: max(0, knobY - zeroY))
-                        .offset(y: zeroY)
-                }
-                Circle()
-                    .fill(Color.appAccent)
-                    .frame(width: 18, height: 18)
-                    .shadow(color: Color.appAccent.opacity(0.24), radius: 6, y: 2)
-                    .offset(y: knobY - 9)
-            }
-            .animation(bandAnimation, value: clampedValue)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        let y = max(0, min(trackHeight, drag.location.y))
-                        let n = 1 - (y / max(1, trackHeight))
-                        let next = range.lowerBound + Float(n) * span
-                        dragValue = next
-                        playStepFeedback(for: next)
-                        let now = ProcessInfo.processInfo.systemUptime
-                        if now - lastCommitUptime >= 0.1 {
-                            lastCommitUptime = now
-                            commitValue(next)
-                        }
-                    }
-                    .onEnded { _ in
-                        if let final = dragValue {
-                            commitValue(final)
-                        }
-                        dragValue = nil
-                        lastCommitUptime = 0
-                        lastFeedbackStep = nil
-                    }
+        GeometryReader { geometry in
+            NativeLevelSlider(
+                value: Binding(get: { Double(value) }, set: { value = Float($0) }),
+                range: Double(range.lowerBound)...Double(range.upperBound),
+                neutralValue: 0,
+                hapticStep: 1
             )
+            .tint(.appAccent)
+            .environment(\.layoutDirection, .leftToRight)
+            .frame(width: geometry.size.height, height: geometry.size.width)
+            .rotationEffect(.degrees(-90))
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            .accessibilityLabel(title)
+            .accessibilityValue(Text("\(Int(value.rounded())) decibels"))
         }
-        .accessibilityElement()
-        .accessibilityLabel(title)
-        .accessibilityValue(Text("\(Int(clampedValue.rounded())) decibels"))
-        .accessibilityHint("Swipe up or down to adjust this band by one decibel.")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment:
-                setValue(clampedValue + 1, feedback: true)
-            case .decrement:
-                setValue(clampedValue - 1, feedback: true)
-            @unknown default:
-                break
-            }
-        }
-    }
-
-    private func setValue(_ newValue: Float, feedback: Bool) {
-        let clamped = min(range.upperBound, max(range.lowerBound, newValue))
-        guard abs(clamped - value) > 0.001 else { return }
-        value = clamped
-        if feedback {
-            playStepFeedback(for: clamped)
-        }
-    }
-
-    private func commitValue(_ newValue: Float) {
-        let clamped = min(range.upperBound, max(range.lowerBound, newValue))
-        guard abs(clamped - value) > 0.001 else { return }
-        value = clamped
-    }
-
-    private func playStepFeedback(for value: Float) {
-        let feedbackStep = Int(value.rounded())
-        guard feedbackStep != lastFeedbackStep else { return }
-        lastFeedbackStep = feedbackStep
-        AppHaptic.detent.play()
-    }
-
-    private var bandAnimation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(response: 0.28, dampingFraction: 0.82)
     }
 }
 
@@ -1023,8 +833,7 @@ private struct CrossfadeDurationRow: View {
                     get: { seconds },
                     set: { seconds = $0.rounded() }
                 ),
-                in: range,
-                step: 1
+                in: range
             ) {
                 Text("Crossfade Duration")
             } minimumValueLabel: {
@@ -1036,6 +845,7 @@ private struct CrossfadeDurationRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .sliderThumbVisibility(.hidden)
             .tint(.appAccent)
         }
         .padding(.vertical, 2)

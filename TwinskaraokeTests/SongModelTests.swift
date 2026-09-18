@@ -494,7 +494,7 @@ struct SongModelTests {
 
     @Test("Bulk song metadata request posts the song ID array")
     func bulkSongMetadataRequestPostsIDs() throws {
-        let request = try KaraokeAPIClient.songsByIDsRequest(["first-id", "second-id"])
+        let request = try KaraokeAPIClient.songsByIDsRequest(["first-id", "second-id"], readToken: { nil })
         let body = try #require(request.httpBody)
 
         #expect(request.httpMethod == "POST")
@@ -505,10 +505,11 @@ struct SongModelTests {
 
     @Test("Uploaded song metadata request uses the authenticated uploads route")
     func uploadedSongMetadataRequestUsesUploadsRoute() throws {
-        let request = try KaraokeAPIClient.uploadedSongsRequest()
+        let request = try KaraokeAPIClient.uploadedSongsRequest(readToken: { "test-token" })
 
         #expect(request.httpMethod == "GET")
         #expect(request.url?.path == "/api/user/songs")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
     }
 
     @Test("Uploaded song metadata cache refreshes for new favorites and after expiration")

@@ -9,7 +9,7 @@ struct LyricsLifecycleTests {
     func ordering() async throws {
         let id = UUID().uuidString
         defer { clearCache(id) }
-        let model = LyricsViewModel(fetchData: { _ in
+        let model = LyricsViewModel(readToken: { nil }, fetchData: { _ in
             Data(#"[{"time":"20","text":"Second"},{"time":"inf","text":"Invalid"},{"time":"00:05","text":"First"}]"#.utf8)
         })
         model.fetch(songID: id)
@@ -21,7 +21,7 @@ struct LyricsLifecycleTests {
     @Test("An old same-song response cannot finish a replacement request")
     func replacement() async throws {
         var pending: [CheckedContinuation<Data, Error>] = []
-        let model = LyricsViewModel(fetchData: { _ in
+        let model = LyricsViewModel(readToken: { nil }, fetchData: { _ in
             try await withCheckedThrowingContinuation { pending.append($0) }
         })
         let id = UUID().uuidString
@@ -79,7 +79,7 @@ struct LyricsLifecycleTests {
     @Test("Not-found lyrics are empty, while server failures remain retryable")
     func errors() async throws {
         for status in [404, 500] {
-            let model = LyricsViewModel(fetchData: { _ in throw KaraokeAPIClient.APIError.httpStatus(status) })
+            let model = LyricsViewModel(readToken: { nil }, fetchData: { _ in throw KaraokeAPIClient.APIError.httpStatus(status) })
             model.fetch(songID: UUID().uuidString)
             try await waitUntil { !model.isLoading }
             #expect(model.hasNoLyrics == (status == 404))

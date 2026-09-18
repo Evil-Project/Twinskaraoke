@@ -121,4 +121,19 @@ struct PlayerTrackingProbe: UIViewRepresentable {
         }
     }
 }
+/// Exposes the audio-free fixture's bound scrub value without changing the slider's
+/// production accessibility value or intercepting touches.
+struct NativeScrubValueProbe: UIViewRepresentable {
+    var value: Double
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = true
+        view.accessibilityIdentifier = "NativeScrubValueProbe"
+        return view
+    }
+    func updateUIView(_ view: UIView, context: Context) {
+        view.accessibilityValue = String(value)
+    }
+}
 #endif

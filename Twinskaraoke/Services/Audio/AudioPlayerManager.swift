@@ -16,7 +16,7 @@ private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
 
-nonisolated enum RepeatMode: Equatable, Sendable {
+nonisolated enum RepeatMode: Equatable, Sendable, Codable {
     case off, all, one
     var symbol: String {
         switch self {
@@ -60,16 +60,25 @@ final class PlaybackClock {
 @Observable
 final class AudioPlayerManager {
     static let shared = AudioPlayerManager()
-    var currentSong: Song?
-    var isPlaying = false
+    var currentSong: Song? { didSet { scheduleSessionSave() } }
+    var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
 
     var progress: Double {
         get { PlaybackClock.shared.progress }
-        set { PlaybackClock.shared.progress = newValue }
+        set { PlaybackClock.shared.progress = newValue; scheduleSessionSave(periodic: true) }
     }
 
-    private var queueState = PlaybackQueueState()
+    private var queueState = PlaybackQueueState() { didSet { scheduleSessionSave() } }
+    @ObservationIgnored private var sessionSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var lastSessionSaveAt: TimeInterval = 0
+    @ObservationIgnored private var sessionPersistenceReady = false
+    @ObservationIgnored private var sessionRestoreAllowed = true
+    @ObservationIgnored private var sessionRestoring = false
+    private var usesSessionPersistence: Bool {
+        !ProcessInfo.processInfo.arguments.contains("-UITestMode")
+            || ProcessInfo.processInfo.arguments.contains("-UITestPlaybackSession")
+    }
     var queue: [Song] { queueState.items }
     var isEditingProgress = false
     var volume: Double = 1.0
@@ -80,7 +89,7 @@ final class AudioPlayerManager {
     private var deferredAIEffect: AudioEffect?
     var routeIcon: String = "airplayaudio"
     var routeName: String = ""
-    var repeatMode: RepeatMode = .off
+    var repeatMode: RepeatMode = .off { didSet { scheduleSessionSave() } }
     var isShuffled: Bool { queueState.isShuffled }
     var autoplayEnabled: Bool = UserDefaults.standard.object(forKey: "nk.autoplayEnabled") as? Bool ?? true {
         didSet {
@@ -477,6 +486,7 @@ final class AudioPlayerManager {
     }
 
     private var isPlaybackRequested: Bool {
+        if audioSessionController.hasPendingPlayback { return true }
         if isRadioMode { return radioPlaybackRequested }
         if isRemotePlaybackCaching { return streamPlaybackRequested }
         if isStreamMode { return streamPlaybackRequested }
@@ -527,8 +537,7 @@ final class AudioPlayerManager {
     // Private so `shared` stays the only instance: the audio session and the
     // remote-command centre it configures are process-wide singletons.
     private init() {
-        configureAudioSessionCategory()
-        activateAudioSession()
+        audioSessionController.prepareForPlayback()
         let cacheCleanupCutoff = Date()
         Task.detached(priority: .utility) {
             AudioCacheStore.cleanupLegacyArtifacts(createdBefore: cacheCleanupCutoff)
@@ -697,11 +706,62 @@ final class AudioPlayerManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.handleMediaServicesReset() }
             .store(in: &cancellables)
+        restorePlaybackSession()
         #if canImport(UIKit)
+            NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
+                .merge(with: NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification))
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.restorePlaybackSession() }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.persistPlaybackSession() }
+                .store(in: &cancellables)
             NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
                 .sink { [weak self] _ in self?.handleMemoryWarning() }
                 .store(in: &cancellables)
         #endif
+    }
+
+    private func scheduleSessionSave(periodic: Bool = false) {
+        guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if periodic && now - lastSessionSaveAt < 10 { return }
+        lastSessionSaveAt = now
+        sessionSaveTask?.cancel()
+        sessionSaveTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.persistPlaybackSession()
+        }
+    }
+
+    private func persistPlaybackSession() {
+        guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
+        PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
+            position: preferredStreamResumeTime(for: song) ?? playbackTime,
+            repeatMode: repeatMode, wasPlaying: isPlaying))
+    }
+
+    private func restorePlaybackSession() {
+        guard usesSessionPersistence, !sessionRestoring, sessionRestoreAllowed, currentSong == nil else { return }
+        sessionRestoring = true
+        Task { @MainActor [weak self] in
+            let saved = await PlaybackSessionStore.load()
+            guard let self else { return }
+            defer { sessionPersistenceReady = true; sessionRestoring = false }
+            guard sessionRestoreAllowed, currentSong == nil, !isRadioMode, let saved else { return }
+            currentSong = saved.song
+            queueState = saved.queue
+            repeatMode = saved.repeatMode
+            lastKnownPlaybackTime = saved.resumePosition
+            progress = saved.song.duration > 0 ? saved.resumePosition / Double(saved.song.duration) : 0
+            // Restore context without starting playback on launch.
+            isPlaying = false
+            isBuffering = false
+            updateNowPlayingInfo(reloadArtwork: true)
+            DebugLogger.log("Restored paused playback: \(saved.song.id), position=\(saved.resumePosition), queue=\(saved.queue.items.count)", category: .playback)
+        }
     }
 
     isolated deinit {
@@ -1102,6 +1162,10 @@ final class AudioPlayerManager {
         for song: Song, stems: CachedStems, sourceURL: URL,
         onReady: (() -> Void)? = nil
     ) {
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.switchActivePlaybackToStems(for: song, stems: stems, sourceURL: sourceURL, onReady: onReady)
+        }, replacingPending: false) else { return }
+
         guard !isRadioMode else { return }
         suppressPlaybackEndedCallbacks()
         let shouldResume = isPlaybackRequested
@@ -1109,8 +1173,6 @@ final class AudioPlayerManager {
         currentPlaybackURL = sourceURL
         aiStemSwitchInFlightSongID = song.id
         aiStemSwitchInFlightShouldResume = shouldResume
-        configureAudioSessionCategory()
-        activateAudioSession()
         if shouldResume {
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         }
@@ -1373,6 +1435,13 @@ final class AudioPlayerManager {
         preserveCacheRecoveryState: Bool = false,
         reportsPlayCount: Bool = true
     ) {
+        sessionRestoreAllowed = false
+        sessionPersistenceReady = true
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.play(song: song, context: context, resetTransitionVolume: resetTransitionVolume,
+                preserveCacheRecoveryState: preserveCacheRecoveryState, reportsPlayCount: reportsPlayCount)
+        }, replacingPending: true) else { return }
+
         cancelAutoplayRequest()
         if !preserveCacheRecoveryState {
             cacheRecoverySongID = nil
@@ -1416,6 +1485,7 @@ final class AudioPlayerManager {
                 temporarilyDisableAIEffects()
             }
         }
+        lastKnownPlaybackTime = 0
         progress = 0
         currentSong = song
         if UserDefaults.standard.bool(forKey: "nk.downloadOnPlay"), song.audioURL != nil {
@@ -1439,8 +1509,6 @@ final class AudioPlayerManager {
             VocalSeparator.shared.cancel()
             preparedStemSongID = song.id
             currentPlaybackURL = fileURL
-            configureAudioSessionCategory()
-            activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             avEngine.playStems(
                 originalURL: fileURL,
@@ -1509,6 +1577,10 @@ final class AudioPlayerManager {
         startAt: TimeInterval = 0,
         resetSeparation: Bool = true
     ) {
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.startPlayingFile(url, startAt: startAt, resetSeparation: resetSeparation)
+        }, replacingPending: false) else { return }
+
         suppressPlaybackEndedCallbacks()
         stopRadioPlayer()
         stopStreamPlayer()
@@ -1524,8 +1596,6 @@ final class AudioPlayerManager {
         streamStartedAt = nil
         currentPlaybackURL = url
         aiStemSwitchInFlightSongID = nil
-        configureAudioSessionCategory()
-        activateAudioSession()
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         avEngine.play(url: url, startAt: max(0, startAt)) { [weak self] in
             #if canImport(UIKit)
@@ -1630,6 +1700,7 @@ final class AudioPlayerManager {
     /// Returns true when a pause request matched an active or resumable playback path.
     @discardableResult
     private func pauseCurrentPlayback(source: String = #function) -> Bool {
+        audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
         if !handlingAudioSessionInterruption {
             wasPlayingBeforeInterruption = false
@@ -1724,6 +1795,10 @@ final class AudioPlayerManager {
     /// Returns true when a resume request could be applied to the current playback path.
     @discardableResult
     private func resumeCurrentPlayback(source: String = #function) -> Bool {
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.resumeCurrentPlayback(source: source)
+        }, replacingPending: true) else { return true }
+
         if isRadioMode {
             guard let player = radioPlayer else {
                 radioPlaybackRequested = false
@@ -1739,8 +1814,6 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            configureAudioSessionCategory()
-            activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             radioPlaybackRequested = true
             setPlaybackState(playing: false, buffering: true, reason: "resume.radio.buffering.\(source)")
@@ -1758,8 +1831,6 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            configureAudioSessionCategory()
-            activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             streamPlaybackRequested = true
             setPlaybackState(
@@ -1785,8 +1856,6 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            configureAudioSessionCategory()
-            activateAudioSession()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             streamPlaybackRequested = true
             setPlaybackState(playing: false, buffering: true, reason: "resume.stream.buffering.\(source)")
@@ -1802,7 +1871,7 @@ final class AudioPlayerManager {
         let deckExhausted = avEngine.currentURL != nil && !avEngine.hasScheduledMedia
         if !isPlaying, avEngine.currentURL == nil || deckExhausted {
             let resumeAt = deckExhausted ? 0 : (preferredStreamResumeTime(for: song) ?? lastKnownPlaybackTime)
-            if let fileURL = localPlaybackFileURL(for: song) {
+            if let fileURL = song.audioURL != nil ? immediateLocalPlaybackFileURL(for: song) : localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
                 startPlayingFile(fileURL, startAt: resumeAt)
                 return true
@@ -1833,8 +1902,6 @@ final class AudioPlayerManager {
             )
             return true
         }
-        configureAudioSessionCategory()
-        activateAudioSession()
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         avEngine.resume()
         setPlaybackState(playing: true, buffering: false, reason: "resume.file.\(source)")
@@ -1857,6 +1924,7 @@ final class AudioPlayerManager {
     func seek(to fraction: Double) {
         guard fraction.isFinite, (0.0 ... 1.0).contains(fraction) else { return }
         if isRadioMode { return }
+        defer { scheduleSessionSave() }
         suppressTransitionAfterSeek = true
         suppressPlaybackEndedCallbacks()
         progress = fraction
@@ -1897,6 +1965,7 @@ final class AudioPlayerManager {
         }
         let target = min(totalDur * fraction, totalDur - 1.5)
         guard target >= 0 else { return }
+        lastKnownPlaybackTime = target
         var needsAIRefresh = false
         if avEngine.mode == .aiStems {
             if !avEngine.seek(to: target) {
@@ -1920,8 +1989,6 @@ final class AudioPlayerManager {
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif
-        configureAudioSessionCategory()
-        activateAudioSession()
         switch queueState.advance(
             after: currentSong,
             repeatMode: repeatMode,
@@ -2124,6 +2191,10 @@ final class AudioPlayerManager {
     }
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.playRadio(streamURL: streamURL, song: song, artworkURL: artworkURL)
+        }, replacingPending: true) else { return }
+
         cancelAutoplayRequest()
         AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
@@ -2147,6 +2218,7 @@ final class AudioPlayerManager {
         VocalSeparator.shared.cancel()
         VocalSeparator.shared.cancelBackgroundAnalysis()
         scheduleIdleCacheCompression(excluding: Set<String>())
+        sessionRestoreAllowed = false
         isRadioMode = true
         radioArtworkURL = artworkURL
         progress = 0
@@ -2158,8 +2230,6 @@ final class AudioPlayerManager {
     private func startRadio(url: URL) {
         stopRadioPlayer()
         currentPlaybackURL = url
-        configureAudioSessionCategory()
-        activateAudioSession()
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
@@ -2208,8 +2278,6 @@ final class AudioPlayerManager {
             "Starting cached remote playback for \(songID): source=\(playbackSourceDescription(url)), startAt=\(startAt), autoplay=\(autoplay)",
             category: .playback
         )
-        configureAudioSessionCategory()
-        activateAudioSession()
         streamStartedAt = Date()
         streamPlaybackRequested = autoplay
         setPlaybackState(
@@ -2234,11 +2302,12 @@ final class AudioPlayerManager {
         remotePlaybackCacheToken = requestToken
         remotePlaybackCacheTask = Task { [weak self] in
             do {
-                let cachedURL = try await Self.cacheRemoteAudio(
-                    from: url,
-                    songID: songID,
-                    expectedDuration: expectedDuration
-                )
+                let cachedURL = try await Self.resolvePlaybackFile(download: {
+                    guard let song = self?.currentSong, song.id == songID else { return nil }
+                    return try await DownloadManager.shared.resolvedPlaybackURL(for: song)
+                }, remoteCache: {
+                    try await Self.cacheRemoteAudio(from: url, songID: songID, expectedDuration: expectedDuration)
+                })
                 await MainActor.run { [weak self] in
                     guard let self, remotePlaybackCacheToken == requestToken else { return }
                     guard currentSong?.id == songID, currentPlaybackURL == url else { return }
@@ -2303,6 +2372,17 @@ final class AudioPlayerManager {
                 }
             }
         }
+    }
+
+    static func resolvePlaybackFile(download: () async throws -> URL?,
+        remoteCache: () async throws -> URL) async throws -> URL {
+        let local = try await download()
+        try Task.checkCancellation()
+        if let local {
+            DebugLogger.log("Playback path: downloaded file, file=\(local.lastPathComponent)", category: .playback)
+            return local
+        }
+        return try await remoteCache()
     }
 
     // @concurrent: cache validation, file moves, and possible decompression
@@ -2714,16 +2794,6 @@ final class AudioPlayerManager {
         }
     }
 
-    private func configureAudioSessionCategory() {
-        audioSessionController.prepareForPlayback()
-    }
-
-    private func activateAudioSession() {
-        // Kept as a compatibility seam while call sites are migrated from the
-        // former configure/activate pair. The controller makes this idempotent.
-        audioSessionController.prepareForPlayback()
-    }
-
     private func syncSystemVolume(
         _ systemVolume: Float? = nil
     ) {
@@ -2740,13 +2810,14 @@ final class AudioPlayerManager {
 
     private func recoverFromEngineConfigChange() {
         guard isPlaying, !isRadioMode, !isStreamMode else { return }
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.recoverFromEngineConfigChange()
+        }, replacingPending: false) else { return }
         let position = lastKnownPlaybackTime
         DebugLogger.log(
             "Recovering playback after engine config change at \(position)s",
             category: .playback
         )
-        configureAudioSessionCategory()
-        activateAudioSession()
         avEngine.startEngineIfNeeded()
         avEngine.seek(to: position)
     }
@@ -2754,6 +2825,14 @@ final class AudioPlayerManager {
     private func handleMediaServicesReset() {
         DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
         audioSessionController.resetAfterMediaServicesLoss()
+        resumeAfterMediaServicesReset()
+    }
+
+    private func resumeAfterMediaServicesReset() {
+        guard isPlaying else { return }
+        guard audioSessionController.performWhenReady({ [weak self] in
+            self?.resumeAfterMediaServicesReset()
+        }, replacingPending: false) else { return }
         if isPlaying, !isRadioMode, !isStreamMode {
             let position = lastKnownPlaybackTime
             avEngine.startEngineIfNeeded()
@@ -2768,8 +2847,8 @@ final class AudioPlayerManager {
         else { return }
         switch type {
         case .began:
-            audioSessionController.markInterrupted()
             wasPlayingBeforeInterruption = isPlaybackRequested
+            audioSessionController.markInterrupted()
             DebugLogger.log(
                 "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
                 category: .playback

@@ -19,6 +19,10 @@ struct DeveloperMenuView: View {
                         exportDebugLogs()
                     }
                     .foregroundStyle(Color.appAccent)
+                    Button("Clear Debug Logs") {
+                        DebugLogger.clearLogs()
+                    }
+                    .foregroundStyle(Color.appAccent)
                 }
             }
             Section {

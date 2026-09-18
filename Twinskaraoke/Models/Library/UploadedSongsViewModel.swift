@@ -59,7 +59,15 @@ final class UploadedSongsViewModel {
         let generation = requestGeneration
         loadFailed = false
 
-        guard CredentialStore.token != nil else {
+        let credential = CredentialStore.readToken()
+        if case .unavailable = credential {
+            requiresSignIn = false
+            isLoading = false
+            hasLoaded = false
+            loadFailed = true
+            return
+        }
+        guard credential.token != nil else {
             requiresSignIn = true
             isLoading = false
             hasLoaded = true

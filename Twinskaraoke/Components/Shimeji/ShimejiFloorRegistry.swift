@@ -3,47 +3,6 @@ import SwiftUI
 #if canImport(UIKit)
     import UIKit
 
-    /// Tracks the mini player's top edge so `ShimejiEngine` can treat it as a
-    /// floor Shimeji can land on.
-    ///
-    /// `MiniPlayerBar` pushes its own frame here as SwiftUI lays it out. This
-    /// used to be a poll: the bar was a `UIView` owned by LNPopupUI, with no
-    /// SwiftUI geometry to read and no change notification offered, so
-    /// `ShimejiOverlayController` re-measured it twice a second and Shimeji
-    /// visibly lagged the bar whenever the tab bar minimized. A view we own
-    /// reports the change instead of being asked about it.
-    ///
-    /// A plain (non-actor) singleton for the same reason as the old floor
-    /// registry this replaces: the only reader is `ShimejiOverlayController`,
-    /// already `@MainActor`, and the only writer is a SwiftUI geometry
-    /// callback, which also runs on the main thread.
-    final class ShimejiMiniPlayerTracker {
-        static let shared = ShimejiMiniPlayerTracker()
-
-        private init() {}
-
-        /// The bar's current top edge in window coordinates — the same space
-        /// `ShimejiEngine.bounds` is tracked in. Nil while no bar is showing,
-        /// which is what puts Shimeji back on the tab bar's edge.
-        private(set) var topEdgeY: CGFloat?
-
-        /// - Parameter frame: the bar's frame in global coordinates, or nil
-        ///   when the bar leaves the screen.
-        func report(frame: CGRect?) {
-            guard let frame, frame.height > 0 else {
-                update(topEdgeY: nil)
-                return
-            }
-            update(topEdgeY: frame.minY)
-        }
-
-        private func update(topEdgeY newValue: CGFloat?) {
-            guard newValue != topEdgeY else { return }
-            topEdgeY = newValue
-            ShimejiEngine.shared.miniPlayerY = newValue
-        }
-    }
-
     /// Finds the app's live `UITabBar` (SwiftUI's `TabView` is backed by a
     /// real `UITabBarController`/`UITabBar` under the hood) so the engine
     /// can rest idle instances on its actual top edge instead of the literal

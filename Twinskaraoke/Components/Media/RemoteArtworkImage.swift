@@ -354,47 +354,47 @@ struct MusicSkeletonShimmer: ViewModifier {
     var isActive: Bool
     @Environment(\.appReduceEffects) private var reduceEffects
     private let scrollState = ScrollPerformanceState.shared
-    @State private var phase: CGFloat = -0.8
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var animationClock = ActiveAnimationClock()
+    @State private var isVisible = false
 
     func body(content: Content) -> some View {
         content
             .overlay {
                 GeometryReader { proxy in
-                    shimmer(width: proxy.size.width)
-                        .opacity(effectiveActive ? 1 : 0)
-                        .mask(content)
+                    TimelineView(
+                        .animation(
+                            minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                            paused: !effectiveActive
+                        )
+                    ) { context in
+                        let elapsed = animationClock.elapsed(at: context.date)
+                        let phase = elapsed.truncatingRemainder(dividingBy: 1.65) / 1.65
+                        shimmer(width: proxy.size.width, phase: -0.8 + 2.6 * phase)
+                    }
+                    .opacity(effectiveActive ? 1 : 0)
+                    .mask(content)
                 }
                 .clipShape(Rectangle())
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
-            .onAppear {
-                restartIfNeeded(active: effectiveActive)
+            .onAppear { isVisible = true }
+            .onDisappear {
+                isVisible = false
+                animationClock.setRunning(false, at: .now)
             }
-            .onChange(of: effectiveActive) { _, effectiveActive in
-                restartIfNeeded(active: effectiveActive)
+            .onChange(of: effectiveActive, initial: true) { _, running in
+                animationClock.setRunning(running, at: .now)
             }
     }
 
     private var effectiveActive: Bool {
-        isActive
-            && !scrollState.isScrolling
-            && !reduceEffects
+        isActive && isVisible && scenePhase == .active
+            && !scrollState.isScrolling && !reduceEffects
     }
 
-    private func restartIfNeeded(active: Bool) {
-        if active {
-            phase = -0.8
-            withOptionalAnimation(AppMotion.spring(response: 1.65, dampingFraction: 0.9).repeatForever(autoreverses: false)) {
-                phase = 1.8
-            }
-        } else {
-            withOptionalAnimation(nil) {
-                phase = -0.8
-            }
-        }
-    }
-
-    private func shimmer(width: CGFloat) -> some View {
+    private func shimmer(width: CGFloat, phase: CGFloat) -> some View {
         LinearGradient(
             colors: [
                 .clear,
@@ -542,6 +542,51 @@ struct MusicEmptyStateMark: View {
             .offset(x: 75, y: -27)
         }
         .frame(width: 132, height: 96)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The empty-state mark, breathing slowly while a screen waits for content.
+///
+/// The pulse is sampled from an `ActiveAnimationClock` rather than driven by a
+/// `repeatForever` animation: an endless animation keeps a transaction alive,
+/// which leaks into unrelated layout changes and cannot be paused without
+/// snapping back to its starting scale.
+struct PulsingMusicEmptyStateMark: View {
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var animationClock = ActiveAnimationClock()
+    @State private var isVisible = false
+
+    /// Deliberately slower than any AppMotion role: this is a perpetual waiting
+    /// pulse, and the interaction springs would drive it at roughly twice the
+    /// rate, which reads as agitation rather than waiting.
+    private static let period: TimeInterval = 0.9
+
+    private var shouldAnimate: Bool {
+        isVisible && !reduceEffects && scenePhase == .active
+    }
+
+    var body: some View {
+        TimelineView(
+            .animation(
+                minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                paused: !shouldAnimate
+            )
+        ) { context in
+            let elapsed = animationClock.elapsed(at: context.date)
+            let phase = (1 - cos(elapsed * .pi / Self.period)) / 2
+            MusicEmptyStateMark()
+                .scaleEffect(reduceEffects ? 1 : 0.98 + 0.05 * phase)
+        }
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            animationClock.setRunning(false, at: .now)
+        }
+        .onChange(of: shouldAnimate, initial: true) { _, running in
+            animationClock.setRunning(running, at: .now)
+        }
         .accessibilityHidden(true)
     }
 }

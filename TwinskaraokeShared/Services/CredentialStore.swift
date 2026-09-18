@@ -21,45 +21,62 @@ nonisolated enum CredentialStore {
 
   // Purely a Keychain wrapper: the half-committed-session marker
   // (nk.sessionCommitted) is enforced by AuthManager.persistedSessionIsComplete.
-  static var token: String? {
+  enum TokenReadResult: Equatable {
+    case available(String)
+    case missing
+    case unavailable(OSStatus)
+
+    var token: String? {
+      if case let .available(token) = self { return token }
+      return nil
+    }
+  }
+
+  static var token: String? { readToken().token }
+
+  static func readToken() -> TokenReadResult {
     tokenCacheLock.lock()
     if tokenCacheValid {
-      let cached = cachedToken
+      let result = cachedToken.map(TokenReadResult.available) ?? .missing
       tokenCacheLock.unlock()
-      return cached
+      return result
     }
     let generation = cacheGeneration
     tokenCacheLock.unlock()
     let resolved = resolveToken()
     tokenCacheLock.lock()
-    if cacheGeneration == generation {
-      cachedToken = resolved
-      tokenCacheValid = true
-      tokenCacheLock.unlock()
-      return resolved
+    defer { tokenCacheLock.unlock() }
+    if cacheGeneration != generation {
+      return tokenCacheValid ? (cachedToken.map(TokenReadResult.available) ?? .missing) : resolved
     }
-    // A save/delete raced the cold read: the resolved value may be a revoked
-    // token, so hand out the current cached value (nil if it was cleared).
-    let current = tokenCacheValid ? cachedToken : nil
-    tokenCacheLock.unlock()
-    return current
+    if case .unavailable = resolved { return resolved }
+    cachedToken = resolved.token
+    tokenCacheValid = true
+    return resolved
   }
 
-  private static func resolveToken() -> String? {
-    if let stored = readTokenFromKeychain() {
-      return stored
-    }
-
+  private static func resolveToken() -> TokenReadResult {
+    let result = readTokenFromKeychain()
+    guard case .missing = result else { return result }
     guard let legacy = UserDefaults.standard.string(forKey: legacyTokenKey), !legacy.isEmpty else {
-      return nil
+      return .missing
     }
-
     do {
       try saveToken(legacy)
-      return legacy
+      return .available(legacy)
+    } catch StoreError.keychain(let status) {
+      return .unavailable(status)
     } catch {
-      UserDefaults.standard.removeObject(forKey: legacyTokenKey)
-      return nil
+      return .unavailable(errSecNotAvailable)
+    }
+  }
+
+  /// A locked Keychain must not turn an authenticated request into an anonymous one.
+  static func requestToken() throws -> String? {
+    switch readToken() {
+    case .available(let token): return token
+    case .missing: return nil
+    case .unavailable(let status): throw StoreError.keychain(status)
     }
   }
 
@@ -174,19 +191,22 @@ nonisolated enum CredentialStore {
     private static let probeAccount = "nk.keychainProbe"
   #endif
 
-  private static func readTokenFromKeychain() -> String? {
+  private static func readTokenFromKeychain() -> TokenReadResult {
     var query = baseQuery
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
-
     var result: CFTypeRef?
-    guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-          let data = result as? Data,
-          let token = String(data: data, encoding: .utf8),
-          !token.isEmpty
-    else {
-      return nil
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    DebugLogger.log("Keychain cold read OSStatus=\(status)", category: .network)
+    return classifyRead(status: status, data: result as? Data)
+  }
+
+  static func classifyRead(status: OSStatus, data: Data?) -> TokenReadResult {
+    if status == errSecItemNotFound { return .missing }
+    guard status == errSecSuccess else { return .unavailable(status) }
+    guard let data, let token = String(data: data, encoding: .utf8), !token.isEmpty else {
+      return .unavailable(errSecDecode)
     }
-    return token
+    return .available(token)
   }
 }

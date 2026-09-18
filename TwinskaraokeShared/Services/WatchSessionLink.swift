@@ -35,10 +35,36 @@ nonisolated enum WatchSessionLink {
         static let kind = "nk.kind"
         static let token = "nk.token"
         static let isSignedIn = "nk.isSignedIn"
+        static let credentialUnavailable = "nk.credentialUnavailable"
     }
 
     enum MessageKind {
         static let fetchToken = "fetchToken"
+    }
+
+    enum TokenReply: Equatable, Sendable {
+        case available(String)
+        case signedOut
+        case unavailable
+    }
+
+    static func tokenReply(for result: CredentialStore.TokenReadResult) -> [String: Any] {
+        switch result {
+        case .available(let token):
+            return [MessageKey.isSignedIn: true, MessageKey.token: token]
+        case .missing:
+            return [MessageKey.isSignedIn: false]
+        case .unavailable:
+            return [MessageKey.credentialUnavailable: true]
+        }
+    }
+
+    static func decodeTokenReply(_ payload: [String: Any]) -> TokenReply {
+        if payload[MessageKey.credentialUnavailable] as? Bool == true { return .unavailable }
+        guard let signedIn = payload[MessageKey.isSignedIn] as? Bool else { return .unavailable }
+        if !signedIn { return .signedOut }
+        guard let token = payload[MessageKey.token] as? String, !token.isEmpty else { return .unavailable }
+        return .available(token)
     }
 
     /// The non-secret half of a session: enough for the watch to render an

@@ -123,12 +123,10 @@ private struct SmoothScrollingModifier: ViewModifier {
     @State private var scrollID = UUID()
 
     func body(content: Content) -> some View {
-        let configured = content
+        content
             .scrollBounceBehavior(bounceBehavior)
             .scrollDismissesKeyboard(.interactively)
-
-        configured
-            .onScrollPhaseChange { _, phase in
+            .onScrollPhaseChange { _, phase, _ in
                 ScrollPerformanceState.shared.update(id: scrollID, isScrolling: phase.isScrolling)
             }
             .onDisappear {

@@ -133,18 +133,24 @@ final class DownloadManager {
         let metadata: URL
     }
 
-    private struct ValidDownloadCacheEntry {
+    nonisolated struct ValidDownloadCacheEntry: Codable, Sendable {
         let source: String?
         let expectedDuration: TimeInterval?
         let modifiedAt: Date?
+        var byteCount: Int?
     }
 
-    private struct StartupScanResult {
+    enum RestorationState: Equatable { case notStarted, restoring, ready, failed }
+    private(set) var restorationState: RestorationState = .notStarted
+    private var restorationGeneration = 0
+    private var removedDuringRestoration = Set<String>()
+    private var changedDuringRestoration = Set<String>()
+    private var restorationStartingIDs = Set<String>()
+
+    struct StartupScanResult {
+        let hadFailures: Bool
         let validIDs: Set<String>
-        let validEntries: [String: ValidDownloadCacheEntry]
         let metadata: [String: Song]
-        let repairs: [String: Song]
-        let junkDirectories: [URL]
     }
 
     static let shared = DownloadManager()
@@ -164,11 +170,26 @@ final class DownloadManager {
     private var failedInCurrentQueue = 0
     private var cancelledInCurrentQueue = 0
     private var pendingWiFiRepairs: [String: Song] = [:]
+    private var validationBatchGeneration = 0
+    private var cancellationGenerations: [String: Int] = [:]
     private var validDownloadCache: [String: ValidDownloadCacheEntry] = [:]
     private var downloadedMetadata: [String: Song] = [:]
     private var isWiFiAvailable = false
     private let taskRegistry = DownloadTaskRegistry()
     private let downloadSession: URLSession
+    private let backgroundTransport: BackgroundDownloadTransport
+    private var pendingDownloads: [String: PendingDownload] = [:]
+    private var restoredPendingDownloads = false
+    private var pendingJournalLoaded = false
+    private var cancelledBeforePendingRestore = Set<String>()
+    private var discardPendingOnRestore = false
+    private var deferredDownloadRequests: [String: Song] = [:]
+    private var pendingRestoration: Task<Void, Never>?
+    private var deferredCompletions: [(URLSessionTask, URL?, Error?)] = []
+    private var pendingJournalURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("pending-downloads.json")
+    }
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "DownloadManager.NetworkMonitor")
     private nonisolated static let deletionQueue = DispatchQueue(
@@ -179,12 +200,9 @@ final class DownloadManager {
     private nonisolated static let maxConcurrentDownloads = 3
 
     private init() {
-        let sessionConfiguration = URLSessionConfiguration.default
-        sessionConfiguration.httpMaximumConnectionsPerHost = Self.maxConcurrentDownloads
-        sessionConfiguration.waitsForConnectivity = true
-        sessionConfiguration.timeoutIntervalForRequest = 60
-        sessionConfiguration.timeoutIntervalForResource = 30 * 60
-        downloadSession = URLSession(configuration: sessionConfiguration)
+        let transport = BackgroundDownloadTransport()
+        backgroundTransport = transport
+        downloadSession = transport.makeSession()
         cacheDir = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask).first!
             .appendingPathComponent("Downloads")
@@ -194,13 +212,60 @@ final class DownloadManager {
             Self.removePendingDeletionDirectories(in: downloadsParent)
         }
         startNetworkMonitoring()
-        // The startup scan opens every downloaded audio file to validate it;
-        // that per-file decode work must stay off the main thread at launch.
-        let scanStartedAt = Date()
+        restoreManifest()
+        retryRestoration()
+    }
+
+    private var manifestURL: URL { cacheDir.appendingPathComponent(".download-manifest.json") }
+
+    private func restoreManifest() {
+        do {
+            let songs = try JSONDecoder().decode([Song].self, from: Data(contentsOf: manifestURL))
+            downloadedMetadata = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+            publishedState.downloadedIDs = Set(songs.map(\.id))
+        } catch {
+            DebugLogger.log("Download manifest read: \(error)", category: .cache)
+        }
+    }
+
+    private func persistManifest() {
+        do {
+            let songs = downloadedIDs.compactMap { downloadedMetadata[$0] }
+            try JSONEncoder().encode(songs).write(to: manifestURL, options: .atomic)
+        } catch {
+            DebugLogger.log("Download manifest write: \(error)", category: .cache)
+        }
+    }
+
+    func retryRestoration() {
+        restorePendingDownloadsIfNeeded()
+        if UIApplication.shared.isProtectedDataAvailable, !deferredCompletions.isEmpty {
+            let completions = deferredCompletions
+            deferredCompletions.removeAll()
+            Task { [weak self] in
+                for (task, file, error) in completions {
+                    await self?.receiveBackgroundDownload(task: task, file: file, error: error)
+                }
+            }
+        }
+        guard restorationState != .restoring else { return }
+        guard UIApplication.shared.isProtectedDataAvailable else {
+            restorationState = .failed
+            DebugLogger.log("Download restoration waiting for protected data", category: .cache)
+            return
+        }
+        if downloadedIDs.isEmpty { restoreManifest() }
+        restorationState = .restoring
+        removedDuringRestoration.removeAll()
+        changedDuringRestoration.removeAll()
+        restorationStartingIDs = downloadedIDs
+        restorationGeneration += 1
+        let generation = restorationGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let scan = scanExistingDownloadsBlocking(createdBefore: scanStartedAt)
+            let scan = Self.scanExistingDownloads(in: cacheDir)
             await MainActor.run {
+                guard self.restorationGeneration == generation else { return }
                 self.applyStartupScan(scan)
             }
         }
@@ -210,7 +275,6 @@ final class DownloadManager {
         for task in cachePromotionTasks.values {
             task.cancel()
         }
-        downloadSession.invalidateAndCancel()
         networkMonitor.cancel()
     }
 
@@ -347,11 +411,11 @@ final class DownloadManager {
     }
 
     private nonisolated static func downloadedByteCount(at url: URL) -> Int {
-        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)?.intValue ?? 0
     }
 
     private nonisolated static func modificationDate(at url: URL) -> Date? {
-        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
     }
 
     func isDownloaded(_ songID: String) -> Bool {
@@ -378,12 +442,16 @@ final class DownloadManager {
         )
     }
 
-    private func updatePublishedState(_ update: (inout PublishedState) -> Void) {
+    private func updatePublishedState(persist: Bool = true, _ update: (inout PublishedState) -> Void) {
         let previous = publishedState
         var next = previous
         update(&next)
         guard next != previous else { return }
+        if persist, restorationState == .restoring {
+            changedDuringRestoration.formUnion(previous.downloadedIDs.symmetricDifference(next.downloadedIDs))
+        }
         publishedState = next
+        if persist, previous.downloadedIDs != next.downloadedIDs { persistManifest() }
     }
 
     var hasActiveQueue: Bool {
@@ -428,23 +496,30 @@ final class DownloadManager {
     }
 
     private func prewarmValidationCache(for songs: [Song]) {
+        let batchGeneration = validationBatchGeneration
+        let generations = Dictionary(songs.map { ($0.id, cancellationGenerations[$0.id, default: 0]) },
+            uniquingKeysWith: { _, new in new })
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let entries = self.validateDownloadsForCachePrewarm(songs)
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                for (songID, entry) in entries where self.validDownloadCache[songID] == nil {
+                guard self.validationBatchGeneration == batchGeneration else { return }
+                for (songID, entry) in entries where self.validDownloadCache[songID] == nil
+                    && self.cancellationGenerations[songID, default: 0] == generations[songID] {
                     self.validDownloadCache[songID] = entry
                 }
-                self.enqueueDownloads(songs)
+                self.enqueueDownloads(songs.filter {
+                    self.cancellationGenerations[$0.id, default: 0] == generations[$0.id]
+                })
             }
         }
     }
 
     /// Mirrors the early-exit checks in playableURL so warmed cache entries
     /// make it return the audio file without AVAudioFile on the main actor.
-    /// Missing, stale, or invalid downloads get no entry and fall back to the
-    /// on-main validation and repair path.
+    /// Missing, stale, or invalid downloads get no entry and can be downloaded
+    /// again without repeating the decoder probe on the main actor.
     private nonisolated func validateDownloadsForCachePrewarm(
         _ songs: [Song]
     ) -> [String: ValidDownloadCacheEntry] {
@@ -464,7 +539,7 @@ final class DownloadManager {
             guard FileManager.default.fileExists(atPath: songFiles.audio.path) else { continue }
             let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
             let expectedSource = song.audioURL?.absoluteString
-            if let cachedSource, let expectedSource, cachedSource != expectedSource { continue }
+            if let cachedSource, let expectedSource, !Self.sameAudioResource(cachedSource, expectedSource) { continue }
             guard Self.isValidDownloadedAudio(
                 at: songFiles.audio,
                 expectedDuration: expectedDuration
@@ -472,21 +547,144 @@ final class DownloadManager {
             entries[song.id] = ValidDownloadCacheEntry(
                 source: cachedSource ?? expectedSource,
                 expectedDuration: expectedDuration,
-                modifiedAt: Self.modificationDate(at: songFiles.audio)
+                modifiedAt: Self.modificationDate(at: songFiles.audio),
+                byteCount: Self.downloadedByteCount(at: songFiles.audio)
             )
         }
         return entries
     }
 
+    func handleBackgroundEvents(completion: @escaping @Sendable () -> Void) {
+        backgroundTransport.handleEvents(completion: completion)
+        restorePendingDownloadsIfNeeded()
+    }
+
+    private func persistPendingDownloads() -> Bool {
+        guard pendingJournalLoaded else { return false }
+        do {
+            let url = pendingJournalURL
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(Array(pendingDownloads.values)).write(to: url, options: .atomic)
+            return true
+        } catch {
+            DebugLogger.log("Pending download journal write failed: \(error)", category: .cache)
+            return false
+        }
+    }
+
+    private func restorePendingDownloadsIfNeeded() {
+        guard !restoredPendingDownloads, pendingRestoration == nil,
+              UIApplication.shared.isProtectedDataAvailable else { return }
+        do {
+            let entries = try JSONDecoder().decode([PendingDownload].self, from: Data(contentsOf: pendingJournalURL))
+            pendingDownloads = Dictionary(entries.map { ($0.song.id, $0) }, uniquingKeysWith: { _, new in new })
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            pendingDownloads = [:]
+        } catch {
+            DebugLogger.log("Pending download journal read failed: \(error)", category: .cache)
+            return
+        }
+        pendingJournalLoaded = true
+        if discardPendingOnRestore { pendingDownloads.removeAll() }
+        for id in cancelledBeforePendingRestore { pendingDownloads.removeValue(forKey: id) }
+        if discardPendingOnRestore || !cancelledBeforePendingRestore.isEmpty { _ = persistPendingDownloads() }
+        discardPendingOnRestore = false
+        cancelledBeforePendingRestore.removeAll()
+        pendingRestoration = Task { [weak self] in
+            guard let self else { return }
+            let existing = await downloadSession.allTasks
+            // Read the current journal state after suspension: cancellation may
+            // have removed entries while Foundation was enumerating its tasks.
+            for task in existing + backgroundTransport.completingTasks() {
+                guard let description = task.taskDescription,
+                      let entry = pendingDownloads.values.first(where: { $0.token.uuidString == description }),
+                      let task = task as? URLSessionDownloadTask else { task.cancel(); continue }
+                tasks[entry.song.id] = task
+                taskRegistry.register(songID: entry.song.id, token: entry.token)
+                task.resume()
+            }
+            updatePublishedState { $0.inProgress.formUnion(pendingDownloads.keys) }
+            do {
+                for receipt in try BackgroundDownloadTransport.receipts() {
+                    guard let entry = pendingDownloads.values.first(where: { $0.token.uuidString == receipt.token }),
+                          let remote = entry.song.audioURL else {
+                        BackgroundDownloadTransport.discardReceipt(for: receipt.file)
+                        continue
+                    }
+                    // A live delegate delivery owns this receipt until it has
+                    // finished; only recover files left by a previous process.
+                    guard tasks[entry.song.id] == nil else { continue }
+                    taskRegistry.register(songID: entry.song.id, token: entry.token)
+                    await Self.runCompletion(downloadCompletion(song: entry.song, remoteURL: remote, token: entry.token), file: receipt.file, response: receipt.response, error: nil)
+                    BackgroundDownloadTransport.discardReceipt(for: receipt.file)
+                }
+            } catch {
+                DebugLogger.log("Download inbox recovery failed: \(error)", category: .cache)
+            }
+            for entry in pendingDownloads.values where tasks[entry.song.id] == nil {
+                queuedDownloads[entry.song.id] = entry.song
+                if !queuedDownloadOrder.contains(entry.song.id) { queuedDownloadOrder.append(entry.song.id) }
+            }
+            updatePublishedState { $0.inProgress.formUnion(pendingDownloads.keys) }
+            restoredPendingDownloads = true
+            pendingRestoration = nil
+            let deferred = Array(deferredDownloadRequests.values)
+            deferredDownloadRequests.removeAll()
+            if !deferred.isEmpty { enqueueDownloads(deferred) }
+            startQueuedDownloadsIfPossible()
+        }
+    }
+
+    func receiveBackgroundDownload(task: URLSessionTask, file: URL?, error: Error?) async {
+        guard UIApplication.shared.isProtectedDataAvailable else {
+            deferredCompletions.append((task, file, error))
+            return
+        }
+        restorePendingDownloadsIfNeeded()
+        await pendingRestoration?.value
+        guard restoredPendingDownloads else {
+            // Keep the journal authoritative; retry restoration after unlock.
+            // This file has not been committed and must not replace a download.
+            deferredCompletions.append((task, file, error))
+            return
+        }
+        guard let description = task.taskDescription,
+              let entry = pendingDownloads.values.first(where: { $0.token.uuidString == description }),
+              let remoteURL = entry.song.audioURL else {
+            if let file { BackgroundDownloadTransport.discardReceipt(for: file) }
+            return
+        }
+        // A completion may arrive during task enumeration. Adopt it only if no
+        // replacement task already owns this token's transfer.
+        if let current = tasks[entry.song.id], current.taskIdentifier != task.taskIdentifier {
+            if let file { BackgroundDownloadTransport.discardReceipt(for: file) }
+            return
+        }
+        taskRegistry.register(songID: entry.song.id, token: entry.token)
+        updatePublishedState { $0.inProgress.insert(entry.song.id) }
+        await Self.runCompletion(downloadCompletion(song: entry.song, remoteURL: remoteURL, token: entry.token), file: file, response: task.response, error: error)
+        if let file { BackgroundDownloadTransport.discardReceipt(for: file) }
+    }
+
     private func enqueueDownloads(_ songs: [Song]) {
+        restorePendingDownloadsIfNeeded()
+        guard restoredPendingDownloads else {
+            for song in songs { deferredDownloadRequests[song.id] = song }
+            return
+        }
         var nextInProgress = inProgress
         var acceptedAny = false
 
         for song in songs {
             guard song.audioURL != nil else { continue }
-            if downloadedIDs.contains(song.id), playableURL(for: song) != nil { continue }
+            if downloadedIDs.contains(song.id), immediatelyPlayableURL(for: song) != nil { continue }
             guard !nextInProgress.contains(song.id) else { continue }
 
+            pendingDownloads[song.id] = PendingDownload(song: song, token: UUID())
+            guard persistPendingDownloads() else {
+                pendingDownloads.removeValue(forKey: song.id)
+                continue
+            }
             pendingWiFiRepairs.removeValue(forKey: song.id)
             nextInProgress.insert(song.id)
             queuedDownloads[song.id] = song
@@ -507,6 +705,7 @@ final class DownloadManager {
     }
 
     private func startQueuedDownloadsIfPossible() {
+        guard restoredPendingDownloads else { return }
         // Iterate by index and remove the drained prefix in one batch instead
         // of removeFirst() per element, which shifts the whole array each time.
         var drainedCount = 0
@@ -516,7 +715,10 @@ final class DownloadManager {
             let songID = queuedDownloadOrder[drainedCount]
             drainedCount += 1
             guard let song = queuedDownloads.removeValue(forKey: songID) else { continue }
-            guard inProgress.contains(songID), !downloadedIDs.contains(songID) else {
+            guard inProgress.contains(songID) else { continue }
+            if downloadedIDs.contains(songID), immediatelyPlayableURL(for: song) != nil {
+                pendingDownloads.removeValue(forKey: songID)
+                _ = persistPendingDownloads()
                 updatePublishedState { $0.inProgress.remove(songID) }
                 continue
             }
@@ -531,7 +733,7 @@ final class DownloadManager {
             return
         }
         let songID = song.id
-        let token = UUID()
+        guard let token = pendingDownloads[songID]?.token else { return }
         let taskRegistry = taskRegistry
         taskRegistry.register(songID: songID, token: token)
         ensureSongDirectory(for: songID)
@@ -641,14 +843,34 @@ final class DownloadManager {
     }
 
     private func startNetworkDownload(song: Song, remoteURL: URL, token: UUID, resumeData: Data? = nil) {
+        let task = if let resumeData {
+            downloadSession.downloadTask(withResumeData: resumeData)
+        } else {
+            downloadSession.downloadTask(with: remoteURL)
+        }
+        task.taskDescription = token.uuidString
+        tasks[song.id] = task
+        task.resume()
+    }
+
+    @concurrent
+    private static func runCompletion(
+        _ completion: @Sendable (URL?, URLResponse?, Error?) async -> Void,
+        file: URL?, response: URLResponse?, error: Error?
+    ) async {
+        await completion(file, response, error)
+    }
+
+    private func downloadCompletion(song: Song, remoteURL: URL, token: UUID)
+        -> @Sendable (URL?, URLResponse?, Error?) async -> Void {
         let songID = song.id
         let songFiles = files(for: songID, sourceURL: remoteURL)
         let taskRegistry = taskRegistry
         DebugLogger.log(
-            "Download started: \(songID) (active=\(tasks.count + 1), queued=\(queuedDownloadOrder.count))",
+            "Download processing completion: \(songID)",
             category: .network
         )
-        let completion: @Sendable (URL?, URLResponse?, Error?) -> Void = { [weak self] tempURL, response, error in
+        let completion: @Sendable (URL?, URLResponse?, Error?) async -> Void = { [weak self] tempURL, response, error in
             var moved = false
             let expectedBytes = response?.expectedContentLength ?? NSURLSessionTransferSizeUnknown
             let downloadedBytes = tempURL.map { Self.downloadedByteCount(at: $0) } ?? 0
@@ -700,7 +922,7 @@ final class DownloadManager {
                         // An interrupted transfer carries resume data; continue
                         // from the partial bytes instead of failing the download.
                         if let resumeData = Self.resumeData(from: error) {
-                            Task { @MainActor [weak self, song, token] in
+                            await MainActor.run { [weak self, song, token] in
                                 self?.retryDownload(
                                     resumeData: resumeData,
                                     song: song,
@@ -719,17 +941,11 @@ final class DownloadManager {
                     )
                 }
             }
-            Task { @MainActor [weak self, moved, song, songID, token] in
+            await MainActor.run { [weak self, moved, song, songID, token] in
                 self?.finishDownload(songID: songID, song: song, moved: moved, token: token)
             }
         }
-        let task = if let resumeData {
-            downloadSession.downloadTask(withResumeData: resumeData, completionHandler: completion)
-        } else {
-            downloadSession.downloadTask(with: remoteURL, completionHandler: completion)
-        }
-        tasks[songID] = task
-        task.resume()
+        return completion
     }
 
     /// Resume data URLSession attaches to an interrupted download's error; nil
@@ -756,17 +972,14 @@ final class DownloadManager {
         if let token {
             let isCurrentTask = taskRegistry.performIfActive(songID: songID, token: token) { true } ?? false
             guard isCurrentTask else {
-                if moved {
-                    let songFiles = files(for: songID, sourceURL: song.audioURL)
-                    Self.removeDownloadedAudioFiles(in: songFiles.directory)
-                    try? FileManager.default.removeItem(at: songFiles.source)
-                }
                 startQueuedDownloadsIfPossible()
                 logDownloadQueueCompletionIfNeeded()
                 return
             }
             taskRegistry.cancel(songID: songID)
         }
+        pendingDownloads.removeValue(forKey: songID)
+        _ = persistPendingDownloads()
         tasks.removeValue(forKey: songID)
         cachePromotionTasks.removeValue(forKey: songID)
         resumeRetriedSongIDs.remove(songID)
@@ -779,13 +992,10 @@ final class DownloadManager {
         if moved {
             writeMetadata(for: song)
             downloadedMetadata[songID] = song
-            validDownloadCache[songID] = ValidDownloadCacheEntry(
+            cacheValidDownload(songID: songID,
+                audioURL: files(for: songID, sourceURL: song.audioURL).audio,
                 source: song.audioURL?.absoluteString,
-                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil,
-                modifiedAt: Self.modificationDate(
-                    at: files(for: songID, sourceURL: song.audioURL).audio
-                )
-            )
+                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil)
             completedInCurrentQueue += 1
             // A downloaded song should never need the network again — but the
             // audio was the only thing being persisted, so its artwork was
@@ -827,7 +1037,24 @@ final class DownloadManager {
         logDownloadQueueCompletionIfNeeded()
     }
 
-    private func cancelWork(songID: String) {
+    func cancel(songs: [Song]) {
+        let ids = Set(songs.map(\.id))
+        let active = inProgress.intersection(ids)
+        for id in ids { cancelWork(songID: id, persist: false) }
+        _ = persistPendingDownloads()
+        cancelledInCurrentQueue += active.count
+        updatePublishedState { $0.inProgress.subtract(ids) }
+        startQueuedDownloadsIfPossible()
+        logDownloadQueueCompletionIfNeeded()
+    }
+
+    private func cancelWork(songID: String, persist: Bool = true) {
+        cancellationGenerations[songID, default: 0] += 1
+        pendingWiFiRepairs.removeValue(forKey: songID)
+        if !pendingJournalLoaded { cancelledBeforePendingRestore.insert(songID) }
+        deferredDownloadRequests.removeValue(forKey: songID)
+        pendingDownloads.removeValue(forKey: songID)
+        if persist { _ = persistPendingDownloads() }
         taskRegistry.cancel(songID: songID)
         cachePromotionTasks[songID]?.cancel()
         cachePromotionTasks.removeValue(forKey: songID)
@@ -843,6 +1070,7 @@ final class DownloadManager {
     }
 
     func remove(songIDs: [String]) {
+        removedDuringRestoration.formUnion(songIDs)
         let uniqueSongIDs = Set(songIDs)
         guard !uniqueSongIDs.isEmpty else { return }
         for songID in uniqueSongIDs {
@@ -953,6 +1181,7 @@ final class DownloadManager {
             DebugLogger.log("Could not recreate downloads directory: \(error)", category: .cache)
         }
 
+        validationBatchGeneration += 1
         for task in tasks.values {
             task.cancel()
         }
@@ -962,6 +1191,10 @@ final class DownloadManager {
         tasks.removeAll()
         cachePromotionTasks.removeAll()
         resumeRetriedSongIDs.removeAll()
+        if !pendingJournalLoaded { discardPendingOnRestore = true }
+        deferredDownloadRequests.removeAll()
+        pendingDownloads.removeAll()
+        _ = persistPendingDownloads()
         queuedDownloads.removeAll()
         queuedDownloadOrder.removeAll()
         isLoggingDownloadQueue = false
@@ -971,6 +1204,8 @@ final class DownloadManager {
         pendingWiFiRepairs.removeAll()
         validDownloadCache.removeAll()
         downloadedMetadata.removeAll()
+        restorationGeneration += 1
+        restorationState = .ready
 
         if let stagedDirectory {
             Self.deletionQueue.async {
@@ -1038,81 +1273,54 @@ final class DownloadManager {
         cancelledInCurrentQueue = 0
     }
 
-    /// The scan runs concurrently with live downloads. It only removes
-    /// promotion staging files that predate this launch; all other destructive
-    /// cleanup is deferred to `applyStartupScan` so live state wins.
-    private nonisolated func scanExistingDownloadsBlocking(
-        createdBefore scanStartedAt: Date
-    ) -> StartupScanResult {
-        migrateLegacyDownloadsIfNeeded()
+    /// Read-only discovery. Live removals are excluded when this result is applied.
+    nonisolated static func scanExistingDownloads(in cacheDir: URL) -> StartupScanResult {
         let fm = FileManager.default
         var ids = Set<String>()
-        var validEntries: [String: ValidDownloadCacheEntry] = [:]
         var metadataByID: [String: Song] = [:]
-        var repairs: [String: Song] = [:]
-        var junkDirectories: [URL] = []
-        guard let entries = try? fm.contentsOfDirectory(
-            at: cacheDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-        else {
-            return StartupScanResult(
-                validIDs: ids,
-                validEntries: validEntries,
-                metadata: metadataByID,
-                repairs: repairs,
-                junkDirectories: junkDirectories
-            )
-        }
-        for entry in entries {
-            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            guard isDirectory else {
-                // Loose files at the root are pre-migration leftovers; no
-                // live download writes them, so removal here cannot race.
-                try? fm.removeItem(at: entry)
-                continue
-            }
-            Self.removePromotionStagingFiles(in: entry, createdBefore: scanStartedAt)
-            // Read from the directory itself because unsafe IDs are stored under a hash.
-            let metadata = readMetadata(at: entry.appendingPathComponent("metadata.json"))
-            let directoryKey = entry.lastPathComponent
-            let canRecoverSongID = SongStorageKey.component(for: directoryKey) == directoryKey
-            guard let songID = metadata?.id ?? (canRecoverSongID ? directoryKey : nil) else {
-                junkDirectories.append(entry)
-                continue
-            }
-            migrateMislabeledDownloadedAudioIfNeeded(
-                for: songID,
-                expectedSourceURL: metadata?.audioURL
-            )
-            if hasValidDownload(for: songID) {
-                ids.insert(songID)
-                if let metadata {
-                    metadataByID[songID] = metadata
-                }
-                let metadataDuration = metadata?.duration ?? 0
-                validEntries[songID] = ValidDownloadCacheEntry(
-                    source: readSourceURL(for: songID),
-                    expectedDuration: metadataDuration > 0 ? TimeInterval(metadataDuration) : nil,
-                    modifiedAt: Self.modificationDate(at: files(for: songID).audio)
-                )
-            } else {
-                let repairSong = readMetadata(for: songID)
-                if let repairSong, repairSong.audioURL != nil {
-                    repairs[songID] = repairSong
-                } else {
-                    junkDirectories.append(entry)
+        var hadFailures = false
+        do {
+            let entries = try fm.contentsOfDirectory(at: cacheDir,
+                includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
+            for entry in entries {
+                do {
+                    guard try entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
+                        if entry.pathExtension == "json" {
+                            let song = try JSONDecoder().decode(Song.self, from: Data(contentsOf: entry))
+                            if try entry.deletingPathExtension().appendingPathExtension("mp3").checkResourceIsReachable() {
+                                ids.insert(song.id)
+                                metadataByID[song.id] = song
+                            }
+                        }
+                        continue
+                    }
+                    let metadataURL = entry.appendingPathComponent("metadata.json")
+                    let song = try JSONDecoder().decode(Song.self, from: Data(contentsOf: metadataURL))
+                    // Discover committed audio without opening a decoder. A startup probe
+                    // cannot establish corruption, and must never remove a user's download.
+                    let audioFiles = try fm.contentsOfDirectory(at: entry,
+                        includingPropertiesForKeys: [.isRegularFileKey]).filter { candidate in
+                            guard candidate.lastPathComponent.hasPrefix("main."),
+                                  !candidate.lastPathComponent.contains(".promoting-"),
+                                  !candidate.lastPathComponent.contains(".partial."),
+                                  AudioCacheStore.supportedMainAudioExtensions.contains(candidate.pathExtension.lowercased())
+                            else { return false }
+                            return try candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+                        }
+                    guard !audioFiles.isEmpty else { continue }
+                    ids.insert(song.id)
+                    metadataByID[song.id] = song
+                } catch {
+                    hadFailures = true
+                    DebugLogger.log("Download restoration \(entry.path): \(error)", category: .cache)
                 }
             }
+        } catch {
+            hadFailures = true
+            DebugLogger.log("Download enumeration \(cacheDir.path): \(error)", category: .cache)
         }
-        return StartupScanResult(
-            validIDs: ids,
-            validEntries: validEntries,
-            metadata: metadataByID,
-            repairs: repairs,
-            junkDirectories: junkDirectories
-        )
+        return StartupScanResult(hadFailures: hadFailures, validIDs: ids,
+            metadata: metadataByID)
     }
 
     nonisolated static func removePromotionStagingFiles(
@@ -1135,49 +1343,49 @@ final class DownloadManager {
         }
     }
 
+    nonisolated static func restorationMissingIDs(
+        starting: Set<String>, discovered: Set<String>, changed: Set<String>,
+        inProgress: Set<String>, hadFailures: Bool
+    ) -> Set<String> {
+        guard !hadFailures else { return [] }
+        return starting.subtracting(discovered).subtracting(changed).subtracting(inProgress)
+    }
+
     private func applyStartupScan(_ scan: StartupScanResult) {
-        // Downloads may have started, finished, or been removed while the
-        // scan ran; merge instead of overwriting, and let live state win.
-        let fm = FileManager.default
-        let stillExistingIDs = scan.validIDs.filter { songID in
-            fm.fileExists(atPath: files(for: songID).audio.path)
-        }
-        for (songID, entry) in scan.validEntries
-            where stillExistingIDs.contains(songID) && validDownloadCache[songID] == nil
-        {
-            validDownloadCache[songID] = entry
-        }
-        for (songID, song) in scan.metadata
-            where stillExistingIDs.contains(songID) && downloadedMetadata[songID] == nil
-        {
+        let restoredIDs = scan.validIDs.subtracting(removedDuringRestoration)
+        for (songID, song) in scan.metadata where restoredIDs.contains(songID) && downloadedMetadata[songID] == nil {
             downloadedMetadata[songID] = song
         }
-        updatePublishedState { $0.downloadedIDs.formUnion(stillExistingIDs) }
-        var repairCount = 0
-        for (songID, song) in scan.repairs {
-            guard !downloadedIDs.contains(songID), !inProgress.contains(songID) else { continue }
-            // A missing metadata file means the song was removed during the
-            // scan; don't delete anything or resurrect it as a repair.
-            let songFiles = files(for: songID, sourceURL: song.audioURL)
-            guard fm.fileExists(atPath: songFiles.metadata.path) else { continue }
-            Self.removeDownloadedAudioFiles(in: songFiles.directory)
-            try? fm.removeItem(at: songFiles.source)
-            pendingWiFiRepairs[songID] = song
-            repairCount += 1
+        let missingIDs = Self.restorationMissingIDs(starting: restorationStartingIDs,
+            discovered: scan.validIDs, changed: changedDuringRestoration,
+            inProgress: inProgress, hadFailures: scan.hadFailures)
+        for songID in missingIDs {
+            downloadedMetadata.removeValue(forKey: songID)
+            validDownloadCache.removeValue(forKey: songID)
         }
-        let liveStorageKeys = SongStorageKey.components(
-            for: downloadedIDs.union(inProgress)
-        )
-        for directory in scan.junkDirectories
-            where !liveStorageKeys.contains(directory.lastPathComponent)
-        {
-            try? fm.removeItem(at: directory)
+        updatePublishedState(persist: false) {
+            $0.downloadedIDs.subtract(missingIDs)
+            $0.downloadedIDs.formUnion(restoredIDs)
         }
-        DebugLogger.log(
-            "DownloadManager scan complete — \(downloadedIDs.count) existing downloads, \(repairCount) pending repair(s)",
-            category: .network
-        )
-        startPendingWiFiRepairsIfPossible()
+        if !scan.hadFailures { persistManifest() }
+        restorationState = scan.hadFailures ? .failed : .ready
+        DebugLogger.log("Download restoration: count=\(downloadedIDs.count), state=\(restorationState), protectedData=\(UIApplication.shared.isProtectedDataAvailable)", category: .cache)
+    }
+
+    nonisolated static func sameAudioResource(_ lhs: String, _ rhs: String) -> Bool {
+        guard var left = URLComponents(string: lhs), var right = URLComponents(string: rhs) else { return lhs == rhs }
+        // Only ignore known authentication parameters; content selectors remain identity.
+        let signatures: Set<String> = ["token", "signature", "expires", "policy", "key-pair-id"]
+        for key in [true, false] {
+            var value = key ? left : right
+            value.queryItems = value.queryItems?.filter {
+                !signatures.contains($0.name.lowercased()) && !$0.name.lowercased().hasPrefix("x-amz-")
+            }
+            if value.queryItems?.isEmpty == true { value.queryItems = nil }
+            value.fragment = nil
+            if key { left = value } else { right = value }
+        }
+        return left == right
     }
 
     func playableURL(for song: Song) -> URL? {
@@ -1216,11 +1424,10 @@ final class DownloadManager {
             sourceURL: storedSourceURL ?? song.audioURL
         )
         guard FileManager.default.fileExists(atPath: songFiles.audio.path) else {
-            discardBrokenDownloadAndScheduleRepair(for: song, reason: "audio file is missing")
             return nil
         }
         let expectedSource = song.audioURL?.absoluteString
-        if let cachedSource, let expectedSource, cachedSource != expectedSource {
+        if let cachedSource, let expectedSource, !Self.sameAudioResource(cachedSource, expectedSource) {
             DebugLogger.log(
                 "Discarding downloaded audio for \(song.id) due to source mismatch",
                 category: .cache
@@ -1250,8 +1457,8 @@ final class DownloadManager {
                 )
             }
             guard Self.isValidDownloadedAudio(at: songFiles.audio, expectedDuration: expectedDuration) else {
-                DebugLogger.log("Discarding invalid downloaded audio for \(song.id)", category: .cache)
-                discardBrokenDownloadAndScheduleRepair(for: song, reason: "file validation failed")
+                DebugLogger.log("Unable to validate downloaded audio for \(song.id)", category: .cache)
+                DebugLogger.log("Keeping download after failed audio probe: \(song.id)", category: .cache)
                 return nil
             }
             cacheValidDownload(
@@ -1264,8 +1471,8 @@ final class DownloadManager {
             return songFiles.audio
         }
         guard Self.isValidDownloadedAudio(at: songFiles.audio, expectedDuration: expectedDuration) else {
-            DebugLogger.log("Discarding invalid downloaded audio for \(song.id)", category: .cache)
-            discardBrokenDownloadAndScheduleRepair(for: song, reason: "file validation failed")
+            DebugLogger.log("Unable to validate downloaded audio for \(song.id)", category: .cache)
+            DebugLogger.log("Keeping download after failed audio probe: \(song.id)", category: .cache)
             return nil
         }
         cacheValidDownload(
@@ -1288,7 +1495,8 @@ final class DownloadManager {
         )
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         let expectedSource = song.audioURL?.absoluteString
-        guard FileManager.default.fileExists(atPath: songFiles.audio.path),
+        guard cachedSource == nil || expectedSource == nil || Self.sameAudioResource(cachedSource!, expectedSource!),
+              FileManager.default.fileExists(atPath: songFiles.audio.path),
               hasCachedValidation(
                   for: song.id,
                   audioURL: songFiles.audio,
@@ -1306,10 +1514,15 @@ final class DownloadManager {
         source: String?,
         expectedDuration: TimeInterval?
     ) -> Bool {
+        if validDownloadCache[songID] == nil {
+            let receipt = audioURL.deletingLastPathComponent().appendingPathComponent("validation.json")
+            if let data = try? Data(contentsOf: receipt),
+               let cached = try? JSONDecoder().decode(ValidDownloadCacheEntry.self, from: data) {
+                validDownloadCache[songID] = cached
+            }
+        }
         guard let cached = validDownloadCache[songID] else { return false }
-        return cached.source == source
-            && cached.expectedDuration == expectedDuration
-            && cached.modifiedAt == Self.modificationDate(at: audioURL)
+        return Self.validationMatches(cached, audioURL: audioURL, source: source, expectedDuration: expectedDuration)
     }
 
     private func cacheValidDownload(
@@ -1321,8 +1534,60 @@ final class DownloadManager {
         validDownloadCache[songID] = ValidDownloadCacheEntry(
             source: source,
             expectedDuration: expectedDuration,
-            modifiedAt: Self.modificationDate(at: audioURL)
+            modifiedAt: Self.modificationDate(at: audioURL),
+            byteCount: Self.downloadedByteCount(at: audioURL)
         )
+        do {
+            try JSONEncoder().encode(validDownloadCache[songID]).write(
+                to: audioURL.deletingLastPathComponent().appendingPathComponent("validation.json"), options: .atomic)
+        } catch {
+            DebugLogger.log("Download validation receipt write for \(songID): \(error)", category: .cache)
+        }
+    }
+
+    nonisolated static func validationMatches(_ cached: ValidDownloadCacheEntry, audioURL: URL,
+        source: String?, expectedDuration: TimeInterval?) -> Bool {
+        let sameSource = cached.source == source || (cached.source != nil && source != nil
+            && sameAudioResource(cached.source!, source!))
+        guard sameSource, cached.expectedDuration == expectedDuration,
+              let modified = cached.modifiedAt, modified == modificationDate(at: audioURL) else { return false }
+        return cached.byteCount.map { $0 > 0 && $0 == downloadedByteCount(at: audioURL) } ?? true
+    }
+
+    /// Resolve committed downloads before consulting the separate streaming cache.
+    /// Older installs have no receipt, so validate only the requested track off-main.
+    func resolvedPlaybackURL(for song: Song) async throws -> URL? {
+        if let ready = immediatelyPlayableURL(for: song) { return ready }
+        let generation = cancellationGenerations[song.id, default: 0]
+        let batchGeneration = validationBatchGeneration
+        if downloadedIDs.contains(song.id), !UIApplication.shared.isProtectedDataAvailable {
+            throw CocoaError(.fileReadNoPermission)
+        }
+        let sourceURL = readSourceURL(for: song.id).flatMap(URL.init(string:)) ?? song.audioURL
+        if let sourceURL, let expected = song.audioURL,
+           !Self.sameAudioResource(sourceURL.absoluteString, expected.absoluteString) { return nil }
+        guard FileManager.default.fileExists(atPath: files(for: song.id, sourceURL: sourceURL).audio.path) else { return nil }
+        let started = ContinuousClock.now
+        let entries = await Task.detached(priority: .userInitiated) {
+            self.validateDownloadsForCachePrewarm([song])
+        }.value
+        try Task.checkCancellation()
+        guard cancellationGenerations[song.id, default: 0] == generation,
+              validationBatchGeneration == batchGeneration else { throw CancellationError() }
+        guard let entry = entries[song.id] else {
+            DebugLogger.log("Keeping unreadable download without network fallback: \(song.id)", category: .cache)
+            throw CocoaError(.fileReadUnknown)
+        }
+        let resolvedSourceURL = entry.source.flatMap(URL.init(string:)) ?? song.audioURL
+        let audio = files(for: song.id, sourceURL: resolvedSourceURL).audio
+        guard Self.validationMatches(entry, audioURL: audio, source: entry.source,
+            expectedDuration: entry.expectedDuration) else { return nil }
+        cacheValidDownload(songID: song.id, audioURL: audio, source: entry.source,
+            expectedDuration: entry.expectedDuration)
+        downloadedMetadata[song.id] = song
+        updatePublishedState { $0.downloadedIDs.insert(song.id) }
+        DebugLogger.log("Downloaded playback resolved: \(song.id), elapsed=\(started.duration(to: .now))", category: .playback)
+        return audio
     }
 
     /// Returns true only when the on-disk download is conclusively invalid and was removed.
@@ -1340,8 +1605,7 @@ final class DownloadManager {
             sourceURL: storedSourceURL ?? song.audioURL
         )
         guard FileManager.default.fileExists(atPath: songFiles.audio.path) else {
-            discardBrokenDownloadAndScheduleRepair(for: song, reason: "audio file is missing")
-            return true
+            return false
         }
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
         guard !Self.isValidDownloadedAudio(
@@ -1350,8 +1614,8 @@ final class DownloadManager {
         ) else {
             return false
         }
-        discardBrokenDownloadAndScheduleRepair(for: song, reason: "file validation failed")
-        return true
+        DebugLogger.log("Keeping download after failed audio probe: \(song.id)", category: .cache)
+        return false
     }
 
     func downloadedSongs(knownSongs: [Song] = []) -> [Song] {
@@ -1362,33 +1626,6 @@ final class DownloadManager {
         return downloadedIDs.compactMap { songsByID[$0] }.sorted {
             $0.title.localizedStandardCompare($1.title) == .orderedAscending
         }
-    }
-
-    private nonisolated func hasValidDownload(for songID: String) -> Bool {
-        let metadata = readMetadata(for: songID)
-        migrateMislabeledDownloadedAudioIfNeeded(
-            for: songID,
-            expectedSourceURL: metadata?.audioURL
-        )
-        let songFiles = files(for: songID)
-        guard FileManager.default.fileExists(atPath: songFiles.audio.path) else { return false }
-        let metadataDuration = metadata?.duration ?? 0
-        let expectedDuration = metadataDuration > 0 ? TimeInterval(metadataDuration) : nil
-        guard Self.isValidDownloadedAudio(
-            at: songFiles.audio,
-            expectedDuration: expectedDuration
-        ) else {
-            return false
-        }
-
-        guard let cachedSource = readSourceURL(for: songID) else {
-            if let remoteURL = metadata?.audioURL {
-                writeSourceURL(remoteURL, for: songID)
-            }
-            return true
-        }
-        guard let expectedSource = metadata?.audioURL?.absoluteString else { return true }
-        return cachedSource == expectedSource
     }
 
     private nonisolated func readSourceURL(for songID: String) -> String? {
@@ -1536,82 +1773,27 @@ final class DownloadManager {
         return try? JSONDecoder().decode(Song.self, from: data)
     }
 
-    private nonisolated func migrateLegacyDownloadsIfNeeded() {
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
-            at: cacheDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-        else { return }
-
-        for entry in entries {
-            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            guard !isDirectory else { continue }
-            guard entry.pathExtension.lowercased() == "mp3" else {
-                if entry.pathExtension.lowercased() == "source" {
-                    continue
-                }
-                try? fm.removeItem(at: entry)
-                continue
-            }
-
-            let songID = entry.deletingPathExtension().lastPathComponent
-            migrateLegacyDownloadIfNeeded(for: songID)
-        }
-
-        if let entries = try? fm.contentsOfDirectory(
-            at: cacheDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) {
-            for entry in entries where entry.pathExtension.lowercased() == "source" {
-                try? fm.removeItem(at: entry)
-            }
-        }
-    }
-
     private nonisolated func migrateLegacyDownloadIfNeeded(for songID: String) {
         let fm = FileManager.default
         let storageKey = SongStorageKey.component(for: songID)
         let legacyAudio = cacheDir.appendingPathComponent("\(storageKey).mp3")
-        let legacySource = cacheDir.appendingPathComponent("\(storageKey).source")
-        guard fm.fileExists(atPath: legacyAudio.path) || fm.fileExists(atPath: legacySource.path) else {
-            return
-        }
-
-        if hasValidDownload(for: songID) {
-            try? fm.removeItem(at: legacyAudio)
-            try? fm.removeItem(at: legacySource)
-            try? fm.removeItem(at: cacheDir.appendingPathComponent("\(storageKey).json"))
-            return
-        }
-
-        guard let sourceValue = readLegacySourceURL(for: songID),
-              let remoteURL = URL(string: sourceValue),
-              fm.fileExists(atPath: legacyAudio.path)
-        else {
-            try? fm.removeItem(at: legacyAudio)
-            try? fm.removeItem(at: legacySource)
-            return
-        }
-
+        guard fm.fileExists(atPath: legacyAudio.path),
+              let sourceValue = readLegacySourceURL(for: songID),
+              let remoteURL = URL(string: sourceValue) else { return }
         let songFiles = files(for: songID, sourceURL: remoteURL)
-        ensureSongDirectory(for: songID)
-        Self.removeDownloadedAudioFiles(in: songFiles.directory)
-        try? fm.removeItem(at: songFiles.source)
-
+        guard !fm.fileExists(atPath: songFiles.audio.path) else { return }
         do {
-            try fm.moveItem(at: legacyAudio, to: songFiles.audio)
-            guard AudioCacheStore.isPlayableAudioFile(at: songFiles.audio) else {
-                throw CocoaError(.fileReadCorruptFile)
+            try fm.createDirectory(at: songFiles.directory, withIntermediateDirectories: true)
+            try fm.copyItem(at: legacyAudio, to: songFiles.audio)
+            try Data(sourceValue.utf8).write(to: songFiles.source, options: .atomic)
+            let legacyMetadata = cacheDir.appendingPathComponent("\(storageKey).json")
+            if !fm.fileExists(atPath: songFiles.metadata.path), fm.fileExists(atPath: legacyMetadata.path) {
+                try fm.copyItem(at: legacyMetadata, to: songFiles.metadata)
             }
-            fm.createFile(atPath: songFiles.source.path, contents: sourceValue.data(using: .utf8))
-            try? fm.removeItem(at: legacySource)
-            DebugLogger.log("Migrated legacy download into UUID folder for \(songID)", category: .cache)
+            // Preserve the original until explicit removal; a decoder failure
+            // or interrupted migration must not destroy the only good copy.
         } catch {
-            try? fm.removeItem(at: songFiles.audio)
-            try? fm.removeItem(at: songFiles.source)
+            DebugLogger.log("Legacy download migration \(songID): \(error)", category: .cache)
         }
     }
 

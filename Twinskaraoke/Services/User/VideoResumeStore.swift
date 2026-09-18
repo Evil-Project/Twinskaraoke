@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// How far into a video the viewer got, kept so it can be resumed later.
 ///
@@ -97,8 +98,8 @@ final class VideoResumeStore {
         points.values.sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    private var account: String
-    private var sessionObserver: NSObjectProtocol?
+    private var account: String?
+    private var sessionObservers: [NSObjectProtocol] = []
     private let defaults = UserDefaults.standard
 
     /// Watch history is device state that outlives a launch, so a UI test would
@@ -110,21 +111,17 @@ final class VideoResumeStore {
         account = Self.currentAccount()
         guard isEnabled else { return }
         load()
-        sessionObserver = NotificationCenter.default.addObserver(
-            forName: WatchSessionLink.sessionChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.rebindAccount()
+        sessionObservers = [WatchSessionLink.sessionChanged,
+                            UIApplication.didBecomeActiveNotification,
+                            UIApplication.protectedDataDidBecomeAvailableNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.rebindAccount() }
             }
         }
     }
 
     isolated deinit {
-        if let sessionObserver {
-            NotificationCenter.default.removeObserver(sessionObserver)
-        }
+        sessionObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     // MARK: - Reading
@@ -243,8 +240,12 @@ final class VideoResumeStore {
 
     /// Reads storage rather than an `AuthManager` instance because `AccountView`
     /// mints a fresh one per visit, so there is no instance to hold on to.
-    private static func currentAccount() -> String {
-        let descriptor = AuthManager.persistedDescriptor()
+    private static func currentAccount() -> String? {
+        accountIdentity(for: AuthManager.persistedDescriptor())
+    }
+
+    nonisolated static func accountIdentity(for descriptor: WatchSessionLink.Descriptor?) -> String? {
+        guard let descriptor else { return nil }
         guard descriptor.isSignedIn else { return "guest" }
         let identity = descriptor.userID ?? descriptor.username
         guard let identity, !identity.isEmpty else { return "guest" }
@@ -257,7 +258,7 @@ final class VideoResumeStore {
     /// immediately, and writing here would post the outgoing account's map to
     /// whichever key is current by the time it ran.
     private func rebindAccount() {
-        let account = Self.currentAccount()
+        guard let account = Self.currentAccount() else { return }
         guard account != self.account else { return }
         self.account = account
         load()
@@ -269,14 +270,15 @@ final class VideoResumeStore {
     /// readable and adding the watched history needed no migration of resume
     /// points already on device.
     private var storageKey: String {
-        "nk.videoResume.v1." + SongStorageKey.component(for: account)
+        "nk.videoResume.v1." + SongStorageKey.component(for: account ?? "unavailable")
     }
 
     private var watchedStorageKey: String {
-        "nk.videoWatched.v1." + SongStorageKey.component(for: account)
+        "nk.videoWatched.v1." + SongStorageKey.component(for: account ?? "unavailable")
     }
 
     private func load() {
+        guard account != nil else { return }
         points = (defaults.data(forKey: storageKey)
             .flatMap { try? JSONDecoder().decode([String: VideoResumePoint].self, from: $0) })
             .map(Self.trimmed) ?? [:]
@@ -286,7 +288,7 @@ final class VideoResumeStore {
     }
 
     private func save() {
-        guard isEnabled else { return }
+        guard isEnabled, account != nil else { return }
         if let data = try? JSONEncoder().encode(points) {
             defaults.set(data, forKey: storageKey)
         }

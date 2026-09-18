@@ -46,6 +46,21 @@ struct PlayerPanGesture: UIGestureRecognizerRepresentable {
 
         init(canBegin: @escaping () -> Bool) { self.canBegin = canBegin }
 
+        // Native controls own the entire touch, including a scrub with vertical drift.
+        // Deciding from pan velocity alone can steal the slider's gesture.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            Self.acceptsTouch(in: touch.view)
+        }
+
+        static func acceptsTouch(in view: UIView?) -> Bool {
+            var current = view
+            while let candidate = current {
+                if candidate is UIControl { return false }
+                current = candidate.superview
+            }
+            return true
+        }
+
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard canBegin(), let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
             let velocity = pan.velocity(in: pan.view?.window)

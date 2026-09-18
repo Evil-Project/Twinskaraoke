@@ -798,8 +798,7 @@ final class VocalSeparator {
         let tmpInstruments = tmpDir.appendingPathComponent("instruments.wav")
         let stems = Stems2(vocals: tmpVocals, accompaniment: tmpInstruments)
         do {
-            for try await prog in separator.separate(from: sourceURL, to: stems) {
-                try Task.checkCancellation()
+            try await separator.separateFile(from: sourceURL, to: stems) { prog in
                 await onProgress(prog.fraction)
             }
         } catch is CancellationError {

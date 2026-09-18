@@ -41,20 +41,30 @@ struct GenreDetail: Decodable {
 final class PublicPlaylistsViewModel {
     var playlists: [Playlist] = []
     var isLoadingMore = false
+    private(set) var errorMessage: String?
     private var canLoadMore = true
     private var hasLoaded = false
     private var requestToken = 0
     private let pageSize = 25
     @ObservationIgnored private let refreshTracker = RefreshTracker()
+    @ObservationIgnored private let loadPage: @Sendable (Int, Int) async throws -> [Playlist]
+
+    init(loadPage: @escaping @Sendable (Int, Int) async throws -> [Playlist] = { start, size in
+        try await KaraokeAPIClient.restoringRequest {
+            try await KaraokeAPIClient.publicPlaylists(startIndex: start, pageSize: size)
+        }
+    }) {
+        self.loadPage = loadPage
+    }
+
 
     func loadIfNeeded() {
-        guard !hasLoaded else { return }
+        guard !hasLoaded, !isLoadingMore else { return }
         if AppRuntime.isUITestMode {
             hasLoaded = true
             applyUITestFixture()
             return
         }
-        hasLoaded = true
         fetchPage(startIndex: 0, replace: true)
     }
 
@@ -88,7 +98,10 @@ final class PublicPlaylistsViewModel {
         } else {
             isLoadingMore = true
         }
+        isLoadingMore = true
+        errorMessage = nil
         let token = requestToken
+        let pageSize = pageSize
         let task = Task { [weak self] in
             guard let self else { return }
             // defer, not a trailing statement: the token guards below return
@@ -104,10 +117,7 @@ final class PublicPlaylistsViewModel {
                 if token == requestToken { isLoadingMore = false }
             }
             do {
-                let items = try await KaraokeAPIClient.publicPlaylists(
-                    startIndex: startIndex,
-                    pageSize: pageSize
-                )
+                let items = try await loadPage(startIndex, pageSize)
                 guard token == requestToken else { return }
                 if replace {
                     playlists = items
@@ -115,12 +125,13 @@ final class PublicPlaylistsViewModel {
                     let existing = Set(playlists.map(\.id))
                     playlists += items.filter { !existing.contains($0.id) }
                 }
+                hasLoaded = true
                 canLoadMore = items.count >= pageSize
             } catch {
                 guard token == requestToken else { return }
                 // Keep the current items on a failed replace fetch so the view
                 // can retry instead of landing on a dead-end empty state.
-                canLoadMore = false
+                errorMessage = "Playlists couldn’t be loaded. Pull to refresh to retry."
             }
         }
         // Only the replacing fetch is what pull-to-refresh waits on; tracking a
@@ -248,6 +259,8 @@ final class GenresViewModel {
     @ObservationIgnored private var page = 0
     @ObservationIgnored private let pageSize = 50
     @ObservationIgnored private var hasLoaded = false
+    @ObservationIgnored private var activeDetails: [UUID: String] = [:]
+    @ObservationIgnored private var requestedDetailIDs = Set<String>()
     @ObservationIgnored private var genreDetailOrder: [String] = []
     @ObservationIgnored private let maxCachedGenreDetails = 30
     @ObservationIgnored private var detailRequestsInFlight = Set<String>()
@@ -322,16 +335,18 @@ final class GenresViewModel {
         }
     }
 
-    private func clearCachedGenreDetails() {
+    func clearCachedGenreDetails() {
         detailGeneration &+= 1
         detailTasks.values.forEach { $0.cancel() }
         detailTasks.removeAll()
         detailRequestsInFlight.removeAll()
         pendingDetailOrder.removeAll()
         pendingDetails.removeAll()
-        allSongs.removeAll()
-        firstSongs.removeAll()
-        genreDetailOrder.removeAll()
+        let visible = Set(activeDetails.values)
+        allSongs = allSongs.filter { visible.contains($0.key) }
+        firstSongs = firstSongs.filter { visible.contains($0.key) }
+        genreDetailOrder.removeAll { !visible.contains($0) }
+        requestedDetailIDs = visible
     }
 
     private func applyUITestFixture() {
@@ -414,14 +429,39 @@ final class GenresViewModel {
     }
 
     func loadPreviewIfNeeded(for genre: GenreSummary) {
-        guard artworkURLs[genre.id] == nil else { return }
+        guard activeDetails.isEmpty, artworkURLs[genre.id] == nil else { return }
         enqueueDetail(for: genre, priority: false)
     }
 
     func loadDetailIfNeeded(for genre: GenreSummary) {
-        guard allSongs[genre.id] == nil else { return }
+        requestedDetailIDs.insert(genre.id)
+        if allSongs[genre.id] != nil {
+            genreDetailOrder.removeAll { $0 == genre.id }
+            genreDetailOrder.append(genre.id)
+            return
+        }
         failedDetailIDs.remove(genre.id)
         enqueueDetail(for: genre, priority: true)
+    }
+
+    func retainDetail(_ genreID: String, owner: UUID) {
+        activeDetails[owner] = genreID
+        // A pushed detail screen should not inherit a backlog of tile requests.
+        let visible = Set(activeDetails.values)
+        pendingDetailOrder.removeAll { !visible.contains($0) }
+        pendingDetails = pendingDetails.filter { visible.contains($0.key) }
+    }
+
+    func releaseDetail(owner: UUID) {
+        guard let id = activeDetails.removeValue(forKey: owner) else { return }
+        if !activeDetails.values.contains(id) { requestedDetailIDs.remove(id) }
+        trimDetailCache()
+    }
+
+    func cancelQueuedPreview(for genre: GenreSummary) {
+        guard !requestedDetailIDs.contains(genre.id), !activeDetails.values.contains(genre.id) else { return }
+        pendingDetailOrder.removeAll { $0 == genre.id }
+        pendingDetails.removeValue(forKey: genre.id)
     }
 
     private func enqueueDetail(for genre: GenreSummary, priority: Bool) {
@@ -438,6 +478,11 @@ final class GenresViewModel {
                 pendingDetailOrder.insert(genre.id, at: 0)
             }
             return
+        }
+        if !priority, pendingDetailOrder.count >= 12,
+           let oldest = pendingDetailOrder.first(where: { !requestedDetailIDs.contains($0) }) {
+            pendingDetailOrder.removeAll { $0 == oldest }
+            pendingDetails.removeValue(forKey: oldest)
         }
         pendingDetails[genre.id] = genre
         if priority {
@@ -498,7 +543,7 @@ final class GenresViewModel {
 
         detailFailureDates.removeValue(forKey: genre.id)
         failedDetailIDs.remove(genre.id)
-        allSongs[genre.id] = songs
+        cacheDetailSongs(songs, for: genre.id, retainFullDetail: requestedDetailIDs.contains(genre.id))
         if let first = songs.first {
             firstSongs[genre.id] = first
         }
@@ -509,10 +554,23 @@ final class GenresViewModel {
             genresNeedingFallback.insert(genre.id)
             artworkURLs[genre.id] = FallbackArtProvider.shared.randomURL
         }
-        genreDetailOrder.removeAll { $0 == genre.id }
-        genreDetailOrder.append(genre.id)
+    }
+
+    func cacheDetailSongs(_ songs: [Song], for id: String, retainFullDetail: Bool) {
+        // The endpoint returns a full list, but tile requests retain only one song/art.
+        if let first = songs.first { firstSongs[id] = first }
+        guard retainFullDetail else { return }
+        allSongs[id] = songs
+        genreDetailOrder.removeAll { $0 == id }
+        genreDetailOrder.append(id)
+        trimDetailCache()
+    }
+
+    private func trimDetailCache() {
+        let visible = Set(activeDetails.values)
         while genreDetailOrder.count > maxCachedGenreDetails {
-            let oldest = genreDetailOrder.removeFirst()
+            guard let index = genreDetailOrder.firstIndex(where: { !visible.contains($0) }) else { break }
+            let oldest = genreDetailOrder.remove(at: index)
             allSongs.removeValue(forKey: oldest)
             firstSongs.removeValue(forKey: oldest)
         }

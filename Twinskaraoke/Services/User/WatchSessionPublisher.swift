@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import UIKit
 
 /// Phone half of the watch session bridge (see `WatchSessionLink`).
 ///
@@ -14,6 +15,7 @@ final class WatchSessionPublisher: NSObject {
     private static let generationKey = "nk.watchSessionGeneration"
 
     private let defaults = UserDefaults.standard
+    private var restorationObservers: [NSObjectProtocol] = []
     private var sessionChangedObserver: NSObjectProtocol?
 
     override private init() { super.init() }
@@ -34,6 +36,12 @@ final class WatchSessionPublisher: NSObject {
             }
         }
 
+        restorationObservers = [UIApplication.didBecomeActiveNotification,
+                                UIApplication.protectedDataDidBecomeAvailableNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.publish(bumpingGeneration: false) }
+            }
+        }
         let session = WCSession.default
         session.delegate = self
         session.activate()
@@ -61,7 +69,7 @@ final class WatchSessionPublisher: NSObject {
         // a watch is paired and the app installed.
         guard session.isPaired, session.isWatchAppInstalled else { return }
 
-        var descriptor = AuthManager.persistedDescriptor()
+        guard var descriptor = AuthManager.persistedDescriptor() else { return }
         descriptor.generation = currentGeneration
 
         do {
@@ -118,15 +126,6 @@ extension WatchSessionPublisher: WCSessionDelegate {
             return
         }
 
-        // Read the Keychain rather than any cached flag, so a session the user
-        // has already signed out of can never be handed to the watch.
-        guard let token = CredentialStore.token, !token.isEmpty else {
-            replyHandler([WatchSessionLink.MessageKey.isSignedIn: false])
-            return
-        }
-        replyHandler([
-            WatchSessionLink.MessageKey.isSignedIn: true,
-            WatchSessionLink.MessageKey.token: token,
-        ])
+        replyHandler(WatchSessionLink.tokenReply(for: CredentialStore.readToken()))
     }
 }

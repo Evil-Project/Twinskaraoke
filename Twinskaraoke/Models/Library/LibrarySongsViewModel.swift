@@ -142,10 +142,6 @@ final class LibrarySongsViewModel {
         request.httpMethod = "POST"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = CredentialStore.token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        GuestIdentity.applyIfNeeded(to: &request)
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
             "page": page,
             "pageSize": pageSize,
@@ -158,6 +154,10 @@ final class LibrarySongsViewModel {
         // session-expired flow and transient failures get retried.
         activeTask = Task { [weak self] in
             do {
+                if let token = try CredentialStore.requestToken() {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+                GuestIdentity.applyIfNeeded(to: &request)
                 let data = try await KaraokeAPIClient.data(
                     for: request,
                     retriesNonIdempotentRequest: true

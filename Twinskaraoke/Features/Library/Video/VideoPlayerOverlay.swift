@@ -101,6 +101,7 @@ struct VideoPlayerOverlay: View {
         VStack(spacing: 6) {
             if progressTracker.isProgressAvailable {
                 Slider(progressTracker: progressTracker)
+                    .sliderThumbVisibility(.hidden)
                     .tint(.white)
             }
             HStack(spacing: 12) {

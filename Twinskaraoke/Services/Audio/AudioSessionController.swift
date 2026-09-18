@@ -51,6 +51,9 @@ protocol AudioSessionManaging: AnyObject {
     var outputVolume: Float { get }
     var currentRoute: AudioRouteDescriptor { get }
 
+    var hasPendingPlayback: Bool { get }
+    func performWhenReady(_ operation: @escaping @MainActor () -> Void, replacingPending: Bool) -> Bool
+    func cancelPendingPlayback()
     func prepareForPlayback()
     func markInterrupted()
     func resetAfterMediaServicesLoss()
@@ -65,9 +68,73 @@ final class AudioSessionController: AudioSessionManaging {
     private let session: AVAudioSession
     private var categoryConfigured = false
     private var isActive = false
+    private var isActivating = false
+    private var activationGeneration = 0
+    private var pendingActivationWasCancelled = false
+    private var pendingPlayback: (@MainActor () -> Void)?
+    private let configure: @MainActor () throws -> Void
+    private let activate: @MainActor (@escaping @Sendable (Bool, (any Error)?) -> Void) -> Void
 
-    init(session: AVAudioSession = .sharedInstance()) {
+    var hasPendingPlayback: Bool { pendingPlayback != nil }
+
+    /// Only the latest request survives activation; Pause can cancel it.
+    func performWhenReady(_ operation: @escaping @MainActor () -> Void, replacingPending: Bool = true) -> Bool {
+        if isActive { return true }
+        if replacingPending {
+            pendingActivationWasCancelled = false
+        } else if pendingActivationWasCancelled {
+            // A late file/stem preparation must not undo Pause while the
+            // activation callback is still in flight. Only a new Play can.
+            return false
+        }
+        if replacingPending || pendingPlayback == nil { pendingPlayback = operation }
+        prepareForPlayback()
+        return false
+    }
+
+    func cancelPendingPlayback() {
+        if isActivating { pendingActivationWasCancelled = true }
+        pendingPlayback = nil
+    }
+
+    init(
+        session: AVAudioSession = .sharedInstance(),
+        configure: (@MainActor () throws -> Void)? = nil,
+        activate: (@MainActor (@escaping @Sendable (Bool, (any Error)?) -> Void) -> Void)? = nil
+    ) {
         self.session = session
+        self.configure = configure ?? {
+            try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
+        }
+        self.activate = activate ?? { completion in
+            #if compiler(>=6.4)
+            if #available(iOS 27.0, *) {
+                session.activate(options: [], completionHandler: completion)
+                return
+            }
+            #endif
+            // Older SDKs cannot name the iOS async API, including when their
+            // binary runs on iOS 27. Never block the main actor in that fallback.
+            Self.activateInBackground({ try session.setActive(true) }, completion: completion)
+        }
+    }
+
+    private nonisolated static let activationQueue = DispatchQueue(
+        label: "Twinskaraoke.audio-session.activation", qos: .userInitiated
+    )
+
+    /// Serialize synchronous activation attempts without blocking UI work.
+    /// Completion is delivered off-main; activateIfNeeded restores actor isolation.
+    nonisolated static func activateInBackground(
+        _ operation: @escaping @Sendable () throws -> Void,
+        completion: @escaping @Sendable (Bool, (any Error)?) -> Void
+    ) {
+        activationQueue.async {
+            do {
+                try operation()
+                completion(true, nil)
+            } catch { completion(false, error) }
+        }
     }
 
     var outputVolume: Float { session.outputVolume }
@@ -78,40 +145,54 @@ final class AudioSessionController: AudioSessionManaging {
     }
 
     func prepareForPlayback() {
-        configureCategoryIfNeeded()
+        guard configureCategoryIfNeeded() else { pendingPlayback = nil; return }
         activateIfNeeded()
     }
 
     func markInterrupted() {
+        activationGeneration &+= 1
+        isActivating = false
         isActive = false
+        cancelPendingPlayback()
     }
 
     func resetAfterMediaServicesLoss() {
+        markInterrupted()
         categoryConfigured = false
-        isActive = false
-        prepareForPlayback()
     }
 
-    private func configureCategoryIfNeeded() {
-        guard !categoryConfigured else { return }
+    private func configureCategoryIfNeeded() -> Bool {
+        guard !categoryConfigured else { return true }
         do {
-            try session.setCategory(.playback, mode: .default, policy: .longFormAudio, options: [])
+            try configure()
             categoryConfigured = true
+            return true
         } catch {
             DebugLogger.log(
                 "Audio session category configuration failed: \(error)",
                 category: .playback
             )
+            return false
         }
     }
 
     private func activateIfNeeded() {
-        guard !isActive else { return }
-        do {
-            try session.setActive(true)
-            isActive = true
-        } catch {
-            DebugLogger.log("Audio session activation failed: \(error)", category: .playback)
+        guard !isActive, !isActivating else { return }
+        isActivating = true
+        let generation = activationGeneration
+        activate { [weak self] activated, error in
+            Task { @MainActor [weak self] in
+                guard let self, self.activationGeneration == generation else { return }
+                self.isActivating = false
+                self.isActive = activated && error == nil
+                let playback = self.pendingPlayback
+                self.pendingPlayback = nil
+                guard self.isActive else {
+                    DebugLogger.log("Audio session activation failed: \(String(describing: error))", category: .playback)
+                    return
+                }
+                playback?()
+            }
         }
     }
 }

@@ -30,13 +30,17 @@ final class LyricsViewModel {
     @ObservationIgnored private let translate: @MainActor (String, [LyricLine]) async throws -> [LyricLine]
     @ObservationIgnored private let translationConfigured: @MainActor () -> Bool
 
+    @ObservationIgnored private let readToken: () throws -> String?
+
     init(
+        readToken: @escaping () throws -> String? = CredentialStore.requestToken,
         fetchData: @escaping @MainActor (URLRequest) async throws -> Data = { try await KaraokeAPIClient.data(for: $0) },
         translate: @escaping @MainActor (String, [LyricLine]) async throws -> [LyricLine] = {
             try await LyricsTranslationService.shared.translate(songID: $0, lyrics: $1)
         },
         translationConfigured: @escaping @MainActor () -> Bool = { LyricsTranslationService.shared.isConfigured }
     ) {
+        self.readToken = readToken
         self.fetchData = fetchData
         self.translate = translate
         self.translationConfigured = translationConfigured
@@ -105,7 +109,7 @@ final class LyricsViewModel {
         isLoading = true
         didFail = false
         guard var request = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "songs", songID, "lyrics"]
+            pathSegments: ["api", "songs", songID, "lyrics"], readToken: readToken
         ) else {
             finish(songID: songID, result: .failure)
             return

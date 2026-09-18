@@ -18,10 +18,11 @@ import SwiftUI
         /// drag doesn't require pixel-perfect precision, without ballooning
         /// out far enough to block taps on nearby UI.
         private let touchMargin: CGFloat = 8
+        var engine: ShimejiEngine?
 
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             let size = ShimejiEngine.displaySize
-            let overSprite = ShimejiEngine.shared.instances.contains { instance in
+            let overSprite = engine?.instances.contains { instance in
                 // instance.position is the sprite's feet; it's drawn from
                 // there upward by `size`, so the hit rect has to match that
                 // — not a box symmetric around the feet, which used to eat
@@ -36,7 +37,7 @@ import SwiftUI
                 )
                 return rect.contains(point)
             }
-            guard overSprite else { return nil }
+            guard overSprite == true else { return nil }
             return super.hitTest(point, with: event)
         }
     }
@@ -44,21 +45,23 @@ import SwiftUI
     /// Owns the overlay window's lifecycle. One instance for the app.
     @MainActor
     final class ShimejiOverlayController {
-        static let shared = ShimejiOverlayController()
+        let engine = ShimejiEngine()
 
         private var window: ShimejiOverlayWindow?
         private var boundsTrackingTimer: Timer?
         private weak var trackedScene: UIWindowScene?
 
-        private init() {}
+        init() {}
 
         func show(in scene: UIWindowScene) {
-            guard window == nil else { return }
+            if trackedScene === scene, window != nil { return }
+            hide()
             let window = ShimejiOverlayWindow(windowScene: scene)
+            window.engine = engine
             window.backgroundColor = .clear
             window.isUserInteractionEnabled = true
             window.windowLevel = .normal + 1
-            let host = UIHostingController(rootView: ShimejiOverlayRootView())
+            let host = UIHostingController(rootView: ShimejiOverlayRootView(engine: engine))
             host.view.backgroundColor = .clear
             window.rootViewController = host
             window.isHidden = false
@@ -68,6 +71,7 @@ import SwiftUI
         }
 
         func hide() {
+            engine.stop()
             boundsTrackingTimer?.invalidate()
             boundsTrackingTimer = nil
             trackedScene = nil
@@ -75,7 +79,7 @@ import SwiftUI
             window = nil
         }
 
-        /// Keeps `ShimejiEngine.shared.bounds` in sync with the screen —
+        /// Keeps `engine.bounds` in sync with the screen —
         /// the actual device screen, since this is a standalone window at
         /// scene level rather than sized to any particular app content view,
         /// which is what lets climbing happen at the real screen edge even
@@ -101,19 +105,19 @@ import SwiftUI
 
         @objc private func refreshTrackedBounds() {
             guard let scene = trackedScene else { return }
-            ShimejiEngine.shared.bounds = scene.effectiveGeometry.coordinateSpace.bounds
-            ShimejiEngine.shared.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: window)
+            engine.bounds = scene.effectiveGeometry.coordinateSpace.bounds
+            engine.navBarY = ShimejiNavBarLocator.topEdgeY(in: scene, excluding: window)
         }
     }
 
     private struct ShimejiOverlayRootView: View {
-        private let engine = ShimejiEngine.shared
+        let engine: ShimejiEngine
 
         var body: some View {
             GeometryReader { proxy in
                 ZStack {
                     ForEach(engine.instances) { instance in
-                        ShimejiSpriteView(instance: instance)
+                        ShimejiSpriteView(instance: instance, engine: engine)
                     }
                 }
                 .onAppear {

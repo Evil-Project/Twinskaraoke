@@ -125,7 +125,12 @@ final class InteractiveDismissalSuppressor {
     /// dismissal comes back, and with it the iOS 26 delay — without touching any
     /// call site. Flip it if a future iOS renames the classes, or if the
     /// dependency is ever considered a submission risk.
-    static let isEnabled = true
+    static var isEnabled: Bool {
+        // Keep the iOS 26 recognizer workaround scoped to the OS it was
+        // measured on. iOS 27 retains the public swipe/touch guard below.
+        if #available(iOS 27, *) { return false }
+        return true
+    }
 
     weak var navigationController: UINavigationController?
     /// The navigation controller's own child that hosts this screen. Identity is
@@ -359,14 +364,10 @@ private struct ZoomDismissalBridge: UIViewRepresentable {
                         onArrived?()
                         return
                     }
-                    // Installed only where the system gesture is suppressed: the
-                    // replacement stands in for it, so the escape hatch has to
-                    // turn off both or neither. On the screen's own view, so it
-                    // dies with the screen instead of outliving it on the
-                    // navigation view.
-                    if InteractiveDismissalSuppressor.isEnabled {
-                        swipeBack?.install(on: host.view)
-                    }
+                    // Own horizontal content drags, including on iOS 27 where
+                    // private recognizer suppression is disabled. This pan
+                    // cancels row taps before committing the zoom back.
+                    swipeBack?.install(on: host.view)
                     reportArrival(host: host)
                     return
                 }

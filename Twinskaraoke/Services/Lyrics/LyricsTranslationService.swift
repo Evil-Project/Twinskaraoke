@@ -27,7 +27,7 @@ final class LyricsTranslationService {
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if Self.isFirstPartyEndpoint(endpointURL) {
-            if let token = CredentialStore.token {
+            if let token = try CredentialStore.requestToken() {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
             GuestIdentity.applyIfNeeded(to: &request)

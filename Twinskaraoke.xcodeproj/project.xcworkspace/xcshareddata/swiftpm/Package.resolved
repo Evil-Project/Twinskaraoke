@@ -1,5 +1,5 @@
 {
-  "originHash" : "0757af0db20cdbf4ed8cd7ffeb56867e7f8aced8afdbdd2ac2363e70040e3eae",
+  "originHash" : "f926195ae1fd496dbef95faa3d2c5f56a301f8e6e0cac6f91069a98305a4e6e8",
   "pins" : [
     {
       "identity" : "comscore-swift-package-manager",
@@ -89,15 +89,6 @@
       "state" : {
         "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
         "version" : "1.6.0"
-      }
-    },
-    {
-      "identity" : "swift-spleeter",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jiyimeta/swift-spleeter",
-      "state" : {
-        "revision" : "bb101655260b2262fe84d3f6b9478a9812884faa",
-        "version" : "0.2.0"
       }
     }
   ],

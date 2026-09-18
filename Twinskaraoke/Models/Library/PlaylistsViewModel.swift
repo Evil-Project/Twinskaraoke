@@ -6,6 +6,8 @@ import Observation
 final class PlaylistsViewModel {
     var playlists: [Playlist] = []
     var favoriteSongs: [Song] = []
+    private(set) var errorMessage: String?
+    private(set) var favoritesErrorMessage: String?
     var isLoading = false
     var isLoadingFavorites = false
     /// Server + saved + user playlists, merged and deduped once per source
@@ -81,11 +83,8 @@ final class PlaylistsViewModel {
     /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
     /// until both the playlists and the favorite songs have finished loading.
     ///
-    /// Neither tracker cancels what it replaces, and both fetches bail while one
-    /// is already running, so a repeated refresh waits on the in-flight load
-    /// rather than starting a second. That is deliberate: the `catch` blocks
-    /// below are not token-guarded, so a cancelled forced fetch would fall into
-    /// them and clear `playlists` / `favoriteSongs` outright.
+    /// Repeated refreshes wait on an in-flight load; failed refreshes retain
+    /// the previous snapshot and remain eligible for a later retry.
     func refreshAll() async {
         fetchPlaylists(force: true)
         fetchFavoriteSongs(force: true)
@@ -97,23 +96,24 @@ final class PlaylistsViewModel {
         guard !isLoading else { return }
         guard force || !hasLoadedPlaylists else { return }
         isLoading = true
+        errorMessage = nil
         playlistsRefresh.track(Task { [weak self] in
             guard let self else { return }
             defer { isLoading = false }
             do {
-                let loaded = try await KaraokeAPIClient.playlists(
+                let loaded = try await KaraokeAPIClient.restoringRequest {
+                    try await KaraokeAPIClient.playlists(
                     startIndex: 0,
                     pageSize: 25,
                     isSetlist: false,
                     sortDescending: false
-                )
+                    )
+                }
                 playlists = loaded
                 hasLoadedPlaylists = true
                 RecentlyAddedTracker.shared.registerIfNew(loaded.map(\.id))
             } catch {
-                if force || playlists.isEmpty {
-                    playlists = []
-                }
+                errorMessage = "Playlists couldn’t be loaded. Pull to refresh to retry."
             }
         })
     }
@@ -122,16 +122,17 @@ final class PlaylistsViewModel {
         guard !isLoadingFavorites else { return }
         guard force || !hasLoadedFavoriteSongs else { return }
         isLoadingFavorites = true
+        favoritesErrorMessage = nil
         favoriteSongsRefresh.track(Task { [weak self] in
             guard let self else { return }
             defer { isLoadingFavorites = false }
             do {
-                favoriteSongs = try await KaraokeAPIClient.favoriteSongs()
+                favoriteSongs = try await KaraokeAPIClient.restoringRequest {
+                    try await KaraokeAPIClient.favoriteSongs()
+                }
                 hasLoadedFavoriteSongs = true
             } catch {
-                if force || favoriteSongs.isEmpty {
-                    favoriteSongs = []
-                }
+                favoritesErrorMessage = "Favourite songs couldn’t be loaded. Pull to refresh to retry."
             }
         })
     }

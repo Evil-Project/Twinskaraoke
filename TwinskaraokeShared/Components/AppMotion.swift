@@ -30,6 +30,30 @@ enum DisplayRefreshRate {
   }
 }
 
+// MARK: - Active animation clock
+
+/// Counts only active animation time, preserving phase across scrolling, scene
+/// pauses and disappearances. Decorative `TimelineView` animations read their
+/// elapsed time from this rather than from wall-clock `context.date`, so a
+/// paused effect resumes where it stopped instead of jumping forward.
+nonisolated struct ActiveAnimationClock {
+    private var accumulated: TimeInterval = 0
+    private var activeSince: Date?
+
+    func elapsed(at date: Date) -> TimeInterval {
+        accumulated + (activeSince.map { max(0, date.timeIntervalSince($0)) } ?? 0)
+    }
+
+    mutating func setRunning(_ running: Bool, at date: Date) {
+        if running {
+            if activeSince == nil { activeSince = date }
+        } else {
+            accumulated = elapsed(at: date)
+            activeSince = nil
+        }
+    }
+}
+
 // MARK: - Reduce Motion EnvironmentKey
 
 struct AppReduceMotionKey: EnvironmentKey {

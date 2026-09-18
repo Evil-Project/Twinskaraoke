@@ -12,13 +12,12 @@ struct PlayerAmbientBackground: View {
     @Environment(\.appReduceEffects) private var reduceEffects
     @State private var palette: ArtworkPalette = .placeholder
     @State private var paletteSourceURL: URL?
-    /// Breath time already run before the current stretch of playback.
-    @State private var breathElapsed: TimeInterval = 0
-    /// When the current stretch of playback began.
-    @State private var breathResumedAt = Date()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var animationClock = ActiveAnimationClock()
+    @State private var isVisible = false
 
     private var shouldAnimateAmbient: Bool {
-        isPlaying && !reduceEffects
+        isPlaying && isVisible && !reduceEffects && scenePhase == .active
     }
 
     /// Seconds for one full out-and-back breath.
@@ -56,24 +55,18 @@ struct PlayerAmbientBackground: View {
         // animation at the boundary. The `.animation(_:value:)` modifiers above
         // sit inside it and still drive the backdrop's own transitions.
         .transaction { $0.animation = nil }
-        .onAppear(perform: loadPalette)
-        .onChange(of: artworkURL) { loadPalette() }
-        .onChange(of: shouldAnimateAmbient) { _, animating in
-            // Bank the time already breathed when stopping, and restart the
-            // clock when resuming, so the breath picks up where it left off
-            // rather than jumping to wherever wall-clock time has reached.
-            if animating {
-                breathResumedAt = Date()
-            } else {
-                breathElapsed += Date().timeIntervalSince(breathResumedAt)
-            }
+        .onAppear {
+            isVisible = true
+            loadPalette()
         }
-    }
-
-    /// How far the breath has run, in seconds, across every stretch of playback.
-    private func breathDuration(at date: Date) -> TimeInterval {
-        guard shouldAnimateAmbient else { return breathElapsed }
-        return breathElapsed + max(0, date.timeIntervalSince(breathResumedAt))
+        .onDisappear {
+            isVisible = false
+            animationClock.setRunning(false, at: .now)
+        }
+        .onChange(of: artworkURL) { loadPalette() }
+        .onChange(of: shouldAnimateAmbient, initial: true) { _, running in
+            animationClock.setRunning(running, at: .now)
+        }
     }
 
     /// Progress through the breath, 0...1 and back, eased at the turns.
@@ -126,7 +119,7 @@ struct PlayerAmbientBackground: View {
                             )
                         ) { context in
                             let phase = Self.breathingPhase(
-                                elapsed: breathDuration(at: context.date)
+                                elapsed: animationClock.elapsed(at: context.date)
                             )
                             image
                                 .resizable()

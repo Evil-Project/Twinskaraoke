@@ -3,95 +3,131 @@ import SwiftUI
 #if canImport(UIKit)
     import UIKit
 
-    /// Decides whether the app may currently rotate out of portrait.
-    ///
-    /// Every screen in the app is laid out for portrait except the video player,
-    /// which goes full-screen when the device is tilted. Declaring landscape in
-    /// the Info.plist is what makes rotation possible at all, but on its own it
-    /// would let *every* portrait-designed screen rotate too. So landscape is
-    /// declared as supported and then gated here: only screens that explicitly
-    /// opt in are allowed to turn.
-    ///
-    /// Opt-ins are counted rather than stored as a flag, because video screens
-    /// can overlap — pushing a video from the "Similar Videos" list leaves the
-    /// previous screen alive underneath until the transition settles, and a
-    /// plain Boolean would let the disappearing screen switch landscape back off
-    /// for the one that just appeared.
+    /// Orientation opt-ins belong to the window displaying the video.
     @MainActor
     final class AppOrientationGate {
         static let shared = AppOrientationGate()
+        private var owners: [ObjectIdentifier: Set<UUID>] = [:]
 
-        private var landscapeOptInCount = 0
-
-        private init() {}
-
-        var supportedOrientations: UIInterfaceOrientationMask {
-            landscapeOptInCount > 0 ? .allButUpsideDown : .portrait
-        }
-
-        func beginAllowingLandscape() {
-            landscapeOptInCount += 1
-            notifySystemOfChange()
-        }
-
-        func endAllowingLandscape() {
-            landscapeOptInCount = max(0, landscapeOptInCount - 1)
-            notifySystemOfChange()
-            if landscapeOptInCount == 0 {
-                returnToPortrait()
-            }
-        }
-
-        /// Asks UIKit to re-read `supportedInterfaceOrientationsFor:`, which it
-        /// otherwise only consults when a view controller is presented.
-        private func notifySystemOfChange() {
-            rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
-
-        /// Rotates back to portrait when the last opt-in goes away.
+        /// The mask that applies when nothing holds a landscape lease.
         ///
-        /// Clearing the gate alone is not enough: if the device is physically
-        /// held in landscape when the video screen is dismissed, UIKit has no
-        /// reason to rotate until the user moves the device, leaving a portrait
-        /// layout stranded sideways.
-        private func returnToPortrait() {
-            guard let windowScene else { return }
-            windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        /// `application(_:supportedInterfaceOrientationsFor:)` overrides
+        /// `UISupportedInterfaceOrientations`, so returning `.portrait` for
+        /// every idiom quietly cancelled the four orientations the Info.plist
+        /// declares for iPad — locking the entire iPad app to portrait outside
+        /// the video player, sidebar shell included. iPhone stays portrait; it
+        /// is the one that declares a narrow set and means it.
+        private var baseOrientations: UIInterfaceOrientationMask {
+            UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
         }
 
-        private var windowScene: UIWindowScene? {
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first { $0.activationState == .foregroundActive }
+        func supportedOrientations(in scene: UIWindowScene?) -> UIInterfaceOrientationMask {
+            guard let scene, owners[ObjectIdentifier(scene)]?.isEmpty == false else { return baseOrientations }
+            // Union, not a replacement: a lease widens iPhone to landscape and
+            // must never narrow iPad back out of upside-down.
+            return baseOrientations.union(.allButUpsideDown)
         }
 
-        private var rootViewController: UIViewController? {
-            windowScene?.keyWindow?.rootViewController
+        func setLandscapeAllowed(_ allowed: Bool, owner: UUID, in scene: UIWindowScene) {
+            let key = ObjectIdentifier(scene)
+            if allowed { owners[key, default: []].insert(owner) }
+            else { owners[key]?.remove(owner) }
+            if owners[key]?.isEmpty == true { owners.removeValue(forKey: key) }
+            for window in scene.windows {
+                window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            if !allowed, owners[key] == nil {
+                // Back to whatever this idiom allows, not unconditionally
+                // portrait — on iPad that would yank the window upright on
+                // leaving a video.
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: baseOrientations))
+            }
         }
     }
 
     final class AppDelegate: NSObject, UIApplicationDelegate {
         func application(
             _: UIApplication,
-            supportedInterfaceOrientationsFor _: UIWindow?
+            handleEventsForBackgroundURLSession identifier: String,
+            completionHandler: @escaping () -> Void
+        ) {
+            guard identifier == BackgroundDownloadTransport.identifier else { completionHandler(); return }
+            let completion = BackgroundEventCompletion(completionHandler)
+            DownloadManager.shared.handleBackgroundEvents {
+                Task { @MainActor in completion.call() }
+            }
+        }
+
+        func application(
+            _: UIApplication,
+            supportedInterfaceOrientationsFor window: UIWindow?
         ) -> UIInterfaceOrientationMask {
-            AppOrientationGate.shared.supportedOrientations
+            AppOrientationGate.shared.supportedOrientations(in: window?.windowScene)
         }
     }
 
-    extension View {
-        /// Lets this screen rotate into landscape while it is on screen.
-        func allowsLandscapeOrientation() -> some View {
-            modifier(LandscapeOrientationModifier())
+    @MainActor
+    private final class BackgroundEventCompletion {
+        private let completion: () -> Void
+        init(_ completion: @escaping () -> Void) { self.completion = completion }
+        func call() { completion() }
+    }
+
+    /// Resolves the actual hosting scene, including moves between windows.
+    struct WindowSceneReader: UIViewRepresentable {
+        var onChange: (UIWindowScene?) -> Void
+
+        final class SceneView: UIView {
+            var onChange: ((UIWindowScene?) -> Void)?
+            override func didMoveToWindow() {
+                super.didMoveToWindow()
+                onChange?(window?.windowScene)
+            }
+        }
+        func makeUIView(context: Context) -> SceneView {
+            let view = SceneView()
+            view.isUserInteractionEnabled = false
+            view.onChange = onChange
+            return view
+        }
+        func updateUIView(_ view: SceneView, context: Context) {
+            view.onChange = onChange
+        }
+        static func dismantleUIView(_ view: SceneView, coordinator: ()) {
+            view.onChange?(nil)
+            view.onChange = nil
         }
     }
 
     private struct LandscapeOrientationModifier: ViewModifier {
+        @State private var lease = LandscapeLease()
         func body(content: Content) -> some View {
             content
-                .onAppear { AppOrientationGate.shared.beginAllowingLandscape() }
-                .onDisappear { AppOrientationGate.shared.endAllowingLandscape() }
+                .background(WindowSceneReader { lease.attach(to: $0) })
+                .onAppear { lease.setVisible(true) }
+                .onDisappear { lease.setVisible(false) }
         }
+    }
+
+    @MainActor
+    private final class LandscapeLease {
+        let id = UUID()
+        weak var scene: UIWindowScene?
+        var visible = false
+        func attach(to newScene: UIWindowScene?) {
+            guard scene !== newScene else { return }
+            if let scene { AppOrientationGate.shared.setLandscapeAllowed(false, owner: id, in: scene) }
+            scene = newScene
+            if visible, let scene { AppOrientationGate.shared.setLandscapeAllowed(true, owner: id, in: scene) }
+        }
+        func setVisible(_ value: Bool) {
+            visible = value
+            if let scene { AppOrientationGate.shared.setLandscapeAllowed(value, owner: id, in: scene) }
+        }
+    }
+
+    extension View {
+        func allowsLandscapeOrientation() -> some View { modifier(LandscapeOrientationModifier()) }
     }
 #else
     extension View {

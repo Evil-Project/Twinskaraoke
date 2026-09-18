@@ -147,10 +147,13 @@ final class WatchAuthManager: NSObject {
         session.sendMessage(
             [WatchSessionLink.MessageKey.kind: WatchSessionLink.MessageKind.fetchToken],
             replyHandler: { [weak self] reply in
-                let signedIn = reply[WatchSessionLink.MessageKey.isSignedIn] as? Bool ?? false
-                let token = reply[WatchSessionLink.MessageKey.token] as? String
+                let result = WatchSessionLink.decodeTokenReply(reply)
                 Task { @MainActor [weak self] in
-                    self?.receive(token: token, signedIn: signedIn)
+                    switch result {
+                    case .available(let token): self?.receive(token: token, signedIn: true)
+                    case .signedOut: self?.receive(token: nil, signedIn: false)
+                    case .unavailable: self?.isSyncing = false
+                    }
                 }
             },
             errorHandler: { [weak self] _ in

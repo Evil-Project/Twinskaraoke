@@ -352,7 +352,7 @@ nonisolated enum KaraokeAPIClient {
       ]
     )
     let data = try await data(for: request)
-    return decodePlaylists(from: data)
+    return try decodePlaylists(from: data)
   }
 
   static func publicPlaylists(
@@ -371,7 +371,7 @@ nonisolated enum KaraokeAPIClient {
       ]
     )
     let data = try await data(for: request)
-    return decodePlaylists(from: data)
+    return try decodePlaylists(from: data)
   }
 
   static func playlistDetail(id: String) async throws -> PlaylistDetail {
@@ -515,8 +515,8 @@ nonisolated enum KaraokeAPIClient {
     return songs
   }
 
-  static func uploadedSongsRequest() throws -> URLRequest {
-    var request = try request(path: "/api/user/songs")
+  static func uploadedSongsRequest(readToken: () throws -> String? = CredentialStore.requestToken) throws -> URLRequest {
+    var request = try request(path: "/api/user/songs", readToken: readToken)
     request.httpMethod = "GET"
     return request
   }
@@ -570,8 +570,8 @@ nonisolated enum KaraokeAPIClient {
     return songs
   }
 
-  static func songsByIDsRequest(_ ids: [String]) throws -> URLRequest {
-    var request = try request(path: "/api/songs/by-ids")
+  static func songsByIDsRequest(_ ids: [String], readToken: () throws -> String? = CredentialStore.requestToken) throws -> URLRequest {
+    var request = try request(path: "/api/songs/by-ids", readToken: readToken)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = try JSONEncoder().encode(ids)
@@ -719,21 +719,37 @@ nonisolated enum KaraokeAPIClient {
     throw APIError.decodeFailed
   }
 
-  private static func decodePlaylists(from data: Data) -> [Playlist] {
+  static func decodePlaylists(from data: Data) throws -> [Playlist] {
     let decoder = JSONDecoder()
     if let items = try? decoder.decode([PlaylistListItem].self, from: data) {
       return items.map { $0.asPlaylist() }
     }
-    if let items = (try? decoder.decode(LossyArray<PlaylistListItem>.self, from: data))?.elements {
-      return items.map { $0.asPlaylist() }
+    if let items = try? decoder.decode([Playlist].self, from: data) { return items }
+    throw APIError.decodeFailed
+  }
+
+  static func restoringRequest<Value: Sendable>(
+    _ operation: @Sendable () async throws -> Value
+  ) async throws -> Value {
+    for attempt in 0...2 {
+      do { return try await operation() }
+      catch {
+        try Task.checkCancellation()
+        let retryable: Bool
+        switch error {
+        case is CredentialStore.StoreError: retryable = true
+        case let error as URLError:
+          retryable = [.timedOut, .networkConnectionLost, .notConnectedToInternet,
+                       .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains(error.code)
+        case APIError.httpStatus(let status): retryable = status == 429 || status >= 500
+        default: retryable = false
+        }
+        DebugLogger.log("Playlist request failed: \(error); attempt=\(attempt + 1), retry=\(retryable && attempt < 2)", category: .network)
+        guard retryable, attempt < 2 else { throw error }
+        try await Task.sleep(for: .seconds(attempt + 1))
+      }
     }
-    if let items = try? decoder.decode([Playlist].self, from: data) {
-      return items
-    }
-    if let items = (try? decoder.decode(LossyArray<Playlist>.self, from: data))?.elements {
-      return items
-    }
-    return []
+    throw APIError.decodeFailed
   }
 
   static func jsonRequest(path: String, body: [String: Any]) throws -> URLRequest {
@@ -835,7 +851,8 @@ nonisolated enum KaraokeAPIClient {
 
   static func request(
     path: String,
-    queryItems: [URLQueryItem] = []
+    queryItems: [URLQueryItem] = [],
+    readToken: () throws -> String? = CredentialStore.requestToken
   ) throws -> URLRequest {
     guard var components = URLComponents(string: StorageHost.api) else {
       throw APIError.invalidURL
@@ -847,7 +864,7 @@ nonisolated enum KaraokeAPIClient {
     }
     var request = URLRequest(url: url)
     request.timeoutInterval = 30
-    if let token = CredentialStore.token {
+    if let token = try readToken() {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     GuestIdentity.applyIfNeeded(to: &request)
@@ -856,7 +873,8 @@ nonisolated enum KaraokeAPIClient {
 
   static func request(
     pathSegments: [String],
-    queryItems: [URLQueryItem] = []
+    queryItems: [URLQueryItem] = [],
+    readToken: () throws -> String? = CredentialStore.requestToken
   ) throws -> URLRequest {
     guard !pathSegments.isEmpty, var components = URLComponents(string: StorageHost.api) else {
       throw APIError.invalidURL
@@ -876,7 +894,7 @@ nonisolated enum KaraokeAPIClient {
     guard let url = components.url else { throw APIError.invalidURL }
     var request = URLRequest(url: url)
     request.timeoutInterval = 30
-    if let token = CredentialStore.token {
+    if let token = try readToken() {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     GuestIdentity.applyIfNeeded(to: &request)

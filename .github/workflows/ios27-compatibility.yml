@@ -1,0 +1,108 @@
+name: iOS 27 compatibility
+
+on:
+  push:
+    branches: [fix/ios-27-launch-restoration]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios27-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios27:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Record toolchain and RC status
+        run: |
+          xcodebuild -version | tee "$RUNNER_TEMP/xcode-version.txt"
+          xcodebuild -showsdks
+          xcrun swift -version
+          xcrun simctl list runtimes
+          if ! grep -q 'Build version 27A266a' "$RUNNER_TEMP/xcode-version.txt"; then
+            echo '::notice::Preview toolchain: results will be labeled preliminary.'
+          fi
+      - name: Resolve iOS 27 simulator
+        run: |
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/devices.json"
+          xcrun simctl list runtimes -j > "$RUNNER_TEMP/runtimes.json"
+          python3 - "$RUNNER_TEMP/devices.json" "$RUNNER_TEMP/runtimes.json" >> "$GITHUB_ENV" <<'PY'
+          import json, sys
+          devices = json.load(open(sys.argv[1]))["devices"]
+          runtimes = {
+              runtime["identifier"]: runtime
+              for runtime in json.load(open(sys.argv[2]))["runtimes"]
+          }
+          # Prefer the audited RC when preview runtimes are also installed.
+          ordered = sorted(devices.items(), key=lambda item:
+              runtimes.get(item[0], {}).get("buildversion") != "24A435")
+          for runtime, entries in ordered:
+              if "SimRuntime.iOS-27-" not in runtime:
+                  continue
+              for device in entries:
+                  if device["isAvailable"] and device["name"].startswith("iPhone"):
+                      print("IOS27_SIMULATOR=" + device["udid"])
+                      print("IOS27_RUNTIME_BUILD=" + runtimes.get(runtime, {}).get("buildversion", "unknown"))
+                      sys.exit(0)
+          sys.exit("No iOS 27 iPhone simulator is available")
+          PY
+      - name: Build and analyze Release
+        run: |
+          set -o pipefail
+          xcodebuild build analyze \
+            -project Twinskaraoke.xcodeproj -scheme Twinskaraoke \
+            -configuration Release -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            -resultBundlePath "$RUNNER_TEMP/ios27-analysis.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/ios27-analysis.log"
+      - name: Run unit tests and navigation checks
+        run: |
+          set -o pipefail
+          xcrun simctl bootstatus "$IOS27_SIMULATOR" -b
+          xcodebuild test \
+            -project Twinskaraoke.xcodeproj -scheme Twinskaraoke \
+            -destination "platform=iOS Simulator,id=$IOS27_SIMULATOR" \
+            -skipPackagePluginValidation -parallel-testing-enabled NO -collect-test-diagnostics never \
+            -only-testing:TwinskaraokeTests \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAppLaunches \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAdaptiveMusicShellShowsSidebarOrTabs \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testLibraryAndSearchDrillDownNavigation \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSwipingBackFromPlaylistDetailStartsNoPlayback \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativePlaybackSliderDoesNotDismissPlayer \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testPlaybackSessionRestoresPausedAfterRelaunch \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSettingsPersistAutoplayAndEnforceTransitionChoice \
+            -resultBundlePath "$RUNNER_TEMP/ios27-tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/ios27-tests.log"
+      - name: Report validation scope
+        if: always()
+        run: |
+          {
+            echo '### iOS 27 compatibility results'
+            cat "$RUNNER_TEMP/xcode-version.txt" 2>/dev/null || true
+            echo "Simulator runtime: ${IOS27_RUNTIME_BUILD:-unavailable}"
+            if grep -q 'Build version 27A266a' "$RUNNER_TEMP/xcode-version.txt" && [ "${IOS27_RUNTIME_BUILD:-}" = '24A435' ]; then
+              echo 'Toolchain scope: audited RC SDK and runtime.'
+            else
+              echo '**Preview validation only. The audited RC SDK/runtime pair was not available.**'
+            fi
+            echo 'Build and test outcomes are reported by their steps; a preview run does not establish RC or device compatibility.'
+            echo 'Verbose simulator diagnostics are disabled; build/test logs and xcresult bundles are retained.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios27-compatibility
+          path: |
+            ${{ runner.temp }}/xcode-version.txt
+            ${{ runner.temp }}/runtimes.json
+            ${{ runner.temp }}/ios27-*.log
+            ${{ runner.temp }}/ios27-*.xcresult
+          if-no-files-found: warn

@@ -4,6 +4,35 @@ import Testing
 
 @Suite("Playback queue state")
 struct PlaybackQueueStateTests {
+    @Test("Playback session preserves position, shuffle order and unshuffle context")
+    func sessionRoundTrip() throws {
+        let songs = fixtures(4)
+        var queue = PlaybackQueueState()
+        queue.beginInOrder(context: songs)
+        queue.toggleShuffle(current: songs[1], shuffling: { Array($0.reversed()) })
+        let snapshot = PlaybackSessionSnapshot(song: songs[1], queue: queue, position: 42,
+            repeatMode: .all, wasPlaying: true)
+        let restored = try JSONDecoder().decode(PlaybackSessionSnapshot.self,
+            from: JSONEncoder().encode(snapshot))
+        #expect(restored.song == songs[1])
+        #expect(restored.resumePosition == 42)
+        #expect(restored.queue == queue)
+        #expect(restored.repeatMode == .all)
+        var unshuffled = restored.queue
+        unshuffled.toggleShuffle(current: restored.song)
+        #expect(unshuffled.items == songs)
+    }
+
+    @Test("Restored position is clamped to valid media bounds")
+    func restoredPositionBounds() {
+        let song = fixtures(1)[0]
+        for (position, expected) in [(Double.nan, 0.0), (-10.0, 0.0), (1000.0, 180.0)] {
+            let saved = PlaybackSessionSnapshot(song: song, queue: PlaybackQueueState(), position: position,
+                repeatMode: .off, wasPlaying: false)
+            #expect(saved.resumePosition == expected)
+        }
+    }
+
     @Test("Play Next inserts once immediately after the current song")
     func insertNextIsStableAndDeduplicated() {
         let songs = fixtures(4)

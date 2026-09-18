@@ -20,6 +20,7 @@ import SwiftUI
 
     struct ShimejiSpriteView: View {
         let instance: ShimejiInstance
+        let engine: ShimejiEngine
         private let resources = ShimejiResourceManager.shared
         @GestureState private var dragTranslation: CGSize = .zero
 
@@ -56,12 +57,12 @@ import SwiftUI
             DragGesture(coordinateSpace: .global)
                 .onChanged { value in
                     if !instance.isDragHeld {
-                        ShimejiEngine.shared.beginDrag(instance)
+                        engine.beginDrag(instance)
                     }
-                    ShimejiEngine.shared.updateDrag(instance, to: value.location)
+                    engine.updateDrag(instance, to: value.location)
                 }
                 .onEnded { _ in
-                    ShimejiEngine.shared.endDrag(instance)
+                    engine.endDrag(instance)
                 }
         }
     }
