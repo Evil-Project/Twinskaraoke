@@ -9,21 +9,14 @@ final class MacPlaylistsViewModel {
     private(set) var errorMessage: String?
 
     private var hasLoaded = false
-    /// Bumped by `invalidate()`. A response carrying a stale generation is
-    /// discarded rather than assigned — without this, a slow request issued for
-    /// the previous account could land after a switch and show one user's
-    /// private playlists to the next.
     private var generation = 0
 
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
         await reload()
     }
-
-    /// The sidebar lists only the signed-in user's own playlists. Public
-    /// playlists used to fall back into this list, which buried the rest of the
-    /// sidebar under dozens of rows nobody asked for — they live in Library now.
     func reload() async {
+        generation &+= 1
         let requestGeneration = generation
         isLoading = true
         errorMessage = nil
@@ -55,10 +48,6 @@ final class MacPlaylistsViewModel {
             errorMessage = String(localized: "Couldn't load your playlists.")
         }
     }
-
-    /// Called when the signed-in user changes: their playlists are a different
-    /// set, so drop the cached load, clear what's on screen, and reject any
-    /// response still in flight for the previous account.
     func invalidate() {
         hasLoaded = false
         generation &+= 1
@@ -66,9 +55,6 @@ final class MacPlaylistsViewModel {
         errorMessage = nil
     }
 }
-
-/// Public playlists, shown in Library. Available signed out, which is why it's
-/// separate from the user's own list rather than a fallback inside it.
 @MainActor
 @Observable
 final class MacLibraryViewModel {
@@ -77,6 +63,7 @@ final class MacLibraryViewModel {
     private(set) var errorMessage: String?
 
     private var hasLoaded = false
+    private var generation = 0
 
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
@@ -84,14 +71,20 @@ final class MacLibraryViewModel {
     }
 
     func reload() async {
+        generation &+= 1
+        let requestGeneration = generation
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if generation == requestGeneration { isLoading = false }
+        }
         do {
-            playlists = try await KaraokeAPIClient.publicPlaylists(
+            let loaded = try await KaraokeAPIClient.publicPlaylists(
                 startIndex: 0,
                 pageSize: 100
             )
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            playlists = loaded
             hasLoaded = true
         } catch is CancellationError {
             return
@@ -100,8 +93,6 @@ final class MacLibraryViewModel {
         }
     }
 }
-
-/// Songs for one playlist, loaded on demand when a playlist is opened.
 @MainActor
 @Observable
 final class MacPlaylistDetailViewModel {
@@ -110,15 +101,22 @@ final class MacPlaylistDetailViewModel {
     private(set) var errorMessage: String?
 
     private var loadedID: String?
+    private var generation = 0
 
     func load(playlistID: String) async {
         guard loadedID != playlistID else { return }
+        generation &+= 1
+        let requestGeneration = generation
         isLoading = true
         errorMessage = nil
         songs = []
-        defer { isLoading = false }
+        defer {
+            if generation == requestGeneration { isLoading = false }
+        }
         do {
-            songs = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+            let loaded = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            songs = loaded
             loadedID = playlistID
         } catch is CancellationError {
             return
@@ -127,21 +125,26 @@ final class MacPlaylistDetailViewModel {
         }
     }
 }
-
-/// The signed-in user's favourites, shown as its own sidebar destination.
 @MainActor
 @Observable
 final class MacFavoritesViewModel {
     private(set) var songs: [Song] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    private var generation = 0
 
     func reload() async {
+        generation &+= 1
+        let requestGeneration = generation
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            if generation == requestGeneration { isLoading = false }
+        }
         do {
-            songs = try await KaraokeAPIClient.favoriteSongs()
+            let loaded = try await KaraokeAPIClient.favoriteSongs()
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            songs = loaded
         } catch is CancellationError {
             return
         } catch {

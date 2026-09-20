@@ -4,10 +4,6 @@ import CryptoKit
 import Foundation
 import Observation
 import Security
-
-/// On macOS `ASPresentationAnchor` is an `NSWindow`, where iOS uses a `UIWindow`.
-/// That difference is the whole reason this flow needed porting rather than
-/// sharing — the rest of the OAuth exchange is platform-neutral.
 private final class WebAuthPresentationContextProvider:
     NSObject, ASWebAuthenticationPresentationContextProviding
 {
@@ -22,15 +18,23 @@ private final class WebAuthPresentationContextProvider:
     }
 }
 
-/// Sign-in and account state for the Mac app.
-///
-/// Offers all three routes the other targets have between them:
-/// - QR device pairing (the default), ported from `TVAuthManager`
-/// - Username/password against `/api/auth/login`, as on iOS
-/// - Discord OAuth via `ASWebAuthenticationSession` with an `NSWindow` anchor
-///
-/// All three land on the same Keychain-backed `CredentialStore`, and the
-/// profile/badge/upload-limit fetch mirrors `TVAuthManager.refreshAccount`.
+private nonisolated final class WebAuthContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<URL, Error>?
+
+    init(_ continuation: CheckedContinuation<URL, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(with result: Result<URL, Error>) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(with: result)
+    }
+}
+
 @MainActor
 @Observable
 final class MacAuthManager {
@@ -47,28 +51,37 @@ final class MacAuthManager {
     @ObservationIgnored private var webAuthContinuation: CheckedContinuation<URL, Error>?
     private var webAuthSession: ASWebAuthenticationSession?
     private var webAuthContextProvider: WebAuthPresentationContextProvider?
-
-    // MARK: - Profile
+    @ObservationIgnored private var sessionRevision = 0
+    @ObservationIgnored private var profileRefreshRevision = 0
 
     private(set) var profile: UserProfile?
     private(set) var badges: [AccountBadge] = []
     private(set) var uploadLimits: UploadLimits?
     private(set) var isRefreshingProfile = false
     private(set) var profileError: String?
-
-    /// Fetches profile, badges and upload limits. Mirrors
-    /// `TVAuthManager.refreshAccount` — same endpoints, same partial-failure
-    /// handling, so one endpoint being down doesn't blank the whole screen.
     func refreshAccount() async {
         guard isLoggedIn, let token = CredentialStore.token, !isRefreshingProfile else { return }
+        let authenticatedRevision = sessionRevision
+        profileRefreshRevision &+= 1
+        let refreshRevision = profileRefreshRevision
         isRefreshingProfile = true
         profileError = nil
-        defer { isRefreshingProfile = false }
+        defer {
+            if profileRefreshRevision == refreshRevision {
+                isRefreshingProfile = false
+            }
+        }
 
         async let fetchedProfile = try? Self.authorizedData(path: "/api/badge/profile")
         async let fetchedLimits = try? Self.authorizedData(path: "/api/user/upload-limits")
         let (profileData, limitsData) = await (fetchedProfile, fetchedLimits)
         guard !Task.isCancelled, isLoggedIn, CredentialStore.token == token else { return }
+
+        guard !Task.isCancelled,
+              sessionRevision == authenticatedRevision,
+              isLoggedIn,
+              CredentialStore.token == token
+        else { return }
 
         var didFail = false
         if let profileData {
@@ -105,20 +118,10 @@ final class MacAuthManager {
         let request = try KaraokeAPIClient.request(path: path)
         return try await KaraokeAPIClient.data(for: request)
     }
-
-    /// Resolved avatar for the toolbar button and profile header. Prefers the
-    /// profile payload, falling back to the stored avatar claim.
-    ///
-    /// The fallback cannot just be `URL(string:)`: `parseJWT` returns the raw
-    /// `urn:discord:avatar` claim, which is a bare hash or a storage-relative
-    /// path rather than an absolute URL. Only the Discord OAuth path stores a
-    /// full CDN URL, so password sign-in, QR sign-in and session restore all
-    /// showed the placeholder. Same resolution `UserProfile.avatarURL` uses.
     var avatarURL: URL? {
         if let profile, let url = profile.avatarURL { return url }
         guard let avatar, !avatar.isEmpty else { return nil }
         if let url = URL(string: avatar), url.scheme != nil { return url }
-        // A bare 32-hex Discord avatar hash needs the user id to form a CDN URL.
         if let userID, Self.looksLikeDiscordAvatarHash(avatar) {
             return URL(string: "https://cdn.discordapp.com/avatars/\(userID)/\(avatar).png")
         }
@@ -130,12 +133,11 @@ final class MacAuthManager {
         return trimmed.count == 32 && trimmed.allSatisfy(\.isHexDigit)
     }
 
-    // MARK: - QR pairing state
-
     private(set) var qrSession: QRSignIn.Session?
     private(set) var qrPhase: QRPhase = .idle
     private(set) var qrError: String?
     @ObservationIgnored private var qrTask: Task<Void, Never>?
+    @ObservationIgnored private var qrGeneration = 0
 
     enum QRPhase: Equatable {
         case idle
@@ -156,9 +158,6 @@ final class MacAuthManager {
         static let redirectUri = "neurokaraoke://auth"
         static let callbackScheme = "neurokaraoke"
     }
-
-    // nonisolated: referenced from the ASWebAuthenticationSession completion
-    // handler, which macOS invokes on a background XPC queue.
     private nonisolated enum AuthError: LocalizedError {
         case http(Int, String)
         case parse
@@ -208,9 +207,6 @@ final class MacAuthManager {
             guard let url = URL(string: Endpoint.login) else { throw AuthError.parse }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            // Without this the request inherits URLSession's 60s default, so a
-            // stalled connection leaves the sign-in button spinning for a
-            // minute. Every other request in this file bounds itself.
             request.timeoutInterval = Self.requestTimeout
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(
@@ -228,13 +224,15 @@ final class MacAuthManager {
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let token = json["token"] as? String
             else { throw AuthError.parse }
+            try Task.checkCancellation()
 
             try CredentialStore.saveToken(token)
             let claims = Self.parseJWT(token)
-            isLoggedIn = true
-            userID = claims?.id ?? trimmed
-            self.username = claims?.username ?? trimmed
-            avatar = claims?.avatar
+            beginAuthenticatedSession(
+                userID: claims?.id ?? trimmed,
+                username: claims?.username ?? trimmed,
+                avatar: claims?.avatar
+            )
 
             FavoritesManager.shared.reload()
         } catch {
@@ -243,8 +241,6 @@ final class MacAuthManager {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
-
-    // MARK: - Discord OAuth
 
     func loginWithDiscord() async {
         guard !isLoading, webAuthSession == nil else { return }
@@ -297,17 +293,18 @@ final class MacAuthManager {
             guard loginGeneration == generation else { return }
 
             try CredentialStore.saveToken(nkToken)
-            isLoggedIn = true
-            userID = profile.id
-            username = profile.username
-            avatar = profile.avatar
+            beginAuthenticatedSession(
+                userID: profile.id,
+                username: profile.username,
+                avatar: profile.avatar
+            )
             FavoritesManager.shared.reload()
         } catch {
             guard loginGeneration == generation else { return }
             if Task.isCancelled || Self.isCancellation(error) { return }
             webAuthSession = nil
             webAuthContextProvider = nil
-            // A user-cancelled sheet isn't an error worth showing.
+            if Task.isCancelled { return }
             if case AuthError.cancelled = error { return }
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -389,9 +386,6 @@ final class MacAuthManager {
     }
 
     private func exchangeForNKToken(_ discordToken: String) async throws -> String {
-        // nkTokenExchange interpolates StorageHost.idk, which is resolved at
-        // runtime — unlike the literal Discord endpoints, it can be malformed,
-        // and force-unwrapping it would crash rather than surface an error.
         guard let url = URL(string: Endpoint.nkTokenExchange) else { throw AuthError.parse }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -438,6 +432,12 @@ final class MacAuthManager {
         // A live pairing code outliving sign-out could complete behind the
         // user and silently sign them back in.
         cancelQRSignIn()
+        webAuthSession?.cancel()
+        webAuthSession = nil
+        webAuthContextProvider = nil
+        sessionRevision &+= 1
+        profileRefreshRevision &+= 1
+        isRefreshingProfile = false
         CredentialStore.deleteToken()
         isLoggedIn = false
         username = nil
@@ -450,25 +450,21 @@ final class MacAuthManager {
         profileError = nil
         FavoritesManager.shared.clear()
     }
-
-    // MARK: - QR device pairing
-
-    /// Requests a pairing code and polls until a signed-in phone approves it.
-    /// Safe to call repeatedly; any in-flight attempt is replaced. Ported from
-    /// `TVAuthManager` — the Mac has a keyboard, but pairing from a phone that
-    /// is already signed in is still the fastest way in.
     func startQRSignIn() {
         guard !isLoading else { return }
         qrTask?.cancel()
+        qrGeneration &+= 1
+        let generation = qrGeneration
         qrError = nil
         qrSession = nil
         qrPhase = .creating
         qrTask = Task { [weak self] in
-            await self?.runQRSignIn()
+            await self?.runQRSignIn(generation: generation)
         }
     }
 
     func cancelQRSignIn() {
+        qrGeneration &+= 1
         qrTask?.cancel()
         qrTask = nil
         qrSession = nil
@@ -476,42 +472,44 @@ final class MacAuthManager {
         qrError = nil
     }
 
-    private func runQRSignIn() async {
+    private func runQRSignIn(generation: Int) async {
+        defer {
+            if qrGeneration == generation {
+                qrTask = nil
+            }
+        }
         var session: QRSignIn.Session
         do {
             session = try await QRSignIn.createSession()
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, qrGeneration == generation else { return }
             qrError = Self.friendlyMessage(for: error)
             qrPhase = .idle
             return
         }
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, qrGeneration == generation else { return }
         qrSession = session
         qrPhase = .waiting
 
         let start = Date()
-        // A single network blip shouldn't discard a code the user is already
-        // pointing a phone at; only give up after it keeps failing.
         var consecutiveFailures = 0
 
-        while !Task.isCancelled {
+        while !Task.isCancelled, qrGeneration == generation {
             if session.isExpired {
                 qrPhase = .expired
                 return
             }
-
-            // Tight while the user is most likely mid-scan, slower after.
             let interval: Double = Date().timeIntervalSince(start) < 30 ? 2 : 5
             try? await Task.sleep(for: .seconds(interval))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, qrGeneration == generation else { return }
 
             do {
                 let poll = try await QRSignIn.status(of: session.id)
-                guard !Task.isCancelled, qrSession?.id == session.id else { return }
-                // The server owns the deadline; the value from createSession is
-                // only a placeholder until the first poll lands.
+                guard !Task.isCancelled,
+                      qrGeneration == generation,
+                      qrSession?.id == session.id
+                else { return }
                 if let expiresAt = poll.expiresAt, expiresAt != session.expiresAt {
                     session.expiresAt = expiresAt
                     qrSession = session
@@ -525,11 +523,14 @@ final class MacAuthManager {
                     return
                 case let .approved(token):
                     qrPhase = .completing
-                    completeQRSignIn(token: token)
+                    completeQRSignIn(token: token, generation: generation)
                     return
                 }
             } catch {
-                guard !Task.isCancelled, qrSession?.id == session.id else { return }
+                guard !Task.isCancelled,
+                      qrGeneration == generation,
+                      qrSession?.id == session.id
+                else { return }
                 consecutiveFailures += 1
                 if consecutiveFailures >= 3 {
                     qrError = Self.friendlyMessage(for: error)
@@ -540,9 +541,8 @@ final class MacAuthManager {
         }
     }
 
-    private func completeQRSignIn(token: String) {
-        // Without readable claims the session would persist with an empty
-        // username, so fail loudly rather than half-committing.
+    private func completeQRSignIn(token: String, generation: Int) {
+        guard qrGeneration == generation else { return }
         guard let claims = Self.parseJWT(token) else {
             qrError = "That sign-in couldn't be completed. Try again."
             qrPhase = .idle
@@ -551,8 +551,6 @@ final class MacAuthManager {
         do {
             try CredentialStore.saveToken(token)
         } catch {
-            // Include the OSStatus: a bare "couldn't save" gave no way to tell
-            // a Keychain entitlement problem from a transient failure.
             if case CredentialStore.StoreError.keychain(let status) = error {
                 qrError = "Couldn't save your sign-in (Keychain error \(status))."
             } else {
@@ -561,16 +559,33 @@ final class MacAuthManager {
             qrPhase = .idle
             return
         }
-        isLoggedIn = true
-        userID = claims.id
-        username = claims.username
-        avatar = claims.avatar
+        beginAuthenticatedSession(
+            userID: claims.id,
+            username: claims.username,
+            avatar: claims.avatar
+        )
         qrSession = nil
         qrPhase = .idle
-        // A transient poll failure earlier in this run may have set qrError;
-        // leaving it would show a stale error beside a signed-in account.
         qrError = nil
         FavoritesManager.shared.reload()
+    }
+
+    private func beginAuthenticatedSession(
+        userID: String,
+        username: String,
+        avatar: String?
+    ) {
+        sessionRevision &+= 1
+        profileRefreshRevision &+= 1
+        isRefreshingProfile = false
+        profile = nil
+        badges = []
+        uploadLimits = nil
+        profileError = nil
+        isLoggedIn = true
+        self.userID = userID
+        self.username = username
+        self.avatar = avatar
     }
 
     private static func friendlyMessage(for error: Error) -> String {
@@ -579,8 +594,6 @@ final class MacAuthManager {
         }
         return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
-
-    // MARK: - Helpers
 
     private static let requestTimeout: TimeInterval = 15
 
@@ -599,9 +612,6 @@ final class MacAuthManager {
         return nsError.domain == ASWebAuthenticationSessionErrorDomain
             && nsError.code == ASWebAuthenticationSessionError.Code.canceledLogin.rawValue
     }
-
-    /// macOS equivalent of the iOS anchor lookup: a key `NSWindow` instead of a
-    /// key `UIWindow` from the connected scenes.
     private static func activePresentationAnchor() -> ASPresentationAnchor? {
         NSApplication.shared.keyWindow
             ?? NSApplication.shared.mainWindow
@@ -624,10 +634,6 @@ final class MacAuthManager {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
-
-    /// The exchange endpoint has returned a bare string, a quoted JSON string
-    /// and an object across versions, so accept all three — same handling as
-    /// `AuthManager.exchangedToken(from:)` on iOS.
     static func exchangedToken(from data: Data) -> String? {
         let raw = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -654,9 +660,6 @@ final class MacAuthManager {
         guard token.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { return nil }
         return token
     }
-
-    /// Same claim URIs the iOS target reads — the token is issued by one server
-    /// for every platform, so the shapes must not drift.
     private static func parseJWT(_ jwt: String) -> (id: String, username: String, avatar: String?)? {
         let parts = jwt.split(separator: ".")
         guard parts.count == 3 else { return nil }

@@ -18,6 +18,7 @@ class CloudProvider {
 struct Cloud: View {
     @State private var provider = CloudProvider()
     @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @State private var move = false
 
     let proxy: GeometryProxy
@@ -31,19 +32,23 @@ struct Cloud: View {
             .fill(color)
             .frame(height: proxy.size.height / provider.frameHeightRatio)
             .offset(provider.offset)
-            .rotationEffect(.init(degrees: (move && !reduceEffects) ? rotationStart : rotationStart + 360))
+            .rotationEffect(.init(degrees: move ? rotationStart : rotationStart + 360))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .opacity(0.8)
             .onAppear {
-                updateAnimation(shouldReduce: reduceEffects)
+                updateAnimation(shouldAnimate: shouldAnimate)
             }
-            .onChange(of: reduceEffects) { _, shouldReduce in
-                updateAnimation(shouldReduce: shouldReduce)
+            .onChange(of: shouldAnimate) { _, shouldAnimate in
+                updateAnimation(shouldAnimate: shouldAnimate)
             }
     }
 
-    private func updateAnimation(shouldReduce: Bool) {
-        if shouldReduce {
+    private var shouldAnimate: Bool {
+        animationsActive && !reduceEffects
+    }
+
+    private func updateAnimation(shouldAnimate: Bool) {
+        if !shouldAnimate {
             withOptionalAnimation(nil) { move = false }
         } else {
             move = false
@@ -66,16 +71,14 @@ struct FloatingClouds: View {
                 Cloud(proxy: proxy, color: Theme.ellipsesTopTrailing(forScheme: scheme), rotationStart: 180, duration: 75, alignment: .topTrailing)
                 Cloud(proxy: proxy, color: Theme.ellipsesBottomLeading(forScheme: scheme), rotationStart: 270, duration: 105, alignment: .bottomLeading)
             }
+            .drawingGroup(opaque: false, colorMode: .linear)
             .blur(radius: blur)
         }
     }
 }
-
-/// A slow diagonal light sweep layered above the blurred clouds. This is
-/// what pushes the wash from "blurry colored blobs" to something that reads
-/// as an actual aurora — a faint band of light drifting across the sky.
 private struct AuroraShimmerOverlay: View {
     @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @State private var animate = false
 
     var body: some View {
@@ -90,15 +93,15 @@ private struct AuroraShimmerOverlay: View {
         )
         .blendMode(.plusLighter)
         .onAppear {
-            guard !reduceEffects else { return }
+            guard shouldAnimate else { return }
             withOptionalAnimation(
                 Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
             ) {
                 animate = true
             }
         }
-        .onChange(of: reduceEffects) { _, shouldReduce in
-            if shouldReduce {
+        .onChange(of: shouldAnimate) { _, shouldAnimate in
+            if !shouldAnimate {
                 withOptionalAnimation(nil) { animate = false }
             } else {
                 withOptionalAnimation(
@@ -109,10 +112,13 @@ private struct AuroraShimmerOverlay: View {
             }
         }
     }
+
+    private var shouldAnimate: Bool {
+        animationsActive && !reduceEffects
+    }
 }
 
 struct LinearNonTransparency: View {
-    // Nwero always renders its dark palette; see the note on FloatingClouds.
     private let scheme: ColorScheme = .dark
 
     var gradient: Gradient {
@@ -127,15 +133,6 @@ struct LinearNonTransparency: View {
             .ignoresSafeArea()
     }
 }
-
-/// Picks the right Nwero backdrop for the current accessibility settings.
-/// This is real, opaquely-drawn SwiftUI content — never a transparency trick
-/// that tries to reveal something mounted elsewhere in the view hierarchy.
-/// Each screen that uses this owns its own instance, so NavigationStack/
-/// TabView can composite push/pop/tab-switch transitions normally (they rely
-/// on each screen having genuine opaque content to mask the other screen
-/// while animating — punching transparency through their backing views
-/// breaks that masking and causes visible ghosting mid-transition).
 struct NweroAuroraBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
@@ -143,8 +140,6 @@ struct NweroAuroraBackdrop: View {
     var body: some View {
         Group {
             if differentiateWithoutColor {
-                // Nwero is always dark, so use the dark variant explicitly
-                // rather than reading ambient colorScheme.
                 Theme.differentiateWithoutColorBackground(forScheme: .dark)
             } else if reduceTransparency {
                 LinearNonTransparency()
@@ -155,8 +150,6 @@ struct NweroAuroraBackdrop: View {
         .ignoresSafeArea()
     }
 }
-
-// Reusable Modifier to apply background anywhere in your app
 struct AuroraBackgroundModifier: ViewModifier {
     @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
 
@@ -166,9 +159,6 @@ struct AuroraBackgroundModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         ZStack {
-            // Only mount the animated Aurora wash when Nwero is active. On
-            // every other theme, screens paint opaque fills over this
-            // background anyway, so rendering it there is pure waste.
             if isNwero {
                 NweroAuroraBackdrop()
             } else {

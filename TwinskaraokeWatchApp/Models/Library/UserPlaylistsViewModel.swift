@@ -1,19 +1,10 @@
 import Foundation
 import Observation
-
-/// The signed-in listener's own playlists.
-///
-/// Read-only on the watch: creating playlists and adding songs stay on the
-/// phone, so this deliberately does not mirror `UserPlaylistsManager`. Results
-/// are mapped to `Playlist` so the existing watch grid and detail views work
-/// unchanged.
 @MainActor
 @Observable
 final class UserPlaylistsViewModel {
     var playlists: [Playlist] = []
     var isLoading = false
-    /// Set when the initial load fails so the view can offer a retry instead
-    /// of showing a misleading empty state.
     var loadError: String?
 
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -70,9 +61,6 @@ final class UserPlaylistsViewModel {
             }
         }
     }
-
-    /// Called when the watch loses its session, so another account's playlists
-    /// can't linger on screen.
     func reset() {
         cancelLoad()
         playlists = []

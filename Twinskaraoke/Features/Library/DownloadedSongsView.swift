@@ -132,9 +132,6 @@ struct DownloadedSongsView: View {
     }
 
     private func sanitizedViewportSize(_ size: CGSize) -> CGSize {
-        // GeometryReader can briefly report zero, negative, or non-finite dimensions
-        // during navigation/layout transitions. Clamp before passing values to
-        // frame modifiers so SwiftUI never receives an invalid frame dimension.
         let width = size.width.isFinite ? max(size.width, 1) : 1
         let height = size.height.isFinite ? max(size.height, 1) : 1
         return CGSize(width: width, height: height)
@@ -227,10 +224,6 @@ struct DownloadedSongsView: View {
         durationTask?.cancel()
         durationTask = Task { @MainActor in
             let downloadManager = downloads
-            // Resolving each song's local URL reads its per-song source file
-            // and may enumerate the download directory; together with the
-            // file-existence checks that is disk I/O per song, so keep the
-            // whole scan off the main actor.
             let scanTask = Task.detached(priority: .utility) {
                 songs.reduce(into: [String: URL]()) { urls, song in
                     guard !Task.isCancelled else { return }
@@ -377,6 +370,7 @@ private struct DownloadedEmptyStateView: View {
         }
         .accessibilityElement(children: .contain)
     }
+
 }
 
 private struct DownloadedEmptyHintRow: View {

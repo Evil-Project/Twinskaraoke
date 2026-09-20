@@ -1,16 +1,4 @@
 import SwiftUI
-
-// MARK: - Glass Modifiers
-
-/// Shape-agnostic Liquid Glass background for cards, panels and pills.
-///
-/// Falls back to an opaque fill when Reduce Transparency is on, strokes the
-/// edge under Increase Contrast so it stays visible without the material, and
-/// otherwise renders glass. `GlassRoundedRect` is this plus a drop shadow.
-///
-/// `GlassCircle` deliberately stays separate: it uses *interactive* glass and
-/// always strokes its reduced-transparency fill, both specific to the floating
-/// circular buttons it backs.
 struct AppGlassBackground<S: Shape>: ViewModifier {
     let shape: S
 
@@ -33,8 +21,6 @@ struct AppGlassBackground<S: Shape>: ViewModifier {
 }
 
 extension View {
-    /// Backs the view with Liquid Glass in `shape`, honouring Reduce
-    /// Transparency and Increase Contrast.
     func appGlassBackground(in shape: some Shape) -> some View {
         modifier(AppGlassBackground(shape: shape))
     }
@@ -73,8 +59,6 @@ struct GlassRoundedRect: ViewModifier {
             .shadow(color: .appShadow, radius: 14, y: 6)
     }
 }
-
-// MARK: - Glass Buttons
 
 struct GlassXButton: View {
     private static let defaultIconSize: CGFloat = 16

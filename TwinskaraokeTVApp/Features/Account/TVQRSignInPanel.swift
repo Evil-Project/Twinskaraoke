@@ -1,9 +1,6 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
-
-/// The pairing half of the TV sign-in screen: renders the current pairing code
-/// and reflects `TVAuthManager.qrPhase` while a phone approves it.
 struct TVQRSignInPanel: View {
     let auth: TVAuthManager
     let onUsePassword: () -> Void
@@ -44,18 +41,11 @@ struct TVQRSignInPanel: View {
         .padding(44)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 28))
         .task {
-            // Only mint a code if there isn't a live one already; re-entering
-            // the tab shouldn't invalidate a code someone is mid-scan on.
             if auth.qrSession == nil, auth.qrPhase == .idle {
                 auth.startQRSignIn()
             }
         }
         .onDisappear {
-            // Ordinary navigation away leaves a live code alone: the phone can
-            // approve it while the panel is off-screen, and the `.task` guard
-            // above only means anything if the session survives leaving the tab.
-            // Sessions end on their own via approval or expiry, so nothing leaks
-            // by waiting. Opting out of pairing cancels at the button instead.
             switch auth.qrPhase {
             case .waiting, .completing:
                 break
@@ -159,12 +149,7 @@ struct TVQRSignInPanel: View {
         }
     }
 
-    // MARK: - QR rendering
-
     private static let ciContext = CIContext(options: nil)
-
-    /// Rendered at native module size and scaled with nearest-neighbour so the
-    /// code stays crisp on a 4K panel instead of being interpolated to mush.
     private static func qrImage(for payload: String) -> CGImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(payload.utf8)

@@ -50,13 +50,6 @@ final class ArtGalleryViewModel {
     var loadFailed = false
     private var hasLoaded = false
     @ObservationIgnored private let refreshTracker = RefreshTracker()
-
-    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
-    /// until the gallery has actually finished loading.
-    ///
-    /// No `cancellingPrevious`: `fetch` bails while a load is already running,
-    /// so a second refresh never starts a competing task — it just waits on the
-    /// one in flight.
     func refreshGallery() async {
         fetch(force: true)
         await refreshTracker.wait()

@@ -4,10 +4,10 @@ struct RadioPlayerLayout: View {
     @Environment(AudioPlayerManager.self) var audioManager
     let favorites: FavoritesManager
     private let radio = RadioController.shared
-    /// Only to stop the marquees while this layout is parked below the screen —
-    /// the player stays mounted when it is closed, so nothing else would.
     private let presentation = NowPlayingPresentation.shared
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @Binding var showingQueue: Bool
     let song: Song
     let artSize: CGFloat
@@ -76,10 +76,6 @@ struct RadioPlayerLayout: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Live radio")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
-            // Not a `Spacer`. The title has been flexible ever since it became a
-            // marquee, and a `Spacer` is flexible too, so the two were quietly
-            // splitting the free width — the title scrolled from about half the
-            // row while the other half sat empty.
             .padding(.trailing, 8)
             Menu {
                 SleepTimerMenu()

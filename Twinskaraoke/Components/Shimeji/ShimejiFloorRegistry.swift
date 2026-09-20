@@ -11,9 +11,6 @@ import SwiftUI
     /// walks the window hierarchy instead — cheap enough for the same 0.5s
     /// poll that already re-measures bounds and the mini player.
     enum ShimejiNavBarLocator {
-        /// - Parameter excluding: the Shimeji overlay window itself, so the
-        ///   search doesn't waste time descending into a view tree that by
-        ///   construction never contains a tab bar.
         static func topEdgeY(in scene: UIWindowScene, excluding excludedWindow: UIWindow?) -> CGFloat? {
             for window in scene.windows where window !== excludedWindow {
                 guard let tabBar = firstTabBar(in: window), !tabBar.isHidden, tabBar.bounds.height > 0 else { continue }

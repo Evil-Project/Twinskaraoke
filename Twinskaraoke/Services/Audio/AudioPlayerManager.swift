@@ -9,9 +9,6 @@ import Observation
     import SDWebImage
     import UIKit
 #endif
-
-/// Tick counter for fade timers; only mutated on the main actor, but lives
-/// in a @Sendable timer closure so it needs an unchecked-Sendable box.
 private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
@@ -410,23 +407,14 @@ final class AudioPlayerManager {
     private var autoplayRequestToken: UUID?
     @ObservationIgnored private var autoplayTask: Task<Void, Never>?
     private var cacheRecoverySongID: String?
-    // Song IDs already sent through enrichSongMetadataIfNeeded this session;
-    // repeat-one loops would otherwise re-issue the search + trending
-    // fallback requests on every replay.
     private var enrichmentAttemptedSongIDs = Set<String>()
     private var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
-    // Volume ramps run on a background DispatchSourceTimer (like the engine
-    // crossfade ramp) so they don't fire on RunLoop.main during scroll
-    // tracking; per-tick work is dispatched back to the main actor.
     private nonisolated static let volumeRampQueue = DispatchQueue(
         label: "com.Mag1cByt3s.Twinskaraoke.volume-ramp",
         qos: .userInteractive
     )
     private var streamFadeTimer: DispatchSourceTimer?
-    // Bumped whenever the fade timer is cancelled so a tick already dispatched
-    // to the main actor by the background timer no-ops instead of applying a
-    // stale volume step.
     private var streamFadeGeneration: UInt64 = 0
     private var streamStartedAt: Date?
 
@@ -442,14 +430,7 @@ final class AudioPlayerManager {
     @ObservationIgnored private var preparedStemTask: Task<Void, Never>?
     @ObservationIgnored private var backgroundAnalysisRetryTask: Task<Void, Never>?
     @ObservationIgnored private var cacheCompressionTask: Task<Void, Never>?
-    // Set while a stem-switch load is in flight so its failure can drop the
-    // broken stem cache. Must be cleared on every pause/stop/new-play path:
-    // those bump the engine's suppression token, the load completion then
-    // returns early before clearing this, and a stale ID would make a later
-    // unrelated engine error delete a valid stem cache.
     private var aiStemSwitchInFlightSongID: String?
-    // The isPlaybackRequested snapshot of the in-flight stem switch, so a
-    // load failure for a paused switch can fall back without un-pausing.
     private var aiStemSwitchInFlightShouldResume = true
     private var quickCutTimer: DispatchSourceTimer?
     private var quickCutGeneration: UInt64 = 0
@@ -483,8 +464,6 @@ final class AudioPlayerManager {
     }()
 
     #if canImport(UIKit)
-        // nonisolated(unsafe): NSCache is documented thread-safe; the artwork
-        // processing task reads and writes it off the main actor.
         private nonisolated(unsafe) static let artworkCache: NSCache<NSURL, UIImage> = {
             let cache = NSCache<NSURL, UIImage>()
             cache.countLimit = 32
@@ -557,9 +536,6 @@ final class AudioPlayerManager {
             updateNowPlayingInfo(reloadArtwork: reloadArtwork)
         }
     }
-
-    // Private so `shared` stays the only instance: the audio session and the
-    // remote-command centre it configures are process-wide singletons.
     private init() {
         // Category only. Activating a non-mixable `.playback` session here
         // interrupted whatever another app was playing the moment Twinskaraoke
@@ -822,10 +798,6 @@ final class AudioPlayerManager {
     }
 
     isolated deinit {
-        // Teardown touches main-actor-bound state: the RunLoop.main poll timer,
-        // the radio time observer, and the AVPlayer. `isolated deinit` runs the
-        // body on the main actor rather than asserting that the last release
-        // happened there, which `MainActor.assumeIsolated` would trap on.
         pollTimer?.invalidate()
         quickCutTimer?.cancel()
         streamFadeTimer?.cancel()
@@ -849,9 +821,6 @@ final class AudioPlayerManager {
             let transitionTaskID = trackTransitionTaskID
             trackTransitionTaskID = .invalid
             if transitionTaskID != .invalid {
-                // Already on the main actor, so end the background task
-                // directly instead of deferring it to a Task that could
-                // outlive the deinit.
                 UIApplication.shared.endBackgroundTask(transitionTaskID)
             }
         #endif
@@ -873,11 +842,6 @@ final class AudioPlayerManager {
             expectedDuration: expectedDuration
         )
     }
-
-    /// Local file lookup for the tap-to-play path: never decompresses on the
-    /// main thread. Compressed-only cache entries return nil here and are
-    /// recovered off-main by the remote playback cache task (which hits the
-    /// same cache and decompresses before playing, without re-downloading).
     private func immediateLocalPlaybackFileURL(for song: Song) -> URL? {
         localPlaybackFileURL(for: song)
     }
@@ -888,10 +852,6 @@ final class AudioPlayerManager {
             expectedDuration: expectedStemDuration(for: song, sourceURL: sourceURL)
         )
     }
-
-    /// Non-decompressing stem lookup for main-thread fast paths: returns nil
-    /// when only the compressed cache exists so callers can defer the
-    /// decompression to the async `cachedStems` path instead.
     private func immediatelyCachedStems(for song: Song, sourceURL: URL? = nil) -> CachedStems? {
         VocalSeparator.shared.immediatelyAvailableStems(
             forSongID: song.id,
@@ -1185,7 +1145,6 @@ final class AudioPlayerManager {
         guard let sourceURL = localPlaybackFileURL(for: song) else { return }
         preparedStemTask?.cancel()
         let gen = separationGeneration
-        // Decompresses compressed stem caches off the main thread.
         preparedStemTask = Task { @MainActor [weak self] in
             guard let self else { return }
             guard let stems = await cachedStems(for: song, sourceURL: sourceURL) else { return }
@@ -1555,9 +1514,6 @@ final class AudioPlayerManager {
         if !context.isEmpty { repeatOnceRemaining = true }
         queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
-        // Songs with a remote source use the non-decompressing lookup; a
-        // compressed-only cache falls through to startStreamPlayback, whose
-        // cache-hit path decompresses off the main thread.
         let fileURL = song.audioURL != nil
             ? immediateLocalPlaybackFileURL(for: song)
             : localPlaybackFileURL(for: song)
@@ -1760,9 +1716,6 @@ final class AudioPlayerManager {
         }
         let resumeAt = max(0, startAt.isFinite ? startAt : 0)
         guard resume else {
-            // A paused stem switch whose stem load failed must not un-pause:
-            // leave the deck unloaded and keep the position so the next
-            // explicit resume reloads the main file at the same spot.
             lastKnownPlaybackTime = resumeAt
             setPlaybackState(
                 playing: false,
@@ -1792,8 +1745,6 @@ final class AudioPlayerManager {
             resetSeparationOnCacheReady: false
         )
     }
-
-    /// Returns true when a pause request matched an active or resumable playback path.
     @discardableResult
     private func pauseCurrentPlayback(source: String = #function) -> Bool {
         audioSessionController.cancelPendingPlayback()
@@ -1887,8 +1838,6 @@ final class AudioPlayerManager {
         setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")
         return true
     }
-
-    /// Returns true when a resume request could be applied to the current playback path.
     @discardableResult
     private func resumeCurrentPlayback(source: String = #function) -> Bool {
         guard audioSessionController.performWhenReady({ [weak self] in
@@ -2174,9 +2123,6 @@ final class AudioPlayerManager {
     func playShuffled(from songs: [Song]) {
         repeatOnceRemaining = true
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
-        // The state already contains the shuffled queue and its original
-        // ordering. Passing that queue back as a context would shuffle it a
-        // second time and overwrite the restoration order.
         play(song: pick)
     }
 
@@ -2444,8 +2390,6 @@ final class AudioPlayerManager {
         }
 
         remotePlaybackCacheTask?.cancel()
-        // Token guard: replaying the same URL cancels the old task, whose
-        // cancellation handler must not reset state owned by the new request.
         let requestToken = UUID()
         remotePlaybackCacheToken = requestToken
         remotePlaybackCacheTask = Task { [weak self] in
@@ -2655,9 +2599,6 @@ final class AudioPlayerManager {
                     let t = Float(counter.step) / Float(max(1, steps))
                     self.streamPlayer?.volume = max(0, 1.0 - t)
                     if t >= 1.0 {
-                        // Bump the generation so a tick already enqueued on
-                        // main before the cancel can't re-enter and force the
-                        // volume back to 0 after the fade completed.
                         self.streamFadeGeneration &+= 1
                         self.streamFadeTimer = nil
                         timer.cancel()
@@ -2836,8 +2777,6 @@ final class AudioPlayerManager {
                 )
                 return
             }
-            // Compressed-only stem caches are decompressed off the main thread
-            // before falling back to real-time separation.
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let stems = await cachedStems(for: song, sourceURL: sourceURL) else {
@@ -3052,13 +2991,6 @@ final class AudioPlayerManager {
             if Thread.isMainThread {
                 return MainActor.assumeIsolated { action() }
             }
-            // MediaPlayer can deliver remote-command callbacks off the main thread.
-            // Return only after the playback state and Now Playing info have changed;
-            // returning .success before the main actor update lets Control Center redraw
-            // from stale state and can leave the play/pause button out of sync.
-            // Apple documents the public integration path as MPRemoteCommandCenter
-            // handlers plus MPNowPlayingInfoCenter metadata/rate updates:
-            // https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/MediaPlaybackGuide/Contents/Resources/en.lproj/RefiningTheUserExperience/RefiningTheUserExperience.html
             var status: MPRemoteCommandHandlerStatus = .commandFailed
             DispatchQueue.main.sync {
                 status = MainActor.assumeIsolated { action() }
@@ -3082,11 +3014,6 @@ final class AudioPlayerManager {
                     return .success
                 }
                 let resumed = self.resumeCurrentPlayback(source: "remote.play")
-                // In-app play/pause buttons carry their own `.commit`; the
-                // remote surfaces had none. iOS suppresses haptics while
-                // backgrounded, so in practice this is felt when the app is
-                // foreground and the command comes from headphones or
-                // Control Center.
                 if resumed { AppHaptic.commit.play() }
                 return resumed ? .success : .commandFailed
             }
@@ -3096,12 +3023,6 @@ final class AudioPlayerManager {
             return performOnMain {
                 DebugLogger.log("Remote pause command received", category: .playback)
                 if !self.isPlaybackRequested {
-                    // Some iOS surfaces can send pauseCommand from a stale paused
-                    // visual state even when the user is pressing the center play
-                    // button. Treat that stale pause as resume; removing this
-                    // fallback made lock-screen/control state diverge in device
-                    // testing, so this intentionally preserves the working
-                    // system-integration behavior over strict command semantics.
                     let resumed = self.resumeCurrentPlayback(source: "remote.pauseAsPlay")
                     if resumed { AppHaptic.commit.play() }
                     return resumed ? .success : .commandFailed
@@ -3288,8 +3209,6 @@ final class AudioPlayerManager {
             ) { [weak self] image, _, _, _, _, _ in
                 guard let self, currentSong?.id == songID else { return }
                 guard let image else { return }
-                // Square-cropping and downscaling redraw the full bitmap;
-                // keep that work off the main thread. NSCache is thread-safe.
                 artworkProcessingTask = Task.detached(priority: .userInitiated) { [weak self] in
                     guard !Task.isCancelled else { return }
                     let squareImage = image.croppedToSquare().downscaled(
@@ -3313,8 +3232,6 @@ final class AudioPlayerManager {
 
     #if canImport(UIKit)
         private func applyArtwork(_ image: UIImage, for songID: String?, artworkURL requestedURL: URL) {
-            // The system may call the artwork request handler off the main
-            // thread; @Sendable keeps it from inheriting main-actor isolation.
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
             DispatchQueue.main.async { [weak self] in
                 guard let self,
@@ -3534,8 +3451,6 @@ final class AudioPlayerManager {
                 pathSegments: ["api", "songs", "playCount", songID]
             ) else { return }
             req.httpMethod = "PUT"
-            // Fire and forget: the result is discarded, so a retry only costs
-            // requests. One skipped song used to cost 3 of these.
             let _ = try? await KaraokeAPIClient.data(for: req, allowsRetry: false)
         }
     }
@@ -3659,9 +3574,6 @@ final class AudioPlayerManager {
                     let t = Float(counter.step) / Float(max(1, steps))
                     self.avEngine.setMasterVolume(1.0 - t)
                     if t >= 1.0 {
-                        // Bump the generation so a tick already enqueued on
-                        // main before the cancel can't re-enter and tear down
-                        // the transition state for the song play() just started.
                         self.quickCutGeneration &+= 1
                         self.quickCutTimer = nil
                         DebugLogger.log("Quick cut transition complete -> play(\(song.id))", category: .playback)
@@ -3751,8 +3663,6 @@ final class AudioPlayerManager {
 }
 
 #if canImport(UIKit)
-    // nonisolated: cropping and re-rendering are thread-safe and run off the
-    // main actor when preparing Now Playing artwork.
     nonisolated extension UIImage {
         func croppedToSquare() -> UIImage {
             let originalWidth = size.width

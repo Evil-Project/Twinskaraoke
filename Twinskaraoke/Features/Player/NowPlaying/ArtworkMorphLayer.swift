@@ -49,12 +49,6 @@ struct ArtworkMorphLayer: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
-
-    /// The interpolation, kept separate from the view so it can be checked
-    /// without a screen. A morph is hard to eyeball — it is on screen for
-    /// about half a second — and the failure modes are silent: an inverted
-    /// rect, a corner radius running the wrong way, artwork flying in from the
-    /// origin because a frame was still `.zero`.
     enum Geometry {
         /// Frames already include the artwork's playback scale. The destination
         /// is measured inside the stationary player surface, excluding the

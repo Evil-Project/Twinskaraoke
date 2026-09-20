@@ -71,14 +71,6 @@ final class ArtworkPrefetcher {
     }
 
     static let shared = ArtworkPrefetcher()
-
-    /// How far ahead of the visible rows artwork is warmed.
-    ///
-    /// These were 18/12, which a fast flick outruns almost immediately — past
-    /// the window you wait on both network and decode, which is what leaves
-    /// placeholders on screen. The URLs are server-resized variants and
-    /// `maxConcurrentPrefetchCount` still throttles the work, so a deeper
-    /// window mostly costs cache entries rather than bandwidth spikes.
     static let songWindow = 36
     static let playlistWindow = 24
 
@@ -86,13 +78,6 @@ final class ArtworkPrefetcher {
     private var recentlyRequested: [String: Date] = [:]
     private var activePrefetches: [String: ActivePrefetch] = [:]
     private let reuseWindow: TimeInterval = 45
-
-    /// Separate prefetcher for whole-collection warming.
-    ///
-    /// Deliberately not `SDWebImagePrefetcher.shared`: warming a 500-song
-    /// playlist must not consume the concurrency budget the scroll-driven
-    /// prefetch above depends on, and it must not be subject to (or interfere
-    /// with) that path's `recentlyRequested` reuse window.
     private let warmPrefetcher: SDWebImagePrefetcher = {
         let prefetcher = SDWebImagePrefetcher()
         prefetcher.maxConcurrentPrefetchCount = 2
@@ -100,34 +85,11 @@ final class ArtworkPrefetcher {
     }()
 
     private var warmTokens: [String: SDWebImagePrefetchToken] = [:]
-    /// Bumped per `reason` on every warm request so a slower off-actor URL
-    /// derivation cannot install its token after a newer request superseded it.
     private var warmRequests: [String: Int] = [:]
 
     private init() {
         prefetcher.maxConcurrentPrefetchCount = 3
     }
-
-    /// Warms artwork for an entire collection onto disk, off the scroll path.
-    ///
-    /// The windowed `prefetch(urls:limit:…)` above exists to stay just ahead of
-    /// the visible rows; a fast flick outruns any such window, because the limit
-    /// is ultimately bounded by network round trips. This instead pulls the
-    /// whole collection once, so a playlist you have opened before scrolls with
-    /// no placeholders at all — the images are already local.
-    ///
-    /// Row variants are a few KB each, so a 500-song playlist costs single-digit
-    /// MB against `CacheManager.imageCacheLimit` (2 GB). Unlike the windowed
-    /// path this is deliberately *not* clamped by `adjustedLimit`; it runs at
-    /// low priority with its own small concurrency budget instead.
-    ///
-    /// The URL derivation runs off the main actor. Building one URL per song,
-    /// rewriting each to the variant and deduping them is O(playlist) string
-    /// work, and it used to run on the main actor at exactly the moment a
-    /// playlist's song list arrived from the network — a device probe on
-    /// 2026-08-03 measured 58–100ms there, reproducibly, about 1.6s after every
-    /// playlist open. It touches only Sendable value types and the nonisolated
-    /// `ArtworkURLBuilder`, so only the prefetch kick-off needs the main actor.
     func warmCollection(
         songs: [Song],
         reason: String,
@@ -141,9 +103,6 @@ final class ArtworkPrefetcher {
             }
         }
     }
-
-    /// Stays synchronous: a handful of playlists is nowhere near the cost that
-    /// made the song path worth moving, and hopping actors would only delay it.
     func warmCollection(
         playlists: [Playlist],
         reason: String,
@@ -156,8 +115,6 @@ final class ArtworkPrefetcher {
             .filter { seen.insert($0.absoluteString).inserted }
         startWarm(urls: unique, reason: reason, request: request)
     }
-
-    /// Cancels any warm already running for `reason` and claims the slot.
     private func beginWarmRequest(reason: String) -> Int {
         warmTokens.removeValue(forKey: reason)?.cancel()
         let next = (warmRequests[reason] ?? 0) + 1
@@ -176,11 +133,7 @@ final class ArtworkPrefetcher {
     }
 
     private func startWarm(urls: [URL], reason: String, request: Int) {
-        // A newer warm for the same reason superseded this one while its URLs
-        // were being derived; installing a token now would leak past its cancel.
         guard warmRequests[reason] == request else { return }
-        // Deliberately still on the main actor: ArtworkFailureBackoff is
-        // main-isolated, and these are dictionary lookups, not string building.
         let unique = urls.filter { !ArtworkFailureBackoff.shared.isBlocked($0) }
         guard !unique.isEmpty else { return }
 
@@ -206,11 +159,6 @@ final class ArtworkPrefetcher {
 
     func cancelWarm(reason: String) {
         warmTokens.removeValue(forKey: reason)?.cancel()
-        // Bump the generation too. Without this a derivation still running off
-        // the actor passes the `warmRequests[reason] == request` check in
-        // startWarm and installs a token *after* the cancel — so a pop-back
-        // during the 58-100ms derivation left the whole-playlist warm running
-        // past teardown, which is exactly what the cancel exists to prevent.
         warmRequests[reason] = (warmRequests[reason] ?? 0) + 1
     }
 
@@ -227,9 +175,6 @@ final class ArtworkPrefetcher {
             variant: variant
         )
     }
-
-    // nonisolated: pure derivation over Sendable value types, so warmCollection
-    // can run it off the main actor.
     nonisolated fileprivate static func urls(
         for songs: [Song],
         variant: ArtworkImageVariant
@@ -341,21 +286,6 @@ final class ArtworkPrefetcher {
             recentlyRequested.removeValue(forKey: key)
         }
     }
-
-    /// Caps the prefetch window so warming artwork can't starve an active
-    /// download queue or playback.
-    ///
-    /// The tiering is deliberate and stays: downloads matter more than artwork,
-    /// and playback matters more than scroll polish. The ceilings were 2/4/8,
-    /// which is why placeholders lingered during a fast flick — a window of 4
-    /// (the common case, since something is usually playing) is roughly one
-    /// screen of rows, so any real scrolling outran it immediately.
-    ///
-    /// Raised to 6/12/24. Prefetch also decodes now (see
-    /// `ImageCacheConfig.prefetchContext`), so this costs more CPU per image
-    /// than it used to; `maxConcurrentPrefetchCount` (3) still bounds the
-    /// parallelism. If scrolling during playback ever feels less smooth than
-    /// before, the playing tier is the first number to pull back.
     private func adjustedLimit(_ limit: Int, reason: String) -> Int {
         guard limit > 0 else { return 0 }
         if DownloadManager.shared.hasActiveQueue {

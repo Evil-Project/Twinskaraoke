@@ -90,8 +90,6 @@ struct RadioQueueView: View {
                 .refreshable {
                     AppHaptic.selection.play()
                     await radio.refresh()
-                    // Branch on the outcome rather than always claiming success,
-                    // matching `RadioView.retryRadioRefresh()`.
                     if radio.refreshErrorMessage != nil {
                         AppHaptic.error.play()
                     } else {
@@ -231,12 +229,6 @@ struct RadioQueueView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom))
     }
 }
-
-/// Row identity for the radio queue history list. The offset keeps IDs unique
-/// when the same song appears twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The song ID makes the ID change when a poll prepends new
-/// items: with purely positional identity every row keeps its old view, so
-/// all visible artwork flashes back through placeholders on each track change.
 private struct PositionedRadioQueueHistoryItem: Identifiable {
     struct ID: Hashable {
         let offset: Int

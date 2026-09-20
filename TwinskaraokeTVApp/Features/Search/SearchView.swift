@@ -8,12 +8,8 @@ struct SearchView: View {
     @State private var songToAdd: Song?
 
     var body: some View {
-        // @Observable models expose bindings through @Bindable rather than the
-        // old $viewModel projection.
         @Bindable var viewModel = viewModel
         return NavigationStack {
-            // See `LibraryView`: the tab bar labels this screen, and a tvOS nav
-            // title floats over the scroll content instead of reserving space.
             content
                 .searchable(text: $viewModel.searchText, prompt: "Songs, artists")
         }
@@ -48,11 +44,7 @@ struct SearchView: View {
 
     private var resultsList: some View {
         ScrollView {
-            // Matches `PlaylistDetailView`: clearance for the focus pill's lift.
             LazyVStack(spacing: 16) {
-                // Keyed by position, not result id — see `PlaylistDetailView`.
-                // Results can repeat an item across sources, and positional
-                // identity also keeps focus put as the query is refined.
                 ForEach(Array(viewModel.resolvedResults.enumerated()), id: \.offset) { index, result in
                     let song = result.song
                     let isCurrent = song.map { audioManager.currentSong?.id == $0.id } ?? false
@@ -66,8 +58,6 @@ struct SearchView: View {
                         onPlay(song, viewModel.playableSongs)
                     }
                     .disabled(song == nil)
-                    // Only real catalog songs: an unplayable oss-only result
-                    // has no song the server would accept into a playlist.
                     .contextMenu {
                         if let song {
                             TVAddToPlaylistMenuButton(song: song, selection: $songToAdd)
@@ -82,8 +72,6 @@ struct SearchView: View {
 }
 
 private extension SearchSongItem {
-    /// A non-playable display stand-in for oss-only / unplayable results so the
-    /// row still renders title and artwork while being disabled.
     var asDisplaySong: Song {
         Song(
             id: id,

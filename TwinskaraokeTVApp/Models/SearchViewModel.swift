@@ -1,8 +1,5 @@
 import Foundation
 import Observation
-
-/// A search result paired with its playable Song, resolved once per results
-/// change so rows don't re-run `toSong()` on every body evaluation.
 struct TVSearchResult: Identifiable {
     let item: SearchSongItem
     let song: Song?
@@ -31,10 +28,6 @@ final class SearchViewModel {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var lastDispatchedQuery = ""
-
-    /// Replaces the former `$searchText.debounce().removeDuplicates()` pipeline:
-    /// `@Observable` has no publisher projection, so the 400ms coalescing and
-    /// the duplicate-query suppression are done here instead.
     private func scheduleSearch() {
         searchDebounceTask?.cancel()
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)

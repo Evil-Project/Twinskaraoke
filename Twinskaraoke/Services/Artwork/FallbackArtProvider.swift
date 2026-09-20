@@ -6,14 +6,6 @@ nonisolated struct FallbackArt {
     let artistName: String?
     let artistLink: String?
 }
-
-/// Main-actor change signal for `FallbackArtProvider`.
-///
-/// The provider itself stays non-observable: it is `nonisolated`, mutates its
-/// pool under an `NSLock` from background URLSession callbacks, and
-/// `@Observable` gives no thread safety for that. It used to broadcast through
-/// `objectWillChange.send()`; observers now watch this counter instead, which
-/// is only ever bumped on the main actor.
 @MainActor
 @Observable
 final class FallbackArtRevision {
@@ -22,9 +14,6 @@ final class FallbackArtRevision {
     private(set) var revision: UInt64 = 0
 
     private init() {}
-
-    /// Callable from the provider's background URLSession callbacks; the
-    /// counter itself is only ever written on the main actor.
     nonisolated static func bump() {
         Task { @MainActor in
             shared.revision &+= 1
@@ -103,8 +92,6 @@ final nonisolated class FallbackArtProvider: @unchecked Sendable {
         guard let data = try? JSONEncoder().encode(Array(pool.prefix(targetPoolSize))) else { return }
         UserDefaults.standard.set(data, forKey: persistedPoolKey)
     }
-
-    // Collects results from concurrent fetch callbacks; guarded by syncQueue.
     private final class ItemCollector: @unchecked Sendable {
         var items: [FallbackArtItem] = []
     }

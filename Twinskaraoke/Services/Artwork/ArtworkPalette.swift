@@ -26,14 +26,7 @@ nonisolated struct ArtworkPalette: Equatable {
     #if canImport(UIKit)
         init(image: UIImage) {
             let samples = ArtworkPalette.dominantColors(image: image, count: 4)
-            // Non-empty by construction: the placeholder supplies four colors.
             let safe = samples.isEmpty ? Self.placeholder.allColors() : samples
-            // Cycle rather than concatenating a fixed number of copies.
-            // `safe + safe + safe` only reaches four entries when `safe` holds
-            // at least two colors, and a near-monochrome cover (or one whose
-            // top buckets all collapse under the dedup filter in
-            // dominantColors) can yield exactly one — leaving the fourth
-            // subscript out of range.
             var arr: [UIColor] = []
             arr.reserveCapacity(4)
             while arr.count < 4 {
@@ -54,15 +47,6 @@ nonisolated struct ArtworkPalette: Equatable {
             let size = CGSize(width: 32, height: 32)
             let width = Int(size.width)
             let height = Int(size.height)
-            // Draw into a context whose layout we chose, rather than sampling
-            // whatever one of the UIKit convenience renderers happened to
-            // produce. Neither `UIGraphicsBeginImageContextWithOptions` nor
-            // `UIGraphicsImageRenderer` promises a channel order, and on iOS
-            // both hand back BGRA — so the byte walk below, which reads the
-            // first three bytes as R, G and B, was returning every palette with
-            // red and blue exchanged. `premultipliedLast | byteOrder32Big` is
-            // RGBA, and sRGB at 8 bits per component keeps the offsets honest
-            // on wide-gamut displays.
             guard let space = CGColorSpace(name: CGColorSpace.sRGB),
                   let context = CGContext(
                       data: nil,
@@ -76,9 +60,6 @@ nonisolated struct ArtworkPalette: Equatable {
                   )
             else { return [] }
             UIGraphicsPushContext(context)
-            // Drawn without the UIKit flip, so this lands vertically mirrored.
-            // Irrelevant: what follows is a histogram over every sampled pixel,
-            // and it does not care where any of them sat.
             image.draw(in: CGRect(origin: .zero, size: size))
             UIGraphicsPopContext()
             guard let base = context.data else { return [] }

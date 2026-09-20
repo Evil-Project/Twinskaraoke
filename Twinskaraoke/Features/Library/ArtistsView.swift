@@ -413,6 +413,7 @@ private struct ArtistDetailStateView: View {
         }
         .accessibilityElement(children: .contain)
     }
+
 }
 
 private struct ArtistDetailHintRow: View {

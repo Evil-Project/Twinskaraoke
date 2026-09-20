@@ -21,8 +21,6 @@ enum AppearanceMode: String, CaseIterable {
         case .system: nil
         case .light: .light
         case .dark: .dark
-        // Nwero keeps Dark's exact palette; it only swaps opaque screen
-        // fills for the animated Aurora backdrop underneath every page.
         case .nwero: .dark
         }
     }
@@ -30,20 +28,10 @@ enum AppearanceMode: String, CaseIterable {
     var usesAuroraBackground: Bool {
         self == .nwero
     }
-
-    /// Experimental themes are hidden from the theme picker unless the
-    /// person has turned on Settings > Experiments > Experimental Themes.
     var isExperimental: Bool {
         self == .nwero
     }
 }
-
-/// Drop-in replacement for a flat screen background color. On every theme
-/// except Nwero it renders the normal opaque background; on Nwero it goes
-/// fully clear so the animated Aurora backdrop (mounted once at the app
-/// root) shows through on every screen. Because this reads `nk.appearance`
-/// via `@AppStorage`, any mounted instance re-renders the moment the theme
-/// picker changes, so every tab picks up the new look without a relaunch.
 struct ScreenBackgroundFill: View {
     enum Style {
         case standard
@@ -61,10 +49,6 @@ struct ScreenBackgroundFill: View {
     var body: some View {
         Group {
             if isNwero {
-                // Each screen gets its own real, opaquely-drawn Aurora
-                // backdrop (not a see-through trick) so NavigationStack/
-                // TabView can composite transitions normally. See the note
-                // on NweroAuroraBackdrop.
                 NweroAuroraBackdrop()
             } else if style == .grouped {
                 Color.appGroupedBackground
@@ -132,11 +116,6 @@ nonisolated extension Color {
             light: UIColor.black.withAlphaComponent(0.08),
             dark: UIColor.white.withAlphaComponent(0.16)
         )
-        /// The circle under the player's round actions — favorite, more, the
-        /// lyrics-header chevron and the queue-mode badge. A shade deeper than
-        /// `appControlInactiveFill`, which washed out against the artwork
-        /// ambience; Apple Music's reads as a darker grey than the surface it
-        /// sits on rather than a light film over it.
         static let appPlayerActionFill = adaptive(
             light: UIColor.black.withAlphaComponent(0.12),
             dark: UIColor.white.withAlphaComponent(0.10)
@@ -261,10 +240,6 @@ enum AM {
         static let wideContentMaxWidth: CGFloat = 1180
         static let wideRailMaxWidth: CGFloat = 740
         static let wideInspectorWidth: CGFloat = 340
-        /// A 13-inch iPad is 1376pt wide in landscape. Its balanced sidebar
-        /// consumes 330pt, leaving a 1046pt detail canvas; using the former
-        /// 1050pt threshold for both shell and content meant the largest iPad
-        /// opened a sidebar and then missed every wide content layout by 4pt.
         static let wideCanvasMinimumWidth: CGFloat = 980
         static let sidebarMinimumWidth: CGFloat = 1050
 
@@ -288,9 +263,6 @@ enum AM {
         ) -> Bool {
             guard horizontalSizeClass == .regular else { return false }
             #if canImport(UIKit)
-                // Mac idiom windows keep desktop navigation even when resized
-                // below the iPad sidebar threshold. Falling back to a tab bar
-                // here is a platform regression, not an adaptive layout.
                 if UIDevice.current.userInterfaceIdiom == .mac {
                     return true
                 }
@@ -425,20 +397,9 @@ extension View {
     func musicScreenBackground() -> some View {
         background(ScreenBackgroundFill(style: .standard))
     }
-
-    /// Same as `musicScreenBackground()` but matches `.insetGrouped` List
-    /// screens (Settings, Account, Notifications) that otherwise paint
-    /// `Color.appGroupedBackground` directly.
     func groupedScreenBackground() -> some View {
         background(ScreenBackgroundFill(style: .grouped))
     }
-
-    /// Search on a screen whose subject is the list, not the searching: the
-    /// field collapses to a toolbar button until tapped, so the content keeps
-    /// the room.
-    ///
-    /// The Search tab deliberately does not use this. Its field stays expanded,
-    /// because searching is the whole point of that screen.
     func secondarySearchBehavior() -> some View {
         searchToolbarBehavior(.minimize)
     }
@@ -491,12 +452,6 @@ struct AccountToolbarButton: View {
                 ToolbarIconLabel(systemImage: "person.fill")
             }
         }
-        // Note this may not fire: SwiftUI substitutes its own button style
-        // inside a `ToolbarItem` and discards the custom style's feedback with
-        // it. Declared anyway because it costs nothing and works wherever the
-        // style *is* honoured — a tap gesture here would be worse, since one
-        // attached to a NavigationLink can win arbitration and eat the
-        // navigation entirely.
         .buttonStyle(PressableButtonStyle(scale: 0.92, dim: 0.78, haptic: .selection))
         .accessibilityIdentifier("AccountToolbarButton")
         .accessibilityLabel(accessibilityLabel)

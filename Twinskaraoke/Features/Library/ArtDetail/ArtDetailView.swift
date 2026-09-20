@@ -105,9 +105,6 @@ struct ArtDetailView: View {
         saveGeneration &+= 1
         let generation = saveGeneration
         #if canImport(UIKit)
-            // Reuse whatever SDWebImage already has (memory first, then disk)
-            // and only hit the network on a real miss — the full-res variant
-            // is usually cached from the detail view's own load.
             SDWebImageManager.shared.loadImage(
                 with: url,
                 options: [],
@@ -144,8 +141,6 @@ struct ArtDetailView: View {
     #endif
 
     private func resetSaveStatusLater(generation: Int) {
-        // A second save may start before this timer fires; only reset the
-        // status that belongs to this save cycle.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             guard saveGeneration == generation else { return }
             saveStatus = .idle

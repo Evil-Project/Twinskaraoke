@@ -1,14 +1,6 @@
 import Compression
 import Darwin
 import Foundation
-
-/// A minimal, dependency-free ZIP reader. iOS has no built-in ZIP archive
-/// API, and this project doesn't otherwise depend on a third-party archiving
-/// library, so this implements just enough of the format to extract the
-/// Shimeji resource pack: reading the central directory, then STORE (0) or
-/// DEFLATE (8) compressed entries. It does not handle encryption, zip64, or
-/// multi-part archives — the resource pack is built with plain `zip`, which
-/// doesn't need any of those.
 nonisolated enum ShimejiZipReader {
     nonisolated enum ZipError: Error {
         case notAZip
@@ -83,8 +75,6 @@ nonisolated enum ShimejiZipReader {
         }
     }
 
-    // MARK: - Central directory parsing
-
     private nonisolated struct Entry {
         let path: String
         let compressionMethod: UInt16
@@ -95,15 +85,10 @@ nonisolated enum ShimejiZipReader {
     }
 
     private static func readCentralDirectory(_ data: Data) throws -> [Entry] {
-        // Locate the End Of Central Directory record by scanning backward for
-        // its signature. The comment field (rarely used, but variable length)
-        // means we can't assume a fixed offset from the end of the file.
         let eocdSignature: [UInt8] = [0x50, 0x4B, 0x05, 0x06]
         guard let eocdOffset = lastRange(of: eocdSignature, in: data) else {
             throw ZipError.notAZip
         }
-
-        // Standard EOCD record is at least 22 bytes long
         guard eocdOffset + 22 <= data.count else {
             throw ZipError.corruptArchive
         }
@@ -133,7 +118,6 @@ nonisolated enum ShimejiZipReader {
         var cursor = centralDirOffset
 
         for _ in 0 ..< totalEntries {
-            // Minimum Central Directory Header size is 46 bytes
             guard cursor + 46 <= data.count else { throw ZipError.corruptArchive }
             guard try u32(cursor) == 0x02014B50 else { throw ZipError.corruptArchive }
 
@@ -207,11 +191,6 @@ nonisolated enum ShimejiZipReader {
             throw ZipError.unsupportedCompressionMethod(entry.compressionMethod)
         }
     }
-
-    /// Decompresses a raw DEFLATE stream (RFC 1951 — no zlib/gzip wrapper).
-    /// Despite the name, Apple's Compression framework's `COMPRESSION_ZLIB`
-    /// algorithm operates on raw deflate data, which is exactly what ZIP's
-    /// method-8 entries contain.
     private static func inflateRaw(_ compressed: Data, uncompressedSize: Int) throws -> Data {
         guard uncompressedSize > 0 else { return Data() }
         guard !compressed.isEmpty else { throw ZipError.decompressionFailed }

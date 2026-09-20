@@ -1,8 +1,4 @@
 import SwiftUI
-
-/// Toolbar account button contents: the user's avatar once signed in, falling
-/// back to the system person glyph. Kept small and circular so it reads as an
-/// avatar rather than another toolbar action.
 struct AccountToolbarIcon: View {
     let auth: MacAuthManager
 

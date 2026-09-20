@@ -87,13 +87,6 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   let coverArtists: [String]?
   let userUploaded: Bool?
   let oss: String?
-  /// The song's position within the playlist or favorites list it came from.
-  ///
-  /// Carried per song rather than expressed by the array: `/api/playlist/{id}`
-  /// returns `songListDTOs` in insertion order and leaves the user's ordering
-  /// here, so it has to be applied on read — see
-  /// `KaraokeAPIClient.applyingPersistedOrder`. Nil for payloads that have no
-  /// ordering of their own (search results, uploads, catalog lookups).
   let order: Int?
 
   enum CodingKeys: String, CodingKey {
@@ -200,9 +193,6 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
       userUploaded: userUploaded
     )
   }
-
-  /// A copy carrying a different position, for payloads that keep the ordering
-  /// beside the song rather than on it (see `FavoriteSongEnvelope`).
   func settingOrder(_ order: Int?) -> Song {
     Song(
       id: id,
@@ -277,12 +267,6 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
       coverArtists: Self.preferredArtists(coverArtists, fallback: canonical.coverArtists),
       userUploaded: userUploaded ?? canonical.userUploaded,
       oss: Self.preferredString(oss, fallback: canonical.oss),
-      // Keep the position. `order` describes where this song sits in the list
-      // it arrived in, so the canonical copy — fetched from a different route
-      // with no such context — must not overwrite it, only fill it in.
-      // Dropping it here silently reverted every hydrated song to `nil` and
-      // made reordering fall back to row indices, which are only correct while
-      // the server's numbering happens to be dense.
       order: order ?? canonical.order
     )
   }
@@ -354,9 +338,6 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
   }
 
   var artistName: String {
-    // decodeArtists can yield a non-nil empty array ("coverArtists": []), and
-    // directly constructed songs can carry whitespace-only entries, so filter
-    // blanks and fall back like displayArtist instead of returning "".
     let originals = originalArtists?.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? []
     if !originals.isEmpty {
       return originals.joined(separator: ", ")
@@ -377,10 +358,6 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     let s = duration % 60
     return String(format: "%d:%02d", m, s)
   }
-
-  /// Identity-based equality: two `Song` values are equal when they share an
-  /// `id`, even if their metadata (title, artists, artwork, …) differs. Do not
-  /// use `==` to detect metadata changes between two instances.
   static func == (lhs: Song, rhs: Song) -> Bool { lhs.id == rhs.id }
 
   private static func decodeString(
@@ -618,10 +595,6 @@ nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
   var songCountText: String {
     SongCountText.songs(songCount)
   }
-
-  /// Identity-based equality and hashing: two `Playlist` values are equal (and
-  /// hash the same) when they share an `id`, even if their metadata differs.
-  /// Do not use `==` to detect metadata changes between two instances.
   static func == (lhs: Playlist, rhs: Playlist) -> Bool { lhs.id == rhs.id }
 
   func hash(into hasher: inout Hasher) {
@@ -809,8 +782,6 @@ nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {
   }
 
   func toSong() -> Song? {
-    // Oss-only uploads have no absolutePath; mirror Song.audioURL's fallback
-    // chain and accept the item when either source yields a playable URL.
     let song = Song(
       id: id,
       title: title,
@@ -847,13 +818,6 @@ nonisolated struct FavoriteSongEnvelope: Decodable, Sendable {
       (try? container.decode(Song.self, forKey: .song))
       ?? (try? container.decode(Song.self, forKey: .songData))
       ?? (try? container.decode(Song.self, forKey: .songDTO))
-
-    // The favorites ordering lives on the *envelope*, not on the song inside
-    // it. The nested song carries an `order` of its own that refers to some
-    // playlist it belongs to and is unrelated here — the first favorite in the
-    // list came back with a nested `order` of 0 while the envelope said 0, and
-    // further down the two diverge entirely. Lifting the envelope's value onto
-    // the song is what makes a favorite's position readable at all.
     let envelopeOrder = try? container.decodeIfPresent(Int.self, forKey: .order)
     song = decodedSong.map { $0.settingOrder(envelopeOrder) }
   }
@@ -888,10 +852,6 @@ nonisolated enum SongPayloadDecoder {
   static func decodeSongs(from data: Data?) -> [Song]? {
     guard let data else { return nil }
     let decoder = JSONDecoder()
-
-    // A payload matching a known shape but containing no songs is a valid
-    // empty list (e.g. an empty uploads library), not a decode failure;
-    // nil is reserved for payloads where no shape matched at all.
     if let wrapped = try? decoder.decode(SongArrayContainer.self, from: data) {
       return wrapped.songs
     }

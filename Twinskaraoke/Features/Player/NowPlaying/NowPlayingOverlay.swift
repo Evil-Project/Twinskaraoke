@@ -1,51 +1,10 @@
 import SwiftUI
-
-/// Presents the full-screen player above the whole app, and owns the gesture
-/// that dismisses it.
-///
-/// It is an overlay rather than a `fullScreenCover` because the dismissal has
-/// to be finger-tracked, and a modal presentation's transition is not ours to
-/// drive. It is a sibling of the app shell rather than a child of any screen
-/// because it has to cover the tab bar.
-///
-/// The gesture is attached with plain `.gesture(_:)`, and that is a deliberate
-/// choice rather than an incidental one. SwiftUI resolves a child's gesture
-/// before its container's, so the scrubber in `AppleMusicProgressBar`, the
-/// volume row, and the lyrics and queue scroll views all keep their own drags,
-/// while every other point on the player belongs to this. `simultaneousGesture`
-/// would let this run *alongside* the scrubber and drag the player while
-/// someone is trying to seek; `highPriorityGesture` would take the scrubber
-/// away entirely.
-///
-/// That single line is what the library this replaces spent its gesture layer
-/// trying to achieve. Because it was retrofitting onto view trees it did not
-/// own, it had to negotiate: declare a failure requirement against every other
-/// recognizer in the content, then graft its own handler onto whichever of
-/// those recognizers it could find at open-time. When the graft missed — and
-/// against SwiftUI's recognizers it always missed, because the handler
-/// string-matched for `UIScrollView` — both paths went dead and the player
-/// simply stopped responding to downward drags. We own this view tree, so
-/// there is nothing to negotiate with.
 struct NowPlayingOverlay: View {
     @Environment(\.appReduceMotion) private var reduceMotion
-
-    /// The window's real safe-area insets, handed down from `PopupHostView`.
-    ///
-    /// They cannot be read from in here: this view ignores the safe area so the
-    /// player can draw under the status bar and the home indicator, and a
-    /// `GeometryReader` nested inside a region that has already ignored it
-    /// reports zero. Measured on device — `size=402x874 safeTop=0 safeBottom=0`
-    /// — which silently pushed `PlayerLayoutMetrics.contentHeight` from 781 to
-    /// 874, past its 760pt `isCompactHeight` breakpoint, and made every font on
-    /// the player a step too large.
     let safeAreaInsets: EdgeInsets
 
     private let presentation = NowPlayingPresentation.shared
     private let snapshot = NowPlayingSnapshotState.shared
-
-    /// Upward give at the top of the travel, kept local because it is purely
-    /// cosmetic — nothing outside this view has any use for "the player is
-    /// 12pt higher than open".
     @State private var overshoot: CGFloat = 0
     @State private var canvasSize: CGSize = .zero
     @State private var closingTransition: PlayerClosingGeometry.Transition?
@@ -105,11 +64,6 @@ struct NowPlayingOverlay: View {
                     .gesture(dismissDrag(height: height))
             }
         }
-        // Outside the reader, so the reader's region is the whole window: the
-        // player draws under the status bar and the home indicator, and its own
-        // `GeometryReader` still reports the real insets to lay its content out
-        // against. `FullScreenPlayerView` pads by `safeAreaInsets` internally
-        // and would collide with both if it were handed a safe-area-sized frame.
         .ignoresSafeArea()
         .onGeometryChange(for: CGSize.self) { $0.size } action: { canvasSize = $0 }
         // Keep the mini player's active opening gesture in its original host.
@@ -119,19 +73,6 @@ struct NowPlayingOverlay: View {
         // player is still in the accessibility tree, and would otherwise sit
         // there as a screenful of focusable controls behind the app.
         .accessibilityHidden(!presentation.isPresenting)
-        // The player has nothing to show once the song is gone — playback
-        // cleared, queue emptied. Animating it away would be animating an
-        // empty screen, since `FullScreenPlayerView` renders nothing without a
-        // current song.
-        // The transition is performed here, in the tree that actually moves, so
-        // it animates no matter which view asked for it — `MiniPlayerBar` lives
-        // in the tab bar's accessory slot and its transactions do not reach us.
-        //
-        // Scoped to one update per transition rather than declared over the
-        // subtree with `.animation(_:value:)`: that fired every frame of a drag
-        // with a nil animation and interrupted the scrub bar's own fill
-        // animation, which juddered while the player was dragged during
-        // playback.
         .onChange(of: presentation.animationToken) { _, _ in
             withTransaction(Transaction(animation: nil)) {
                 closingTransition = nil
@@ -177,8 +118,6 @@ struct NowPlayingOverlay: View {
         }
     }
 
-    // MARK: - The artwork in flight
-
     @ViewBuilder
     private func artworkMorph(surfaceOffset: CGFloat) -> some View {
         if presentation.isMorphingArtwork, !presentation.isSettlingArtwork,
@@ -213,7 +152,6 @@ struct NowPlayingOverlay: View {
                     overshoot = 0
                     presentation.drag(to: PlayerDismissMetrics.progress(forOffset: travel, height: height), from: .fullPlayer)
                 } else {
-                    // Already fully open; the give is all there is above it.
                     overshoot = travel
                     presentation.drag(to: 1, from: .fullPlayer)
                 }

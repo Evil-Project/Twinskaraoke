@@ -4,16 +4,6 @@ import SwiftUI
 #if canImport(UIKit)
     import UIKit
 #endif
-
-/// A coalesced view of `AudioPlayerManager` for the mini player to read.
-///
-/// The bar is on screen for most of a session and sits above every scroll view
-/// in the app, so it must not rebuild on every tick of the underlying manager.
-/// This collects the four fields the bar actually shows, republishes them at
-/// most once per frame-and-a-bit, and drops any rebuild that produced the same
-/// values — which is why the per-property `removeDuplicates` this replaced is
-/// not needed: an identical snapshot never reaches the property that observers
-/// are watching.
 @MainActor
 @Observable
 final class NowPlayingSnapshotState {

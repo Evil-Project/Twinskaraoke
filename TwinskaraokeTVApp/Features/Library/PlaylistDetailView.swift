@@ -24,15 +24,8 @@ struct PlaylistDetailView: View {
             .padding(.horizontal, 80)
             .padding(.vertical, 40)
         }
-        // No `.navigationTitle` here on purpose: the 56pt name in `header` is
-        // the title for this screen, and setting both renders the playlist name
-        // twice, with the nav-bar copy sliding around during the push
-        // transition and on scroll.
         .onAppear {
             viewModel.fetchSongs()
-            // The removal item is gated on this list; without the warm-up it
-            // stays hidden when the playlist was opened from the Library tab
-            // rather than the Playlists tab.
             userPlaylists.loadIfNeeded()
         }
         .addToPlaylistSheet(song: $songToAdd)
@@ -89,8 +82,6 @@ struct PlaylistDetailView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, minHeight: 400)
         } else if viewModel.songs.isEmpty {
-            // A playlist created on this Apple TV starts empty, so this is a
-            // state users reach immediately rather than an edge case.
             TVEmptyState(
                 systemImage: "music.note.list",
                 title: String(localized: "No songs yet"),
@@ -98,23 +89,13 @@ struct PlaylistDetailView: View {
             )
             .frame(height: 400)
         } else {
-            // Enough gap for the focus pill, which scales slightly past the
-            // row's own bounds — at a tighter spacing it laps onto the artwork
-            // of the rows either side.
             LazyVStack(spacing: 16) {
-                // Keyed by position, not song id: a playlist may legitimately
-                // list the same song twice, and duplicate SwiftUI identities
-                // drop or mis-animate rows.
                 ForEach(Array(viewModel.songs.enumerated()), id: \.offset) { index, song in
                     row(for: song, at: index)
                 }
             }
         }
     }
-
-    /// Long-pressing the remote's select button opens the context menu. Adding
-    /// to another playlist works anywhere; removing is offered only on the
-    /// user's own playlists — a curated one isn't theirs to edit.
     private func row(for song: Song, at index: Int) -> some View {
         let isCurrent = audioManager.currentSong?.id == song.id
         return TVSongRow(
@@ -136,8 +117,6 @@ struct PlaylistDetailView: View {
                 }
             }
         }
-        // Built as one set so the removal action is *absent* on a playlist the
-        // user can't edit, rather than present and silently doing nothing.
         .accessibilityActions {
             Button("Add to Playlist") {
                 songToAdd = song
@@ -149,12 +128,6 @@ struct PlaylistDetailView: View {
             }
         }
     }
-
-    /// Membership in `/api/user/playlists` is the whole ownership test. The
-    /// payload's `editable`/`deletable` flags are not usable: the server
-    /// returns false for both even on playlists the signed-in user created.
-    /// `isPersonal` is only set on the instances `PlaylistsView` builds, so it
-    /// would hide the action on the same playlist opened from the Library tab.
     private var canRemoveSongs: Bool {
         guard playlist.id != Playlist.favoritesID else { return false }
         return userPlaylists.playlists.contains { $0.id == playlist.id }

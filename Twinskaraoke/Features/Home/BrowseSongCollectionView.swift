@@ -123,8 +123,6 @@ struct BrowseSongCollectionView: View {
     @ViewBuilder
     private var heroArtwork: some View {
         let heroSong = songs.first(where: { $0.hasOwnArtwork })
-        // The random fallback is picked once per collection; drawing it in
-        // `body` directly would swap the hero image on every re-render.
         let artURL = heroSong?.imageURL ?? fallbackHeroURL
         RemoteArtworkImage(url: artURL, cornerRadius: 0, contentMode: .fill, lowResURL: heroSong?.thumbnailURL)
             .onAppear {

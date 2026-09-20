@@ -2,9 +2,6 @@ import SwiftUI
 
 #if canImport(UIKit)
     import UIKit
-
-    /// Tiny in-memory cache so scrubbing through an action's frames doesn't
-    /// re-read the same handful of small PNGs from disk every cycle.
     private final class ShimejiImageCache {
         static let shared = ShimejiImageCache()
         private let cache = NSCache<NSString, UIImage>()
@@ -33,10 +30,6 @@ import SwiftUI
                 .scaledToFit()
                 .frame(width: displaySize, height: displaySize)
                 .scaleEffect(x: instance.facingRight ? -1 : 1, y: 1)
-                // instance.position tracks the sprite's feet (what the physics
-                // sim rests on the floor), but .position() centers a view at
-                // the given point — offset up by half the frame so the feet,
-                // not the center, land on the floor surface.
                 .position(x: instance.position.x, y: instance.position.y - displaySize / 2)
                 .accessibilityHidden(true)
                 .gesture(dragGesture)

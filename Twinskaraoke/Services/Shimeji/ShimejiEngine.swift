@@ -6,10 +6,6 @@ import Observation
 #if canImport(UIKit)
     import UIKit
 #endif
-
-/// One on-screen creature. Position/animation state live here; the engine
-/// owns the shared physics tick, `ShimejiSpriteView` just renders whatever
-/// this currently says.
 @Observable
 final class ShimejiInstance: Identifiable {
     enum Motion {
@@ -36,13 +32,7 @@ final class ShimejiInstance: Identifiable {
     var stateTimer: Double = 0
     var frameTimer: Double = 0
     var climbingOnLeftEdge = false
-
-    /// Set true while a drag gesture owns this instance's position; the
-    /// physics tick skips motion updates (but keeps animating) until released.
     var isDragHeld = false
-
-    /// Tracks recent drag motion so a release can carry it forward as real
-    /// throw momentum instead of just dropping straight down.
     var lastDragSample: (point: CGPoint, time: CFTimeInterval)?
     var dragVelocity: CGPoint = .zero
 
@@ -50,9 +40,6 @@ final class ShimejiInstance: Identifiable {
         self.character = character
         self.position = position
     }
-
-    /// Frames for the current action, falling back to "stand" if this
-    /// character's pack doesn't define a pose for it (e.g. no "sit").
     var currentFrames: [String] {
         (character.action(action) ?? character.action(.stand))?.frames ?? []
     }
@@ -61,11 +48,6 @@ final class ShimejiInstance: Identifiable {
         (character.action(action) ?? character.action(.stand))?.frameDuration ?? 0.2
     }
 }
-
-/// Drives every on-screen Shimeji: spawn/despawn, the shared physics/AI tick,
-/// and drag interaction. One instance lives for the app's lifetime.
-/// Drives every on-screen Shimeji: spawn/despawn, the shared physics/AI tick,
-/// and drag interaction. One instance lives for the app's lifetime.
 @MainActor
 @Observable
 final class ShimejiEngine: NSObject {
@@ -76,10 +58,6 @@ final class ShimejiEngine: NSObject {
 
     private(set) var instances: [ShimejiInstance] = []
     var bounds: CGRect = .zero
-
-    /// The app's actual tab bar top edge, in the same coordinate space as
-    /// `bounds`, kept fresh by `ShimejiOverlayController`'s periodic poll of
-    /// the live `UITabBar`. Nil when there's no tab bar to find.
     var navBarY: CGFloat?
 
     private var displayLink: CADisplayLink?
@@ -97,8 +75,6 @@ final class ShimejiEngine: NSObject {
     private var allowClimbing: Bool {
         (UserDefaults.standard.object(forKey: "nk.shimeji.canClimb") as? Bool) ?? true
     }
-
-    // MARK: - Mini player floor
 
     private(set) var hasMiniPlayer: Bool = false {
         didSet {
@@ -129,9 +105,6 @@ final class ShimejiEngine: NSObject {
     }
 
     private func observePlaybackState() {
-        // The guarded assignments below replace `removeDuplicates`: only the
-        // presence of a song matters here, so most `currentSong` changes are
-        // no-ops for the overlay and must not restart its animation.
         playbackObservation = observeContinuously({
             _ = AudioPlayerManager.shared.currentSong
             _ = NowPlayingPresentation.shared.isExpanded
@@ -147,8 +120,6 @@ final class ShimejiEngine: NSObject {
         let isExpanded = NowPlayingPresentation.shared.isExpanded
         if isNowPlayingOpen != isExpanded { isNowPlayingOpen = isExpanded }
     }
-
-    // MARK: - Lifecycle
 
     func start(manifest: ShimejiManifest) {
         guard displayLink == nil else { return }
@@ -180,8 +151,6 @@ final class ShimejiEngine: NSObject {
             return ShimejiInstance(character: character, position: CGPoint(x: x, y: bounds.minY))
         }
     }
-
-    // MARK: - Drag interaction
 
     func beginDrag(_ instance: ShimejiInstance) {
         instance.isDragHeld = true
@@ -217,8 +186,6 @@ final class ShimejiEngine: NSObject {
         instance.lastDragSample = nil
         instance.action = .fall
     }
-
-    // MARK: - Physics tick
 
     @objc private func tick(_ link: CADisplayLink) {
         let dt = min(1.0 / 30.0, link.timestamp - (lastTimestamp ?? link.timestamp))
@@ -372,9 +339,6 @@ final class ShimejiEngine: NSObject {
             }
         }
     }
-
-    /// The screen bottom — when Now Playing is expanded, bypass navBarY so
-    /// Shimejis fall past the nav bar all the way to bounds.maxY.
     private var groundY: CGFloat {
         if isNowPlayingOpen {
             return bounds.maxY
@@ -392,22 +356,17 @@ final class ShimejiEngine: NSObject {
     private func isStillSupported(_ instance: ShimejiInstance) -> Bool {
         abs(currentFloorY - instance.position.y) < 2
     }
-
-    /// Triggers when the active floor changes position (opening/closing Now Playing or starting/ending a song).
     private func handleFloorTargetChange() {
         let target = currentFloorY
 
         for instance in instances where !instance.isDragHeld {
             let gap = instance.position.y - target
-
-            // If target moved DOWN (e.g. Now Playing opened), force them to fall
             if gap < -2 {
                 if instance.motion != .falling && instance.motion != .climbing {
                     instance.motion = .falling
                     instance.action = .fall
                 }
             }
-            // If target moved UP (e.g. Now Playing closed), hop up to reach it
             else if gap > 2 {
                 let impulse = sqrt(2 * gravity * gap) * 1.15 + 60
                 instance.motion = .falling
@@ -439,10 +398,6 @@ final class ShimejiEngine: NSObject {
         return true
     }
 }
-
-/// Which characters spawn and how many at once — user-editable in
-/// ShimejiSettingsView, persisted to UserDefaults directly (rather than
-/// @AppStorage) since it's an array/struct, not a primitive.
 struct ShimejiSpawnSettings: Codable {
     static let countRange = 0 ... 8
     var enabledCharacterIDs: Set<String>
@@ -471,8 +426,6 @@ struct ShimejiSpawnSettings: Codable {
         guard let data = try? JSONEncoder().encode(self) else { return }
         UserDefaults.standard.set(data, forKey: ShimejiSpawnSettings.key)
     }
-
-    /// Which characters should actually spawn for a given manifest.
     func enabledIDs(for manifest: ShimejiManifest) -> Set<String> {
         if hasCustomizedCharacters == true {
             return enabledCharacterIDs

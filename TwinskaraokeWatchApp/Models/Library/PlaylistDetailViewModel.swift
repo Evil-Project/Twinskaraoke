@@ -6,15 +6,8 @@ import Observation
 final class PlaylistDetailViewModel {
     var songs: [Song] = []
     var isLoading = false
-    /// Set when the initial load fails so the view can offer a retry instead
-    /// of showing a misleading empty state.
     var loadError: String?
     let playlistID: String
-    /// Songs the caller already had — personal playlists arrive from
-    /// `/api/user/playlists` with their contents inline. Shown immediately so
-    /// the screen is never blank while the network answers, and kept if the
-    /// answer is an empty list, which is what the curated endpoint says about
-    /// a playlist ID it does not know.
     private let fallbackSongs: [Song]
     private var hasLoadedRemoteSongs = false
 
@@ -38,9 +31,6 @@ final class PlaylistDetailViewModel {
                     songs = loaded
                 }
             } catch {
-                // Only worth saying when there is nothing on screen to say it
-                // over; a personal playlist showing its inline songs does not
-                // need an error about the fetch that would have replaced them.
                 if songs.isEmpty {
                     loadError = String(localized: "Check your connection and try again.")
                 }

@@ -1,15 +1,9 @@
 import SwiftUI
-
-/// One song line in a list. Double-click or the hover play button starts it in
-/// the context of the list it came from, so the queue matches what's on screen.
 struct SongRow: View {
     let song: Song
     let context: [Song]
 
     @Environment(MacAudioManager.self) private var audio
-    // A plain reference, not @State: FavoritesManager is @Observable, so
-    // SwiftUI tracks the properties this body reads. @State implied per-view
-    // ownership of a process-wide singleton, which reads as a local copy.
     private let favorites = FavoritesManager.shared
     @State private var isHovering = false
 
@@ -78,8 +72,6 @@ struct SongRow: View {
         }
     }
 }
-
-/// Shared empty/error/loading presentation so every screen behaves the same.
 struct StateMessage: View {
     let systemImage: String
     let title: String
@@ -103,8 +95,6 @@ struct StateMessage: View {
         .padding(40)
     }
 }
-
-/// Horizontal artwork shelf used by Home.
 struct SongShelf: View {
     let title: String
     let songs: [Song]

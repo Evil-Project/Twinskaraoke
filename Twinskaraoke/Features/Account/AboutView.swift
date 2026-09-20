@@ -88,7 +88,7 @@ struct AboutView: View {
                         icon: "heart.fill",
                         color: .pink,
                         title: "Credits",
-                        subtitle: "Artists, maintainers, testers, and contributors"
+                        subtitle: "Artists, maintainers, and contributors"
                     )
                 }
                 NavigationLink {

@@ -1,7 +1,4 @@
 import SwiftUI
-
-/// The signed-in user's own playlists, plus the entry point for making a new
-/// one. Curated playlists live in `LibraryView`; this tab is personal content.
 struct PlaylistsView: View {
     let onPlay: (Song, [Song]) -> Void
 
@@ -10,17 +7,11 @@ struct PlaylistsView: View {
 
     private let cardWidth: CGFloat = 260
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 60)]
-    /// Same spacing rationale as `LibraryView`: the `.card` focus lift scales a
-    /// poster in place, so each cell needs slack around its artwork or a focused
-    /// card grows into its own caption and the row above.
     private let captionGap: CGFloat = 30
     private let rowGap: CGFloat = 80
 
     var body: some View {
         NavigationStack {
-            // No `.navigationTitle`: as in `LibraryView`, the tab bar already
-            // labels this screen and a tvOS title floats over the scrolling
-            // content instead of reserving space for itself.
             content
                 .navigationDestination(for: Playlist.self) { playlist in
                     PlaylistDetailView(playlist: playlist, onPlay: onPlay)
@@ -61,8 +52,6 @@ struct PlaylistsView: View {
                 }
 
                 LazyVGrid(columns: columns, spacing: rowGap) {
-                    // First cell, so it's where focus lands on an empty account
-                    // and stays in a predictable spot once playlists arrive.
                     VStack(alignment: .leading, spacing: captionGap) {
                         Button {
                             isCreating = true
@@ -105,9 +94,6 @@ struct PlaylistsView: View {
         }
     }
 }
-
-/// Placeholder artwork for the create-playlist cell, shaped like the posters
-/// beside it so the grid keeps one rhythm.
 private struct NewPlaylistTile: View {
     var cornerRadius: CGFloat
 

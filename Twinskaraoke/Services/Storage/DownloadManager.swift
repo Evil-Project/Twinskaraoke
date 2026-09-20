@@ -2,8 +2,6 @@ import Foundation
 import Network
 import SwiftUI
 import Observation
-
-// Called from URLSession completion handlers off the main actor; NSLock-guarded.
 private nonisolated final class DownloadTaskRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var activeTokens: [String: UUID] = [:]
@@ -160,8 +158,6 @@ final class DownloadManager {
     private let cacheDir: URL
     private var tasks: [String: URLSessionDownloadTask] = [:]
     @ObservationIgnored private var cachePromotionTasks: [String: Task<Void, Never>] = [:]
-    // Song IDs that already used their one resume-data retry for the current
-    // download attempt; a second interruption fails normally.
     private var resumeRetriedSongIDs: Set<String> = []
     private var queuedDownloads: [String: Song] = [:]
     private var queuedDownloadOrder: [String] = []
@@ -463,11 +459,6 @@ final class DownloadManager {
     }
 
     func download(songs: [Song]) {
-        // Already-downloaded songs are revalidated through playableURL, which
-        // on a validation-cache miss opens the file with AVAudioFile. Validate
-        // those off the main actor first so 'download all' on a large playlist
-        // never decodes audio on the main thread; the warmed cache then makes
-        // the enqueue pass skip them for the price of a dictionary lookup.
         let needsValidation = songs.filter {
             $0.audioURL != nil
                 && downloadedIDs.contains($0.id)
@@ -924,8 +915,6 @@ final class DownloadManager {
                             "Download transport failed for \(songID): domain=\(nsError.domain), code=\(nsError.code)",
                             category: .network
                         )
-                        // An interrupted transfer carries resume data; continue
-                        // from the partial bytes instead of failing the download.
                         if let resumeData = Self.resumeData(from: error) {
                             await MainActor.run { [weak self, song, token] in
                                 self?.retryDownload(
@@ -952,9 +941,6 @@ final class DownloadManager {
         }
         return completion
     }
-
-    /// Resume data URLSession attaches to an interrupted download's error; nil
-    /// for cancellations (user-initiated) and failures with no usable progress.
     nonisolated static func resumeData(from error: Error) -> Data? {
         let nsError = error as NSError
         guard nsError.domain == NSURLErrorDomain, nsError.code != NSURLErrorCancelled else {
@@ -1002,11 +988,6 @@ final class DownloadManager {
                 source: song.audioURL?.absoluteString,
                 expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil)
             completedInCurrentQueue += 1
-            // A downloaded song should never need the network again — but the
-            // audio was the only thing being persisted, so its artwork was
-            // still fetched on demand and showed a placeholder offline. Warm
-            // the row and card variants into the (2 GB, 90-day) image cache so
-            // the whole row renders from disk.
             ArtworkPrefetcher.shared.warmCollection(
                 songs: [song],
                 reason: "downloaded artwork \(songID)",
@@ -1183,8 +1164,6 @@ final class DownloadManager {
         do {
             try fm.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         } catch {
-            // Song-directory creation also recreates missing parents, so a
-            // failed empty-directory recreation does not invalidate removal.
             DebugLogger.log("Could not recreate downloads directory: \(error)", category: .cache)
         }
 
@@ -1265,9 +1244,6 @@ final class DownloadManager {
             "Download queue complete: completed=\(completedInCurrentQueue), failed=\(failedInCurrentQueue)",
             category: .network
         )
-        // A whole batch landing is worth a custom texture; a single song is
-        // not — every download entry point is an explicit user action, so the
-        // only thing separating "earned" from "noise" here is the batch size.
         if completedInCurrentQueue > 1, failedInCurrentQueue == 0, cancelledInCurrentQueue == 0 {
             AppHaptic.celebrate.play()
         }
@@ -1397,9 +1373,6 @@ final class DownloadManager {
 
     func playableURL(for song: Song) -> URL? {
         let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
-        // Fast path: a prewarmed validation entry needs only the
-        // modification-date stat in hasCachedValidation, skipping the
-        // migration and source-file reads below.
         if let cached = validDownloadCache[song.id],
            cached.source == song.audioURL?.absoluteString,
            let source = cached.source,
@@ -1596,9 +1569,6 @@ final class DownloadManager {
         DebugLogger.log("Downloaded playback resolved: \(song.id), elapsed=\(started.duration(to: .now))", category: .playback)
         return audio
     }
-
-    /// Returns true only when the on-disk download is conclusively invalid and was removed.
-    /// Playback callbacks alone are not evidence that a download is corrupt.
     @discardableResult
     func repairIfDownloadedFileIsBroken(for song: Song) -> Bool {
         guard isDownloaded(song.id) else { return false }
@@ -1658,10 +1628,6 @@ final class DownloadManager {
             contents: remoteURL.absoluteString.data(using: .utf8)
         )
     }
-
-    /// Older builds stored every downloaded container as `main.mp3`. When the
-    /// saved source identifies another supported container, rename the file
-    /// before validation so Core Audio selects the correct decoder.
     private nonisolated func migrateMislabeledDownloadedAudioIfNeeded(
         for songID: String,
         expectedSourceURL: URL?

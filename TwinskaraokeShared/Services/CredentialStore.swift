@@ -136,12 +136,6 @@ nonisolated enum CredentialStore {
       kSecAttrAccount as String: tokenAccount,
     ]
     #if os(macOS)
-      // macOS defaults SecItem to the legacy file-based keychain, which ignores
-      // kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly and can prompt on
-      // access. Prefer the data-protection keychain so the Mac app behaves like
-      // the iOS one — but only when this build can actually use it. Must be set
-      // identically on every query for the same item, which is why it lives
-      // here rather than at the call sites.
       if usesDataProtectionKeychain {
         query[kSecUseDataProtectionKeychain as String] = true
       }
@@ -150,24 +144,6 @@ nonisolated enum CredentialStore {
   }
 
   #if os(macOS)
-    /// The macOS data-protection keychain requires an `application-identifier`
-    /// or `keychain-access-groups` entitlement, which only a properly
-    /// team-signed build carries. Ad-hoc and unsigned local builds have
-    /// neither, and every SecItem call there fails with
-    /// `errSecMissingEntitlement (-34018)` — which reads to the user as
-    /// "couldn't save your sign-in".
-    ///
-    /// Probing once beats assuming: a shipping signed build gets the modern
-    /// keychain, and a developer's local build silently falls back to the
-    /// legacy one instead of being unable to sign in at all. Resolved a single
-    /// time per process so save, read and delete can never disagree about which
-    /// keychain holds the item.
-    /// Only an entitlement-shaped failure counts as "this build cannot use the
-    /// data-protection keychain". Statuses like `errSecInteractionNotAllowed`
-    /// (keychain locked) or `errSecAuthFailed` are transient: treating those as
-    /// a negative would make this launch read the legacy keychain only, hide a
-    /// token a previous launch wrote to the data-protection one, sign the user
-    /// out, and then write a second divergent token on the next save.
     private static let usesDataProtectionKeychain: Bool = {
       var probe: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -182,9 +158,6 @@ nonisolated enum CredentialStore {
         SecItemDelete(probe as CFDictionary)
         return true
       }
-      // errSecMissingEntitlement: ad-hoc/unsigned build with no
-      // application-identifier. errSecNotAvailable: no keychain available to
-      // this process at all. Anything else, keep the modern keychain.
       return !(status == errSecMissingEntitlement || status == errSecNotAvailable)
     }()
 

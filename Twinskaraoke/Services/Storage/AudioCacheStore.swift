@@ -10,18 +10,12 @@ nonisolated enum AudioCacheStore {
         let instruments: URL
         let offset: URL
     }
-
-    // FileManager.default is thread-safe; Algorithm is an immutable enum value.
     private nonisolated(unsafe) static let fm = FileManager.default
     private static let compressionLock = NSLock()
     private static let compressionExtension = "nkz"
     private nonisolated(unsafe) static let compressionAlgorithm: Algorithm = .lzfse
     private static let chunkSize = 64 * 1024
     private static let maximumPlayableFileSize: Int64 = 256 * 1024 * 1024
-    // Track-start paths probe the same cached file several times per song
-    // (header validation + duration), each opening a fresh AVAudioFile. Memoize
-    // per (path, modificationDate); `touch` bumps the modification date, so
-    // entries invalidate conservatively whenever the file changes.
     private static let probeMemoLock = NSLock()
     private static let probeMemoLimit = 256
     private nonisolated(unsafe) static var durationMemo: [String: (modified: Date, duration: TimeInterval)] = [:]
@@ -73,9 +67,6 @@ nonisolated enum AudioCacheStore {
         } else {
             try fm.moveItem(at: stagedURL, to: finalURL)
         }
-
-        // A newly committed uncompressed file supersedes any compressed copy
-        // and alternate legacy-extension variants.
         try? fm.removeItem(at: compressedURL(for: finalURL))
         removeMainAudioFiles(for: songID, excluding: finalURL)
         CacheManager.noteMusicCacheCommit()
@@ -126,10 +117,6 @@ nonisolated enum AudioCacheStore {
         }
         return nil
     }
-
-    /// Like `playableMainURL`, but never decompresses: returns nil when only the
-    /// compressed cache exists, so callers on the main thread can defer that
-    /// work to a background path instead.
     static func immediatelyPlayableMainURL(
         for songID: String,
         expectedRemoteURL: URL? = nil,
@@ -187,10 +174,6 @@ nonisolated enum AudioCacheStore {
         }
         return CachedStems(vocals: vocals, instruments: instruments, startOffset: startOffset)
     }
-
-    /// Like `playableStems`, but never decompresses: returns nil when only the
-    /// compressed cache exists, so callers on the main thread can defer that
-    /// work to a background path instead.
     static func immediatelyPlayableStems(
         for songID: String,
         startOffset: TimeInterval,
@@ -240,8 +223,6 @@ nonisolated enum AudioCacheStore {
 
     static func removeSongCache(for songID: String) {
         try? fm.removeItem(at: files(for: songID).directory)
-        // The music tree changed outside an enforcement pass; tell the
-        // debounced enforcer so it re-measures instead of reusing a stale size.
         CacheManager.noteMusicCacheCommit()
     }
 
@@ -357,9 +338,6 @@ nonisolated enum AudioCacheStore {
 
     private static func mainAudioCandidates(songID: String, expectedRemoteURL: URL?) -> [URL] {
         if let expectedRemoteURL {
-            // The container extension is part of Core Audio's file-type
-            // selection. Do not reuse a legacy `main.mp3` that contains M4A
-            // bytes from the same source URL.
             return [mainAudioURL(for: songID, sourceURL: expectedRemoteURL)]
         }
         return cachedMainAudioURLs(in: files(for: songID).directory)
@@ -396,8 +374,6 @@ nonisolated enum AudioCacheStore {
     }
 
     static func compressAssets(for songID: String) {
-        // Match compressIdleAssets: the wav deletes below must hold the same
-        // lock playableURL holds while decompressing and handing a file out.
         guard compressionLock.try() else { return }
         defer { compressionLock.unlock() }
         compressAssets(in: files(for: songID).directory)
@@ -419,8 +395,6 @@ nonisolated enum AudioCacheStore {
         let standardizedURL = url.standardizedFileURL
         let standardizedCacheDirectory = cacheDirectory.standardizedFileURL
         let cachePathPrefix = standardizedCacheDirectory.path + "/"
-        // Lyrics cache files live outside AudioCache but share the same
-        // access-date LRU bookkeeping.
         let standardizedLyricsDirectory = LyricsCacheStore.cacheDirectory.standardizedFileURL
         let lyricsPathPrefix = standardizedLyricsDirectory.path + "/"
         guard standardizedURL.path.hasPrefix(cachePathPrefix)
@@ -440,10 +414,6 @@ nonisolated enum AudioCacheStore {
             try? fm.setAttributes([.modificationDate: now], ofItemAtPath: songDirectory.path)
         }
     }
-
-    /// The probe memos are keyed by modification date, which touch() just
-    /// bumped; carry any memoized results forward to the new date so the next
-    /// lookup doesn't re-open the file with AVAudioFile.
     private static func carryProbeMemosAcrossTouch(of url: URL) {
         let path = url.path
         let modified = modificationDate(of: url)
@@ -507,19 +477,10 @@ nonisolated enum AudioCacheStore {
     private static let minimumPlayableFileSize = 4096
 
     private static func playableURL(for url: URL) -> URL? {
-        // Only wav stems ever get a compressed sibling; the compressor never
-        // touches other files, so they skip the lock dance entirely. Taking
-        // the lock for them would stall reads whenever a long
-        // compressIdleAssets sweep holds it.
         guard shouldCompressPlayableFile(at: url) else {
             guard fm.fileExists(atPath: url.path) else { return nil }
             return validateAndHandOut(url)
         }
-        // The compressor deletes wav files it has compressed; hold the same
-        // lock across the existence check, decompression, validation, and
-        // handout so the file cannot be deleted or replaced mid-flight.
-        // Blocking acquire is fine: decompressing callers run on background
-        // threads (main-thread paths use the immediatelyPlayable variants).
         compressionLock.lock()
         defer { compressionLock.unlock() }
         if fm.fileExists(atPath: url.path) {
@@ -534,9 +495,6 @@ nonisolated enum AudioCacheStore {
                 return nil
             }
             touch(url)
-            // The fresh decompression bumped the wav's modification date;
-            // touch the producing .nkz too so compressedIsCurrent doesn't see
-            // it as stale and recompress the pair after every play.
             touch(compressed)
             return url
         } catch {
@@ -651,9 +609,6 @@ nonisolated enum AudioCacheStore {
         return vocalsDuration + expectedTolerance >= expectedStemDuration
             && instrumentsDuration + expectedTolerance >= expectedStemDuration
     }
-
-    // Callers must hold compressionLock (see compressIdleAssets /
-    // compressAssets(for:)); the wav deletes here race playableURL otherwise.
     private static func compressPlayableFileIfNeeded(at url: URL) {
         guard shouldCompressPlayableFile(at: url), !Task.isCancelled else { return }
         guard fm.fileExists(atPath: url.path) else { return }
@@ -700,8 +655,6 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func compressFile(from sourceURL: URL, to destinationURL: URL) throws {
-        // Per-operation temp name: cache operations for the same destination
-        // must never share (and corrupt) a temp file.
         let tempURL = destinationURL
             .appendingPathExtension(UUID().uuidString)
             .appendingPathExtension("tmp")
@@ -739,8 +692,6 @@ nonisolated enum AudioCacheStore {
     }
 
     private static func decompressFileIfNeeded(from sourceURL: URL, to destinationURL: URL) throws {
-        // Per-operation temp name: cache operations for the same destination
-        // must never share (and corrupt) a temp file.
         let tempURL = destinationURL
             .appendingPathExtension(UUID().uuidString)
             .appendingPathExtension("tmp")

@@ -1,18 +1,12 @@
 import SwiftUI
 import UIKit
-
-/// In-memory + disk image cache for the tvOS app (no SDWebImage on this target).
-/// Mirrors the watch app's cache so repeated artwork loads don't re-fetch or
-/// flicker when focusable cards re-enter the view hierarchy.
 final class TVImageCache {
     static let shared = TVImageCache()
 
     private let memory = NSCache<NSURL, UIImage>()
     private let disk = URLCache(memoryCapacity: 16 * 1024 * 1024, diskCapacity: 128 * 1024 * 1024)
-    /// Guards `inFlight` and `failures` (NSCache/URLCache are already thread-safe).
     private let stateLock = NSLock()
     private var inFlight: [NSURL: Task<UIImage?, Never>] = [:]
-    /// Short-lived negative cache so scrolling doesn't hammer a dead host.
     private var failures: [NSURL: Date] = [:]
     private static let negativeTTL: TimeInterval = 30
 
@@ -20,8 +14,6 @@ final class TVImageCache {
         memory.countLimit = 400
         memory.totalCostLimit = 64 * 1024 * 1024
     }
-
-    /// Synchronous memory-cache lookup used to seed views without a placeholder frame.
     func cachedImage(for url: URL) -> UIImage? {
         memory.object(forKey: url as NSURL)
     }
@@ -101,8 +93,6 @@ final class TVImageCache {
         failures[key] = Date()
     }
 }
-
-/// Drop-in cached async image that serves repeated loads from TVImageCache.
 struct TVRemoteImage<Content: View, Placeholder: View>: View {
     let url: URL?
     @ViewBuilder let content: (Image) -> Content

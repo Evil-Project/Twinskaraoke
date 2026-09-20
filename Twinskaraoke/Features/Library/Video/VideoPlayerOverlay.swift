@@ -1,15 +1,6 @@
 import AVFoundation
 import PillarboxPlayer
 import SwiftUI
-
-/// Transport controls drawn over the video surface.
-///
-/// Everything here is custom because the system player UI cannot host a quality
-/// selector on iOS — `SystemVideoView.transportBar` is tvOS-only — and quality
-/// control is the main thing the previous `AVPlayerViewController` could not
-/// offer. Track selection, playback speed, zoom and AirPlay still come from
-/// Pillarbox's own `standardSettingsMenu`, so only the quality section and the
-/// layout are hand-written.
 struct VideoPlayerOverlay: View {
     @ObservedObject var player: Player
     @ObservedObject var progressTracker: ProgressTracker

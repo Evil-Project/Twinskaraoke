@@ -1,6 +1,3 @@
-# =========================
-# System & IDEs
-# =========================
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -9,26 +6,17 @@
 *.swp
 *~
 
-# =========================
-# AI Assistants & Agents
-# =========================
 .claude/
 .codex/
 .omo/
 AGENTS.md
 CLAUDE.md
 
-# =========================
-# Node.js & Web / Docs Cache
-# =========================
 node_modules/
 .vitepress/cache/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 
-# =========================
-# Xcode & Swift Specific
-# =========================
 *.hmap
 *.xccheckout
 *.xcscmblueprint
@@ -37,36 +25,21 @@ DerivedData/
 playground.xcworkspace/
 timeline.xctimeline/
 
-# =========================
-# Build Output & Packaging
-# =========================
 build/
 *.app/
 *.dSYM/
 *.dSYM.zip
 *.ipa
 
-# =========================
-# Swift Package Manager
-# =========================
 .build/
 .swiftpm/
 
-# =========================
-# Dependency Managers
-# =========================
 Carthage/Build/
 Pods/
 
-# =========================
-# Tools (Fastlane)
-# =========================
 fastlane/Preview.html
 fastlane/report.xml
 fastlane/screenshots/**/*.png
 fastlane/test_output/
 
-# =========================
-# Generated Output
-# =========================
 graphify-out/

@@ -5,8 +5,6 @@ struct AccountView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var showSignOutConfirmation = false
-    /// Phone pairing is the default; the password form stays reachable for
-    /// anyone without the iOS app on hand.
     @State private var usePasswordSignIn = false
     @FocusState private var focusedField: LoginField?
 
@@ -24,8 +22,6 @@ struct AccountView: View {
                     signInContent
                 }
             }
-            // See `LibraryView`: the tab bar labels this screen, and a tvOS nav
-            // title floats over the scroll content instead of reserving space.
         }
         .task(id: auth.isLoggedIn) {
             if auth.isLoggedIn {
@@ -286,8 +282,6 @@ struct AccountView: View {
                     systemImage: "list.number"
                 )
             }
-            // Keeps the row a single focus target from above and below, so
-            // moving down out of it lands in the badges rather than sideways.
             .focusSection()
         }
     }
@@ -325,7 +319,6 @@ struct AccountView: View {
     private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
-        // Otherwise an empty cache reads "Zero KB" next to its "1 GB" limit.
         formatter.allowsNonnumericFormatting = false
         return formatter
     }()
@@ -350,11 +343,6 @@ private struct TVAccountProgressBar: View {
         .frame(height: 12)
     }
 }
-
-/// Read-only, but deliberately focusable: a tvOS `ScrollView` scrolls only to
-/// reveal the focused view, so a region with no focus stops cannot be scrolled
-/// into view at all. Without this the usage cards were unreachable whenever
-/// they fell below the fold.
 private struct TVAccountMetric: View {
     let title: String
     let value: String
@@ -422,8 +410,6 @@ private struct AccountBadgeCardView: View {
             Color.white.opacity(isFocused ? 0.18 : 0.07),
             in: RoundedRectangle(cornerRadius: 22)
         )
-        // Already focusable so the grid can be scrolled to; it just had no
-        // visible focus state, so there was no way to see where the remote was.
         .scaleEffect(isFocused ? 1.04 : 1)
         .focusable()
         .focused($isFocused)

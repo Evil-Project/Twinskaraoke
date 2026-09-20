@@ -37,9 +37,6 @@ struct CaptchaWebView: UIViewRepresentable {
         func webViewDidClose(_: WKWebView) {
             onClose()
         }
-
-        // The full-screen web view may only navigate within the captcha host;
-        // anything else is cancelled and handed to the system browser.
         func webView(
             _: WKWebView,
             decidePolicyFor navigationAction: WKNavigationAction,

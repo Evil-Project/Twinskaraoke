@@ -303,10 +303,6 @@ struct QRApproveView: View {
         case untrusted
         case notSignIn
     }
-
-    // Sign-in codes are only issued as HTTPS links on the first-party web
-    // hosts; a sessionId from anywhere else must never reach the confirming
-    // phase, where it would be approved blindly.
     private static let trustedQRHosts = [
         "twinskaraoke.com",
         "neurokaraoke.com",
@@ -330,7 +326,6 @@ struct QRApproveView: View {
         if let comps = URLComponents(string: "?\(raw)"),
            comps.queryItems?.contains(where: { $0.name == "sessionId" }) == true
         {
-            // A bare sessionId carries no first-party origin to verify.
             return .untrusted
         }
         return .notSignIn
@@ -422,6 +417,8 @@ struct QRApproveView: View {
 
 private struct QRPermissionLoadingView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @State private var pulse = false
 
     var body: some View {
@@ -449,13 +446,24 @@ private struct QRPermissionLoadingView: View {
         .padding(.horizontal, 24)
         .onAppear {
             withOptionalAnimation(pulseAnimation) {
-                pulse = true
+                pulse = pulseEnabled
+            }
+        }
+        .onChange(of: pulseEnabled) { _, enabled in
+            withOptionalAnimation(enabled ? pulseAnimation : nil) {
+                pulse = enabled
             }
         }
     }
 
     private var pulseAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.spring(response: 1.15, dampingFraction: 0.82).repeatForever(autoreverses: true)
+        pulseEnabled
+            ? AppMotion.spring(response: 1.15, dampingFraction: 0.82).repeatForever(autoreverses: true)
+            : nil
+    }
+
+    private var pulseEnabled: Bool {
+        !reduceMotion && !reduceEffects && animationsActive
     }
 }
 
@@ -556,9 +564,6 @@ private struct QRScannerChrome: View {
         .allowsHitTesting(false)
     }
 }
-
-// Nonisolated for the same reason as the bracket shape below: `Shape` refines
-// `Sendable`, so the conformance must not be main-actor isolated.
 private nonisolated struct QRScannerDimMask: Shape {
     let cutoutSide: CGFloat
     let cornerRadius: CGFloat
@@ -593,11 +598,6 @@ private struct QRCornerBrackets: View {
             )
     }
 }
-
-// Nonisolated because `Shape` refines `Sendable`: under
-// SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor this struct is otherwise implicitly
-// isolated, and SwiftUI calls `path(in:)` off the main actor. Xcode 27 rejects
-// the isolated conformance; 26.x accepts it silently.
 private nonisolated struct QRCornerBracketShape: Shape {
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
@@ -686,6 +686,8 @@ private struct QRHeroGlyph: View {
     var isSpinning = false
     var isPulsing = false
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @State private var animate = false
 
     var body: some View {
@@ -700,15 +702,25 @@ private struct QRHeroGlyph: View {
             .shadow(color: tint.opacity(0.18), radius: 16, y: 8)
             .animation(heroAnimation, value: animate)
             .onAppear {
-                animate = !reduceMotion && (isSpinning || isPulsing)
+                animate = animationEnabled
+            }
+            .onChange(of: animationEnabled) { _, enabled in
+                animate = enabled
             }
     }
 
     private var heroAnimation: Animation? {
-        guard !reduceMotion else { return nil }
+        guard animationEnabled else { return nil }
         return isSpinning
             ? AppMotion.spring(response: 1.3, dampingFraction: 0.9).repeatForever(autoreverses: false)
             : AppMotion.spring(response: 1.05, dampingFraction: 0.82).repeatForever(autoreverses: true)
+    }
+
+    private var animationEnabled: Bool {
+        !reduceMotion
+            && !reduceEffects
+            && animationsActive
+            && (isSpinning || isPulsing)
     }
 }
 
@@ -843,9 +855,6 @@ private final class QRCameraController: UIViewController {
     private var shouldRunSession = false
     private var hasUsablePreviewBounds = false
     private lazy var metadataOutputDelegate = QRCameraMetadataDelegate(controller: self)
-
-    // Capture may run only while the controller is visible, after configuration
-    // succeeds, and once layout has produced non-zero preview bounds.
     private var isSessionReadyToRun: Bool {
         shouldRunSession && isSessionConfigured && hasUsablePreviewBounds
     }
@@ -978,7 +987,6 @@ private final class QRCameraController: UIViewController {
             object: session,
             queue: .main
         ) { [weak self] _ in
-            // Delivered on the main queue (queue: .main above).
             MainActor.assumeIsolated {
                 self?.reportFailure(String(localized: "The camera stopped unexpectedly. Check that it is working, then try again."))
             }

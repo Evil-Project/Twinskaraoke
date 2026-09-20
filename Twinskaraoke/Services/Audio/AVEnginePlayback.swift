@@ -2,10 +2,6 @@ import AVFoundation
 import Foundation
 
 enum AVEnginePlaybackMode { case single, aiStems }
-
-/// Moves freshly loaded, uniquely referenced audio media out of a background
-/// loading task; AVAudioFile is not Sendable but the loader
-/// hands over its only reference.
 private nonisolated struct LoadedMediaTransfer<Value>: @unchecked Sendable {
     let value: Value
 }
@@ -37,10 +33,6 @@ final class SimpleAudioPlayer {
     private var pausedPosition: TimeInterval?
     private var _isPaused = false
     private var scheduleGeneration: UInt64 = 0
-    // True while the node holds a not-yet-consumed scheduled segment. A pause
-    // after natural playback end leaves the segment fully played out, and
-    // resuming such a node would report isPlaying while rendering silence
-    // with no completion ever firing.
     private(set) var hasScheduledMedia = false
 
     var volume: Float {
@@ -103,8 +95,6 @@ final class SimpleAudioPlayer {
 
         let generation = scheduleGeneration
         guard let file = loadedFile, scheduleFileSegment(file, at: time) else {
-            // Preserve the asynchronous shape of a natural node completion.
-            // A later stop/load invalidates this generation before delivery.
             Task { @MainActor [weak self] in
                 self?.deliverCompletion(for: generation)
             }
@@ -134,8 +124,6 @@ final class SimpleAudioPlayer {
     private func invalidateScheduledPlayback() {
         scheduleGeneration &+= 1
         hasScheduledMedia = false
-        // Completion handlers can run when stop() unschedules media. Incrementing
-        // first makes those callbacks stale by construction.
         playerNode.stop()
     }
 
@@ -164,14 +152,6 @@ final class SimpleAudioPlayer {
         completionHandler?()
     }
 
-    #if DEBUG
-        var scheduleGenerationForTesting: UInt64 { scheduleGeneration }
-        var loadedFileFormatForTesting: AVAudioFormat? { loadedFile?.processingFormat }
-
-        func deliverCompletionForTesting(scheduledGeneration: UInt64) {
-            deliverCompletion(for: scheduledGeneration)
-        }
-    #endif
 }
 
 @MainActor
@@ -198,9 +178,6 @@ final class AVEnginePlayback {
     private(set) var mode: Mode = .single
     private(set) var currentURL: URL?
     private(set) var aiStartOffset: TimeInterval = 0
-
-    // Bumped on every user-intent change to detect stale load completions;
-    // accessed only on the main actor.
     private var suppressionToken: UInt64 = 0
     private var _paused: Bool = false
 
@@ -303,9 +280,6 @@ final class AVEnginePlayback {
         for player in [mainPlayer, crossfadePlayer] {
             player.completionHandler = { [weak self, weak player] in
                 guard let self, let player else { return }
-                // Only the deck currently designated as main can end a song.
-                // The outgoing deck is stopped after a crossfade and must not
-                // advance the queue.
                 if self.mainPlayer === player, self.mode == .single {
                     self.onPlaybackEnded?()
                 }
@@ -703,8 +677,6 @@ final class AVEnginePlayback {
         DebugLogger.log("Reverting to main player", category: .playback)
         let wasPaused = _paused
         _paused = false
-        // mode == .aiStems guarantees currentURL != nil: playStems sets it,
-        // and switchToStems is only reachable while a main track is loaded.
         mainPlayer.volume = 1
         stopAllStems(releasingMedia: true)
         mode = .single
@@ -765,10 +737,6 @@ final class AVEnginePlayback {
         if _paused { return false }
         return mainPlayer.isPlaying
     }
-
-    /// False when the active deck's scheduled segment has fully played out —
-    /// the state end-of-queue leaves behind when it pauses instead of
-    /// stopping. Resuming then would render silence; callers must reload.
     var hasScheduledMedia: Bool {
         if mode == .aiStems {
             return mainPlayer.hasScheduledMedia && stemInstrumental.hasScheduledMedia
@@ -831,9 +799,6 @@ final class AVEnginePlayback {
     @discardableResult
     func seek(to seconds: TimeInterval) -> Bool {
         guard seconds.isFinite else { return true }
-        // safePlay/synchronizedPlay stop and restart the nodes, which clears
-        // their paused state; without re-pausing, a seek while paused would
-        // make resume() fall through to play(from: 0).
         let wasPaused = _paused
         if mode == .aiStems {
             let stemTarget = seconds - aiStartOffset
@@ -975,9 +940,6 @@ final class AVEnginePlayback {
                     for: url, token: token, loadGeneration: loadGeneration
                 )
                 guard self.suppressionToken == token, self.crossfadeLoadGeneration == loadGeneration else {
-                    // Superseded before the crossfade could start. Clear the
-                    // pending marker only if it is still ours — a newer
-                    // beginCrossfade owns the marker when it differs.
                     if self.pendingCrossfadeURL == url {
                         self.pendingCrossfadeURL = nil
                         DebugLogger.log(
@@ -1013,8 +975,6 @@ final class AVEnginePlayback {
                 let startMainVolume = self.crossfadeStartMainVol
                 let startVocalsVolume = self.crossfadeStartVocalsVol
                 let startInstrumentalVolume = self.crossfadeStartInstrumentalVol
-                // AVEnginePlayback and its player nodes are main-actor
-                // isolated. Keep the ramp handler on that executor too.
                 let timer = DispatchSource.makeTimerSource(queue: .main)
                 timer.schedule(
                     deadline: .now() + playbackLeadTime,
@@ -1111,11 +1071,6 @@ final class AVEnginePlayback {
             "Finalizing crossfade by swapping decks pending=\(completedURL?.lastPathComponent ?? "nil"), time=\(crossfadePlayer.currentTime)",
             category: .playback
         )
-
-        // Keep the incoming node and its scheduled file playing. Reloading it
-        // into the outgoing node used to allocate duplicate media and created a
-        // teardown completion race. Deck identity is an implementation detail,
-        // so swapping the references is the seamless handoff.
         let outgoingPlayer = mainPlayer
         mainPlayer = crossfadePlayer
         crossfadePlayer = outgoingPlayer

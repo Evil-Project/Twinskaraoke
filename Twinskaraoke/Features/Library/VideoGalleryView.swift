@@ -66,9 +66,6 @@ struct VideoGalleryView: View {
                 }
                 .padding(.horizontal, AM.Spacing.screenMargin)
             }
-
-            // Above the filter bar because it is account state, not a slice of
-            // the feed — the filter below has nothing to say about it.
             ContinueWatchingSection(zoomNamespace: zoomNamespace)
 
             VideoGalleryFilterBar(filter: $filter)
@@ -92,11 +89,6 @@ struct VideoGalleryView: View {
                             } preview: {
                                 VideoContextPreview(video: video)
                             }
-                            // `loadMoreIfNeeded` measures against the unfiltered
-                            // catalogue, so under a filter its "within 5 of the
-                            // end" test almost never fires — watchalongs are
-                            // scattered thinly through ~1400 items. Paging off
-                            // the last *displayed* row keeps both filters going.
                             .onAppear {
                                 if video.id == videos.last?.id {
                                     viewModel.loadMore()
@@ -109,11 +101,6 @@ struct VideoGalleryView: View {
                     .padding(.horizontal, AM.Spacing.screenMargin)
                 }
             }
-
-            // Kept available for the whole filtered feed, not just an empty one:
-            // watchalongs are sparse enough that the automatic trigger can stall
-            // with results already on screen, and pull-to-refresh resets to page
-            // one rather than continuing.
             if filter == .watchalongs, viewModel.canLoadMore {
                 VideoGalleryLoadMoreFooter(
                     isLoading: viewModel.isLoading,
@@ -135,20 +122,11 @@ struct VideoGalleryView: View {
     }
 }
 
-// MARK: - Filtering
-
 enum VideoGalleryFilter: String, CaseIterable, Identifiable {
     case all
     case watchalongs
 
     var id: String { rawValue }
-
-    // `String(localized:)` rather than a bare literal: `Text(someString)`
-    // renders verbatim, so these segment labels and section headers were never
-    // translated. Returning `LocalizedStringKey` would localize at runtime but
-    // the keys would never be extracted into the catalogue — the extractor only
-    // sees literals at localizable call sites, not ones handed back from a
-    // computed property — so nobody could author a translation.
     var title: String {
         switch self {
         case .all: String(localized: "All Videos")
@@ -216,8 +194,6 @@ private struct VideoGalleryLoadMoreFooter: View {
         .padding(.vertical, AM.Spacing.xl)
     }
 }
-
-// MARK: - Cards
 
 private struct FeaturedVideoCard: View {
     let video: GalleryVideo
@@ -292,8 +268,6 @@ private struct VideoGalleryCell: View {
     }
 }
 
-// MARK: - States
-
 private struct VideoGallerySkeleton: View {
     var body: some View {
         CenteredLoadingView(label: String(localized: "Loading videos"))
@@ -358,6 +332,7 @@ private struct VideoGalleryStateView: View {
         }
         .accessibilityElement(children: .contain)
     }
+
 }
 
 private struct VideoGalleryHintRow: View {

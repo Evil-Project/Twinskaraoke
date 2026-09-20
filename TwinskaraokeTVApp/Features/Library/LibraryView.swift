@@ -7,17 +7,11 @@ struct LibraryView: View {
 
     private let cardWidth: CGFloat = 260
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 60)]
-    /// The `.card` focus lift scales a poster up in place, so each cell needs
-    /// slack above and below its artwork or a focused card grows into the
-    /// caption under it and the row of posters above.
     private let captionGap: CGFloat = 30
     private let rowGap: CGFloat = 80
 
     var body: some View {
         NavigationStack {
-            // No `.navigationTitle`: the tab bar already labels this screen,
-            // and on tvOS the title floats over the scroll content rather than
-            // reserving space for itself — it drifts across the artwork.
             content
                 .navigationDestination(for: Playlist.self) { playlist in
                     PlaylistDetailView(playlist: playlist, onPlay: onPlay)

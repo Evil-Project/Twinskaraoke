@@ -8,9 +8,6 @@ nonisolated enum LogCategory: String {
     case separation = "Separation"
     case network = "Network"
     case ui = "UI"
-
-    // Cached per category: this is read on every log call, and constructing an
-    // OSLog handle each time throws away the one the system already made.
     var osLog: OSLog {
         switch self {
         case .cache: Self.cacheLog
@@ -43,7 +40,6 @@ nonisolated enum DebugLogger {
     }
 
     private static let logQueue = DispatchQueue(label: "nk.debugLogger", qos: .utility)
-    // Only accessed on logQueue.
     private nonisolated(unsafe) static var recentLogs: [String] = []
     private static let maxStoredLogs = 500
 

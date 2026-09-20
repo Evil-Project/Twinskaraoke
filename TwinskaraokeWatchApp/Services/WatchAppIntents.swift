@@ -1,17 +1,5 @@
 import AppIntents
 import Foundation
-
-/// Siri and Shortcuts entry points.
-///
-/// These conform to `AudioPlaybackIntent` rather than plain `AppIntent` so the
-/// system lets them start audio without bringing the app to the front — the
-/// point of asking a watch to play something is not having to look at it.
-/// Why an intent could not do what it was asked.
-///
-/// Siri reads the `failureReason` back, so these say what is missing rather
-/// than that something went wrong: an intent that returns `.result()` after
-/// doing nothing leaves the listener staring at a silent watch that just
-/// told them it had started playing.
 enum WatchPlaybackIntentError: Swift.Error, CustomLocalizedStringResourceConvertible {
     case stationUnavailable
     case nothingLoaded
@@ -35,14 +23,9 @@ struct PlayLiveRadioIntent: AudioPlaybackIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let radio = RadioController.shared
-        // Awaited rather than left to `playLiveStream`'s own retry, so the
-        // intent doesn't report success before the station is known.
         if radio.nowPlaying == nil {
             await radio.refresh()
         }
-        // `playLiveStream` schedules its own retry when the station is still
-        // unknown, which would report success now and start audio later or
-        // never. Better to say so.
         guard radio.nowPlaying != nil else {
             throw WatchPlaybackIntentError.stationUnavailable
         }
@@ -59,18 +42,12 @@ struct ResumePlaybackIntent: AudioPlaybackIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        // `togglePlayPause` returns false only when there is no player, no
-        // queued song and no download in flight — nothing a "resumed" reply
-        // could be about.
         guard AudioManager.shared.togglePlayPause() else {
             throw WatchPlaybackIntentError.nothingLoaded
         }
         return .result()
     }
 }
-
-/// Skipping is meaningless on a live stream, so this one is an ordinary
-/// `AppIntent`: it changes what is queued rather than starting audio.
 struct PlayNextTrackIntent: AppIntent {
     static let title: LocalizedStringResource = "Play Next Track"
     static let description = IntentDescription(

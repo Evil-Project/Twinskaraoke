@@ -44,19 +44,7 @@ final class HomeViewModel {
     @ObservationIgnored private var homeLoadTask: Task<Void, Never>?
     @ObservationIgnored private var topPicksLoadMoreTask: Task<Void, Never>?
 
-    // No work in init. This type is held in `@State`, whose initial-value
-    // expression is re-evaluated on every re-initialization of the owning view
-    // struct (only the first instance is kept). `@StateObject` took an
-    // @autoclosure and evaluated it once, so an init-time fetch was safe there
-    // and is a request flood here. The fetch is driven from the view's .task
-    // instead, and `hasLoaded` keeps it to one round trip.
-
     func fetchHomeData(force: Bool = false) {
-        if AppRuntime.isUITestMode {
-            applyUITestFixture()
-            return
-        }
-
         if hasLoaded, !force { return }
         homeLoadTask?.cancel()
         topPicksLoadMoreTask?.cancel()
@@ -64,8 +52,6 @@ final class HomeViewModel {
         dataGeneration += 1
         let generation = dataGeneration
         hasLoaded = true
-        // Only swap to the skeleton on the first load; a pull-to-refresh with
-        // existing content keeps it on screen until the new data arrives.
         if trending.isEmpty, suggestions.isEmpty, recentPlaylists.isEmpty, newReleases.isEmpty {
             isLoading = true
         }
@@ -95,8 +81,6 @@ final class HomeViewModel {
                 topPicksPage = 1
                 canLoadMoreTopPicks = playlists.count == topPicksPageSize
             }
-            // Match the sections above: a failed refresh keeps the existing
-            // New Releases shelf instead of erasing it mid-session.
             if let loadedReleases {
                 newReleases = loadedReleases
                 latestSingle = loadedReleases.first
@@ -196,79 +180,6 @@ final class HomeViewModel {
             pageSize: pageSize
         )
         return (.publicPlaylists, fallback)
-    }
-
-    private func applyUITestFixture() {
-        hasLoaded = true
-        isLoading = false
-        isLoadingMoreTopPicks = false
-        canLoadMoreTopPicks = false
-        topPicksSource = .setlists
-
-        let fixtureSongs = Self.fixtureSongs
-        trending = Array(fixtureSongs.suffix(4))
-        suggestions = Array(fixtureSongs.prefix(4))
-        newReleases = fixtureSongs
-        latestSingle = fixtureSongs.first
-        latestSingleContext = fixtureSongs
-        recentPlaylists = [
-            UITestFixtures.playlist(
-                id: "ui-home-playlist-essentials",
-                name: "Karaoke Essentials",
-                songs: Array(fixtureSongs.prefix(4))
-            ),
-            UITestFixtures.playlist(
-                id: "ui-home-playlist-pop",
-                name: "Pop Covers",
-                songs: Array(fixtureSongs.dropFirst(2).prefix(4))
-            ),
-            UITestFixtures.playlist(
-                id: "ui-home-playlist-night",
-                name: "Late Night Singalong",
-                songs: Array(fixtureSongs.suffix(4))
-            ),
-        ]
-    }
-
-    private static var fixtureSongs: [Song] {
-        [
-            UITestFixtures.song(
-                id: "ui-home-song-1",
-                title: "Wake Me Up Before You Go-Go",
-                originalArtists: ["Wham!"],
-                coverArtists: ["Neuro"]
-            ),
-            UITestFixtures.song(
-                id: "ui-home-song-2",
-                title: "Hero",
-                originalArtists: ["Mili"],
-                coverArtists: ["Neuro"]
-            ),
-            UITestFixtures.song(
-                id: "ui-home-song-3",
-                title: "Cure For Me",
-                originalArtists: ["AURORA"],
-                coverArtists: ["Neuro"]
-            ),
-            UITestFixtures.song(
-                id: "ui-home-song-4",
-                title: "Be My Star",
-                originalArtists: ["LEVEL NINE"],
-                coverArtists: ["Neuro"]
-            ),
-            UITestFixtures.song(
-                id: "ui-home-song-5",
-                title: "Young and Beautiful",
-                originalArtists: ["Lana Del Rey"],
-                coverArtists: ["Neuro"]
-            ),
-            UITestFixtures.song(
-                id: "ui-home-song-6",
-                title: "Send Me an Angel",
-                originalArtists: ["Scorpions"],
-                coverArtists: ["Neuro"]
-            ),
-        ]
     }
 
     deinit {

@@ -87,8 +87,6 @@ final class PlaylistListLoader {
     }
 
     func bootstrap(initial: [Playlist], urlBuilder: @escaping (Int, Int) -> String) {
-        // Re-bootstrap when the view opened before page 1 arrived: the loader
-        // is still empty and loadMoreIfNeeded can't fire on an empty list.
         guard self.urlBuilder == nil || (playlists.isEmpty && !initial.isEmpty) else { return }
         self.urlBuilder = urlBuilder
         var seen = Set<String>()

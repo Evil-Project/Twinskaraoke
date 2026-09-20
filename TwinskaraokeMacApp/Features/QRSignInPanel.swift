@@ -1,12 +1,6 @@
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import SwiftUI
-
-/// Pairing half of the Mac sign-in screen: renders the current pairing code and
-/// reflects `MacAuthManager.qrPhase` while a signed-in phone approves it.
-///
-/// Mirrors `TVQRSignInPanel`, scaled down — a Mac window is closer than a TV
-/// across the room, so the code doesn't need to be 320pt.
 struct QRSignInPanel: View {
     let auth: MacAuthManager
     let onUsePassword: () -> Void
@@ -31,9 +25,6 @@ struct QRSignInPanel: View {
                 }
 
                 Button("Sign in with password instead") {
-                    // Choosing password sign-in retires the code: otherwise an
-                    // already-scanned code could complete authentication behind
-                    // a user who opted out of pairing.
                     auth.cancelQRSignIn()
                     onUsePassword()
                 }
@@ -42,22 +33,12 @@ struct QRSignInPanel: View {
         }
         .padding(28)
         .task {
-            // Only mint a code if there isn't a live one; re-opening the pane
-            // shouldn't invalidate a code someone is mid-scan on.
             if auth.qrSession == nil, auth.qrPhase == .idle {
                 auth.startQRSignIn()
             }
         }
         .onDisappear {
-            // Ordinary navigation away leaves a live code alone so the phone
-            // can approve it off-screen. Sessions end on their own via approval
-            // or expiry, so nothing leaks by waiting.
-            switch auth.qrPhase {
-            case .waiting, .completing:
-                break
-            case .idle, .creating, .expired:
-                auth.cancelQRSignIn()
-            }
+            auth.cancelQRSignIn()
         }
     }
 
@@ -153,12 +134,7 @@ struct QRSignInPanel: View {
         }
     }
 
-    // MARK: - QR rendering
-
     private static let ciContext = CIContext(options: nil)
-
-    /// Rendered at native module size and scaled with nearest-neighbour so the
-    /// code stays crisp on a Retina display instead of being interpolated.
     private static func qrImage(for payload: String) -> CGImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(payload.utf8)

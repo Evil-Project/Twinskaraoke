@@ -1,10 +1,4 @@
 import SwiftUI
-
-/// Browse public playlists.
-///
-/// These used to be poured into the sidebar's Playlists section as a signed-out
-/// fallback, which pushed everything else out of reach. A grid in the detail
-/// pane is where a hundred playlists actually belong.
 struct LibraryView: View {
     @State private var model = MacLibraryViewModel()
     @Binding var selection: MacDestination?
@@ -58,8 +52,6 @@ struct PlaylistCard: View {
     @State private var isHovering = false
 
     var body: some View {
-        // A Button rather than onTapGesture: tap gestures are pointer-only, so
-        // the cards were unreachable by keyboard.
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack {

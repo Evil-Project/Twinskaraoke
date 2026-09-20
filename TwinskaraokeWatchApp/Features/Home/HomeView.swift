@@ -8,13 +8,6 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var path = NavigationPath()
-
-    /// Everything this screen can push.
-    ///
-    /// The stack drives navigation from one path and one `navigationDestination`.
-    /// Mixing value-based links with `navigationDestination(isPresented:)` in a
-    /// single stack leaves the view-based links inert — taps land, nothing is
-    /// pushed — which is what made every Browse row except Radio look dead.
     private enum Destination: Hashable {
         case player
         case playlists
@@ -71,8 +64,6 @@ struct HomeView: View {
                     Section("Recently Played") {
                         ForEach(Array(recentlyPlayed.enumerated()), id: \.element.id) { index, song in
                             Button {
-                                // Queue the whole history, not just the rows
-                                // shown, so playing the last one keeps going.
                                 play(song, context: recents.songs)
                             } label: {
                                 WatchSongRow(song: song)
@@ -188,12 +179,6 @@ struct HomeView: View {
             }
         }
     }
-
-    // `title` and `hint` are keys rather than plain strings so the literals at
-    // each call site still land in the string catalog. Passing them as `String`
-    // hides them from extraction — the four Browse hints dropped out of
-    // Localizable.xcstrings the moment these rows moved behind a helper.
-    // `subtitle` stays a String: Account's is a live session status, not a key.
     private func browseLink(
         _ destination: Destination,
         title: LocalizedStringKey,
@@ -236,9 +221,6 @@ struct HomeView: View {
             AccountView()
         }
     }
-
-    /// The current song already has its own section above, so it is dropped
-    /// here rather than appearing twice on one short screen.
     private var recentlyPlayed: [Song] {
         Array(
             recents.songs

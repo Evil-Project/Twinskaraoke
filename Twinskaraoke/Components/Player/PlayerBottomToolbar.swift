@@ -3,13 +3,6 @@ import SwiftUI
 #if canImport(UIKit)
     import UIKit
 #endif
-
-/// The active queue mode, drawn as a small glyph on the corner of the Playing
-/// Next button the way Apple Music does. Autoplay is deliberately absent: it is
-/// on by default, so badging it would mean a permanent glyph that says nothing —
-/// Apple Music leaves it out for the same reason. Only one glyph fits, so
-/// repeat outranks shuffle: repeat changes where the queue ends, which is the
-/// less obvious of the two once playback is under way.
 enum PlayerQueueModeBadge {
     case shuffle, repeatAll, repeatOne
 
@@ -46,8 +39,6 @@ struct PlayerBottomToolbar: View {
     let onLyricsToggle: () -> Void
     let showLyrics: Bool
     var horizontalPadding: CGFloat = 48
-
-    /// Radio has no queue to shuffle or repeat, so the badge stays off there.
     private var queueModeBadge: PlayerQueueModeBadge? {
         guard !audioManager.isRadioMode else { return nil }
         return PlayerQueueModeBadge.resolve(
@@ -55,12 +46,6 @@ struct PlayerBottomToolbar: View {
             repeatMode: audioManager.repeatMode
         )
     }
-
-    /// Never blank: an empty string is still a value as far as VoiceOver is
-    /// concerned, and the plain case is worth hearing. A conditional
-    /// `accessibilityValue` would say nothing at all, but branching the
-    /// modifier changes the button's identity, which kills the badge's
-    /// transition every time a mode goes on or off.
     private var queueModeAccessibilityValue: String {
         if audioManager.isRadioMode { return String(localized: "Live radio") }
         return queueModeBadge?.label ?? String(localized: "Playing in order")
@@ -113,9 +98,6 @@ struct PlayerBottomToolbar: View {
                     .font(.title3)
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
-                    // Cornered on the button's frame rather than on the glyph:
-                    // the badge clears the list icon's top rule that way, so
-                    // the two never overlap at any Dynamic Type size.
                     .overlay(alignment: .topTrailing) { queueModeBadgeView }
                     .frame(maxWidth: audioManager.isRadioMode ? nil : .infinity)
             }

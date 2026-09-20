@@ -250,9 +250,6 @@ struct HomeView: View {
         }
     }
 }
-
-/// Fades and rises a Home shelf into place once, staggered by its position,
-/// when the loaded content first replaces the skeleton.
 private struct ShelfEntranceModifier: ViewModifier {
     let index: Int
     @Environment(\.appReduceMotion) private var reduceMotion

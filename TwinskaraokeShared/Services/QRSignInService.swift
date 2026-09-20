@@ -1,40 +1,5 @@
 import Foundation
-
-/// Device pairing for the TV: the Apple TV has no camera, so it takes the role
-/// the website plays in the existing QR flow. It asks the backend for a pairing
-/// session, renders the session's payload as a QR code, and polls until a
-/// signed-in phone scans it and calls `/api/auth/approve-qr` (see
-/// `AuthManager.approveQRSession` in the iOS target, the other half of this
-/// handshake).
-///
-/// # Backend contract
-///
-/// Verified against the live API:
-///
-/// - `POST {api}/api/auth/qr-session` — no body, no auth
-///   ```
-///   { "sessionId": "B53D…", "approveUrl": "…", "statusStreamUrl": "…",
-///     "qrCodePayload": "https://api.neurokaraoke.com/auth/qr-approve?sessionId=B53D…",
-///     "qrCodeImageDataUrl": "data:image/png;base64,…" }
-///   ```
-/// - `GET {api}/api/auth/qr-session/{sessionId}`
-///   ```
-///   { "status": "pending", "token": null, "expiresAt": "2026-07-28T14:53:13.80+00:00" }
-///   ```
-///   404 once the session is swept, with `{ "message": … }`.
-///
-/// The server also exposes an SSE stream at `statusStreamUrl` carrying the same
-/// payload with PascalCase keys. Polling is used instead: a dropped stream on a
-/// TV that may sit on flaky Wi-Fi is harder to recover from than a missed poll,
-/// and the session is short-lived anyway.
-///
-/// `qrCodePayload` is encoded verbatim rather than rebuilt locally — it is
-/// already an HTTPS URL on `api.neurokaraoke.com`, which the iOS scanner
-/// accepts as a subdomain of the first-party host `neurokaraoke.com`
-/// (`QRApproveView.trustedQRHosts`). Rebuilding it here would risk drifting out
-/// of that allowlist.
 nonisolated enum QRSignIn {
-    // MARK: - Contract
 
     enum Route {
         static var createSession: String { "\(StorageHost.api)/api/auth/qr-session" }
@@ -48,24 +13,12 @@ nonisolated enum QRSignIn {
             return "\(StorageHost.api)/api/auth/qr-session/\(escaped)"
         }
     }
-
-    /// Fallback lifetime for the window between creating a session and the
-    /// first poll, which is where the server's own `expiresAt` arrives. A TV
-    /// screen is a public display, so this stays short.
     static let defaultLifetime: TimeInterval = 120
-
-    // MARK: - Types
 
     struct Session: Equatable, Sendable {
         let id: String
-        /// Encoded into the QR verbatim; see the note on the type.
         let payload: String
-        /// Provisional until the first poll replaces it with the server's value.
         var expiresAt: Date
-
-        /// Shown next to the QR so the code on screen can be matched against
-        /// the one the phone displays before approving. Matches the iOS side's
-        /// `String(sessionId.prefix(8)).uppercased()`.
         var shortCode: String {
             String(id.prefix(8)).uppercased()
         }
@@ -78,10 +31,6 @@ nonisolated enum QRSignIn {
         case approved(token: String)
         case expired
     }
-
-    /// One poll. `expiresAt` is echoed on every response, so the TV keeps its
-    /// countdown in step with the server rather than trusting its own clock
-    /// arithmetic from creation time.
     struct Poll: Equatable, Sendable {
         let status: Status
         let expiresAt: Date?
@@ -104,8 +53,6 @@ nonisolated enum QRSignIn {
         }
     }
 
-    // MARK: - Requests
-
     static func createSession() async throws -> Session {
         guard let url = URL(string: Route.createSession) else {
             throw ServiceError.invalidResponse
@@ -125,9 +72,6 @@ nonisolated enum QRSignIn {
 
         let decoded = try JSONDecoder().decode(CreateResponse.self, from: data)
         guard !decoded.sessionId.isEmpty else { throw ServiceError.invalidResponse }
-
-        // `approveUrl` is the documented fallback: the two fields carry the same
-        // URL today, but only one of them is named for the job it does here.
         let payload = decoded.qrCodePayload ?? decoded.approveUrl
         guard let payload, !payload.isEmpty else { throw ServiceError.invalidResponse }
 
@@ -149,7 +93,6 @@ nonisolated enum QRSignIn {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ServiceError.invalidResponse }
-        // A session the server has already swept is an expiry, not a failure.
         if http.statusCode == 404 || http.statusCode == 410 {
             return Poll(status: .expired, expiresAt: nil)
         }
@@ -172,8 +115,6 @@ nonisolated enum QRSignIn {
         }
         return Poll(status: status, expiresAt: decoded.expiresAt)
     }
-
-    // MARK: - Wire shapes
 
     private struct CreateResponse: Decodable {
         let sessionId: String
@@ -200,10 +141,6 @@ nonisolated enum QRSignIn {
         let status: String
         let token: String?
         let expiresAt: Date?
-
-        // The SSE stream sends the same payload PascalCased, so both spellings
-        // are accepted and this shape can be reused if polling is ever swapped
-        // for the stream.
         private enum CodingKeys: String, CodingKey {
             case status, Status
             case token, Token
@@ -224,19 +161,6 @@ nonisolated enum QRSignIn {
         }
     }
 }
-
-/// The API sends 7 fractional-second digits (`…:13.8019715+00:00`), which
-/// `ISO8601DateFormatter` rejects outright on some OS versions rather than
-/// truncating. Its documented format is exactly three digits, so the fraction is
-/// normalised to three — trimmed when longer, zero-padded when shorter. Current
-/// OS versions do parse a short fraction like `…:13.5+00:00`, but that leniency
-/// isn't contractual and this formatter is already known to differ across them.
-/// A second pass drops the fraction entirely in case the server stops sending it.
-/// `nonisolated` is required, not cosmetic: the target builds with
-/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so this would otherwise be
-/// implicitly `@MainActor` while being called from `Decodable.init(from:)` —
-/// which `JSONDecoder` runs off the main thread. The body is pure (its
-/// formatters are local), so there is nothing to isolate.
 private nonisolated func parseTimestamp(_ raw: String) -> Date? {
     let withFraction = ISO8601DateFormatter()
     withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

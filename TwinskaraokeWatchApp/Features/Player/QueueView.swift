@@ -1,11 +1,6 @@
 import SwiftUI
 
 struct QueueView: View {
-    /// Whether to repeat the current song at the top.
-    ///
-    /// False when the queue sits one swipe away from the player, where the
-    /// summary card and the "Now Playing" section would say what the page
-    /// beside it already shows.
     var showsCurrentSong = true
 
     @Environment(AudioManager.self) var audioManager
@@ -106,7 +101,6 @@ struct QueueView: View {
                 }
             }
         }
-        // Embedded as a page beside the player, the title belongs to the pager.
         .navigationTitle(showsCurrentSong ? "Queue" : "")
         .animation(queueAnimation, value: audioManager.currentSong?.id)
         .onAppear {
@@ -128,9 +122,6 @@ struct QueueView: View {
     private var upNextSongs: [Song] {
         audioManager.upNextSongs
     }
-
-    // Karaoke setlists legitimately repeat a song and Song identity is the id
-    // alone, so rows use a composite id to keep ForEach identifiers unique.
     private var indexedUpNext: [QueuedSongRowItem] {
         upNextSongs.enumerated().map { offset, song in
             QueuedSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)

@@ -12,17 +12,10 @@ struct RemoteArtworkImage: View {
 
     var fixedDisplaySize: CGSize?
     private let scrollState = ScrollPerformanceState.shared
-    // Observed so a view composed during a failure-backoff window re-evaluates
-    // isBlocked when the window ends instead of showing the placeholder forever.
     private let failureBackoff = ArtworkFailureBackoff.shared
     @State private var fullLoaded: Bool = false
     @State private var renderedFullURL: URL?
     var body: some View {
-        // Load-bearing read: `isBlocked(url)` below is a method call over
-        // NSLock-guarded storage and registers nothing with observation.
-        // `generation` is the publish signal, so reading it here is what
-        // recomposes this view when a backoff window ends. Under
-        // @ObservedObject merely holding `failureBackoff` was enough.
         let _ = failureBackoff.generation
         return Group {
             if let fixedDisplaySize {
@@ -46,10 +39,6 @@ struct RemoteArtworkImage: View {
     private func imageContent(size: CGSize) -> some View {
         let displaySize = sanitizedDisplaySize(size)
         let context = fullResolution ? ImageCacheConfig.memoryAndDiskCacheContext : ImageCacheConfig.visibleImageContext
-        // Fast path: the bitmap is already in the memory cache, so paint it in
-        // this very body pass. `WebImage` cannot do this — it decides to show
-        // the placeholder before it starts the load — which costs one grey
-        // frame per row even on a hit. See `ArtworkMemoryCache`.
         if let cached = ArtworkMemoryCache.image(for: url) {
             cached
                 .resizable()
@@ -71,9 +60,6 @@ struct RemoteArtworkImage: View {
                 MusicArtworkPlaceholder(cornerRadius: cornerRadius)
             }
             if let lowResURL, !fullLoaded, shouldPreferProgressiveArtwork {
-                // The blur variant is a ~1 KB WebP; loading it (not just from
-                // cache) gives every image a progressive preview, even when the
-                // prefetcher hasn't warmed this URL yet.
                 WebImage(
                     url: lowResURL,
                     options: ImageCacheConfig.defaultOptions,
@@ -110,9 +96,6 @@ struct RemoteArtworkImage: View {
                     markFinishedAfterFailure(for: url, error: error)
                 }
                 .onSuccess { _, _, cacheType in
-                    // Memory-cache hits complete synchronously while SwiftUI is still
-                    // evaluating this view; writing @State here trips "Modifying state
-                    // during view update". Defer the write to the next runloop turn.
                     deferMarkRendered(url, cacheType: cacheType)
                 }
                 .transition(
@@ -151,11 +134,6 @@ struct RemoteArtworkImage: View {
             "Artwork load failed for \(safeURL)",
             category: .cache
         )
-        // The shared backoff is the single retry owner. Its generation update
-        // removes this WebImage immediately, and its scheduled expiry
-        // recomposes every view for the URL after the cooldown. A per-view
-        // five-minute Task here duplicated that timer and retained off-screen
-        // view state throughout CDN outages.
         ArtworkFailureBackoff.shared.recordFailure(failedURL)
         evictFailedImageCache(for: failedURL)
     }
@@ -163,18 +141,6 @@ struct RemoteArtworkImage: View {
     private var shouldAnimateLoad: Bool {
         !scrollState.isScrolling && shouldPreferProgressiveArtwork
     }
-
-    /// Whether to show the ~1 KB blurred preview while the real image loads.
-    ///
-    /// This used to require a display size over 96pt, which excluded song rows
-    /// (44–48pt) — precisely where fast scrolling leaves a flat grey
-    /// placeholder on screen the longest. A blurred preview is a far better
-    /// stand-in than grey, and at a few hundred bytes it arrives about as fast
-    /// as the network can answer at all.
-    ///
-    /// The floor stays low rather than disappearing: below ~24pt the preview is
-    /// too small to read as anything, so the extra image layer per row buys
-    /// nothing.
     private var shouldPreferProgressiveArtwork: Bool {
         guard let fixedDisplaySize else { return true }
         return max(fixedDisplaySize.width, fixedDisplaySize.height) >= 24
@@ -193,8 +159,6 @@ struct RemoteArtworkImage: View {
 
     private func evictFailedImageCache(for failedURL: URL) {
         let cacheKey = failedURL.absoluteString
-        // Async variant: removes from memory immediately and evicts the disk
-        // entry off the calling (main) queue.
         SDImageCache.shared.removeImage(forKey: cacheKey, fromDisk: true, withCompletion: nil)
     }
 
@@ -212,18 +176,7 @@ final class ArtworkFailureBackoff {
 
     private let cooldown: TimeInterval = 300
     private let lock = NSLock()
-    // MUST stay out of the observation graph. It is NSLock-guarded, written off
-    // the main actor, and mutated from `clear(_:)` on the render path. Observing
-    // it publishes on every `removeValue` — even one that removes nothing —
-    // which re-enters the SwiftUI graph synchronously and recurses forever
-    // (markRendered -> clear -> willSet -> flushTransactions -> body -> ...).
-    // `generation` below is the intended publish signal precisely because its
-    // bump is guarded by "did anything actually change".
     @ObservationIgnored private var blockedUntil: [URL: Date] = [:]
-
-    // Bumped whenever the blocked set changes so observing views re-evaluate
-    // isBlocked. Never written from isBlocked itself — that runs during view
-    // body evaluation, where publishing a change is illegal.
     private(set) var generation = 0
 
     var cooldownDuration: Duration {
@@ -235,10 +188,6 @@ final class ArtworkFailureBackoff {
         lock.lock()
         defer { lock.unlock() }
         guard let until = blockedUntil[url] else { return false }
-        // Don't remove elapsed entries here: expire(_:) removes them and
-        // bumps generation, which is what recomposes blocked views. Removing
-        // here would skip that publish and leave those views on the
-        // placeholder until they are recreated.
         return until > now
     }
 
@@ -251,9 +200,6 @@ final class ArtworkFailureBackoff {
         blockedUntil[url] = Date().addingTimeInterval(cooldown)
         lock.unlock()
         bumpGeneration()
-        // Views composed while this URL is blocked render no WebImage and
-        // schedule no retry of their own; unblock proactively so they
-        // recompose when the cooldown ends.
         DispatchQueue.main.asyncAfter(deadline: .now() + cooldown) { [weak self] in
             self?.expire(url)
         }
@@ -268,8 +214,6 @@ final class ArtworkFailureBackoff {
 
     private func expire(_ url: URL) {
         lock.lock()
-        // A failure re-recorded after this expiry was scheduled extends the
-        // deadline; only remove entries whose window actually ended.
         let expired = blockedUntil[url].map { $0 <= Date() } ?? false
         if expired {
             blockedUntil.removeValue(forKey: url)
@@ -353,6 +297,7 @@ struct CenteredLoadingView: View {
 struct MusicSkeletonShimmer: ViewModifier {
     var isActive: Bool
     @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     private let scrollState = ScrollPerformanceState.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var animationClock = ActiveAnimationClock()

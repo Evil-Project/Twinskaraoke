@@ -7,9 +7,6 @@ final class PlaylistDetailViewModel {
     var songs: [Song] = []
     var isLoading = false
     var loadError: String?
-    /// Surfaced as an alert, separate from `loadError`: a failed removal leaves
-    /// a perfectly good song list on screen and mustn't replace it with a
-    /// full-screen error state.
     var actionError: String?
     let playlistID: String
 
@@ -31,9 +28,6 @@ final class PlaylistDetailViewModel {
             }
         }
     }
-
-    /// Removes the song at `index`, taking it off the list immediately and
-    /// putting it back if the server refuses.
     func removeSong(at index: Int) {
         guard songs.indices.contains(index) else { return }
         let song = songs[index]
@@ -46,17 +40,10 @@ final class PlaylistDetailViewModel {
                 from: playlistID
             )
             guard removed else {
-                // Re-insert just this song rather than restoring a snapshot of
-                // the whole list: a second removal may have started and
-                // finished while this one was in flight, and a snapshot taken
-                // before either would undo its work too.
                 songs.insert(song, at: min(index, songs.count))
                 actionError = String(localized: "Couldn’t remove “\(song.title)”. Try again.")
                 return
             }
-            // A playlist may legitimately list the same song twice, and the
-            // server decides whether it drops one entry or both — so take its
-            // answer rather than trusting the local edit.
             if let reconciled = try? await KaraokeAPIClient.playlistSongs(id: playlistID) {
                 songs = reconciled
             }

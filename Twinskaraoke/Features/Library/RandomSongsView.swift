@@ -256,13 +256,6 @@ struct RandomSongsView: View {
         }
     }
 }
-
-/// Row identity for the random songs list. The offset keeps IDs unique when
-/// the same song appears twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The song fields make the ID change when refresh replaces
-/// the whole set at the same offsets: with purely positional identity, an
-/// already-composed row keeps showing the previous random pick, and its
-/// SongDownloadRowState stays subscribed to the old song's downloads.
 private struct PositionedRandomSong: Identifiable {
     struct ID: Hashable {
         let offset: Int

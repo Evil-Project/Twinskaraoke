@@ -98,8 +98,6 @@ struct CreatePlaylistSheet: View {
             .navigationTitle("New Playlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // These carry their own glass, so the toolbar must not put its
-                // shared glass behind them as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: {
                         AppHaptic.selection.play()

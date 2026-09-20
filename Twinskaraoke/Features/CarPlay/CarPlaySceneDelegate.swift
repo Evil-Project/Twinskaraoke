@@ -33,10 +33,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var favoritesSongCount = 0
     private var latestSongs: [Song] = []
     private var randomSongs: [Song] = []
-
-    /// Keyed by loader so a repeated Reload replaces its own in-flight request
-    /// instead of racing it — an appended array let a slow first response land
-    /// after a fast second one and overwrite it with stale data.
     private enum ContentTask {
         static let playlists = "playlists"
         static let latest = "latest"
@@ -200,10 +196,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func observeContentChanges() {
         contentObservation?.cancel()
         favoritesObservation?.cancel()
-
-        // Replaces `Publishers.MergeMany(...).debounce(150ms)`. `observeContinuously`
-        // only fires on change, which is what the `dropFirst()` on each signal
-        // was for.
         contentObservation = observeContinuously({
             _ = self.player.currentSong
             _ = self.player.isPlaying
@@ -221,21 +213,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }, onChange: { [weak self] in
             self?.scheduleTemplateRefresh()
         })
-
-        // Favourites get their own observation rather than joining the merge:
-        // the count is only ever shown in the Playlists template, and a live
-        // emission means the local set is authoritative — including when a
-        // removal takes it below whatever the server last reported. Seeding the
-        // count from an unloaded manager would instead read a spurious zero.
         favoritesObservation = observeContinuously({
             _ = FavoritesManager.shared.favoriteIDs
         }, onChange: { [weak self] in
             self?.scheduleFavoritesRefresh()
         })
     }
-
-    /// Stands in for the former `.debounce(for: .milliseconds(150))`: template
-    /// rebuilds are expensive and a queue edit churns several properties at once.
     private func scheduleTemplateRefresh() {
         templateRefreshTask?.cancel()
         templateRefreshTask = Task { @MainActor [weak self] in

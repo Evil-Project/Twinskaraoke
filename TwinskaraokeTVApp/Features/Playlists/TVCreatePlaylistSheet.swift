@@ -1,10 +1,4 @@
 import SwiftUI
-
-/// Full-screen form for creating a playlist from the TV.
-///
-/// The iOS `CreatePlaylistSheet` is a compact card built around a keyboard that
-/// slides up under it; on tvOS every field is a focus target and the keyboard
-/// takes over the screen, so the layout is rebuilt here rather than shared.
 struct TVCreatePlaylistSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -36,9 +30,6 @@ struct TVCreatePlaylistSheet: View {
     }
 
     var body: some View {
-        // Scrollable as a safety net, but the layout is sized to fit the sheet
-        // without scrolling: on tvOS a scroll only happens when focus moves, so
-        // anything below the fold is easy to miss entirely.
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
@@ -82,11 +73,6 @@ struct TVCreatePlaylistSheet: View {
                 .disabled(isSaving)
         }
     }
-
-    /// A plain `Toggle` here renders as a full-width bar filled with the app's
-    /// accent tint, with its own label lost inside the fill — unreadable, and
-    /// nothing like the fields above it. This is the same flat focus-pill
-    /// treatment `TVSongRow` uses, so the row reads as one more control.
     private var privacyRow: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -100,15 +86,10 @@ struct TVCreatePlaylistSheet: View {
                         .foregroundStyle(privacyFocused ? Color.black.opacity(0.6) : Color.primary.opacity(0.6))
                 }
                 .font(.title3)
-                // Stated explicitly because a plain button on tvOS otherwise
-                // tints its label with the app accent — the state here would
-                // read as red, and as an alert rather than a setting.
                 .foregroundStyle(privacyFocused ? Color.black : Color.primary)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 20)
                 .contentShape(Rectangle())
-                // Drawn only when unfocused so it can't paint over the focus
-                // pill the plain style puts behind the label.
                 .background(privacyFocused ? Color.clear : Color.white.opacity(0.10))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -117,9 +98,6 @@ struct TVCreatePlaylistSheet: View {
             .disabled(isSaving)
             .accessibilityLabel("Playlist privacy")
             .accessibilityValue(isPublic ? "Public" : "Private")
-            // The label replaces the composed children, so without a hint the
-            // announcement is "Playlist privacy, Private, button" — nothing
-            // says that activating it switches the setting.
             .accessibilityHint("Switches between private and public.")
 
             Text("Public playlists can be discovered by other users.")
@@ -127,12 +105,6 @@ struct TVCreatePlaylistSheet: View {
                 .foregroundStyle(.secondary)
         }
     }
-
-    /// Cancel stays enabled and the create button stays in place while saving,
-    /// rather than being disabled and swapped for a bare progress view: tvOS
-    /// moves focus off a control that becomes unfocusable, and with every
-    /// control in the sheet disabled the focus engine has nowhere to go — the
-    /// remote goes dead until the request lands.
     private var actions: some View {
         HStack(spacing: 20) {
             TVActionButton(title: String(localized: "Cancel"), systemImage: "xmark") {
@@ -170,10 +142,6 @@ struct TVCreatePlaylistSheet: View {
             if created {
                 dismiss()
             } else {
-                // String(localized:) rather than a bare literal: this is stored
-                // in a String and rendered through `Label(_:systemImage:)`,
-                // which picks the non-localizing StringProtocol overload, so an
-                // unwrapped literal would never reach the catalog.
                 errorMessage = String(localized: "Couldn’t create the playlist. Try again.")
             }
         }

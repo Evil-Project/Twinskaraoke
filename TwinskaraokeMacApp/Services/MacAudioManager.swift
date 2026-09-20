@@ -25,15 +25,6 @@ enum MacPlaybackMode: String, CaseIterable {
         }
     }
 }
-
-/// Playback for the Mac app.
-///
-/// Deliberately not a port of the tvOS `AudioManager`: everything here that
-/// differs from that file is because `AVAudioSession` does not exist on macOS.
-/// There is no category to set, no session to activate, and no interruption
-/// notification — the system mixes and ducks apps itself. What survives the
-/// platform change is `AVPlayer` plus the `MediaPlayer` now-playing/remote
-/// command surface, both of which are fully supported natively.
 @MainActor
 @Observable
 final class MacAudioManager {
@@ -55,13 +46,14 @@ final class MacAudioManager {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    private var failedToEndObserver: NSObjectProtocol?
+    private var stalledObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
-    /// Indices that failed to load, so a broken queue can't spin forever.
+    private var timeControlObservation: NSKeyValueObservation?
     private var failedIndices: Set<Int> = []
-    /// Whether playback should begin once the item becomes ready. A pause
-    /// issued while still loading used to be overwritten by the unconditional
-    /// `play()` in the `.readyToPlay` observer.
     private var wantsPlaybackWhenReady = true
+    private var playbackGeneration = 0
+    private var artworkTask: Task<Void, Never>?
 
     private init() {
         configureRemoteCommands()
@@ -76,13 +68,8 @@ final class MacAudioManager {
         guard !queue.isEmpty, currentIndex + 1 < queue.count else { return [] }
         return Array(queue[(currentIndex + 1)...])
     }
-
-    // Once every index has failed there is nothing left to advance to, so the
-    // transport buttons should stop pretending otherwise.
     var canPlayNext: Bool { !queue.isEmpty && failedIndices.count < queue.count }
     var canPlayPrevious: Bool { !queue.isEmpty && failedIndices.count < queue.count }
-
-    // MARK: - Transport
 
     func play(song: Song, context: [Song] = []) {
         var playbackQueue = context.isEmpty ? [song] : context
@@ -107,6 +94,7 @@ final class MacAudioManager {
     func pause() {
         wantsPlaybackWhenReady = false
         player?.pause()
+        isLoading = false
         isPlaying = false
         updateNowPlayingPlaybackState()
     }
@@ -115,30 +103,25 @@ final class MacAudioManager {
         wantsPlaybackWhenReady = true
         guard let player else { return }
         player.play()
-        isPlaying = true
+        isLoading = player.currentItem?.status != .readyToPlay
+        isPlaying = player.timeControlStatus == .playing
         updateNowPlayingPlaybackState()
     }
 
     func playNext() {
-        guard !queue.isEmpty else { return }
-        switch playbackMode {
-        case .shuffle:
-            currentIndex = randomIndex(excluding: queue.count > 1 ? currentIndex : nil)
-        case .listLoop, .songLoop:
-            currentIndex = (currentIndex + 1) % queue.count
-        }
+        guard let nextIndex = nextPlayableIndex(forward: true) else { return }
+        currentIndex = nextIndex
         startCurrent()
     }
 
     func playPrevious() {
         guard !queue.isEmpty else { return }
-        // Match the platform convention: past ~3s, restart the track instead
-        // of leaving the song.
         if currentTime > 3 {
             seek(to: 0)
             return
         }
-        currentIndex = currentIndex == 0 ? queue.count - 1 : currentIndex - 1
+        guard let previousIndex = nextPlayableIndex(forward: false) else { return }
+        currentIndex = previousIndex
         startCurrent()
     }
 
@@ -160,25 +143,22 @@ final class MacAudioManager {
         playbackMode = modes[next]
     }
 
-    // MARK: - Loading
-
     private func startCurrent() {
         guard queue.indices.contains(currentIndex) else { return }
         wantsPlaybackWhenReady = true
         let song = queue[currentIndex]
+        teardownPlayer()
+        let generation = playbackGeneration
         currentSong = song
         playbackError = nil
-
-        teardownPlayer()
         currentTime = 0
         duration = 0
+        isLoading = true
 
         guard let url = song.audioURL else {
-            handleFailure(String(localized: "This song has no playable audio."))
+            handleFailure(String(localized: "This song has no playable audio."), generation: generation)
             return
         }
-
-        isLoading = true
 
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
@@ -187,24 +167,50 @@ final class MacAudioManager {
 
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
-                guard let self, self.player === player else { return }
+                guard let self,
+                      self.isCurrentPlayback(generation: generation, player: player, item: item)
+                else { return }
                 switch item.status {
                 case .readyToPlay:
                     self.isLoading = false
                     self.failedIndices.remove(self.currentIndex)
                     let seconds = item.duration.seconds
                     self.duration = seconds.isFinite ? seconds : 0
-                    // Honour a pause the user issued while this was loading.
                     if self.wantsPlaybackWhenReady {
                         player.play()
                         self.isPlaying = true
                     }
                     self.updateNowPlayingInfo()
                 case .failed:
-                    self.handleFailure(item.error?.localizedDescription ?? String(localized: "Couldn't play this song."))
+                    self.handleFailure(item.error?.localizedDescription ?? String(localized: "Couldn't play this song."), generation: generation)
                 default:
                     break
                 }
+            }
+        }
+
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) {
+            [weak self] player, _ in
+            Task { @MainActor in
+                guard let self,
+                      self.isCurrentPlayback(generation: generation, player: player, item: item)
+                else { return }
+                switch player.timeControlStatus {
+                case .playing:
+                    self.isLoading = false
+                    self.isPlaying = true
+                case .waitingToPlayAtSpecifiedRate:
+                    self.isLoading = self.wantsPlaybackWhenReady
+                    self.isPlaying = false
+                case .paused:
+                    self.isPlaying = false
+                    if item.status == .readyToPlay {
+                        self.isLoading = false
+                    }
+                @unknown default:
+                    self.isPlaying = false
+                }
+                self.updateNowPlayingPlaybackState()
             }
         }
 
@@ -213,7 +219,9 @@ final class MacAudioManager {
             queue: .main
         ) { [weak self] time in
             Task { @MainActor in
-                guard let self, self.player === player else { return }
+                guard let self,
+                      self.isCurrentPlayback(generation: generation, player: player, item: item)
+                else { return }
                 self.currentTime = time.seconds.isFinite ? time.seconds : 0
                 if self.duration == 0, let itemDuration = self.player?.currentItem?.duration.seconds,
                    itemDuration.isFinite, itemDuration > 0 {
@@ -228,7 +236,9 @@ final class MacAudioManager {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.player === player else { return }
+                guard let self,
+                      self.isCurrentPlayback(generation: generation, player: player, item: item)
+                else { return }
                 self.handleReachedEnd()
             }
         }
@@ -243,7 +253,8 @@ final class MacAudioManager {
         playNext()
     }
 
-    private func handleFailure(_ message: String) {
+    private func handleFailure(_ message: String, generation: Int) {
+        guard generation == playbackGeneration else { return }
         isLoading = false
         isPlaying = false
         playbackError = message
@@ -267,15 +278,42 @@ final class MacAudioManager {
     }
 
     /// Avoid revisiting failed indices while searching for playable audio.
-    private func randomIndex(excluding excluded: Int?) -> Int {
+    private func randomIndex(excluding excluded: Int?) -> Int? {
         let candidates = queue.indices.filter { $0 != excluded && !failedIndices.contains($0) }
-        if let pick = candidates.randomElement() { return pick }
-        // Nothing unplayed left: fall back to any index other than the current
-        // one so the caller's own exhaustion guard can end the walk.
-        return queue.indices.filter { $0 != excluded }.randomElement() ?? currentIndex
+        return candidates.randomElement()
+    }
+
+    private func nextPlayableIndex(forward: Bool) -> Int? {
+        guard !queue.isEmpty, failedIndices.count < queue.count else { return nil }
+        if playbackMode == .shuffle {
+            return randomIndex(excluding: queue.count > 1 ? currentIndex : nil)
+                ?? (failedIndices.contains(currentIndex) ? nil : currentIndex)
+        }
+
+        for offset in 1 ... queue.count {
+            let delta = forward ? offset : -offset
+            let candidate = (currentIndex + delta + queue.count * 2) % queue.count
+            if !failedIndices.contains(candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private func isCurrentPlayback(
+        generation: Int,
+        player: AVPlayer,
+        item: AVPlayerItem
+    ) -> Bool {
+        playbackGeneration == generation
+            && self.player === player
+            && player.currentItem === item
     }
 
     private func teardownPlayer() {
+        playbackGeneration &+= 1
+        artworkTask?.cancel()
+        artworkTask = nil
         if let timeObserver, let player {
             player.removeTimeObserver(timeObserver)
         }
@@ -284,14 +322,22 @@ final class MacAudioManager {
             NotificationCenter.default.removeObserver(endObserver)
         }
         endObserver = nil
+        if let failedToEndObserver {
+            NotificationCenter.default.removeObserver(failedToEndObserver)
+        }
+        failedToEndObserver = nil
+        if let stalledObserver {
+            NotificationCenter.default.removeObserver(stalledObserver)
+        }
+        stalledObserver = nil
         statusObservation?.invalidate()
         statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
         player?.pause()
         player = nil
         isPlaying = false
     }
-
-    // MARK: - Now Playing / remote commands
 
     private func configureRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
@@ -344,10 +390,13 @@ final class MacAudioManager {
     }
 
     private func loadNowPlayingArtwork(for song: Song) {
+        artworkTask?.cancel()
         guard let url = song.thumbnailURL else { return }
-        Task { @MainActor in
+        artworkTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             guard let image = await MacImageCache.shared.image(for: url),
-                  currentSong?.id == song.id else { return }
+                  !Task.isCancelled,
+                  self.currentSong?.id == song.id else { return }
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
@@ -356,9 +405,6 @@ final class MacAudioManager {
 
     private func updateNowPlayingPlaybackState() {
         let center = MPNowPlayingInfoCenter.default()
-        // macOS drives the system Now Playing panel and the media keys from
-        // playbackState, not from the playback rate in nowPlayingInfo — unlike
-        // iOS, where the rate alone is enough.
         center.playbackState = isPlaying ? .playing : (currentSong == nil ? .stopped : .paused)
         guard var info = center.nowPlayingInfo else { return }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime

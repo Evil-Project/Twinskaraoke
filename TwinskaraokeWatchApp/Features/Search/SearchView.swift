@@ -19,8 +19,6 @@ struct SearchView: View {
     }
 
     var body: some View {
-        // @Observable models expose bindings through @Bindable rather than the
-        // old $viewModel projection.
         @Bindable var viewModel = viewModel
         return VStack(spacing: 0) {
             HStack(spacing: 6) {

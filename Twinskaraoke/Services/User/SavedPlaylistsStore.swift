@@ -8,8 +8,6 @@ final class SavedPlaylistsStore {
     static let shared = SavedPlaylistsStore()
     private static let storageKey = "nk.savedPlaylists.v1"
     private(set) var playlists: [Playlist] = []
-    // O(1) membership cache for isSaved, which is called per visible
-    // playlist count label on every publish.
     private var savedIDs: Set<String> = []
     private init() {
         load()
@@ -47,9 +45,6 @@ final class SavedPlaylistsStore {
     }
 
     private func save() {
-        // Persist lightweight metadata only: songListDTOs embeds full song
-        // arrays and stays in memory. load() still decodes older blobs that
-        // include the songs.
         let stripped = playlists.map {
             Playlist(
                 id: $0.id,

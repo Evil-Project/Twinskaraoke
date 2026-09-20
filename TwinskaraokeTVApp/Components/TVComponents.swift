@@ -1,19 +1,9 @@
 import SwiftUI
-
-// MARK: - Artwork
-
-/// Rounded song / playlist artwork with a graceful music-note placeholder.
 struct TVArtwork: View {
     let url: URL?
     var cornerRadius: CGFloat = 12
 
     var body: some View {
-        // `scaledToFill` reports the *image's* scaled size rather than the size
-        // it was proposed, so on its own the overflow escapes the layout bounds
-        // and the clip crops nothing: a landscape cover bleeds sideways over
-        // whatever sits beside it, while a square one looks fine. Overlaying
-        // onto a flexible `Color.clear` pins the layout size to the frame the
-        // caller set, so the clip has real bounds to crop against.
         Color.clear
             .overlay {
                 TVRemoteImage(url: url) { image in
@@ -45,10 +35,6 @@ struct MusicArtworkPlaceholder: View {
             }
     }
 }
-
-// MARK: - Now Playing glyph
-
-/// Animated bars shown over the artwork of the currently playing item.
 struct TVNowPlayingGlyph: View {
     var isPlaying: Bool
     @State private var animated = false
@@ -83,10 +69,6 @@ struct TVNowPlayingGlyph: View {
             .delay(Double(index) * 0.08)
     }
 }
-
-// MARK: - Song card (shelves)
-
-/// A focusable poster-style card used inside horizontal shelves.
 struct TVSongCard: View {
     let song: Song
     var isCurrent = false
@@ -96,8 +78,6 @@ struct TVSongCard: View {
     private let width: CGFloat = 240
 
     var body: some View {
-        // Spacing has to clear the `.card` focus lift, or a focused poster
-        // grows down into its own caption.
         VStack(alignment: .leading, spacing: 30) {
             Button(action: action) {
                 ZStack(alignment: .bottomTrailing) {
@@ -126,12 +106,6 @@ struct TVSongCard: View {
         .accessibilityValue(song.artistName)
     }
 }
-
-// MARK: - Poster caption
-
-/// Title + subtitle shown beneath a focusable poster. Kept outside the `.card`
-/// button so it doesn't scale with the focus lift or crowd the highlight's
-/// rounded edge, and inset slightly from the poster's width.
 struct TVPosterCaption: View {
     let title: String
     let subtitle: String
@@ -153,14 +127,6 @@ struct TVPosterCaption: View {
         .padding(.horizontal, 8)
     }
 }
-
-// MARK: - Song row (lists)
-
-/// Full-width list row. Deliberately *not* `.buttonStyle(.card)`: the card
-/// style is sized for poster content, and on a row this wide its focus lift
-/// grows the row laterally and raises it above neighbouring content, so a
-/// focused row spills over whatever sits above the list. Rows instead take the
-/// flat inset-highlight treatment, which stays inside its own bounds.
 struct TVSongRow: View {
     let index: Int?
     let song: Song
@@ -174,12 +140,6 @@ struct TVSongRow: View {
         Button(action: action) {
             HStack(spacing: 20) {
                 if let index {
-                    // `fixedSize` rather than a fixed `width`: two monospaced
-                    // digits at tvOS `.title3` are wider than the 44pt this
-                    // used to be, so track 10 onwards wrapped to a second line
-                    // and stacked its digits. Taking the text's ideal width
-                    // means three-digit tracks can't reintroduce that, while
-                    // `minWidth` keeps the column aligned for single digits.
                     Text("\(index)")
                         .font(.title3.monospacedDigit())
                         .foregroundStyle(Self.subduedText)
@@ -221,30 +181,13 @@ struct TVSongRow: View {
             .padding(.horizontal, 16)
             .contentShape(Rectangle())
         }
-        // `.plain` draws tvOS's own focus pill, which stays within the row's
-        // own bounds — no background of our own is needed here.
         .buttonStyle(.plain)
         .focused($isFocused)
         .accessibilityLabel(song.title)
         .accessibilityValue("\(song.artistName), \(song.durationText)")
     }
-
-    /// Explicitly derived from `.primary` rather than using `.secondary`: on
-    /// tvOS a plain button propagates its tint into secondary labels, which
-    /// turned every artist name and duration accent-red. Deriving from
-    /// `.primary` keeps them neutral and still flips to dark text inside the
-    /// focus pill.
     private static let subduedText = Color.primary.opacity(0.6)
 }
-
-// MARK: - Text button
-
-/// Low-emphasis text button that still shows where the remote is pointing.
-///
-/// `.buttonStyle(.borderless)` leaves a bare text label with no usable focus
-/// treatment on tvOS, so these read as unfocusable. `.plain` draws the system
-/// focus pill — the same one `TVSongRow` relies on — and the padding is what
-/// gives that pill a target-sized shape to fill instead of hugging the glyphs.
 struct TVTextButton: View {
     let title: String
     let action: () -> Void
@@ -260,17 +203,6 @@ struct TVTextButton: View {
         .buttonStyle(.plain)
     }
 }
-
-// MARK: - Action button
-
-/// Icon + title action button for page-level actions.
-///
-/// The tvOS default button style inherits the app's accent tint, which rendered
-/// these as red fill under a red label — the focused button's text disappeared
-/// into its own background, and a `.destructive` role washed out to pink on
-/// pink. `.plain` gives the standard focus pill instead, and the label colour is
-/// driven off focus explicitly so it stays legible in both states rather than
-/// depending on what the style decides to do with the inherited tint.
 struct TVActionButton: View {
     let title: String
     let systemImage: String
@@ -295,13 +227,10 @@ struct TVActionButton: View {
     }
 
     private var labelColor: Color {
-        // The focus pill is white, so the label has to invert with it.
         if isFocused { return .black }
         return isDestructive ? .appAccent : .primary
     }
 }
-
-// MARK: - Section header
 
 struct TVSectionHeader: View {
     let title: String
@@ -320,8 +249,6 @@ struct TVSectionHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
-// MARK: - States
 
 struct TVEmptyState: View {
     let systemImage: String

@@ -1,6 +1,4 @@
 import Foundation
-
-/// Keeps recently played history tied to explicit playback from a playlist.
 @MainActor
 enum PlaylistPlayback {
     static func play(_ song: Song, from playlist: Playlist, context: [Song]) {

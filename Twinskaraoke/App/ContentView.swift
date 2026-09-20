@@ -20,9 +20,6 @@ private struct PopupHostView: View {
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
     private let nowPlaying = NowPlayingSnapshotState.shared
-    // The mini player is presented from the root and sits above every pushed
-    // screen, so `.toolbar(.hidden, for: .tabBar)` cannot reach it — a
-    // full-screen video has to withdraw the bar here instead.
     private let videoFullScreen = VideoFullScreenState.shared
 
     init() {
@@ -30,10 +27,6 @@ private struct PopupHostView: View {
     }
 
     var body: some View {
-        // The reader is outside the overlay on purpose: it is laid out
-        // normally, so it can still see the window's safe-area insets. The
-        // overlay ignores them, and nothing nested under that point can read
-        // them back.
         GeometryReader { proxy in
             ZStack {
                 rootShell
@@ -85,13 +78,6 @@ private struct PopupHostView: View {
             UserPlaylistsManager.shared.loadIfNeeded()
         }
         .onAppear {
-            // Warm the account-scoped state that the shared song context
-            // menu reads. Both used to load only when Library (or the
-            // full-screen player) first appeared, so a long-press before
-            // that — or during the fetch — rendered "Favorite" for a song
-            // that was already favorited, and hid "Remove from Playlist".
-            // A context menu's contents are snapshotted when it opens, so a
-            // load landing mid-press cannot correct the label afterwards.
             FavoritesManager.shared.loadIfNeeded()
             UserPlaylistsManager.shared.loadIfNeeded()
             if DeveloperMode.shouldTriggerEasterEgg() {
@@ -106,10 +92,6 @@ private struct PopupHostView: View {
             .ignoresSafeArea()
         }
     }
-
-    /// The mini player shows whenever there is something playing, and steps
-    /// aside for full-screen video, which covers the tab bar the accessory
-    /// slot lives in.
     private var showsMiniPlayer: Bool {
         nowPlaying.hasCurrentSong && !videoFullScreen.isActive
     }
@@ -141,13 +123,6 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
-        // Driven off `allCases` and `content` so the enum stays the only place
-        // a section is described — the sidebar already builds itself the same
-        // way, and listing the screens here too let the two drift apart.
-        //
-        // `systemImage` is the unfilled symbol: the tab bar fills it for the
-        // selected tab itself. Passing the filled variant is what made Home and
-        // New render filled even while unselected.
         TabView(selection: selectedTabBinding) {
             ForEach(RootSection.allCases) { section in
                 Tab(
@@ -161,10 +136,6 @@ private struct PopupHostView: View {
             }
         }
         .tint(.appAccent)
-        // The mini player goes in the system's own accessory slot — the one
-        // Apple Music uses. That is what gives it Liquid Glass, the merge into
-        // the minimized tab bar, and a bottom content inset on every screen
-        // underneath, none of which we now maintain ourselves.
         .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
             MiniPlayerBar()
         }
@@ -185,9 +156,6 @@ private struct PopupHostView: View {
                     Section(group.title) {
                         ForEach(group.sections) { section in
                             SidebarSectionRow(section: section, isSelected: currentSection == section)
-                                // `List(selection: Binding<RootSection?>)` matches rows by a tag
-                                // whose type is RootSection — a `RootSection?` tag never matches,
-                                // leaving every row unselectable (taps highlight, nothing happens).
                                 .tag(section)
                                 .accessibilityIdentifier(section.sidebarAccessibilityIdentifier)
                         }
@@ -196,15 +164,6 @@ private struct PopupHostView: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Twinskaraoke")
-            // `safeAreaBar`, not `safeAreaInset`: this is a bar, so it should
-            // get the bar treatment — glass and scroll-edge behaviour — rather
-            // than painting its own `.bar` background under a plain inset.
-            //
-            // The same `MiniPlayerBar` as the tab shell, not a second design.
-            // There is no accessory slot outside a `TabView`, so it reads a nil
-            // placement and lays itself out at full size. This used to be a
-            // separate, non-interactive "Now Playing" hint that sat *underneath*
-            // a floating popup bar — two mini players stacked on the same screen.
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 if showsMiniPlayer {
                     MiniPlayerBar()
@@ -261,6 +220,7 @@ private struct PopupHostView: View {
         }
         return section
     }
+
 }
 
 enum RootSection: String, CaseIterable, Identifiable {
@@ -297,11 +257,6 @@ enum RootSection: String, CaseIterable, Identifiable {
         case .search: "magnifyingglass"
         }
     }
-
-    /// Search gets the system's search affordance on iOS 26 — separated from
-    /// the rest of the bar, and morphing into the search field rather than
-    /// pushing a screen that happens to contain one. Everything else is an
-    /// ordinary tab.
     var tabRole: TabRole? {
         self == .search ? .search : nil
     }
@@ -372,15 +327,6 @@ private struct SidebarSectionRow: View {
 }
 
 private extension RootSection {
-    /// Sidebar only, and deliberately scoped to this extension: the tab bar
-    /// fills the selected symbol for itself, and handing it the filled variant
-    /// is what previously made Home and New render filled while unselected.
-    ///
-    /// Radio, Library and Search repeat their unselected symbol because
-    /// `dot.radiowaves.left.and.right`, `music.note.list` and `magnifyingglass`
-    /// have no filled counterpart in SF Symbols. The sidebar still reads as
-    /// selected: `SidebarSectionRow` swaps the icon's tinted backing plate to
-    /// full opacity and its foreground to white.
     var sidebarSelectedSystemImage: String {
         switch self {
         case .home: "house.fill"
@@ -410,4 +356,3 @@ private extension RootSection {
 #Preview {
     ContentView()
 }
-

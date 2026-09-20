@@ -17,10 +17,6 @@ final class PlaylistSongCountStore {
         if playlist.isFavorites {
             return playlist.songCount
         }
-        // Only withhold the summary count for playlists whose summary is known
-        // to be unreliable; those fetch a detail count via loadIfNeeded.
-        // Public playlists already carry an accurate server-side count — show
-        // it immediately instead of staying blank until a detail fetch or visit.
         let needsDetail = Self.needsDetailCount(
             for: playlist,
             isSaved: SavedPlaylistsStore.shared.isSaved(playlist)
@@ -43,10 +39,6 @@ final class PlaylistSongCountStore {
         else { return }
         guard resolvedCounts[playlist.id] == nil else { return }
         guard !loadingIDs.contains(playlist.id) else { return }
-
-        // Mark in-flight synchronously: an unstructured Task does not run its
-        // body until later, so inserting inside it would let same-runloop
-        // callers pass the guard twice and fire duplicate requests.
         loadingIDs.insert(playlist.id)
         let generation = generations[playlist.id, default: 0]
         Task {
@@ -69,8 +61,6 @@ final class PlaylistSongCountStore {
     }
 
     func invalidate(playlistID: String) {
-        // Bump the generation so any older in-flight count request for this
-        // playlist is fenced off and cannot overwrite fresher local state.
         generations[playlistID, default: 0] &+= 1
         resolvedCounts.removeValue(forKey: playlistID)
     }

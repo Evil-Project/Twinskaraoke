@@ -1,10 +1,6 @@
 import SwiftUI
 
 extension GalleryVideo {
-    /// A link worth handing to someone else.
-    ///
-    /// Prefers the web player page over the raw HLS manifest — the manifest
-    /// plays in the app but is useless in a browser or a chat client.
     var shareURL: URL? {
         embedURL ?? streamURL ?? posterURL
     }
@@ -16,10 +12,6 @@ extension GalleryVideo {
     var trimmedDescription: String? {
         videoTrimmed(description)
     }
-
-    /// `createdDate` arrives as an ISO-8601 timestamp, and a chunk of the
-    /// catalogue carries placeholder years (the watchalongs are stamped 2030),
-    /// so anything that fails to parse is simply not shown.
     var formattedCreatedDate: String? {
         guard let createdDate, let date = VideoDateParser.date(from: createdDate) else { return nil }
         return date.formatted(.dateTime.year().month(.abbreviated).day())
@@ -34,41 +26,26 @@ private func videoTrimmed(_ value: String?) -> String? {
 }
 
 nonisolated enum VideoDateParser {
-    // `ISO8601DateFormatter` is a non-Sendable class and cannot be held in a
-    // static under strict concurrency; `Date.ISO8601FormatStyle` is a Sendable
-    // value type and can.
     private static let fractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let plain = Date.ISO8601FormatStyle()
 
     static func date(from string: String) -> Date? {
-        // Timestamps come back without a timezone designator, which ISO-8601
-        // parsing requires, so assume UTC. Fractional seconds are present on
-        // most but not all rows, hence the second attempt.
         let normalized = string.hasSuffix("Z") ? string : string + "Z"
         return (try? fractional.parse(normalized)) ?? (try? plain.parse(normalized))
     }
 }
 
 nonisolated enum VideoCountFormatter {
-    /// Compact counts ("1.2K") so a card's metadata row stays on one line.
     static func string(from count: Int) -> String {
         count.formatted(.number.notation(.compactName))
     }
 }
 
-// MARK: - Thumbnails
-
 struct VideoThumbnail: View {
     let video: GalleryVideo
     var cornerRadius: CGFloat = 10
     var showsBadges = true
-    /// Separate from `showsBadges` because the featured card suppresses the
-    /// badges to stay clean but still wants to say it has been half-watched.
     var showsProgress = true
-
-    /// `nil` both when the video was never started and when its runtime was
-    /// never established — most of the catalogue reports no `duration`, and a
-    /// bar with nothing to divide by would be a lie either way.
     private var watchedFraction: Double? {
         VideoResumeStore.shared.point(for: video.id)?.fraction
     }
@@ -89,11 +66,6 @@ struct VideoThumbnail: View {
                     }
                 }
             )
-            // "Watched" takes the runtime's place rather than crowding in
-            // beside it: once you have seen a video, how long it was is the
-            // less useful of the two. Both are badges, so both answer to
-            // `showsBadges` — the featured card opts out of badges and would
-            // otherwise have gained a capsule with no runtime to replace.
             .overlay(alignment: .bottomTrailing) {
                 if showsBadges, showsProgress, isWatched {
                     VideoWatchedBadge()
@@ -120,8 +92,6 @@ struct VideoThumbnail: View {
                         .padding(6)
                 }
             }
-            // Flush with the bottom edge, under the runtime badge's own 6pt
-            // inset, so the two never collide.
             .overlay(alignment: .bottom) {
                 if showsProgress, let watchedFraction {
                     VideoResumeProgressBar(fraction: watchedFraction)
@@ -130,8 +100,6 @@ struct VideoThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
-
-/// Marks a video the viewer has already seen through to the end.
 struct VideoWatchedBadge: View {
     var body: some View {
         Label("Watched", systemImage: "checkmark.circle.fill")
@@ -142,8 +110,6 @@ struct VideoWatchedBadge: View {
             .background(.black.opacity(0.72), in: Capsule())
     }
 }
-
-/// How far through a video the viewer got, drawn across the foot of its poster.
 struct VideoResumeProgressBar: View {
     let fraction: Double
     var height: CGFloat = 3
@@ -155,21 +121,14 @@ struct VideoResumeProgressBar: View {
                     .fill(.black.opacity(0.45))
                 Rectangle()
                     .fill(Color.appAccent)
-                    // A floor so a barely-started video still reads as started
-                    // rather than as an empty track.
                     .frame(width: max(2, proxy.size.width * fraction))
             }
         }
         .frame(height: height)
-        // Not "Watched" — that string is the finished badge, and sharing one
-        // catalogue key between a partial-progress label and a completion badge
-        // would give translators one word for two different claims.
         .accessibilityLabel("Watch progress")
         .accessibilityValue(Text(fraction.formatted(.percent.precision(.fractionLength(0)))))
     }
 }
-
-// MARK: - Menus and previews
 
 struct VideoActionsMenu: View {
     let video: GalleryVideo
@@ -225,8 +184,6 @@ struct VideoContextPreview: View {
         .appGlassBackground(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
-
-// MARK: - Detail panel
 
 struct VideoPlayerInfoPanel: View {
     let video: GalleryVideo
@@ -358,8 +315,6 @@ private struct VideoActionButtonLabel: View {
             .background(Color.appControlInactiveFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
-
-// MARK: - Similar videos
 
 struct SimilarVideosSection: View {
     let similar: SimilarVideosViewModel

@@ -11,10 +11,8 @@ final class MacSearchViewModel {
 
     private var queryToken = 0
     private var searchTask: Task<Void, Never>?
+    private var generation = 0
     private static let debounce = Duration.milliseconds(300)
-
-    /// Debounced so typing doesn't fire a request per keystroke. Cancelling the
-    /// previous task also cancels its in-flight URLSession work.
     func queryChanged() {
         searchTask?.cancel()
         queryToken &+= 1
@@ -63,6 +61,7 @@ final class MacSearchViewModel {
         isSearching = false
         query = ""
         results = []
+        isSearching = false
         errorMessage = nil
     }
 }

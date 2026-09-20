@@ -108,9 +108,6 @@ struct PlaylistDetailView: View {
             viewModel.fetchSongs()
         }
     }
-
-    // Karaoke setlists legitimately repeat a song and Song identity is the id
-    // alone, so rows use a composite id to keep ForEach identifiers unique.
     private var indexedSongs: [PlaylistSongRowItem] {
         viewModel.songs.enumerated().map { offset, song in
             PlaylistSongRowItem(id: "\(song.id)#\(offset)", offset: offset, song: song)
@@ -133,9 +130,6 @@ struct PlaylistDetailView: View {
         }
         return "\(minutes)m"
     }
-
-    // Row taps pass the row item so a repeated song starts at the tapped
-    // occurrence; play(song:context:) would resolve the first match instead.
     private func play(_ item: PlaylistSongRowItem) {
         if audioManager.currentSong?.id != item.song.id {
             audioManager.playSong(at: item.offset, context: viewModel.songs)

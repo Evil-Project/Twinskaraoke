@@ -35,10 +35,6 @@ nonisolated struct CachedStems {
         self.isTemporary = isTemporary
     }
 }
-
-/// Owns one AVFoundation trim pipeline after it moves onto `trimWriteQueue`.
-/// The referenced AVFoundation objects are not `Sendable`, but every mutation
-/// after setup is serialized by that queue and its completion callback.
 private nonisolated final class TrimWriteContext: @unchecked Sendable {
     let reader: AVAssetReader
     let readerOutput: AVAssetReaderTrackOutput
@@ -80,9 +76,6 @@ private nonisolated final class TrimCancellationState: @unchecked Sendable {
         cancelled = true
         lock.unlock()
     }
-
-    /// The continuation must be resumed exactly once, but the readiness
-    /// callback and the cancellation handler can race to finish it.
     func claimContinuationResume() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -91,9 +84,6 @@ private nonisolated final class TrimCancellationState: @unchecked Sendable {
         return true
     }
 }
-
-/// Hands the trim pipeline context from the continuation setup closure to the
-/// cancellation handler, which may run first on another thread.
 private nonisolated final class TrimWriteContextBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: TrimWriteContext?
@@ -148,9 +138,6 @@ final class VocalSeparator {
 
     private(set) var processingSongID: String?
     private(set) var progressFraction: Float = 0
-    // progressFraction fans out to the whole player tree; only publish >=1%
-    // deltas (plus exact completion) so minute-long analyses don't publish
-    // hundreds of times.
     private var lastPublishedProgressFraction: Float = -1
     private(set) var isBackgroundAnalyzing: Bool = false
 
@@ -230,8 +217,6 @@ final class VocalSeparator {
         expectedDuration: TimeInterval? = nil
     ) async -> CachedStems? {
         guard let offset = validatedStemStartOffset(forSongID: songID) else { return nil }
-        // Decompression of compressed cache entries is blocking file I/O, so
-        // the lookup runs off the main actor.
         let stems = await Task.detached(priority: .userInitiated) {
             AudioCacheStore.playableStems(
                 for: songID,
@@ -247,10 +232,6 @@ final class VocalSeparator {
         CacheManager.shared.recordAccess(for: stems.instruments)
         return stems
     }
-
-    /// Non-decompressing variant of `cachedStems` for main-thread fast paths:
-    /// returns nil when only the compressed cache exists so callers can defer
-    /// the decompression to the async path instead of blocking the main thread.
     func immediatelyAvailableStems(
         forSongID songID: String,
         expectedDuration: TimeInterval? = nil
@@ -270,8 +251,6 @@ final class VocalSeparator {
         CacheManager.shared.recordAccess(for: stems.instruments)
         return stems
     }
-
-    /// Existence-only stem check (plain or compressed) that never decompresses.
     func hasCachedStems(forSongID songID: String) -> Bool {
         cachedVocalsURL(forSongID: songID) != nil && cachedInstrumentsURL(forSongID: songID) != nil
     }
@@ -296,9 +275,6 @@ final class VocalSeparator {
             }
             throw VocalSeparatorError.unavailable
         }
-        // Check before cancelling the in-progress job: a caller that is
-        // already cancelled (e.g. a superseded background analysis) must not
-        // tear down a newer foreground separation.
         try Task.checkCancellation()
         if let old = activeTask {
             old.cancel()
@@ -648,10 +624,6 @@ final class VocalSeparator {
         let safeStartSeconds = min(startSeconds, max(0, duration.seconds - 0.5))
         let safeStart = safeStartSeconds < startSeconds
             ? CMTime(seconds: safeStartSeconds, preferredTimescale: 600) : start
-
-        // Decode once into uncompressed LPCM/WAV instead of a full AAC
-        // re-encode: ML inference decodes the trimmed file again, and a WAV
-        // passthrough is far cheaper than an AAC encode + decode round-trip.
         var sampleRate = 44100.0
         var channels = 2
         if let formatDescription = try await track.load(.formatDescriptions).first,
@@ -761,10 +733,6 @@ final class VocalSeparator {
             }
         } onCancel: {
             cancellationState.cancel()
-            // The writer may never signal readiness again, so the readiness
-            // callback alone cannot be relied on to resume the continuation.
-            // Hop onto the trim queue to tear the pipeline down and resume
-            // it there, serialized against any in-flight readiness pass.
             Self.trimWriteQueue.async {
                 guard let context = contextBox.context,
                       cancellationState.claimContinuationResume()
@@ -809,8 +777,6 @@ final class VocalSeparator {
             cleanupTmpFiles([tmpVocals, tmpInstruments])
             throw error
         }
-        // Some inference backends finish their AsyncSequence normally after
-        // cancellation. Never publish those partial outputs as completed stems.
         do {
             try Task.checkCancellation()
         } catch {
@@ -857,9 +823,6 @@ final class VocalSeparator {
         var publishedDestinations: [URL] = []
 
         do {
-            // Move any existing pair aside first. Both replacements are then
-            // published as one transaction and the old pair can be restored if
-            // either move fails.
             for (_, destination) in moves
             where fileManager.fileExists(atPath: destination.path) {
                 let backup = destination.deletingLastPathComponent()

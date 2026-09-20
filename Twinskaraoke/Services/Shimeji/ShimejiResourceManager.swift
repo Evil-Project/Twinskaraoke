@@ -142,9 +142,6 @@ final class ShimejiResourceManager: NSObject {
         }
 
         state = .extracting
-
-        // Move off the temp file synchronously before the completion handler's
-        // scope releases it, then hop to a background queue for extraction.
         let stagedZip = FileManager.default.temporaryDirectory
             .appendingPathComponent("shimeji_nwero_\(UUID().uuidString).zip")
         do {
@@ -172,9 +169,6 @@ final class ShimejiResourceManager: NSObject {
                     Self.discardPreparedPack(preparedPack)
                     return
                 }
-
-                // This synchronous swap runs on the main actor so delete/retry
-                // cannot invalidate the generation between the check and move.
                 try Self.installPreparedPack(preparedPack, at: self.packDirectory)
 
                 guard !Task.isCancelled, generation == self.operationGeneration else {
@@ -230,9 +224,6 @@ final class ShimejiResourceManager: NSObject {
 
     private nonisolated static func extractPack(zipURL: URL) throws -> PreparedPack {
         let fm = FileManager.default
-
-        // Extraction only touches a unique temporary location. The actor-
-        // isolated caller decides whether this generation may install it.
         let stagingDirectory = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         do {
             try fm.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
@@ -258,10 +249,6 @@ final class ShimejiResourceManager: NSObject {
     private nonisolated static func installPreparedPack(_ preparedPack: PreparedPack, at packDirectory: URL) throws {
         let fm = FileManager.default
         let base = packDirectory.deletingLastPathComponent()
-        // Application Support isn't guaranteed to exist on disk yet on a
-        // fresh install — FileManager just hands back the URL it *would*
-        // use, without creating it. Moving into a directory whose parent
-        // doesn't exist fails, so make sure it's really there first.
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
 
         if fm.fileExists(atPath: packDirectory.path) {

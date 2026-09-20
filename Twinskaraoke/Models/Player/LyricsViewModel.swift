@@ -17,9 +17,6 @@ final class LyricsViewModel {
     private(set) var didFail = false
     private(set) var hasNoLyrics = false
     private(set) var translationState: LyricsTranslationState = .idle
-
-    // Read by the player view to match the prefetched model against the
-    // incoming song; under @Published it was untracked and could read stale.
     private(set) var loadedSongID: String?
     @ObservationIgnored private var inFlightSongID: String?
     @ObservationIgnored private var currentTask: Task<Void, Never>?

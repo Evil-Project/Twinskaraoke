@@ -25,9 +25,6 @@ private final class RadioPlaybackState {
         })
         syncFromPlayer()
     }
-
-    /// See `PlaybackRowState.syncFromPlayer`: the guards stand in for the
-    /// `removeDuplicates` the former `$property.sink` pipelines carried.
     private func syncFromPlayer() {
         let manager = AudioPlayerManager.shared
         let songID = manager.currentSong?.id
@@ -101,9 +98,6 @@ struct RadioView: View {
             }
             .onAppear { radio.start() }
             .onDisappear {
-                // Polling must keep running while the stream is playing so
-                // now-playing metadata stays fresh; stop() only invalidates
-                // the metadata poll timer and never touches playback.
                 if !playback.isRadioMode {
                     radio.stop()
                 }
@@ -449,12 +443,6 @@ struct RadioView: View {
         .accessibilityIdentifier("Radio.HistorySection")
     }
 }
-
-/// Row identity for the radio history list. The offset keeps IDs unique when
-/// the same song appears twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The song ID makes the ID change when a poll prepends new
-/// items: with purely positional identity every row keeps its old view, so
-/// all visible artwork flashes back through placeholders on each track change.
 private struct PositionedRadioHistoryItem: Identifiable {
     struct ID: Hashable {
         let offset: Int

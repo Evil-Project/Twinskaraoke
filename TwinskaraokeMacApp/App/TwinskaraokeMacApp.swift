@@ -16,9 +16,6 @@ struct TwinskaraokeMacApp: App {
         }
         .defaultSize(width: 1180, height: 760)
         .commands {
-            // Transport in the menu bar, with the shortcuts Mac users expect
-            // from a media app. This is the main affordance Catalyst couldn't
-            // have given us for free.
             CommandMenu("Playback") {
                 Button(audio.isPlaying ? "Pause" : "Play") {
                     audio.togglePlayPause()

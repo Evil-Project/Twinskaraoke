@@ -1,14 +1,5 @@
 import Foundation
 import Observation
-
-/// Loads timed lyrics for the tvOS player.
-///
-/// Deliberately slimmer than the iOS `LyricsViewModel`: it hits the same
-/// `/api/songs/{id}/lyrics` endpoint and reuses the same `RawLyricLine` /
-/// `TimeSpanParser` decoding, but drops the on-disk cache and the translation
-/// pipeline. The Apple TV is always online — the same reason `AudioManager`
-/// streams instead of downloading — so an in-memory cache keyed by song is
-/// enough to make returning to a song in the same session instant.
 @MainActor
 @Observable
 final class TVLyricsViewModel {
@@ -16,18 +7,11 @@ final class TVLyricsViewModel {
     private(set) var isLoading = false
     private(set) var didFail = false
     private(set) var hasNoLyrics = false
-
-    /// The song a load is currently satisfied for. Cleared on failure so that
-    /// coming back to the player retries instead of showing a stale error.
     private var servedSongID: String?
-    /// The last song asked for, kept through failures purely so `retry` knows
-    /// what to re-request.
     private var requestedSongID: String?
 
     @ObservationIgnored private var task: Task<Void, Never>?
     private var cache: [String: [LyricLine]] = [:]
-    /// Songs the API answered 404 for, so switching back and forth doesn't
-    /// re-ask for something the catalog has already said it lacks.
     private var knownEmpty: Set<String> = []
 
     func load(songID: String) {
@@ -105,11 +89,6 @@ final class TVLyricsViewModel {
                 finish(songID: songID, outcome: .failure)
                 return
             }
-
-            // Lines the server can't give a usable timestamp for are dropped
-            // rather than pinned to zero, which would make them all light up
-            // together during the intro. Sorting guards the binary search in
-            // `TVLyricsView` against an out-of-order payload.
             let parsed = raw
                 .compactMap { line -> LyricLine? in
                     guard let time = TimeSpanParser.parse(line.time) else { return nil }
@@ -132,8 +111,6 @@ final class TVLyricsViewModel {
     }
 
     private func finish(songID: String, outcome: Outcome) {
-        // A response that landed after the player moved on is discarded, so a
-        // slow request for the previous song can't overwrite the current one.
         guard servedSongID == songID else { return }
         isLoading = false
         switch outcome {

@@ -4,8 +4,6 @@ struct AccountView: View {
     @Environment(MacAuthManager.self) private var auth
     @State private var username = ""
     @State private var password = ""
-    /// QR pairing is the default: it's the fastest path in when the phone app
-    /// is already signed in, same reasoning as tvOS.
     @State private var usePasswordSignIn = false
 
     var body: some View {

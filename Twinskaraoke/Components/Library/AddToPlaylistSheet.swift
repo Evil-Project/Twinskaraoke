@@ -62,10 +62,6 @@ struct AddToPlaylistSheet: View {
             }
             .smoothScrolling()
             .musicScreenBackground()
-            // `safeAreaBar`, not `safeAreaInset`: this is a bar, so the system
-            // supplies its background and scroll-edge behaviour. That replaces
-            // the hand-applied glass this used to carry, which never sat right
-            // — glass suits a floating shape, and this is flush and full-width.
             .safeAreaBar(edge: .bottom) {
                 if !manager.playlists.isEmpty {
                     Button {
@@ -88,8 +84,6 @@ struct AddToPlaylistSheet: View {
             .navigationTitle("Add to Playlist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // These carry their own glass, so the toolbar must not put its
-                // shared glass behind them as well.
                 ToolbarItem(placement: .cancellationAction) {
                     GlassXButton(action: {
                         AppHaptic.selection.play()

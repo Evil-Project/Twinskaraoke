@@ -361,8 +361,6 @@ struct SongActionsMenuItems: View {
     private let isDownloaded: Bool
     private let isDownloading: Bool
     private let favorites = FavoritesManager.shared
-    // Non-nil only inside an editable playlist the user owns; see
-    // PlaylistSongRemoval.swift.
     @Environment(\.playlistSongRemoval) private var playlistRemoval
 
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {

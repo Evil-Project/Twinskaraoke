@@ -460,9 +460,6 @@ private struct BrowseCategoriesView: View {
         .scrollIndicators(.hidden)
         .refreshable {
             AppHaptic.selection.play()
-            // `async let` so the three shelves reload concurrently; awaiting
-            // them in sequence would make the spinner sit through three
-            // round trips instead of one.
             async let genres: Void = genresVM.refreshGenres()
             async let topChart: Void = topChartVM.refreshTopChart()
             async let playlists: Void = publicPlaylistsVM.refreshPublicPlaylists()
@@ -629,8 +626,6 @@ private struct BrowseCategoriesView: View {
         }
         return genres[Self.stablePaletteIndex(for: name, count: genres.count)].1
     }
-
-    /// FNV-1a over unicode scalars: stable across launches, unlike `hashValue`.
     private static func stablePaletteIndex(for name: String, count: Int) -> Int {
         var hash: UInt64 = 1_469_598_103_934_665_603
         for scalar in name.unicodeScalars {
@@ -704,9 +699,6 @@ struct GenreDetailView: View {
                 .transition(.opacity)
             }
         }
-        // Keyed on the purge generation, not the cache entry: a memory-warning
-        // purge cancels in-flight detail tasks without changing allSongs, so a
-        // nil-entry key would never change and the load would never restart.
         .task(id: viewModel.detailGeneration) {
             viewModel.retainDetail(genre.id, owner: detailOwner)
             viewModel.loadDetailIfNeeded(for: genre)

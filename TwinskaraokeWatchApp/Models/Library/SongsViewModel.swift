@@ -6,8 +6,6 @@ import Observation
 final class SongsViewModel {
     var songs: [Song] = []
     var isLoading = false
-    /// Set when the initial load fails so the view can offer a retry instead
-    /// of showing a misleading empty state.
     var loadError: String?
 
     func fetchSongs() {

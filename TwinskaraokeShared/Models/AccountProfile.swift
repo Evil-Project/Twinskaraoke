@@ -1,13 +1,5 @@
 import Foundation
 
-/// Account profile, badge and upload-limit shapes returned by
-/// `/api/badge/profile` and `/api/user/upload-limits`.
-///
-/// These began life inside the tvOS `TVAuthManager`; they moved here when the
-/// Mac app needed the same profile screen. Nothing in them is platform
-/// specific — plain `Decodable` value types over Foundation — so every target
-/// that already compiles `TwinskaraokeShared` gets them for free.
-
 struct ProfileResponse: Decodable, Sendable {
     let profile: UserProfile
     let badges: [AccountBadge]?

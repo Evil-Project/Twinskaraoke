@@ -1,11 +1,4 @@
 import SwiftUI
-
-/// Videos the viewer started but did not finish, newest first.
-///
-/// Rendered straight from `VideoResumeStore` rather than from the gallery feed:
-/// the feed pages 25 at a time through ~1400 videos, so anything watched more
-/// than a few days ago is almost never among the pages currently loaded. The
-/// store keeps the `GalleryVideo` alongside the position for exactly this.
 struct ContinueWatchingSection: View {
     let zoomNamespace: Namespace.ID
 
@@ -20,10 +13,6 @@ struct ContinueWatchingSection: View {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 14) {
                         ForEach(points) { point in
-                            // The id is prefixed because the same video can also
-                            // be on screen in the grid below, and two zoom
-                            // transition sources sharing one id in one namespace
-                            // is ambiguous.
                             ZoomNavigationLink(id: "continue-\(point.id)", in: zoomNamespace) {
                                 VideoPlayerScreen(video: point.video)
                             } label: {
@@ -45,8 +34,6 @@ struct ContinueWatchingSection: View {
                         }
                     }
                     .padding(.horizontal, AM.Spacing.screenMargin)
-                    // Cards lift under `PressableButtonStyle`, and a LazyHStack
-                    // clips to its own bounds without room to grow into.
                     .padding(.vertical, 2)
                 }
                 .scrollIndicators(.hidden)
@@ -116,8 +103,6 @@ private struct ContinueWatchingCard: View {
                         .lineLimit(1)
                 }
             }
-            // Two title lines plus a creator line, so cards in a row keep their
-            // posters aligned whatever the title length.
             .frame(width: 208, height: 52, alignment: .topLeading)
         }
     }

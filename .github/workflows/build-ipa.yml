@@ -21,13 +21,9 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest
-      # ------------------------
 
       - name: Archive iPhone
         run: |
-          # -skipPackagePluginValidation: Pillarbox ships a build tool plugin that
-          # Xcode refuses to run until it is trusted, and the prompt that grants
-          # trust cannot be answered on a runner. See tests.yml.
           xcodebuild archive \
             -project Twinskaraoke.xcodeproj \
             -skipPackagePluginValidation \
@@ -43,9 +39,7 @@ jobs:
           mkdir -p Payload
           cp -R build/iPhone.xcarchive/Products/Applications/*.app Payload/
           
-          # --- sideload fix ---
           rm -rf Payload/*.app/Watch
-          # ---------------------
           
           zip -q -r Twinskaraoke-iPhone-Sideload.ipa Payload
           mkdir -p output && mv Twinskaraoke-iPhone-Sideload.ipa output/
@@ -83,7 +77,6 @@ jobs:
           name: Twinskaraoke-Watch
           path: output_watch/Twinskaraoke-Watch.ipa
 
-      # --- NIGHTLYS ---
       
       - name: Update "nightly" Git Tag
         run: |

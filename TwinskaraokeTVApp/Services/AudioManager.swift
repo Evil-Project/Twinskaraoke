@@ -16,11 +16,6 @@ enum PlaybackMode {
         }
     }
 }
-
-/// Streaming audio playback for the tvOS app. The Apple TV is always online, so
-/// unlike the watch target this streams directly through `AVPlayer` rather than
-/// downloading to a local cache first. It still drives the queue, Now Playing
-/// info, and the Siri Remote / Control Center transport commands.
 @MainActor
 @Observable
 final class AudioManager {
@@ -58,15 +53,10 @@ final class AudioManager {
         setupRemoteCommands()
         setupInterruptionHandler()
     }
-
-    /// Clamped to 0...1: `currentTime` can briefly overshoot `duration` around
-    /// a track boundary, and callers scale view widths by this.
     var progress: Double {
         guard duration > 0 else { return 0 }
         return min(max(currentTime / duration, 0), 1)
     }
-
-    // MARK: - Queue
 
     private func refreshUpNext() {
         guard let index = resolvedCurrentQueueIndex else {
@@ -88,8 +78,6 @@ final class AudioManager {
         }
         return queue.firstIndex(of: currentSong)
     }
-
-    // MARK: - Playback control
 
     func play(song: Song, context: [Song] = []) {
         let isCurrentSong = currentSong?.id == song.id
@@ -189,9 +177,6 @@ final class AudioManager {
                 refreshPlaybackState()
             }
             .store(in: &cancellables)
-
-        // 0.1s rather than 0.5s: `currentTime` is what drives lyric highlighting,
-        // and at half-second granularity a line could light up a beat late.
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
@@ -363,8 +348,6 @@ final class AudioManager {
         currentTime = clamped
         updateNowPlayingInfo()
     }
-
-    // MARK: - Session & remote commands
 
     private func configureAudioSession() {
         try? AVAudioSession.sharedInstance().setCategory(

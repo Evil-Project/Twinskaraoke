@@ -19,10 +19,7 @@ final class WatchSessionPublisher: NSObject {
     private var sessionChangedObserver: NSObjectProtocol?
 
     override private init() { super.init() }
-
-    /// Safe to call more than once; only the first call takes effect.
     func activate() {
-        // False on iPad and any device that can't pair a watch.
         guard WCSession.isSupported() else { return }
         guard sessionChangedObserver == nil else { return }
 
@@ -46,27 +43,13 @@ final class WatchSessionPublisher: NSObject {
         session.delegate = self
         session.activate()
     }
-
-    // MARK: - Publishing
-
-    /// - Parameter bumpingGeneration: `true` for a genuine session change, so
-    ///   the watch knows to re-pull the token. `false` when merely resending
-    ///   the state we already published (activation, watch app installed).
     private func publish(bumpingGeneration: Bool) {
-        // Recorded before the guards below, because the guards are about
-        // whether anyone is listening, not about whether the change happened.
-        // Signing out and back in as the same user with the watch unpaired
-        // used to leave the generation untouched, and the resend that follows
-        // reconnection carries `bumpingGeneration: false` — so the watch saw
-        // the number it had already applied and kept the old session's token.
         if bumpingGeneration {
             defaults.set(currentGeneration + 1, forKey: Self.generationKey)
         }
 
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        // Nothing to talk to yet; `sessionWatchStateDidChange` republishes once
-        // a watch is paired and the app installed.
         guard session.isPaired, session.isWatchAppInstalled else { return }
 
         guard var descriptor = AuthManager.persistedDescriptor() else { return }
@@ -93,8 +76,6 @@ extension WatchSessionPublisher: WCSessionDelegate {
         activationDidCompleteWith _: WCSessionActivationState,
         error _: Error?
     ) {
-        // The watch may have missed changes while unpaired or the app was gone;
-        // resend the current state without claiming it is new.
         Task { @MainActor [weak self] in
             self?.publish(bumpingGeneration: false)
         }
@@ -109,8 +90,6 @@ extension WatchSessionPublisher: WCSessionDelegate {
     nonisolated func sessionDidBecomeInactive(_: WCSession) {}
 
     nonisolated func sessionDidDeactivate(_: WCSession) {
-        // Switching to a different paired watch: reactivate so the new one
-        // receives the session too.
         WCSession.default.activate()
     }
 

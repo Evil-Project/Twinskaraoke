@@ -2,21 +2,7 @@ import SwiftUI
 
 #if canImport(UIKit)
     import UIKit
-
-    /// A borderless window stacked above the app's main window so Shimeji can
-    /// walk over any screen, including the tab bar and any presented sheets.
-    /// Touches only register where a sprite actually is; everywhere else
-    /// passes straight through to the app underneath.
-    ///
-    /// This checks against the engine's own tracked sprite positions rather
-    /// than relying on the hit-tested UIView's identity: SwiftUI content
-    /// hosted via UIHostingController is typically backed by a single root
-    /// UIView (not one UIView per SwiftUI node), so UIKit's normal hitTest
-    /// can't distinguish "over a sprite" from "over empty space" on its own.
     final class ShimejiOverlayWindow: UIWindow {
-        /// Small margin beyond the sprite's actual drawn footprint so a
-        /// drag doesn't require pixel-perfect precision, without ballooning
-        /// out far enough to block taps on nearby UI.
         private let touchMargin: CGFloat = 8
         var engine: ShimejiEngine?
 
@@ -41,8 +27,6 @@ import SwiftUI
             return super.hitTest(point, with: event)
         }
     }
-
-    /// Owns the overlay window's lifecycle. One instance for the app.
     @MainActor
     final class ShimejiOverlayController {
         let engine = ShimejiEngine()
@@ -121,8 +105,6 @@ import SwiftUI
                     }
                 }
                 .onAppear {
-                    // Fallback in case the scene-based bounds tracker hasn't
-                    // fired yet on first frame.
                     if engine.bounds == .zero {
                         engine.bounds = proxy.frame(in: .global)
                     }

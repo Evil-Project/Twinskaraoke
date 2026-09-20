@@ -10,6 +10,8 @@ struct PlayerAmbientBackground: View {
     var isPlaying: Bool = true
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
+    private let scrollState = ScrollPerformanceState.shared
     @State private var palette: ArtworkPalette = .placeholder
     @State private var paletteSourceURL: URL?
     @Environment(\.scenePhase) private var scenePhase
@@ -19,21 +21,7 @@ struct PlayerAmbientBackground: View {
     private var shouldAnimateAmbient: Bool {
         isPlaying && isVisible && !reduceEffects && scenePhase == .active
     }
-
-    /// Seconds for one full out-and-back breath.
     private static let breathingPeriod: TimeInterval = 12
-
-    /// Defence in depth against the backdrop's extent depending on safe-area
-    /// insets. `.ignoresSafeArea()` does not pin a view to the screen, it expands
-    /// it *by the current insets*, so anything that moves those insets moves this
-    /// backdrop's edges with them. Overscanning keeps the painted area past every
-    /// edge whatever the insets do; the host clips the overflow.
-    ///
-    /// Sized against the insets themselves rather than the screen: the largest
-    /// this has to clear is one safe-area inset, ~67pt at the extreme on device,
-    /// so this leaves comfortable headroom for taller hardware. Scaling it to the
-    /// display would overscan an iPad far past anything the insets can reach and
-    /// pay for it in blurred area on every frame.
     private static let safeAreaOverscan: CGFloat = 96
 
     var body: some View {
@@ -47,13 +35,6 @@ struct PlayerAmbientBackground: View {
         .ignoresSafeArea()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: artworkURL)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: palette)
-        // A `withAnimation` transaction applies to every animatable change in
-        // the update, not just the state it wraps, so a `repeatForever` started
-        // anywhere in the app could latch onto this backdrop's geometry and
-        // oscillate it forever. This is a decorative full-bleed layer that
-        // should never inherit motion from elsewhere: drop any ambient
-        // animation at the boundary. The `.animation(_:value:)` modifiers above
-        // sit inside it and still drive the backdrop's own transitions.
         .transaction { $0.animation = nil }
         .onAppear {
             isVisible = true
@@ -68,20 +49,6 @@ struct PlayerAmbientBackground: View {
             animationClock.setRunning(running, at: .now)
         }
     }
-
-    /// Progress through the breath, 0...1 and back, eased at the turns.
-    ///
-    /// Driven off the clock rather than a `repeatForever` animation. An endless
-    /// SwiftUI animation is a transaction, and a transaction applies to every
-    /// animatable change in its subtree — including the safe-area expansion that
-    /// sizes this backdrop. Started that way, the breath latched onto the
-    /// backdrop's top edge and oscillated it between the real inset and zero for
-    /// as long as the view lived, sliding the artwork off screen and exposing the
-    /// layer beneath. Scoping it with `.animation(_:value:)` was not enough:
-    /// that modifier still animates everything in its subtree, so keying one on
-    /// the play/pause flag would re-arm the same leak on the same trigger. A
-    /// clock produces the same motion with no transaction to leak, and `paused:`
-    /// stops it without leaving anything running.
     private static func breathingPhase(elapsed: TimeInterval) -> Double {
         let cycle = elapsed
             .truncatingRemainder(dividingBy: breathingPeriod) / breathingPeriod
@@ -91,20 +58,7 @@ struct PlayerAmbientBackground: View {
     @ViewBuilder
     private var blurredArtworkLayer: some View {
         if let artworkURL {
-            // The backdrop is blurred beyond recognition anyway, so load the
-            // 32px server-blurred variant instead of the full card image:
-            // far less decode, memory and GPU work for the same visual result.
             let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
-            // The image goes in an `overlay` so it cannot influence the size of
-            // anything above it. `.aspectRatio(.fill)` always resolves to a size
-            // that *covers* the proposal, and `.frame(maxWidth:maxHeight:)` does
-            // not clamp a child that came back larger — it adopts the child's
-            // size. That let the image inflate the frame, the frame inflate the
-            // ZStack, and the backdrop end up laid out at the artwork's aspect
-            // ratio instead of the screen's, so it no longer covered the display.
-            // Overlay content never feeds size back to its parent, which keeps the
-            // clamp without an explicit numeric frame for an animation to
-            // interpolate.
             Color.clear
                 .overlay {
                     WebImage(
@@ -114,7 +68,7 @@ struct PlayerAmbientBackground: View {
                     ) { image in
                         TimelineView(
                             .animation(
-                                minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
+                                minimumInterval: DisplayRefreshRate.ambientAnimationInterval,
                                 paused: !shouldAnimateAmbient
                             )
                         ) { context in
@@ -127,15 +81,7 @@ struct PlayerAmbientBackground: View {
                                 .aspectRatio(contentMode: .fill)
                                 .blur(radius: runtimeBlurRadius)
                                 .saturation(1.05)
-                                // Deliberately no `.drawingGroup()`. It bought
-                                // nothing here — the source is the 32px
-                                // server-blurred variant above, so there is no
-                                // costly rasterization worth caching — while
-                                // forcing a full-screen offscreen pass on every
-                                // re-render, and this view re-renders constantly
-                                // because `audioManager` republishes during
-                                // playback. `.blur` on its own is a hardware
-                                // filter and needs no offscreen buffer.
+                                .drawingGroup(opaque: true, colorMode: .linear)
                                 .scaleEffect(1.22 + 0.06 * phase)
                                 .offset(
                                     x: -8 + 16 * phase,
@@ -244,8 +190,6 @@ struct PlayerAmbientBackground: View {
             palette = .placeholder
             return
         }
-        // Tag the request with its URL so a slow extraction for an older
-        // artwork can't overwrite a newer palette after quick song skips.
         paletteSourceURL = url
         #if canImport(UIKit)
             SDWebImageManager.shared.loadImage(
@@ -255,7 +199,6 @@ struct PlayerAmbientBackground: View {
                 progress: nil
             ) { image, _, _, _, _, _ in
                 guard let image else { return }
-                // Pixel sampling is too heavy for the main-queue completion.
                 Task.detached(priority: .utility) {
                     let extracted = ArtworkPalette(image: image)
                     await MainActor.run {

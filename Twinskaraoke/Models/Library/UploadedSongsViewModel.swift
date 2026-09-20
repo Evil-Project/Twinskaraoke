@@ -26,10 +26,6 @@ final class UploadedSongsViewModel {
     @ObservationIgnored private var lastRebuiltSearchText = ""
     private var songsGeneration: UInt64 = 0
     private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
-
-    /// Replaces `$searchText.debounce(200ms).removeDuplicates()`. Filtering a
-    /// large library runs localized comparisons per song, so keystrokes must
-    /// still coalesce.
     private func scheduleDisplayedSongsRebuild() {
         searchDebounceTask?.cancel()
         searchDebounceTask = Task { [weak self] in
@@ -112,9 +108,6 @@ final class UploadedSongsViewModel {
             }
         }
     }
-
-    // Sorting is the expensive half of a rebuild; cache it per (sort, songs)
-    // so search keystrokes only pay for the filter pass.
     private var sortedSongs: [Song] {
         if let sortCache,
            sortCache.sort == sort,
@@ -251,9 +244,6 @@ actor UploadedSongDurationResolver {
                 coverArtists: song.coverArtists,
                 userUploaded: song.userUploaded,
                 oss: song.oss,
-                // Carried through: this rebuild runs over playlist songs, and
-                // losing `order` here silently reverted them to an unpositioned
-                // state that reordering then had to guess at.
                 order: song.order
             )
         }

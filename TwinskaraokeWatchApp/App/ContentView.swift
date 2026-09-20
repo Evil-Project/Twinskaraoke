@@ -249,9 +249,6 @@ struct WatchEmptyState: View {
         .accessibilityHint(message)
     }
 }
-
-/// Shown when an initial load fails, so a network error is not mistaken for
-/// an empty library. Mirrors WatchEmptyState with an added retry action.
 struct WatchLoadErrorState: View {
     let title: String
     let message: String

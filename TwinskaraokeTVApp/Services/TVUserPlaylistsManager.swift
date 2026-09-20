@@ -1,15 +1,5 @@
 import Foundation
 import Observation
-
-/// The signed-in user's own playlists, from `/api/user/playlists`.
-///
-/// Shared rather than per-view state because the grid and the create sheet
-/// presented over it both work on the same list — a playlist saved in the sheet
-/// has to land in the grid behind it without the user refreshing anything.
-///
-/// This is the tvOS counterpart to the iOS `UserPlaylistsManager`; it stays a
-/// separate type because that one carries iOS-only collaborators (the
-/// recently-added tracker, the song-count store) that have no tvOS surface.
 @MainActor
 @Observable
 final class TVUserPlaylistsManager {
@@ -18,14 +8,8 @@ final class TVUserPlaylistsManager {
     private(set) var playlists: [UserPlaylist] = []
     private(set) var isLoading = false
     private(set) var loadError: String?
-
-    /// The token the current list was fetched with. Compared on each appearance
-    /// so signing out and back in as someone else refetches rather than leaving
-    /// the previous account's playlists on screen.
     @ObservationIgnored private var loadedToken: String?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
-    /// Bumped per load so a cancelled fetch resuming late can't clear the
-    /// loading flag out from under the one that replaced it.
     @ObservationIgnored private var generation = 0
 
     private init() {
@@ -43,18 +27,11 @@ final class TVUserPlaylistsManager {
     var isSignedIn: Bool {
         CredentialStore.isAuthenticated
     }
-
-    /// Call on every appearance: loads on first sight of a signed-in session,
-    /// refetches when the account changed, and clears after a sign-out.
     func loadIfNeeded() {
         guard let token = CredentialStore.token, !token.isEmpty else {
             clear()
             return
         }
-        // A failed load leaves `loadedToken` nil, so the next appearance retries
-        // instead of showing a stale error over an account we never read — but
-        // not while that retry is still in flight, or switching tabs during the
-        // first load restarts it each time.
         guard loadedToken != token, !isLoading else { return }
         load()
     }
@@ -96,9 +73,6 @@ final class TVUserPlaylistsManager {
             }
         }
     }
-
-    /// Creates a playlist and reloads the list so the caller's grid shows it.
-    /// Returns `false` if the save didn't reach the server.
     func create(name: String, description: String?, isPublic: Bool) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
 
@@ -125,9 +99,6 @@ final class TVUserPlaylistsManager {
         load()
         return true
     }
-
-    /// Adds one song to one of the user's playlists.
-    /// Returns `false` if the server didn't accept it.
     func addSong(_ songID: String, to playlistID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
 
@@ -150,14 +121,6 @@ final class TVUserPlaylistsManager {
         load()
         return true
     }
-
-    /// Removes one song from one of the user's playlists.
-    /// Returns `false` if the server didn't accept the removal.
-    ///
-    /// Note the different route shape from `addSong`: adding is
-    /// `PUT /api/user/playlists/{id}?songId=`, the only method that path
-    /// accepts, while removal lives on `/api/playlist/{id}/song/{songId}` and
-    /// accepts DELETE alone.
     func removeSong(_ songID: String, from playlistID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
 
@@ -168,12 +131,6 @@ final class TVUserPlaylistsManager {
             request.httpMethod = "DELETE"
             _ = try await KaraokeAPIClient.data(for: request)
         } catch KaraokeAPIClient.APIError.httpStatus(404) {
-            // A 404 means the membership is already gone — exactly what the
-            // caller asked for. This is reachable: data(for:) classes DELETE as
-            // idempotent and retries it, so losing the response to a request the
-            // server did apply produces a second DELETE that 404s. Reporting
-            // failure there would put the row back behind an error alert
-            // despite the song being gone server-side.
         } catch {
             DebugLogger.log(
                 "Remove song \(songID) from playlist \(playlistID) failed: \(String(describing: error))",
@@ -181,10 +138,6 @@ final class TVUserPlaylistsManager {
             )
             return false
         }
-
-        // The detail payload is cached for 60s, and the grid caption shows a
-        // song count from the list endpoint — both would otherwise still show
-        // the removed song after the user backs out and comes straight back in.
         await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
         load()
         return true

@@ -23,9 +23,7 @@ final class TVAuthManager {
     enum QRPhase: Equatable {
         case idle
         case creating
-        /// Code on screen, polling for a phone to approve it.
         case waiting
-        /// Approved; exchanging the token for a session.
         case completing
         case expired
     }
@@ -150,11 +148,6 @@ final class TVAuthManager {
             authError = friendlyMessage(for: error)
         }
     }
-
-    // MARK: - QR device pairing
-
-    /// Requests a pairing code and polls until a signed-in phone approves it.
-    /// Safe to call repeatedly; any in-flight attempt is replaced.
     func startQRSignIn() {
         guard !isAuthenticating else { return }
         qrTask?.cancel()
@@ -190,8 +183,6 @@ final class TVAuthManager {
         qrPhase = .waiting
 
         let start = Date()
-        // A single network blip shouldn't throw away a code the user is
-        // already pointing a phone at; only give up after it keeps failing.
         var consecutiveFailures = 0
 
         while !Task.isCancelled {
@@ -199,8 +190,6 @@ final class TVAuthManager {
                 qrPhase = .expired
                 return
             }
-
-            // Tight while the user is most likely mid-scan, slower after.
             let interval: Double = Date().timeIntervalSince(start) < 30 ? 2 : 5
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
@@ -208,8 +197,6 @@ final class TVAuthManager {
             do {
                 let poll = try await QRSignIn.status(of: session.id)
                 guard !Task.isCancelled, qrSession?.id == session.id else { return }
-                // The server owns the deadline; the value from `createSession`
-                // is only a placeholder until the first poll lands.
                 if let expiresAt = poll.expiresAt, expiresAt != session.expiresAt {
                     session.expiresAt = expiresAt
                     qrSession = session
@@ -239,9 +226,6 @@ final class TVAuthManager {
     }
 
     private func completeQRSignIn(token: String) async throws {
-        // Without readable claims the session would persist with an empty
-        // username, which `loadPersistedSession` treats as half-committed and
-        // wipes on next launch — fail loudly here instead.
         guard let claims = Self.parseJWT(token) else {
             throw AuthError.invalidResponse
         }
@@ -442,9 +426,6 @@ final class TVAuthManager {
     }
 
     private func friendlyMessage(for error: Error) -> String {
-        // `ServiceError` already phrases its own cases for this screen — most
-        // usefully the 429 rate-limit text, which the generic fallback below
-        // would otherwise flatten into a connection problem.
         if let serviceError = error as? QRSignIn.ServiceError,
            let description = serviceError.errorDescription
         {

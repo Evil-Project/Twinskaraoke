@@ -1,13 +1,4 @@
 import SwiftUI
-
-/// Time-synced lyrics for the tvOS player, mirroring the iOS `LyricsView`: the
-/// active line is bright and full size, neighbouring lines dim and soften with
-/// distance, and the list scrolls itself to keep the active line centred.
-///
-/// Unlike iOS the lines are **not** interactive. A focusable line would pull the
-/// Siri Remote away from the transport controls beside it, and the focus engine
-/// would then fight the automatic scrolling for control of the scroll offset. On
-/// the TV this panel is something you read, not something you drive.
 struct TVLyricsView: View {
     let lyrics: [LyricLine]
     let currentTime: TimeInterval
@@ -17,10 +8,6 @@ struct TVLyricsView: View {
     var onRetry: (() -> Void)?
 
     @Environment(\.appReduceMotion) private var reduceMotion
-
-    /// Index of the last line whose timestamp has passed, or -1 while the intro
-    /// is still playing. Binary search because this recomputes on every clock
-    /// tick and a long song can run to several hundred lines.
     private var currentIndex: Int {
         guard !lyrics.isEmpty else { return -1 }
         var low = 0
@@ -74,9 +61,6 @@ struct TVLyricsView: View {
                             .equatable()
                             .id(lyrics[index].id)
                         }
-
-                        // Lets the final line reach the centre anchor instead of
-                        // stopping at the bottom of the scroll view.
                         Spacer().frame(height: 260)
                     }
                     .padding(.horizontal, 8)
@@ -95,8 +79,6 @@ struct TVLyricsView: View {
                     scroll(to: index, proxy: proxy)
                 }
                 .onAppear {
-                    // Entering the tab mid-song should land on the current line
-                    // rather than animating up from the top.
                     proxy.scrollTo(anchorID(for: currentIndex), anchor: .center)
                 }
             }
@@ -153,15 +135,10 @@ struct TVLyricsView: View {
     }
 }
 
-// MARK: - Line
-
 private struct TVLyricLineRow: View, Equatable {
     let line: LyricLine
     let index: Int
     let currentIndex: Int
-    /// Only supplied for an active instrumental break, where the dots fill in
-    /// time with the gap; nil everywhere else so ordinary lines don't redraw on
-    /// every clock tick.
     let currentTime: TimeInterval?
     let nextLineTime: TimeInterval?
 
@@ -200,12 +177,6 @@ private struct TVLyricLineRow: View, Equatable {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, isCurrent ? 14 : 8)
             } else {
-                // One size and weight for every line, with emphasis carried by
-                // colour and `scaleEffect`. Animating the font size instead —
-                // which is what iOS does, at sizes small enough to get away with
-                // it — re-wraps the text mid-transition, and SwiftUI crossfades
-                // the two different wraps: the active line visibly renders twice,
-                // overlapping itself. Scaling never re-wraps.
                 Text(line.text)
                     .font(.system(size: 38, weight: .semibold))
                     .foregroundStyle(lineColor)
@@ -215,9 +186,6 @@ private struct TVLyricLineRow: View, Equatable {
             }
         }
         .blur(radius: lineBlur)
-        // Anchored leading so the growing active line pushes right rather than
-        // drifting out from under the line above it. Kept modest: a full-width
-        // line at a larger factor would scale past the column's right edge.
         .scaleEffect(reduceMotion ? 1 : (isCurrent ? 1.09 : 0.97), anchor: .leading)
         .opacity(lineOpacity)
         .animation(reduceMotion ? nil : AppMotion.gentle, value: currentIndex)
@@ -232,9 +200,6 @@ private struct TVLyricLineRow: View, Equatable {
     }
 
     private var lineBlur: CGFloat {
-        // Depth-of-field, same as iOS: the active line stays crisp and the rest
-        // soften with distance. Skipped under reduce motion, where the constant
-        // refocusing reads as movement.
         guard !reduceMotion, !isCurrent else { return 0 }
         return min(3.0, 1.0 * CGFloat(distance))
     }
@@ -245,8 +210,6 @@ private struct TVLyricLineRow: View, Equatable {
         return max(0.45, 1 - Double(distance - 2) * 0.12)
     }
 }
-
-// MARK: - Intro
 
 private struct TVIntroDots: View {
     let isActive: Bool

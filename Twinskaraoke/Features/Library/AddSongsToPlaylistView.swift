@@ -1,18 +1,7 @@
 import SwiftUI
-
-/// The playlist editor's "+" destination: search the catalogue and add songs to
-/// the collection being edited.
-///
-/// The inverse of `AddToPlaylistSheet`, which starts from one song and picks a
-/// playlist. Here the playlist is fixed and the songs are what vary, so the two
-/// share a look but not a structure.
 struct AddSongsToPlaylistView: View {
     let target: PlaylistEditTarget
-    /// Songs already in the collection, so they can be shown as present rather
-    /// than offered again. Includes anything added during this session.
     let existingSongIDs: Set<String>
-    /// Handed the songs that were actually accepted by the server, so the
-    /// editor can append them without refetching.
     let onFinish: ([Song]) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -26,8 +15,6 @@ struct AddSongsToPlaylistView: View {
     @State private var inFlight: Set<String> = []
     @State private var added: [Song] = []
     @State private var failed: Set<String> = []
-    /// `onDisappear` can fire more than once for a single dismissal; without
-    /// this the editor would append the same songs twice.
     @State private var hasReported = false
 
     private var addedIDs: Set<String> { Set(added.map(\.id)) }
@@ -53,21 +40,12 @@ struct AddSongsToPlaylistView: View {
                 .onChange(of: query) { _, newValue in
                     scheduleSearch(for: newValue)
                 }
-                // Completion hangs off dismissal, not off the Done button.
-                //
-                // This is a sheet, so it can also be swiped away — and songs
-                // added before that swipe are already on the server. Reporting
-                // them only from Done meant a swipe-dismiss left the editor
-                // showing a list that was missing them, which it would then
-                // hand back to the detail screen as if authoritative.
                 .onDisappear {
                     searchTask?.cancel()
                     guard !hasReported else { return }
                     hasReported = true
                     onFinish(added)
                 }
-                // Additions are in flight; leaving now would drop them from the
-                // report even though the server is applying them.
                 .interactiveDismissDisabled(!inFlight.isEmpty)
                 .animation(reduceMotion ? nil : AppMotion.quick, value: results)
                 .animation(reduceMotion ? nil : AppMotion.snap, value: inFlight)
@@ -106,9 +84,6 @@ struct AddSongsToPlaylistView: View {
 
     private func row(for song: Song) -> some View {
         let isPresent = existingSongIDs.contains(song.id) || addedIDs.contains(song.id)
-        // The same lean row the editor uses. `PlaylistRow` brings its own
-        // ellipsis menu, which sat next to the add button as a second trailing
-        // control and crowded the title out.
         return HStack(spacing: 12) {
             PlaylistEditSongRow(song: song)
             Spacer(minLength: 8)
@@ -143,15 +118,10 @@ struct AddSongsToPlaylistView: View {
                 .foregroundStyle(Color.appAccent)
         }
     }
-
-    /// Only dismisses — `onDisappear` is the single completion path, so Done
-    /// and a swipe report the same thing exactly once.
     private func finish() {
         AppHaptic.commit.play()
         dismiss()
     }
-
-    /// Debounced so typing doesn't fire a request per keystroke.
     private func scheduleSearch(for text: String) {
         searchTask?.cancel()
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

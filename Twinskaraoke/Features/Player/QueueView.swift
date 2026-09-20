@@ -150,8 +150,6 @@ struct QueueView: View {
                 AddToPlaylistSheet(song: current)
             }
         }
-        // Snapshot up-next only when the queue or current song changes, so
-        // unrelated AudioPlayerManager publishes don't redo the O(n) slice.
         .onAppear { refreshUpNextSongs() }
         .onChange(of: audioManager.queue) { _, _ in refreshUpNextSongs() }
         .onChange(of: audioManager.currentSong?.id) { _, _ in refreshUpNextSongs() }
@@ -330,8 +328,6 @@ struct QueueView: View {
     }
 
     private func refreshUpNextSongs() {
-        // Match by id: applyEnrichedMetadata replaces currentSong with a fresh
-        // instance that no longer == the queue copy.
         guard let current = audioManager.currentSong,
               let idx = audioManager.queue.firstIndex(where: { $0.id == current.id }),
               idx + 1 < audioManager.queue.count
@@ -341,11 +337,6 @@ struct QueueView: View {
             return
         }
         let songs = Array(audioManager.queue[(idx + 1)...])
-        // Stable identities across refreshes: match each occurrence to the
-        // previous entry with the same (song id, occurrence index) pair, so
-        // identity follows the song occurrence rather than the position — a
-        // moved row keeps its UUID, and minting fresh UUIDs here would destroy
-        // every row (killing sheets/drags) on each track advance.
         var previousIDs: [String: UUID] = [:]
         var previousCounts: [String: Int] = [:]
         for entry in upNextEntries {
@@ -360,8 +351,6 @@ struct QueueView: View {
             let id = previousIDs["\(song.id)#\(occurrence)"] ?? UUID()
             return UpNextEntry(id: id, song: song, position: offset + 1)
         }
-        // Rows otherwise rely on the source list having warmed these; the queue
-        // can outlive that list, so warm the row variants here too.
         ArtworkPrefetcher.shared.prefetchSongs(
             Array(songs.prefix(12)),
             limit: 12,
@@ -370,13 +359,8 @@ struct QueueView: View {
         )
     }
 }
-
-/// Stable identity for a queue row: positional `ForEach` identity mis-tracks
-/// rows while the user reorders the up-next list, so each queue occurrence
-/// gets a UUID that refreshUpNextSongs carries across refreshes.
 private struct UpNextEntry: Identifiable {
     let id: UUID
     let song: Song
-    /// 1-based display position; also the index into the up-next slice + 1.
     let position: Int
 }

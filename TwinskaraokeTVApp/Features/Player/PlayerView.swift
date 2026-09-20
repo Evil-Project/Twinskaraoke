@@ -37,9 +37,6 @@ struct PlayerView: View {
             }
             .ignoresSafeArea()
             .blur(radius: 80)
-            // Heavier than it needs to be for artwork alone: the lyrics are the
-            // thing being read now, and a pale cover blurred out to near-white
-            // left the dimmed past/upcoming lines barely legible against it.
             .overlay(Color.black.opacity(0.72).ignoresSafeArea())
         } else {
             Color.black.ignoresSafeArea()
@@ -50,10 +47,6 @@ struct PlayerView: View {
     private var content: some View {
         if showsLyrics {
             HStack(alignment: .top, spacing: 72) {
-                // Fixed width rather than a share of the screen: the transport
-                // row is the widest thing in this column and it has a hard
-                // minimum, so the column is sized to fit it and the lyrics take
-                // whatever is left.
                 VStack(alignment: .leading, spacing: 28) {
                     artwork(size: 420)
                     trackInfo(titleSize: 38)
@@ -61,9 +54,6 @@ struct PlayerView: View {
                     transport(spacing: 36)
                     Spacer(minLength: 0)
                 }
-                // Wide enough for the focused transport button's pill, which
-                // spreads well past the 88pt button it wraps — at a narrower
-                // column the focused Repeat control lapped over the lyrics.
                 .frame(width: 640, alignment: .leading)
 
                 TVLyricsView(
@@ -77,17 +67,8 @@ struct PlayerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 100)
-            // Small, because `containerRelativeFrame` below measures the tab
-            // content area, which is already inset for the floating tab bar —
-            // this only has to clear the last few points of it.
             .padding(.top, 56)
             .padding(.bottom, 40)
-            // Pins the page to one screenful. tvOS hosts tab content in a
-            // scrolling container, which proposes unbounded height — so the
-            // lyrics panel's `maxHeight: .infinity` resolved to the height of
-            // the *entire* lyric list instead of the viewport. That made the
-            // whole page taller than the screen, and the artwork and controls
-            // scrolled away off the top along with the lyrics.
             .containerRelativeFrame(.vertical)
         } else {
             HStack(spacing: 80) {
@@ -104,11 +85,6 @@ struct PlayerView: View {
             .padding(.vertical, 80)
         }
     }
-
-    /// The lyrics panel claims half the screen, so it only earns that space when
-    /// there is something to put in it. A song the catalog has no lyrics for
-    /// falls back to the original wide layout instead of parking a permanent
-    /// "no lyrics" placeholder next to the artwork.
     private var showsLyrics: Bool {
         !lyrics.hasNoLyrics
     }
@@ -118,10 +94,6 @@ struct PlayerView: View {
             .frame(width: size, height: size)
             .shadow(radius: 30)
     }
-
-    /// Sized by the caller: the title has a narrower column to live in once the
-    /// lyrics panel is on screen, and at 52pt a normal song title wrapped past
-    /// two lines and got truncated.
     private func trackInfo(titleSize: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(audioManager.currentSong?.title ?? "")

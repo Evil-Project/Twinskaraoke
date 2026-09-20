@@ -9,7 +9,6 @@ final class CacheManager {
 
     nonisolated static let imageCacheLimit: UInt64 = 2 * 1024 * 1024 * 1024
     nonisolated static let musicCacheLimit: UInt64 = 4 * 1024 * 1024 * 1024
-    // Lyrics are KB-sized JSON documents; a few MB already holds thousands.
     nonisolated static let lyricsCacheLimit: UInt64 = 64 * 1024 * 1024
     nonisolated static let maxCacheAge: TimeInterval = 6 * 30 * 24 * 3600
 
@@ -19,33 +18,14 @@ final class CacheManager {
 
     private let fm = FileManager.default
     @ObservationIgnored private var sizeRefreshTask: Task<Void, Never>?
-
-    // Maintenance walks entire cache directories (music cache can hold
-    // gigabytes across hundreds of folders). That file I/O must stay off the
-    // main thread; the serial queue also keeps passes from overlapping.
     private nonisolated static let maintenanceQueue = DispatchQueue(
         label: "nk.cacheMaintenance", qos: .utility
     )
-
-    // Debounce state for the per-transition/per-save enforcement passes.
-    // Only touched on the serial maintenanceQueue.
     private nonisolated static let enforcementDebounceInterval: TimeInterval = 60
-    // Written on the serial maintenance queue, never read by a view:
-    // observation-tracking these would route background writes through the
-    // registrar and break the nonisolated(unsafe) contract.
     @ObservationIgnored private nonisolated(unsafe) var lastMusicEnforcementAt: Date?
     private nonisolated(unsafe) static var lastMusicCommitAt: Date?
-    // Written on the serial maintenance queue, never read by a view:
-    // observation-tracking these would route background writes through the
-    // registrar and break the nonisolated(unsafe) contract.
     @ObservationIgnored private nonisolated(unsafe) var lastMusicCacheSize: UInt64?
-    // Written on the serial maintenance queue, never read by a view:
-    // observation-tracking these would route background writes through the
-    // registrar and break the nonisolated(unsafe) contract.
     @ObservationIgnored private nonisolated(unsafe) var lastLyricsEnforcementAt: Date?
-    // Written on the serial maintenance queue, never read by a view:
-    // observation-tracking these would route background writes through the
-    // registrar and break the nonisolated(unsafe) contract.
     @ObservationIgnored private nonisolated(unsafe) var lastLyricsCacheSize: UInt64?
 
     private init() {
@@ -54,8 +34,6 @@ final class CacheManager {
             guard let self else { return }
             let pruned = pruneExpiredEntriesBlocking(directories: directories)
             DebugLogger.log("Pruned \(pruned) expired cache entries", category: .cache)
-            // The enforcement passes already measure each tree; reuse their
-            // sizes instead of walking every cache directory a second time.
             let image = enforceImageCacheLimitsBlocking()
             let music = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
             let lyrics = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
@@ -134,15 +112,10 @@ final class CacheManager {
     }
 
     func recordAccess(for url: URL) {
-        // touch() performs two synchronous setAttributes calls; keep them off
-        // the caller's thread (usually main, once per play).
         Self.maintenanceQueue.async {
             AudioCacheStore.touch(url)
         }
     }
-
-    /// Marks that a file was committed to the music cache, so the debounced
-    /// enforcement pass knows the tree changed since its last run.
     nonisolated static func noteMusicCacheCommit() {
         maintenanceQueue.async {
             lastMusicCommitAt = Date()
@@ -180,9 +153,6 @@ final class CacheManager {
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
             removeAllFiles(in: dir)
-            // The tree changed outside an enforcement pass; drop the debounced
-            // size/run markers so the next pass re-measures instead of
-            // republishing the pre-clear size.
             lastMusicEnforcementAt = nil
             lastMusicCacheSize = nil
             Self.lastMusicCommitAt = Date()
@@ -210,8 +180,6 @@ final class CacheManager {
         Self.maintenanceQueue.async { [weak self] in
             guard let self else { return }
             LyricsCacheStore.clear()
-            // Same as clearMusicCache: drop the debounced markers so the next
-            // enforcement pass re-measures instead of republishing stale sizes.
             lastLyricsEnforcementAt = nil
             lastLyricsCacheSize = nil
             let remainingSize = measuredDirectorySize(at: LyricsCacheStore.cacheDirectory)
@@ -245,8 +213,6 @@ final class CacheManager {
     func formattedLyricsCacheSize() -> String {
         formatBytes(lyricsCacheSize)
     }
-
-    // MARK: - Maintenance cores (run on maintenanceQueue, never the main actor)
 
     private nonisolated func publishSizes(
         _ sizes: (image: UInt64?, music: UInt64?, lyrics: UInt64?)
@@ -284,9 +250,6 @@ final class CacheManager {
                 "Image cache \(formatBytes(diskSize)) exceeds limit \(formatBytes(Self.imageCacheLimit)), clearing oldest",
                 category: .cache
             )
-            // SDWebImage prunes its own tree against the maxDiskSize set in
-            // ImageCacheConfig; a manual eviction walk here would race that
-            // I/O. Wait for the pass so the published size is post-evict.
             let evictionDone = DispatchSemaphore(value: 0)
             sdCache.deleteOldFiles {
                 evictionDone.signal()
@@ -301,8 +264,6 @@ final class CacheManager {
         musicDirectory: URL,
         excluding protectedIDs: Set<String>
     ) -> UInt64 {
-        // Runs on every track transition and after every vocal separation;
-        // skip the tree walk when nothing was committed since the last run.
         let now = Date()
         if let lastRun = lastMusicEnforcementAt,
            now.timeIntervalSince(lastRun) < Self.enforcementDebounceInterval,
@@ -322,8 +283,6 @@ final class CacheManager {
     }
 
     private nonisolated func enforceLyricsCacheLimitsBlocking(lyricsDirectory: URL) -> UInt64 {
-        // Lyrics saves trigger this per save; the files are tiny, so a light
-        // debounce avoids a full enumeration for every cached lyric.
         let now = Date()
         if let lastRun = lastLyricsEnforcementAt,
            now.timeIntervalSince(lastRun) < Self.enforcementDebounceInterval,
@@ -349,8 +308,6 @@ final class CacheManager {
         SDImageCache.shared.deleteOldFiles(completionBlock: nil)
         return prunedCount
     }
-
-    // MARK: - File helpers
 
     private nonisolated func directorySize(at url: URL) -> UInt64 {
         measuredDirectorySize(at: url) ?? 0
@@ -434,8 +391,6 @@ final class CacheManager {
         for folder in songDirectoriesOrderedByDate(in: directory) {
             guard currentSize > limit else { break }
             if protectedIDs.contains(folder.lastPathComponent) { continue }
-            // A streaming download commits into the song folder through a
-            // .partial file; never evict a folder mid-commit.
             if containsPartialFiles(folder) { continue }
             let size = directorySize(at: folder)
             do {
@@ -450,8 +405,6 @@ final class CacheManager {
             }
         }
         if currentSize > limit {
-            // The running total was subtracted from a stale pre-pass size and
-            // skips protected/partial folders; re-stat what actually remains.
             currentSize = directorySize(at: directory)
         }
         return currentSize

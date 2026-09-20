@@ -2,11 +2,6 @@ import SwiftUI
 
 struct AccountView: View {
     private let auth = WatchAuthManager.shared
-    /// Watched only for `cacheRevision`: a song that finishes downloading while
-    /// this screen is open changes what "Downloaded Audio" should say, and
-    /// leaving it to `onAppear` meant the listener had to navigate away and
-    /// back before the figure — and whether "Clear Cache" is even enabled —
-    /// caught up.
     private let audioManager = AudioManager.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
@@ -14,9 +9,6 @@ struct AccountView: View {
     @State private var showsFullGuestID = false
     @State private var showsClearCacheConfirmation = false
     @State private var cacheSizeBytes: Int64 = 0
-
-    /// `.file` counts the way a storage screen is expected to: what the disk
-    /// gives back, not the decimal size of the payload.
     private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file

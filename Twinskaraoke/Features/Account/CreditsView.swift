@@ -57,18 +57,6 @@ struct CreditsView: View {
                 creditRow(name: "Aferil", detail: "Creator and maintainer of the Karaoke App")
                 creditRow(name: "Emuz", detail: "Badge art editing", url: "https://x.com/possiblyemuz")
             }
-            Section("Internal Testing & Metadata") {
-                Text(
-                    "Big thanks for assisting with internal testing, bug reporting, and maintaining "
-                        + "accurate song metadata across the site:\n\n"
-                        + "flashfire8 • promote. • emuz • germaninfantry • magnettileman • waya13 • "
-                        + "kyarashard • ttsuyuki • nyss_7 • isrlygood • rachinova • ninjakai03 • "
-                        + "czadymny • gbritannia • sir_recker • dodo8071795"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 4)
-            }
             Section("Special Thanks") {
                 creditRow(
                     name: "Waya", detail: "Helped obtain artist permissions from B2",

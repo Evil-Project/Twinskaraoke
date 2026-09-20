@@ -1,12 +1,5 @@
 import SwiftUI
 import WidgetKit
-
-/// What the station is playing, on the watch face and in the Smart Stack.
-///
-/// Deliberately reads the public station metadata endpoint directly rather than
-/// anything the app has stored. That keeps the complication working without an
-/// App Group to share a container, without the Keychain, and without a signed-in
-/// session — none of which a watch face is a good place to depend on.
 struct RadioEntry: TimelineEntry {
     let date: Date
     let title: String
@@ -20,8 +13,6 @@ struct RadioEntry: TimelineEntry {
 }
 
 struct RadioProvider: TimelineProvider {
-    /// Watch complications get a small refresh budget, so this asks for less
-    /// than the app's 15-second polling: a face is a glance, not a monitor.
     private static let refreshInterval: TimeInterval = 15 * 60
 
     func placeholder(in _: Context) -> RadioEntry {
@@ -47,9 +38,6 @@ struct RadioProvider: TimelineProvider {
             )
         }
     }
-
-    /// Falls back to the station name rather than an error state: a face that
-    /// says "Twinskaraoke Radio" is more use than one showing a failure.
     private static func fetchEntry() async -> RadioEntry {
         var request = URLRequest(url: RadioStation.metadataURL)
         request.timeoutInterval = 10
@@ -77,7 +65,6 @@ struct RadioComplicationView: View {
     var body: some View {
         switch family {
         case .accessoryInline:
-            // A single line the system styles itself; no artwork, no colour.
             Text(inlineText)
 
         case .accessoryCircular:

@@ -102,14 +102,9 @@ struct FavoritesView: View {
         }
         .onAppear {
             favorites.loadIfNeeded()
-            // Forced because starring happens on this device too, from the
-            // player. `favoriteSongs()` is cached and `toggle` invalidates it,
-            // so an unchanged list costs a cache hit rather than a request.
             viewModel.fetch(force: true)
         }
         .onChange(of: auth.linkState) { _, state in
-            // Following the phone out of a session: drop the previous
-            // account's list rather than leaving it on screen.
             if state == .signedIn {
                 viewModel.fetch(force: true)
             } else {
@@ -130,9 +125,6 @@ struct FavoritesView: View {
 
     private func unfavorite(_ song: Song) {
         favorites.toggle(songID: song.id)
-        // `FavoritesManager` rolls its own state back if the request fails, but
-        // this list is a snapshot; drop the row now and let a later visit
-        // re-fetch the authoritative set.
         viewModel.remove(songID: song.id)
         WatchHaptic.play(.click)
     }

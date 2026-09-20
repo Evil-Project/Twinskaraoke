@@ -1,7 +1,4 @@
 import SwiftUI
-
-/// Avatar, display name, level and XP progress. Mirrors the tvOS
-/// `profileHeader`, laid out horizontally for a Mac window.
 struct ProfileHeader: View {
     let auth: MacAuthManager
 
@@ -116,8 +113,6 @@ struct UploadLimitsSection: View {
     }
 
     private static func bytes(_ count: Int64) -> String {
-        // allowsNonnumericFormatting defaults to true, which renders 0 as
-        // "Zero KB" — reads as a bug next to "1 GB".
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         formatter.allowsNonnumericFormatting = false
@@ -161,8 +156,6 @@ struct BadgeCard: View {
                     .foregroundStyle(.secondary)
             }
             .frame(width: 52, height: 52)
-            // Locked badges are dimmed and desaturated rather than hidden, so
-            // there's something to aim for.
             .saturation(badge.unlocked ? 1 : 0)
             .opacity(badge.unlocked ? 1 : 0.35)
 

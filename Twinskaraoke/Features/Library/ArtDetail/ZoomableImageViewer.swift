@@ -49,11 +49,6 @@ struct ZoomableImageViewer: View {
             }
             if showOverlay {
                 VStack {
-                    // The only place two glass elements share a layer. A
-                    // container renders them in one pass rather than compositing
-                    // each separately; they sit at opposite edges so nothing
-                    // merges visually, but the grouping is still what the
-                    // effect expects.
                     GlassEffectContainer {
                         HStack {
                             GlassXButton(action: {

@@ -64,8 +64,6 @@ struct DeveloperMenuView: View {
                 while let presented = presenter.presentedViewController {
                     presenter = presented
                 }
-                // UIActivityViewController is a popover on iPad and crashes
-                // without a source view/rect.
                 if let popover = av.popoverPresentationController {
                     popover.sourceView = presenter.view
                     popover.sourceRect = CGRect(

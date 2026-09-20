@@ -15,8 +15,6 @@ actor UploadedSongMetadataCache {
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
   private var inFlight: (id: UUID, task: Task<[Song], Error>)?
-  // Bumped on invalidate() so a fetch started before signout can't re-cache
-  // the previous user's uploads when it resolves.
   private var epoch = 0
 
   init(lifetime: TimeInterval) {
@@ -72,19 +70,11 @@ actor UploadedSongMetadataCache {
 
   func invalidate() {
     cachedValue = nil
-    // Dropping only our reference still lets current awaiters receive the
-    // previous account's response. Cancellation makes invalidation a delivery
-    // boundary as well as a cache boundary.
     inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
   }
 }
-
-/// TTL + in-flight-dedup cache for full playlist detail payloads (the multi-MB
-/// song-list response shared by cover art, song count, and the detail view).
-/// Playlist content mutations (UserPlaylistsManager.addSong) should call
-/// `KaraokeAPIClient.invalidatePlaylistDetail(id:)`; the 60s TTL bounds staleness otherwise.
 actor PlaylistDetailCache {
   private struct Entry: Sendable {
     let data: Data
@@ -94,8 +84,6 @@ actor PlaylistDetailCache {
   private let lifetime: TimeInterval
   private var entries: [String: Entry] = [:]
   private var inFlight: [String: (id: UUID, task: Task<Data, Error>)] = [:]
-  // Guards against stale writes: a fetch that started before an invalidation
-  // must not re-cache its pre-mutation payload when it resolves.
   private var generations: [String: Int] = [:]
   private var epoch = 0
 
@@ -108,8 +96,6 @@ actor PlaylistDetailCache {
     at now: Date = Date(),
     loader: @escaping @Sendable () async throws -> Data
   ) async throws -> Data {
-    // Multi-MB payloads: purge expired entries so browsing many playlists
-    // doesn't retain every detail payload for the process lifetime.
     entries = entries.filter { $0.value.expiresAt > now }
     if let entry = entries[playlistID] {
       return entry.data
@@ -147,25 +133,17 @@ actor PlaylistDetailCache {
   func invalidate(playlistID: String) {
     entries[playlistID] = nil
     generations[playlistID, default: 0] &+= 1
-    // Cancel the in-flight load so awaiters get CancellationError (and
-    // re-fetch) instead of the pre-mutation payload, and the multi-MB
-    // download stops instead of running to completion.
     inFlight[playlistID]?.task.cancel()
     inFlight[playlistID] = nil
   }
 
   func invalidateAll() {
     entries.removeAll()
-    // Same as invalidate(playlistID:): cancel in-flight loads so signout
-    // awaiters can't resolve with the previous user's payload.
     inFlight.values.forEach { $0.task.cancel() }
     inFlight.removeAll()
     epoch &+= 1
   }
 }
-
-/// Short-TTL cache for the canonical (catalog) half of favorite-song hydration,
-/// keyed by the exact favorite ID set so any favorite change is a cache miss.
 actor FavoriteCatalogMetadataCache {
   private struct Entry: Sendable {
     let key: String
@@ -175,11 +153,7 @@ actor FavoriteCatalogMetadataCache {
 
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
-  // Keyed like PlaylistDetailCache so a concurrent request with a different
-  // key doesn't clobber the slot and fire a duplicate POST.
   private var inFlight: [String: (id: UUID, task: Task<[Song], Error>)] = [:]
-  // Bumped on invalidate() so a fetch started before signout can't re-cache
-  // the previous user's favorites when it resolves.
   private var epoch = 0
 
   init(lifetime: TimeInterval) {
@@ -226,17 +200,11 @@ actor FavoriteCatalogMetadataCache {
 
   func invalidate() {
     cachedValue = nil
-    // Favorite mutations and signout must not deliver metadata fetched for
-    // the state that was just invalidated.
     inFlight.values.forEach { $0.task.cancel() }
     inFlight.removeAll()
     epoch &+= 1
   }
 }
-
-/// Short-TTL cache for the full hydrated favorite-song list so reopening the
-/// Favorites playlist doesn't re-fetch and re-hydrate within the lifetime.
-/// Favorite toggles (FavoritesManager) and signout must invalidate it.
 actor FavoriteSongsCache {
   private struct Entry: Sendable {
     let songs: [Song]
@@ -246,8 +214,6 @@ actor FavoriteSongsCache {
   private let lifetime: TimeInterval
   private var cachedValue: Entry?
   private var inFlight: (id: UUID, task: Task<[Song], Error>)?
-  // Bumped on invalidate() so a fetch started before a toggle or signout
-  // can't re-cache the stale list when it resolves.
   private var epoch = 0
 
   init(lifetime: TimeInterval) {
@@ -291,8 +257,6 @@ actor FavoriteSongsCache {
 
   func invalidate() {
     cachedValue = nil
-    // Prevent an older favorite list from reaching an awaiting screen after a
-    // toggle or account change.
     inFlight?.task.cancel()
     inFlight = nil
     epoch &+= 1
@@ -423,19 +387,9 @@ nonisolated enum KaraokeAPIClient {
         queryItems: [URLQueryItem(name: "type", value: "0")]
       )
       let data = try await data(for: request)
-      // A valid empty list decodes fine; nil means no known shape matched,
-      // which must surface as an error rather than an empty favorites list
-      // (callers treat [] as authoritative star state).
       guard let songs = SongPayloadDecoder.decodeSongs(from: data) else {
         throw APIError.decodeFailed
       }
-      // Belt and braces: this route already returns favorites sorted, unlike
-      // the playlist one, so today this is a no-op. It is applied anyway
-      // because the reorder path now derives `oldOrder` from each song's
-      // position — if the route ever stopped sorting, the list would look right
-      // for a moment and then move songs to wrong places, which is a far worse
-      // failure than a redundant sort. Stable, so the server's arrangement of
-      // any tied entries is preserved exactly.
       return try await hydrateFavoriteSongs(applyingPersistedOrder(songs))
     }
   }
@@ -699,23 +653,12 @@ nonisolated enum KaraokeAPIClient {
       return try await data(for: request)
     }
   }
-
-  /// Drop the cached detail payload for a playlist after its contents change
-  /// (e.g. UserPlaylistsManager.addSong). The 60s TTL bounds staleness even
-  /// without explicit invalidation.
   static func invalidatePlaylistDetail(id: String) async {
     await playlistDetailCache.invalidate(playlistID: id)
   }
-
-  /// Drop the cached favorite-song list after a favorite toggle so the next
-  /// read reflects the change (the 60s TTL bounds staleness otherwise).
   static func invalidateFavoriteSongs() async {
     await favoriteSongsCache.invalidate()
   }
-
-  /// Drop all account-scoped cached payloads on signout so the previous
-  /// user's playlist details, favorites, and uploads can't leak into the
-  /// next session.
   static func invalidateAccountScopedCaches() async {
     await playlistDetailCache.invalidateAll()
     await favoriteCatalogMetadataCache.invalidate()
@@ -776,13 +719,6 @@ nonisolated enum KaraokeAPIClient {
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
     return request
   }
-
-  /// Same as `jsonRequest(path:body:)` but with a **top-level JSON array** body
-  /// and the path built from segments, so an ID interpolated into it is
-  /// percent-encoded rather than able to inject extra path components.
-  ///
-  /// Separate from `jsonRequest` because that one takes a `[String: Any]` and so
-  /// can only ever produce a JSON object.
   static func jsonArrayRequest(
     pathSegments: [String],
     body: [[String: Any]]
@@ -796,42 +732,6 @@ nonisolated enum KaraokeAPIClient {
     request.httpBody = try JSONSerialization.data(withJSONObject: body)
     return request
   }
-
-  /// The body both `save-order` routes take: a **single-element array**
-  /// describing one song's move, verified against the reference client's own
-  /// request.
-  ///
-  /// It moves one song per call and needs *both* ends of the move — `oldOrder`
-  /// and `newOrder`. Sending the whole list with only `order` set is accepted
-  /// (204) and does nothing, because every element then carries the default
-  /// `oldOrder`/`newOrder` of 0, i.e. "move from 0 to 0". That silent no-op is
-  /// what made this look like a payload-shape problem for several rounds.
-  ///
-  /// An array, not an object — the playlist comes from the route. The server
-  /// rejects an object body with "PlaylistId and songs must not be null", which
-  /// reads like field names but is prose for one combined guard.
-  ///
-  /// camelCase because the reference client posts with `PostAsJsonAsync`, whose
-  /// web defaults are camelCase. Note this is the opposite of `/api/playlist/save`,
-  /// which takes PascalCase keys — the casing is per-route, not global.
-  /// Puts a playlist's songs into the user's saved order.
-  ///
-  /// `/api/playlist/{id}` returns `songListDTOs` in insertion order and carries
-  /// the ordering on each song's `order` field instead of applying it to the
-  /// array — so a reorder round-trips correctly and still looks discarded
-  /// unless it is applied here. The reference client does the same thing
-  /// (`SongTrackComponent` keeps a `_sortOrder`).
-  ///
-  /// Applied before hydration, because hydration rebuilds `Song` values and
-  /// need not carry `order` through; once the array is sorted, every later step
-  /// preserves it by mapping in place.
-  ///
-  /// **Stable by construction.** Songs routinely share an `order` — ties are
-  /// normal, not a corner case (a playlist can have a dozen at the same value),
-  /// and `sorted(by:)` is not a stable sort, so ties would otherwise be
-  /// permuted arbitrarily on every fetch and the list would visibly reshuffle.
-  /// Comparing the original offset on ties pins them to the order the server
-  /// sent. Songs with no `order` sort last, keeping their relative order.
   static func applyingPersistedOrder(_ songs: [Song]) -> [Song] {
     songs.enumerated()
       .sorted { lhs, rhs in
@@ -850,11 +750,7 @@ nonisolated enum KaraokeAPIClient {
     [
       [
         "songId": songID,
-        // Explicitly null, as the reference client sends it. Present in the DTO
-        // for uploaded songs; the web client leaves it null even for those.
         "userAudioId": NSNull(),
-        // Position within *this* payload, not within the playlist — always 0
-        // for the single-element array below.
         "order": 0,
         "oldOrder": oldOrder,
         "newOrder": newOrder,
@@ -928,9 +824,6 @@ nonisolated enum KaraokeAPIClient {
   ) async throws -> Data {
     let maxRetries = 3
     let baseDelay: Duration = .milliseconds(500)
-    // `allowsRetry: false` is for fire-and-forget writes whose failure is
-    // cosmetic (play counts). Retrying those triples their cost for no user
-    // benefit, and they burst when someone skips through a queue.
     let canRetry = allowsRetry && (retriesNonIdempotentRequest || isIdempotent(request))
 
     for attempt in 0..<maxRetries {
@@ -983,16 +876,9 @@ nonisolated enum KaraokeAPIClient {
     guard let method = request.httpMethod?.uppercased() else { return true }
     return method == "GET" || method == "HEAD" || method == "PUT" || method == "DELETE"
   }
-
-  // Exponential backoff with up to half a base delay of random jitter so
-  // concurrent retrying clients don't stay in lockstep.
   private static func backoffDelay(attempt: Int, baseDelay: Duration) -> Duration {
     baseDelay * Double(1 << attempt) + baseDelay * Double.random(in: 0 ... 0.5)
   }
-
-  // Retry-After may be delta-seconds or an HTTP-date. The parsed value is
-  // clamped so an absurd header can't park the retry for hours at the call
-  // site.
   private static let maxRetryAfterInterval: TimeInterval = 300
 
   private static func retryAfterInterval(from response: HTTPURLResponse) -> TimeInterval? {

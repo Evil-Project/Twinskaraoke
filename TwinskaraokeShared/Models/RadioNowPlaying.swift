@@ -1,7 +1,4 @@
 import Foundation
-
-/// The one station the app streams. Lives here because the watch app and its
-/// complication both need it and cannot see each other's code.
 nonisolated enum RadioStation {
     static let id = "neuro_21"
 

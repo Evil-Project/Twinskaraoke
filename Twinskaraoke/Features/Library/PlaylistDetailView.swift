@@ -6,32 +6,17 @@ struct PlaylistDetailView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var loader = PlaylistDetailViewModel()
     private let favorites = FavoritesManager.shared
-    // Rows derive artwork URLs through `Song`, which consults the fallback
-    // pool; reading the revision in `body` re-renders them when it changes.
     private let fallbackArt = FallbackArtRevision.shared
     @State private var searchText = ""
     @State private var contentWidth: CGFloat = 390
     @FocusState private var isSearchFocused: Bool
-    /// Height of `playlistSearchField` — 40pt capsule plus its bottom padding.
-    /// The scroll view starts exactly this far down, so the field sits just off
-    /// the top of the viewport and a pull brings it into view.
     private static let searchFieldExtent: CGFloat = 52
-    /// How far the list must be scrolled down before the field is put away.
     private static let searchDismissDistance: CGFloat = 40
-    /// Incidental overscroll below this reveals nothing at all.
     private static let searchRevealDeadZone: CGFloat = 30
-    /// Below 1 so the field trails the finger — ~110pt of pull for a full reveal.
     private static let searchRevealResistance: CGFloat = 0.65
-    /// Step the observed pull is rounded to, so the reveal cannot re-trigger the
-    /// scroll observation that drives it. See the `onScrollGeometryChange` below.
     private static let searchPullStep: CGFloat = 2
     @State private var searchRevealHeight: CGFloat = 0
-    /// Drives the navigation bar's title and background. The old search field
-    /// hid the title while it was active, because it lived in the bar area; the
-    /// pull-revealed field is content, so the title only follows the scroll.
     @State private var showsCollapsedTitle = false
-    /// Latched once the pull completes, so the field stays put instead of
-    /// collapsing the moment the finger lifts.
     @State private var isSearchLatched = false
 
     private static let searchAnchor = "playlist.search"
@@ -45,31 +30,15 @@ struct PlaylistDetailView: View {
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
     @State private var isEditing = false
-    /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
-    /// touches until the push has settled. The zoom transition does not gate
-    /// input, so a second tap aimed at the grid tile lands on this screen as it
-    /// arrives under the finger, and at that Y coordinate there is either a song
-    /// row or an action button. Both started playing; the buttons were exempt
-    /// from this gate until they were caught doing it. Scrolling and Back stay
-    /// live throughout.
-    ///
-    /// Two conditions, because neither covers the other: the transition itself
-    /// says when the zoom is done (measured at ~0.9s, far longer than the delay
-    /// below used to allow), and the delay covers the arrivals that have no
-    /// transition to ask — reduce motion, or coming back from a sub-screen.
     @Environment(\.zoomPushIsArriving) private var isArriving
     @State private var hasSettledAfterAppear = false
     @State private var rowArmingTask: Task<Void, Never>?
     private var playbackTapsArmed: Bool { hasSettledAfterAppear && !isArriving }
-    /// onAppear fires repeatedly for one visit — device logs show appeared and
-    /// disappeared 1ms apart, over and over. Reloading below cancels and restarts
-    /// the network load, so it remains one-shot work for a visit.
     @State private var hasStartedVisit = false
     private let userPlaylists = UserPlaylistsManager.shared
 
     init(playlist: Playlist) {
         self.playlist = playlist
-        // searchText starts empty, so the initial filtered list is the fallback.
         _filteredSongs = State(initialValue: playlist.songListDTOs ?? [])
     }
 
@@ -102,13 +71,9 @@ struct PlaylistDetailView: View {
         .padding(.bottom, AM.Spacing.m)
         .accessibilityIdentifier("PlaylistDetail.search")
     }
-
-    /// Grows the field with the pull, latches it open once fully revealed, and
-    /// drops it again when the list is scrolled back down.
     private func updateSearchReveal(pull: CGFloat) {
         let extent = Self.searchFieldExtent
         if isSearchLatched {
-            // Scrolling down past the top puts it away again.
             if pull < -Self.searchDismissDistance, !isSearchFocused, searchText.isEmpty {
                 isSearchLatched = false
                 withOptionalAnimation(reduceMotion ? nil : AppMotion.quick) {
@@ -119,12 +84,6 @@ struct PlaylistDetailView: View {
             }
             return
         }
-
-        // Deliberately resistant. Tracking the pull 1:1 from the first pixel made
-        // the field appear during ordinary scrolling; it should take a decided
-        // pull. The dead zone absorbs incidental overscroll, and the resistance
-        // means the field moves slower than the finger, so a full reveal needs
-        // roughly `deadZone + extent / resistance` points of travel.
         let effective = max(0, pull - Self.searchRevealDeadZone) * Self.searchRevealResistance
         let revealed = min(effective, extent)
         if revealed >= extent {
@@ -182,11 +141,6 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         detailContent
-            // A cover, not a push. Pushed, the editor's bottom bar sits behind
-            // the tab bar, and hiding that is not enough on its own: the
-            // LNPopup mini player merges into the tab bar's metrics and would
-            // still float over the Delete button. A full-screen presentation is
-            // above both, which is also where Apple Music puts its editor.
             .fullScreenCover(isPresented: $isEditing) {
                 if let editTarget {
                     NavigationStack {
@@ -195,24 +149,12 @@ struct PlaylistDetailView: View {
                             songs: loader.songs ?? playlist.songListDTOs ?? [],
                             target: editTarget
                         ) { reordered in
-                            // Adopt the edited order straight away. The detail
-                            // route now returns it too — `saveSongOrder`
-                            // invalidates that cache — but refetching to learn
-                            // what we just did would flash the old order first.
                             loader.songs = reordered
                         }
                     }
                 }
             }
     }
-
-    /// Non-nil only where editing can actually be written through: Favorites,
-    /// which owns its own order, or a playlist the signed-in user owns.
-    ///
-    /// Ownership is membership in `/api/user/playlists` for the same reason
-    /// `songRemovalContext` uses it — see the note there. `editable`/`deletable`
-    /// come back false on playlists the user created, and `isPersonal` is false
-    /// on the instance that reaches this screen.
     private var editTarget: PlaylistEditTarget? {
         if playlist.isFavorites { return .favorites }
         guard userPlaylists.playlists.contains(where: { $0.id == playlist.id }) else {
@@ -220,86 +162,32 @@ struct PlaylistDetailView: View {
         }
         return .playlist(id: playlist.id)
     }
-
-    /// Spelled out as its own property with an explicit type on purpose. Inline
-    /// in the toolbar, the `nil`-or-closure ternary had to be resolved as part
-    /// of the `detailContent` chain, which was already close enough to the
-    /// type-checker's budget that the extra overload resolution tipped it over.
     private var editAction: (() -> Void)? {
-        // Gated on an authoritative list, not just a target.
-        //
-        // The editor is seeded with a snapshot and hands its result back to
-        // `loader.songs` on finish. Opening it before the fetch lands would
-        // seed it from the `songListDTOs` fallback — or from nothing at all —
-        // and closing it would then overwrite a newer, complete list with that
-        // stale snapshot, or with an empty one.
         guard editTarget != nil, loader.hasAuthoritativeSongs else { return nil }
         return beginEditing
     }
 
     private func beginEditing() {
-        // The web client refuses to reorder under an active filter, and for the
-        // same reason: the indices the endpoint takes are positions in the whole
-        // playlist, so dragging within a filtered subset would write the wrong
-        // ones. Clearing the query sidesteps it rather than blocking the action.
         searchText = ""
         filteredSongs = loader.songs ?? playlist.songListDTOs ?? []
         isSearchFocused = false
         AppHaptic.selection.play()
         isEditing = true
     }
-
-    // @ViewBuilder is load-bearing, not decoration: `View.body` declares it
-    // implicitly, so extracting this out of `body` dropped it and turned the
-    // leading `let _ =` into a multi-statement closure the compiler had to infer
-    // as a whole — which it cannot do in reasonable time for an expression this
-    // size ("unable to type-check this expression in reasonable time").
     @ViewBuilder
     private var detailContent: some View {
         let _ = fallbackArt.revision
         let songs: [Song] = loader.songs ?? playlist.songListDTOs ?? []
         let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        // Derive the unfiltered list rather than mirroring it into @State.
-        //
-        // `filteredSongs` is only meaningful while a search is active. Using it
-        // as the sole source made the whole screen depend on a sync that had no
-        // way to self-correct: if it was ever missed, the list stayed empty and
-        // stayed empty. See the `onChange(of: loader.songs)` note below.
         let displayedSongs = isSearching ? filteredSongs : songs
-        // The ScrollView is a *direct* child of the navigation container, not
-        // wrapped in a GeometryReader.
-        //
-        // The wrapper broke the navigation bar's scroll-edge tracking, so it
-        // could not collapse the large title or tuck the search drawer away —
-        // the drawer sat pinned open instead of starting hidden and revealing on
-        // a pull, which is the whole behaviour we are after. Width is measured
-        // from the content instead, which needs no wrapper.
         ScrollView {
             VStack(spacing: 0) {
-                // Above the content, not in the navigation bar, and revealed by
-                // ordinary scrolling rather than a gesture.
-                //
-                // The nav-bar drawer cannot do what we want: with
-                // `hidesSearchBarWhenScrolling` it is *visible at scroll top* by
-                // definition and hides as you scroll down — the opposite of
-                // hidden-until-pulled. And the hand-rolled version this replaces
-                // read raw overscroll, which is the same drag the zoom uses to
-                // dismiss, so the two fought and the dismissal won.
-                //
-                // As the first row of content it is neither: `scrollTo` below
-                // parks the view just underneath it on appear, so pulling down
-                // simply scrolls it into view. No gesture, nothing to arbitrate.
                 playlistSearchField
                     .frame(height: searchRevealHeight, alignment: .bottom)
                     .opacity(searchRevealHeight / Self.searchFieldExtent)
                     .clipped()
-                    // Neither opacity nor clipping removes a view from the
-                    // accessibility tree, so while collapsed the field could
-                    // still take VoiceOver or hardware-keyboard focus and raise
-                    // the keyboard with nothing visible to type into.
                     .allowsHitTesting(searchRevealHeight > 0)
                     .accessibilityHidden(searchRevealHeight <= 0)
-                    // Above the hero regardless of what its visual effect does.
                     .zIndex(1)
                     .id(Self.searchAnchor)
                 playlistScrollContent(
@@ -311,11 +199,6 @@ struct PlaylistDetailView: View {
                 .id(Self.contentAnchor)
             }
                 .padding(.bottom, 16)
-                // Row changes (e.g. unfavouriting) used to animate via the
-                // `filteredSongs` swap; now that the list is derived, the
-                // animation attaches to the value instead. Same 300-row
-                // guard: animating a large structural swap stalls the main
-                // thread.
                 .animation(
                     reduceMotion || displayedSongs.count >= 300
                         ? nil
@@ -323,12 +206,6 @@ struct PlaylistDetailView: View {
                     value: displayedSongs
                 )
         }
-        // Measure the viewport, not the laid-out content. The former
-        // `onGeometryChange` lived on the content VStack; because its first
-        // pass used the 390pt compact fallback, the VStack reported that same
-        // intrinsic width and could never promote itself to the wide layout on
-        // iPad. Scroll geometry exposes the actual detail-column width without
-        // inserting the GeometryReader that breaks navigation-bar edge tracking.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.containerSize.width
         } action: { _, width in
@@ -338,53 +215,13 @@ struct PlaylistDetailView: View {
         .smoothScrolling()
         .scrollEdgeHaptic()
         .scrollDismissesKeyboard(.interactively)
-        // Resting offset expressed as a raw point, which is what finally worked.
-        //
-        // Four earlier attempts all failed for the same underlying reason — they
-        // depended on something that is not ready at first layout:
-        // `ScrollViewReader.scrollTo` from `onAppear` (no laid-out content to
-        // scroll to), the same deferred past a yield (content not yet tall
-        // enough to be scrollable), `scrollPosition(id:)` (needs the target row
-        // measured), and before those the system nav-bar drawer, which is
-        // visible at scroll top by definition and so can never start hidden.
-        //
-        // A raw offset needs none of that: it is just where the scroll view
-        // starts, parking the search field exactly its own height above the
-        // viewport.
-        // Revealed by the pull itself, not by a resting scroll offset.
-        //
-        // Apple Music grows the field out of the overscroll: pull down, the
-        // background stretches, and the search bar expands into the gap between
-        // the toolbar and the title. Its height *is* the pull distance.
-        //
-        // Six attempts to instead park the scroll below a full-height field all
-        // failed, for the same reason each time — they needed something that is
-        // not settled at first layout (laid-out content, a measured row, or the
-        // top inset, which is `-107` here rather than 0, so absolute offsets are
-        // meaningless). Driving height from the live pull needs none of it.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            // Positive while pulled past the top.
             let pull = -(geometry.contentOffset.y + geometry.contentInsets.top)
-            // Quantised, because this observation is circular: the action writes
-            // `searchRevealHeight`, that height is laid out inside this very
-            // scroll view, and the resulting geometry change re-enters here on
-            // the same frame -- which is what SwiftUI reports as
-            // "<OnScrollGeometryChange Modifier> tried to update multiple times
-            // per frame". Rounding to a step gives the loop somewhere to stop:
-            // the sub-step geometry the action induces no longer reads as a
-            // change. `ScrollOptimization` makes the same point the coarse way,
-            // with zones; a reveal needs to track the finger, so it rounds
-            // instead. At 0.65 resistance a 2pt step is ~1.3pt of height.
             return (pull / Self.searchPullStep).rounded() * Self.searchPullStep
         } action: { _, pull in
             updateSearchReveal(pull: pull)
         }
         .scrollIndicators(.hidden)
-        // Same threshold and wiring as BrowseSongCollectionView, ArtistsView and
-        // DownloadedSongsView: the name belongs in the bar once its own heading
-        // has scrolled away, and the bar stays transparent over the artwork until
-        // then. Inline, never large — the zoom leaves the source screen on
-        // display, so a large title collapsing on push is animated in full view.
         .collapsedNavigationTitle($showsCollapsedTitle)
         .musicScreenBackground()
         .navigationTitle(showsCollapsedTitle ? playlist.name : "")
@@ -394,10 +231,6 @@ struct PlaylistDetailView: View {
             reduceMotion ? nil : AppMotion.quick,
             value: showsCollapsedTitle
         )
-        // Add to Library, Download / Remove Downloads and Refresh Playlist live
-        // here and nowhere else on this screen. They were reachable only by
-        // long-pressing the artwork between the pull-to-reveal search landing and
-        // this — a context menu is a shortcut to actions, never their only home.
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 PlaylistMoreMenu(
@@ -421,10 +254,6 @@ struct PlaylistDetailView: View {
             Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
         .onAppear {
-            // Per-appear, deliberately outside the one-shot guard below.
-            // onDisappear disarms the rows, so gating this on `hasStartedVisit`
-            // left them permanently untappable after any re-appear — pushing a
-            // sub-screen and coming back was enough.
             rowArmingTask?.cancel()
             rowArmingTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
@@ -436,12 +265,8 @@ struct PlaylistDetailView: View {
             guard !hasStartedVisit else { return }
             hasStartedVisit = true
             loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
-            // The removal menu item is gated on this list; without the warm-up
-            // it stays hidden until something else happens to load it.
             userPlaylists.loadIfNeeded()
         }
-        // Diffing on displayedSongs (Equatable) avoids allocating the prefix
-        // id array on every body eval; it only builds when the list changes.
         .onChange(of: displayedSongs) { _, newSongs in
             guard prefetchTask == nil else { return }
             let ids = Array(newSongs.prefix(18)).map(\.id)
@@ -450,37 +275,19 @@ struct PlaylistDetailView: View {
             prefetchArtwork(songs: newSongs)
         }
         .onChange(of: searchText) { _, newValue in
-            // Filtering a large playlist runs 3 localized comparisons per song;
-            // debounce so typing doesn't stall the main thread per keystroke.
             filterTask?.cancel()
             filterTask = Task {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
-                // Resolve the source list now, not at body-eval time, so a
-                // loader.$songs update during the debounce isn't overwritten
-                // by a filter of the stale snapshot.
                 let currentSongs = loader.songs ?? playlist.songListDTOs ?? []
                 filteredSongs = PlaylistSongSearch.filter(currentSongs, matching: newValue)
             }
         }
-        // Keeps the *search* results fresh when the playlist reloads underneath
-        // an active query. It deliberately no longer feeds the unfiltered list.
-        //
-        // This was `.onReceive(loader.$songs)`, and the two are not equivalent.
-        // A `@Published` projected publisher replays its current value to every
-        // new subscriber, so that fired on each appear and re-seeded the list
-        // unconditionally. `onChange` fires neither on install nor when the new
-        // value compares equal to the old. Both gaps bit: a playlist already
-        // loaded when the view appeared never seeded, and Refresh re-fetched an
-        // *equal* array, so nothing fired and the empty list could not recover
-        // until the view was destroyed by popping back to Library.
         .onChange(of: loader.songs) { _, newSongs in
             let next = PlaylistSongSearch.filter(
                 newSongs ?? playlist.songListDTOs ?? [],
                 matching: searchText
             )
-            // Animating a huge structural swap can stall the main thread;
-            // only animate small list changes (e.g. unfavoriting a row).
             let canAnimate = filteredSongs.count < 300 && next.count < 300
             withOptionalAnimation(reduceMotion || !canAnimate ? nil : AppMotion.quick) {
                 filteredSongs = next
@@ -493,9 +300,6 @@ struct PlaylistDetailView: View {
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in
             guard playlist.isFavorites else { return }
-            // Every star tap anywhere in the app fires this; coalesce rapid
-            // toggles into a single refetch instead of reloading the whole
-            // playlist per tap.
             favoritesRefreshTask?.cancel()
             favoritesRefreshTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1))
@@ -507,18 +311,10 @@ struct PlaylistDetailView: View {
             rowArmingTask?.cancel()
             hasSettledAfterAppear = false
             prefetchTask?.cancel()
-            // Same class of post-teardown work as the prefetches below:
-            // favoritesRefreshTask starts a network fetch after a one-second
-            // sleep, and filterTask writes state after 200ms.
             filterTask?.cancel()
             favoritesRefreshTask?.cancel()
             ArtworkPrefetcher.shared.cancel(reason: "playlist cover \(playlist.id)")
             ArtworkPrefetcher.shared.cancel(reason: "playlist songs \(playlist.id)")
-            // prefetchArtwork starts three prefetches and this cancelled two of
-            // them. The whole-playlist warm ran on regardless — hundreds of
-            // images still downloading and decoding after the screen was gone,
-            // and since each playlist warms under its own reason key, opening
-            // several in a row stacked them instead of replacing them.
             ArtworkPrefetcher.shared.cancelWarm(reason: "playlist warm \(playlist.id)")
             warmedSongIDs = []
         }
@@ -531,10 +327,6 @@ struct PlaylistDetailView: View {
         isSearching: Bool,
         width: CGFloat
     ) -> some View {
-        // No separate search-results mode. The custom reveal swapped the whole
-        // screen for a bare list; the system drawer sits in the navigation bar
-        // instead, so the hero and action buttons stay put and a query just
-        // shortens the list underneath them — which is what Apple Music does.
         playlistOverview(
             songs: songs,
             displayedSongs: displayedSongs,
@@ -702,10 +494,6 @@ struct PlaylistDetailView: View {
                 restingOffset: 12,
                 fadesWhenCollapsed: true,
                 reduceMotion: reduceMotion,
-                // Zero, not nil: with `nil` the hero takes the pull for itself,
-                // scaling up and sliding *upward* over the search field growing
-                // above it — which is why the field appeared behind the artwork.
-                // Apple Music gives that space to the search bar instead.
                 pullDownOverride: 0
             )
             .padding(.top, 12)
@@ -823,8 +611,6 @@ struct PlaylistDetailView: View {
             .accessibilityLabel("Shuffle playlist")
         }
         .padding(.horizontal, horizontalPadding)
-        // Gated here rather than around the caller: the wide overview puts these
-        // buttons beside the artwork, outside `playlistSongsContent`.
         .allowsHitTesting(playbackTapsArmed)
     }
 
@@ -832,17 +618,7 @@ struct PlaylistDetailView: View {
         AppHaptic.selection.play()
         PlaylistPlayback.play(song, from: playlist, context: context)
     }
-
-    /// Non-nil only for a playlist the signed-in user owns. Favorites is
-    /// excluded: its membership is owned by the star action, which the same
-    /// menu already offers.
     private var songRemovalContext: PlaylistSongRemovalContext? {
-        // Membership in /api/user/playlists is the whole ownership test. The
-        // payload's `editable`/`deletable` flags are NOT usable here: the
-        // server returns false for both on playlists the signed-in user created
-        // themselves (verified on device), so gating on them hid the action
-        // everywhere. `isPersonal` is equally useless — the instance reaching
-        // this screen comes from /api/playlists, which leaves it false.
         guard !playlist.isFavorites,
               userPlaylists.playlists.contains(where: { $0.id == playlist.id })
         else { return nil }
@@ -863,14 +639,6 @@ struct PlaylistDetailView: View {
         }
     }
 }
-
-/// Row identity for the playlist song list. The offset keeps IDs unique when
-/// a playlist contains the same song twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The content fields make the ID change when metadata
-/// (artist, duration) arrives after a row was first composed: with purely
-/// positional identity, an already-composed row keeps showing the stale
-/// "Unknown Artist" from the artist-less list DTOs even after the detail
-/// fetch lands, until the whole list is torn down and rebuilt.
 private struct PositionedPlaylistSong: Identifiable {
     struct ID: Hashable {
         let offset: Int
@@ -961,7 +729,6 @@ private struct PlaylistMoreMenu: View {
     let playlist: Playlist
     let songs: [Song]
     let onRefresh: () -> Void
-    /// Nil on a playlist the signed-in user cannot edit, which hides the item.
     var onEdit: (() -> Void)?
     var body: some View {
         Menu {

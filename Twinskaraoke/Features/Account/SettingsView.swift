@@ -205,9 +205,6 @@ struct SettingsView: View {
                 : "Taps, swipes and controls answer back with a vibration."))
         }
     }
-
-    /// Plays the chosen level as you pick it, so the setting is judged by feel
-    /// rather than by the word next to it.
     private var hapticStrengthBinding: Binding<AppHapticStrength> {
         Binding(
             get: { AppHapticStrength(rawValue: hapticStrength) ?? .default },
@@ -217,10 +214,6 @@ struct SettingsView: View {
             }
         )
     }
-
-    /// Fires the confirmation *before* writing the preference when switching
-    /// off, so the toggle's own haptic still plays — the user's last impression
-    /// of the feature is the feature working, not silence.
     private var hapticsToggleBinding: Binding<Bool> {
         Binding(
             get: { hapticsEnabled },
@@ -293,9 +286,6 @@ struct SettingsView: View {
             }
         )
     }
-
-    /// If Experimental Themes gets turned off while an experimental theme is
-    /// active, fall back to Dark so the picker never holds a hidden value.
     private func resetThemeIfHiddenByExperiments() {
         if AppearanceMode(rawValue: appearanceMode)?.isExperimental == true {
             appearanceMode = AppearanceMode.dark.rawValue

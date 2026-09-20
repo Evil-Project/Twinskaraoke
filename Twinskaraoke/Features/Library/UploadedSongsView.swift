@@ -70,8 +70,6 @@ struct UploadedSongsView: View {
         .task {
             viewModel.loadIfNeeded()
         }
-        // Diffing on displayedSongs (Equatable, id-only ==) avoids allocating
-        // the prefix id array on every body eval; it only builds when the list changes.
         .onChange(of: viewModel.displayedSongs) { _, newSongs in
             let visible = Array(newSongs.prefix(18))
             let ids = visible.map(\.id)

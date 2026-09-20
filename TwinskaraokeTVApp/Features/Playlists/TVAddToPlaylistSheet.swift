@@ -1,7 +1,4 @@
 import SwiftUI
-
-/// Picker shown after choosing "Add to Playlist" on a song: one row per
-/// playlist the user owns, tapping one adds the song and closes.
 struct TVAddToPlaylistSheet: View {
     let song: Song
 
@@ -25,17 +22,12 @@ struct TVAddToPlaylistSheet: View {
 
                 content
             }
-            // A tvOS sheet shrink-wraps its content, and one short playlist
-            // name makes a card too narrow to read as a picker — the floor
-            // keeps it the same width as the create sheet.
             .frame(minWidth: 900, maxWidth: 1000, alignment: .leading)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 80)
             .padding(.vertical, 44)
         }
         .onAppear { manager.loadIfNeeded() }
-        // Presented over this sheet so someone with no playlists yet isn't sent
-        // back to the Playlists tab and made to start the song over.
         .sheet(isPresented: $isCreating) {
             TVCreatePlaylistSheet()
         }
@@ -97,9 +89,6 @@ struct TVAddToPlaylistSheet: View {
                         .lineLimit(1)
                     Text(display.songCountText)
                         .font(.subheadline)
-                        // Derived from `.primary` for the reason `TVSongRow`
-                        // documents: a plain tvOS button tints `.secondary`
-                        // labels with the app accent.
                         .foregroundStyle(Color.primary.opacity(0.6))
                 }
 
@@ -114,10 +103,6 @@ struct TVAddToPlaylistSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Only this row locks out, not the whole list: with every row disabled
-        // the tvOS focus engine has no valid target and the remote stops
-        // responding until the request lands. `add(to:)` still guards against a
-        // second submission.
         .disabled(addingPlaylistID == playlist.id)
         .accessibilityLabel(display.name)
         .accessibilityValue(display.songCountText)
@@ -141,19 +126,12 @@ struct TVAddToPlaylistSheet: View {
             if added {
                 dismiss()
             } else {
-                // Interpolated inside String(localized:) so the catalog gets a
-                // format key rather than a pre-built string, and named from the
-                // same value the row displays.
                 let name = playlist.asPlaylist().name
                 errorMessage = String(localized: "Couldn’t add the song to “\(name)”. Try again.")
             }
         }
     }
 }
-
-/// The long-press menu item. Sets the binding the screen's single
-/// `addToPlaylistSheet` presents from — one sheet per screen rather than one
-/// per row, which would attach a presentation to every cell in a long list.
 struct TVAddToPlaylistMenuButton: View {
     let song: Song
     @Binding var selection: Song?

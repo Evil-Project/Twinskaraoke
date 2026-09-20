@@ -1,29 +1,9 @@
 import Observation
 import SwiftUI
-
-/// Whether the full-screen player is showing, and how far.
-///
-/// One scalar drives the whole presentation. That much is borrowed from the
-/// dependency this replaces — LNPopupController derives every frame it touches
-/// from a single percentage, so its interactive and animated paths cannot
-/// disagree, and that is the right shape. What is not borrowed is where the
-/// scalar comes from: there, it was read back out of a `UIView`'s live frame,
-/// which is why the state machine needed six variables to describe three
-/// states. Here it is just a stored property, and the views follow it.
-///
-/// `isExpanded` is the *committed* state, not the visual one. A dismissal drag
-/// in progress leaves it true until the gesture actually commits, so things
-/// that key off "the player is open" — the ambient background's breathing
-/// (`FullScreenPlayerView`), Shimeji's floor (`ShimejiEngine`) — do not flicker
-/// while someone drags halfway down and changes their mind.
 @MainActor
 @Observable
 final class NowPlayingPresentation {
     static let shared = NowPlayingPresentation()
-
-    /// 0 with the player fully off-screen, 1 with it fully open. Written
-    /// continuously while a drag is in flight and animated to an endpoint when
-    /// one commits.
     private(set) var progress: Double = 0
     enum DragSource { case miniPlayer, fullPlayer }
     private(set) var dragSource: DragSource?
@@ -54,15 +34,9 @@ final class NowPlayingPresentation {
     /// Whether the player is open as a matter of intent. See the type's
     /// documentation for why this is not `progress > 0.5`.
     private(set) var isExpanded = false
-
-    /// Whether the overlay needs to render and take touches at all. False in
-    /// the resting collapsed state, which is what keeps the player out of the
-    /// hit-testing path while someone is using the rest of the app.
     var isPresenting: Bool {
         isExpanded || progress > 0
     }
-
-    /// True only mid-flight, in either direction. The artwork morph rides this.
     var isTransitioning: Bool {
         progress > 0 && progress < 1
     }
@@ -126,8 +100,6 @@ final class NowPlayingPresentation {
 
     init() {}
 
-    // MARK: - Intent
-
     func expand() {
         guard !isExpanded, !isDragging else { return }
         artworkTransitionSource = .miniPlayer
@@ -189,11 +161,6 @@ final class NowPlayingPresentation {
         }
         animate(to: dismissing ? 0 : 1)
     }
-
-    /// Drops the player without ceremony. For the case where the thing being
-    /// presented stops existing — the queue empties, the song is cleared —
-    /// where an animated close would be animating a player that has nothing
-    /// left to show.
     func dismissImmediately() {
         AppPerformance.event("Player Immediate Dismiss")
         isAnimatingTransition = false
@@ -203,36 +170,8 @@ final class NowPlayingPresentation {
         isExpanded = false
         progress = 0
     }
-
-    // MARK: - Driving the animation
-
-    /// Where an animated transition is heading, and a token that changes every
-    /// time one is requested.
-    ///
-    /// `NowPlayingOverlay` watches the token and performs the move itself,
-    /// inside its own `withAnimation`. Two earlier arrangements were wrong in
-    /// different ways, and both are worth remembering.
-    ///
-    /// Calling `withAnimation` *here* only animated one direction: a
-    /// transaction does not cross a hosting boundary, and `collapse()` and
-    /// `endDrag()` are called from inside the overlay while `expand()` comes
-    /// from `MiniPlayerBar`, which lives in the tab bar's accessory slot.
-    ///
-    /// Replacing that with `.animation(_:value:)` on the overlay fixed the
-    /// direction but animated the player's whole subtree. During a drag that
-    /// modifier fires every frame with a nil animation, which interrupts any
-    /// animation already running inside the player — the scrub bar's fill
-    /// animates its width over 0.25s on every playback tick, so it visibly
-    /// juddered back and forth while the player was dragged, but only while
-    /// something was playing.
-    ///
-    /// Driving it from the overlay's own `onChange` keeps the animation in the
-    /// right tree and scopes it to one update per transition instead of one
-    /// per frame.
     private(set) var animationTarget: Double = 0
     private(set) var animationToken = 0
-
-    /// Applied by `NowPlayingOverlay` inside its own animation.
     func applyAnimationTarget() {
         progress = animationTarget
     }
@@ -244,21 +183,11 @@ final class NowPlayingPresentation {
     }
 }
 
-// MARK: - Safe-area handoff
-
 private struct PlayerSafeAreaInsetsKey: EnvironmentKey {
     static let defaultValue: EdgeInsets?  = nil
 }
 
 extension EnvironmentValues {
-    /// The window's real safe-area insets, for a player hosted inside a view
-    /// that ignores the safe area.
-    ///
-    /// `FullScreenPlayerView` lays itself out against the insets and needs the
-    /// true ones, but its own `GeometryReader` sits inside `NowPlayingOverlay`,
-    /// which has already ignored them so the player can paint edge to edge —
-    /// and a reader below that point reports zero. Nil outside the overlay, so
-    /// previews and any other host keep reading their own geometry.
     var playerSafeAreaInsets: EdgeInsets? {
         get { self[PlayerSafeAreaInsetsKey.self] }
         set { self[PlayerSafeAreaInsetsKey.self] = newValue }

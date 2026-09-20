@@ -138,9 +138,6 @@ struct KaraokeRightDock: View {
 
     private var processingIndicator: some View {
         VStack(spacing: 4) {
-            // progressFraction is only non-zero while VocalSeparator is actively
-            // processing this song, so only show a percentage then; while merely
-            // queued/locked show an indeterminate label instead of "0%".
             if isProcessing {
                 Text(processingPercentText)
                     .font(.caption.monospacedDigit())

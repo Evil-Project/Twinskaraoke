@@ -1,20 +1,7 @@
 import SwiftUI
-
-/// A playlist to push, carried by value.
-///
-/// Both grids push the same screen, and a stack that already routes by value
-/// cannot also host `NavigationLink(destination:)` — the view-based links go
-/// inert. Curated and user playlists share one route so there is one place
-/// where that can drift.
 struct PlaylistRoute: Hashable {
     let id: String
     let name: String
-    /// The songs the list endpoint already handed over, for personal playlists.
-    ///
-    /// `/api/user/playlists` returns each playlist with its songs inline, and
-    /// the curated detail endpoint the watch would otherwise ask has never
-    /// heard of a personal playlist ID. Dropping them here is what made your
-    /// own playlists open onto an empty state.
     let fallbackSongs: [Song]
 
     init(playlist: Playlist) {
@@ -22,10 +9,6 @@ struct PlaylistRoute: Hashable {
         name = playlist.name
         fallbackSongs = playlist.isPersonal ? playlist.songListDTOs ?? [] : []
     }
-
-    // A route is the playlist it points at, not the snapshot of songs it
-    // happened to be built with: two pushes of the same playlist must land on
-    // the same destination even if one was built before a refresh.
     static func == (lhs: PlaylistRoute, rhs: PlaylistRoute) -> Bool {
         lhs.id == rhs.id && lhs.name == rhs.name
     }
@@ -96,8 +79,6 @@ struct PlaylistsGridView: View {
             prefetchArtwork()
         }
         .onChange(of: auth.linkState) { _, state in
-            // Follow the phone in and out of a session so another account's
-            // playlists never linger on screen.
             if state == .signedIn {
                 userViewModel.fetch(force: true)
             } else {
@@ -112,18 +93,11 @@ struct PlaylistsGridView: View {
     private var showsUserPlaylists: Bool {
         auth.linkState == .signedIn && !userViewModel.playlists.isEmpty
     }
-
-    /// A signed-in listener whose own playlists failed to load used to get the
-    /// curated grid and nothing else — indistinguishable from having no
-    /// playlists, and with no way to ask again.
     private var showsUserPlaylistsError: Bool {
         auth.linkState == .signedIn
             && userViewModel.playlists.isEmpty
             && userViewModel.loadError != nil
     }
-
-    /// One row rather than `WatchLoadErrorState`: the curated playlists below
-    /// did load, and this is a note about the missing section, not the screen.
     private var userPlaylistsErrorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Yours")
@@ -300,9 +274,6 @@ private struct WatchPlaylistsHeader: View {
         return "\(playlists) - \(songs)"
     }
 }
-
-/// Internal rather than file-private so the signed-in listener's own playlists
-/// render identically to the curated ones.
 struct WatchPlaylistCard: View {
     let playlist: Playlist
 

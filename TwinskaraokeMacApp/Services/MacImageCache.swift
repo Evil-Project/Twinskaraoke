@@ -1,32 +1,30 @@
 import AppKit
+import ImageIO
 import SwiftUI
-
-/// In-memory + disk artwork cache for the Mac app.
-///
-/// Mirrors `TVImageCache` rather than pulling in SDWebImage: the Mac target
-/// only needs artwork for rows, the sidebar and the player bar, so keeping the
-/// dependency out means this target links nothing beyond system frameworks.
-/// The lock is confined to the synchronous `fetchPlan`/`finishFetch` helpers —
-/// under Swift 6 holding an `NSLock` across an `await` is a hard error.
 final class MacImageCache: @unchecked Sendable {
     static let shared = MacImageCache()
 
     private let memory = NSCache<NSURL, NSImage>()
     private let disk = URLCache(memoryCapacity: 16 * 1024 * 1024, diskCapacity: 128 * 1024 * 1024)
-    /// Guards `inFlight` and `failures` (NSCache/URLCache are already thread-safe).
+    private let session: URLSession
     private let stateLock = NSLock()
     private var inFlight: [NSURL: Task<NSImage?, Never>] = [:]
-    /// Short-lived negative cache so scrolling doesn't hammer a dead host.
     private var failures: [NSURL: Date] = [:]
     private static let negativeTTL: TimeInterval = 30
+    nonisolated private static let maximumEncodedImageBytes = 24 * 1024 * 1024
+    nonisolated private static let maximumPixelDimension = 1_600
 
     private init() {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        configuration.httpMaximumConnectionsPerHost = 6
+        configuration.urlCache = nil
+        session = URLSession(configuration: configuration)
         memory.countLimit = 400
         memory.totalCostLimit = 64 * 1024 * 1024
     }
-
-    /// Synchronous lookup so a view can render artwork on first layout instead
-    /// of flashing a placeholder for one frame.
     func cachedImage(for url: URL) -> NSImage? {
         memory.object(forKey: url as NSURL)
     }
@@ -36,7 +34,11 @@ final class MacImageCache: @unchecked Sendable {
         if let cached = memory.object(forKey: key) { return cached }
 
         let request = URLRequest(url: url)
-        if let stored = disk.cachedResponse(for: request), let image = NSImage(data: stored.data) {
+        if let stored = disk.cachedResponse(for: request),
+           stored.data.count <= Self.maximumEncodedImageBytes,
+           let image = await Task.detached(priority: .utility, operation: {
+               Self.decodedImage(from: stored.data)
+           }).value {
             memory.setObject(image, forKey: key, cost: Self.memoryCost(for: image, fallback: stored.data.count))
             return image
         }
@@ -69,10 +71,14 @@ final class MacImageCache: @unchecked Sendable {
         if let task = inFlight[key] {
             return .coalesce(task)
         }
-        let task = Task<NSImage?, Never> { [memory, disk] in
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
+        let task = Task<NSImage?, Never> { [memory, disk, session] in
+            guard let (data, response) = try? await session.data(for: request),
                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-                  let image = NSImage(data: data)
+                  data.count <= Self.maximumEncodedImageBytes,
+                  http.mimeType?.hasPrefix("image/") != false,
+                  let image = await Task.detached(priority: .utility, operation: {
+                      Self.decodedImage(from: data)
+                  }).value
             else { return nil }
             memory.setObject(image, forKey: key, cost: Self.memoryCost(for: image, fallback: data.count))
             disk.storeCachedResponse(CachedURLResponse(response: response, data: data), for: request)
@@ -90,6 +96,26 @@ final class MacImageCache: @unchecked Sendable {
         return estimated > 0 ? estimated : fallback
     }
 
+    nonisolated private static func decodedImage(from data: Data) -> NSImage? {
+        guard data.count <= maximumEncodedImageBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil)
+        else { return nil }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maximumPixelDimension,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(
+            cgImage: image,
+            size: NSSize(width: image.width, height: image.height)
+        )
+    }
+
     private func finishFetch(for key: NSURL, image: NSImage?) {
         stateLock.lock()
         defer { stateLock.unlock() }
@@ -102,8 +128,6 @@ final class MacImageCache: @unchecked Sendable {
         failures[key] = Date()
     }
 }
-
-/// Drop-in cached async image that serves repeated loads from `MacImageCache`.
 struct MacRemoteImage<Content: View, Placeholder: View>: View {
     let url: URL?
     @ViewBuilder let content: (Image) -> Content
@@ -119,8 +143,6 @@ struct MacRemoteImage<Content: View, Placeholder: View>: View {
         self.url = url
         self.content = content
         self.placeholder = placeholder
-        // Seed from the memory cache so an already-loaded image renders on the
-        // first frame rather than flashing the placeholder.
         _image = State(initialValue: url.flatMap { MacImageCache.shared.cachedImage(for: $0) })
     }
 
@@ -137,24 +159,15 @@ struct MacRemoteImage<Content: View, Placeholder: View>: View {
                 image = nil
                 return
             }
-            // Reset on URL change before the guard: `image` still holds the
-            // previous URL's artwork, and `image == nil` alone would skip the
-            // load. SwiftUI recycles row identity in List and LazyVGrid, so a
-            // scrolled row or an advancing player bar kept the old artwork.
             let cached = MacImageCache.shared.cachedImage(for: url)
             image = cached
             guard cached == nil else { return }
             let loaded = await MacImageCache.shared.image(for: url)
-            // The task is cancelled and restarted when `url` changes, so a late
-            // response here still belongs to the URL we were asked for.
             guard !Task.isCancelled else { return }
             image = loaded
         }
     }
 }
-
-/// Square artwork tile with the app's standard placeholder, used by rows, the
-/// grid cards and the player bar so they stay visually identical.
 struct SongArtwork: View {
     let url: URL?
     var size: CGFloat

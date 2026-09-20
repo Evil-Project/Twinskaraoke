@@ -204,9 +204,6 @@ struct AccountView: View {
             uploadLimits = decoded
         }
     }
-
-    /// The toolbar avatar reads "nk.avatar"; keep it in sync with the server
-    /// profile so accounts whose login token carried no avatar still get one.
     private func persistAvatarIfNeeded(_ avatarUrl: String?) {
         guard let avatarUrl, !avatarUrl.isEmpty else { return }
         let defaults = UserDefaults.standard

@@ -23,11 +23,6 @@ struct MiniPlayerBar: View {
 
     private let snapshot = NowPlayingSnapshotState.shared
     private let presentation = NowPlayingPresentation.shared
-
-    /// Matches the artwork the old bar drew: LNPopupBar sized its image as
-    /// `barHeight - 18`, so 40pt at the full 58pt height and 30pt at the
-    /// minimized 48pt one. Keeping the numbers means the bar does not visibly
-    /// change size on the day the library comes out.
     private var artworkSize: CGFloat {
         isInline ? 30 : 40
     }
@@ -39,11 +34,6 @@ struct MiniPlayerBar: View {
     var body: some View {
         HStack(spacing: 10) {
             artwork
-            // No `Spacer` between the titles and the controls. The titles now
-            // grow to fill, and a `Spacer` is flexible too — SwiftUI would split
-            // the free width between them, so a title would start scrolling with
-            // half the bar sitting empty next to it. The trailing padding keeps
-            // the gap the `Spacer(minLength: 8)` used to guarantee.
             titles
                 .padding(.trailing, 8)
             MiniPlayerTransportControls(
@@ -79,10 +69,6 @@ struct MiniPlayerBar: View {
         .accessibilityAction {
             presentation.expand()
         }
-        // Shimeji rest on the bar's top edge. Reporting the frame as SwiftUI
-        // lays it out replaces the half-second poll that was the only way to
-        // follow a `UIView` the app did not own — which is why sprites used to
-        // lag the bar whenever the tab bar minimized.
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .global)
         } action: { frame in
@@ -94,8 +80,6 @@ struct MiniPlayerBar: View {
             presentation.reportBarFrame(nil)
         }
     }
-
-    // MARK: - Pieces
 
     @ViewBuilder
     private var artwork: some View {
@@ -124,19 +108,6 @@ struct MiniPlayerBar: View {
     }
 
     @ViewBuilder
-    /// Title over artist in both placements, the way Apple Music stacks them:
-    /// the title carries the weight and the artist is plainly lighter beneath
-    /// it, so the pair reads as one item at a glance rather than two labels.
-    ///
-    /// The minimized bar keeps both lines and just drops a type size. An
-    /// earlier version hid the artist there to save room, which lost the one
-    /// piece of information that tells two versions of the same song apart.
-    ///
-    /// Both lines scroll when they outgrow the bar, which is what makes keeping
-    /// the artist in the minimized placement affordable: there is very little
-    /// room there, and truncating to "Bohemian Rha…" tells you less than a line
-    /// that eventually shows all of it. Paused while the full-screen player is
-    /// up — the bar is behind it, and nothing should be scrolling out of sight.
     private var titles: some View {
         VStack(alignment: .leading, spacing: 0) {
             MarqueeText(
@@ -166,18 +137,11 @@ struct MiniPlayerBar: View {
         }
         .accessibilityHidden(true)
     }
-
-    /// Tighter than the marquee's default, which is sized for the full-screen
-    /// player. At 48pt a quarter of the minimized pill would be blank as the
-    /// title wraps.
     private static let marqueeGap: CGFloat = 28
 
     private var titleFont: Font {
         isInline ? .caption.weight(.semibold) : AM.Font.rowCompactTitle.weight(.semibold)
     }
-
-    /// Explicitly `.regular`: the artist should never inherit the title's
-    /// weight, which is the whole contrast the pair is built on.
     private var subtitleFont: Font {
         isInline ? .caption2.weight(.regular) : AM.Font.rowCompactSubtitle.weight(.regular)
     }
@@ -187,12 +151,6 @@ struct MiniPlayerBar: View {
         return detail.isEmpty ? snapshot.title : "\(snapshot.title), \(detail)"
     }
 }
-
-/// Play/pause and next, as their own hit targets.
-///
-/// `Equatable` on just the two flags that change what is drawn: the closures
-/// are recreated on every rebuild of the parent and would otherwise defeat
-/// SwiftUI's own equality check, redrawing the buttons on every snapshot tick.
 private struct MiniPlayerTransportControls: View, Equatable {
     let isPlaying: Bool
     let isRadioMode: Bool
@@ -221,8 +179,6 @@ private struct MiniPlayerTransportControls: View, Equatable {
             .accessibilityHint(
                 isRadioMode ? "Controls the live radio stream." : "Controls the current song."
             )
-
-            // Radio has nothing to skip to, and the minimized bar has no room.
             if showsNext, !isRadioMode {
                 Button {
                     AudioPlayerManager.shared.skipToNext()

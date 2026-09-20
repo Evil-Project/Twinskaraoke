@@ -28,21 +28,10 @@ final class VideoGalleryViewModel {
         canLoadMore = true
         load(reset: true)
     }
-
-    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
-    /// until the videos have actually finished loading. Deliberately not an
-    /// `async` overload of `refresh()` — in an async context Swift would
-    /// prefer the async overload and recurse.
     func refreshVideos() async {
         refresh()
         await activeTask?.value
     }
-
-    /// Pulls the next page regardless of scroll position.
-    ///
-    /// Needed by the Watchalongs filter: watchalongs are a handful of items in
-    /// a ~1400-video catalogue, so the filtered list can be empty (and therefore
-    /// have nothing to trigger `loadMoreIfNeeded`) while pages remain unread.
     func loadMore() {
         guard canLoadMore, !isLoading else { return }
         load(reset: false)
@@ -145,13 +134,6 @@ final class VideoGalleryViewModel {
         activeTask?.cancel()
     }
 }
-
-/// Videos related to the one being watched.
-///
-/// `/api/videos` ignores `songId`, `createdBy` and `isWatchalong` as filters —
-/// passing them returns the unfiltered catalogue — so relatedness is expressed
-/// through the two parameters the endpoint actually honours: `search`, which
-/// matches title, description and uploader, and `category`.
 @MainActor
 @Observable
 final class SimilarVideosViewModel {
@@ -183,27 +165,22 @@ final class SimilarVideosViewModel {
             self?.apply(Array(collected.prefix(Self.resultLimit)))
         }
     }
-
-    /// Progressively weaker notions of "similar", most specific first.
     private static func queries(for video: GalleryVideo) -> [[URLQueryItem]] {
         var queries: [[URLQueryItem]] = []
 
         if video.isWatchalongVideo {
             queries.append([URLQueryItem(name: "category", value: "2")])
         }
-        // Other performances of the same song.
         if let songTitle = video.songTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
            !songTitle.isEmpty
         {
             queries.append([URLQueryItem(name: "search", value: songTitle)])
         }
-        // More from the same uploader.
         if let creator = video.createdBy?.trimmingCharacters(in: .whitespacesAndNewlines),
            !creator.isEmpty
         {
             queries.append([URLQueryItem(name: "search", value: creator)])
         }
-        // Last resort so the shelf is never empty.
         queries.append([])
         return queries
     }

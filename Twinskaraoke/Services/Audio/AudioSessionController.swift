@@ -59,11 +59,6 @@ protocol AudioSessionManaging: AnyObject {
     func markInterrupted()
     func resetAfterMediaServicesLoss()
 }
-
-/// Owns the process-wide AVAudioSession configuration state.
-///
-/// Playback code can ask for a prepared session without duplicating the
-/// category/activation guards or reaching into AVAudioSession directly.
 @MainActor
 final class AudioSessionController: AudioSessionManaging {
     private let session: AVAudioSession

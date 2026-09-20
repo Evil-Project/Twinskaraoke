@@ -6,9 +6,6 @@ struct VideoPlayerScreen: View {
     let video: GalleryVideo
 
     @Namespace private var zoomNamespace
-    // Reuses the model Pillarbox is holding for an active Picture in Picture
-    // overlay, so returning to a video already playing in PiP resumes that
-    // player rather than starting a second one.
     @StateObject private var model = VideoPlaybackModel()
     @StateObject private var progressTracker = ProgressTracker(interval: .init(value: 1, timescale: 10))
     @StateObject private var visibilityTracker = VisibilityTracker()
@@ -17,9 +14,6 @@ struct VideoPlayerScreen: View {
     @State private var gravity: AVLayerVideoGravity = .resizeAspect
     @State private var isFullScreen = false
     @State private var appeared = false
-    // `isBuffering` lives on `PlayerProperties`, which Pillarbox publishes
-    // separately from the player's own `@Published` state, so it has to be
-    // mirrored into view state rather than read off `player` directly.
     @State private var isBuffering = false
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -29,9 +23,6 @@ struct VideoPlayerScreen: View {
     private let audioWillPlay = NotificationCenter.default.publisher(
         for: MediaPlaybackCoordinator.audioWillPlay
     )
-
-    /// Landscape on iPhone. Tilting is the primary way into full screen; the
-    /// button is the explicit alternative and works in portrait too.
     private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
@@ -50,13 +41,6 @@ struct VideoPlayerScreen: View {
                     }
                 }
             }
-            // Full screen is a *presentation*, not a layout swap. Hiding the tab
-            // bar from a pushed screen is not enough: with LNPopupController
-            // attached, the minimised tab pill and the `role: .search` button
-            // keep drawing over the video, and the mini player merges into the
-            // tab bar's own metrics. A full-screen presentation sits above all
-            // of it by construction — the same conclusion `PlaylistDetailView`
-            // reached for its editor.
             .fullScreenCover(isPresented: $isFullScreen) {
                 VideoFullScreenPlayer(
                     player: model.player,
@@ -72,7 +56,6 @@ struct VideoPlayerScreen: View {
                     onDismissResume: { model.dismissResumeBanner() }
                 )
             }
-            // Tilting the device enters and leaves full screen.
             .onChange(of: isLandscape) { _, isLandscape in
                 guard isFullScreen != isLandscape else { return }
                 isFullScreen = isLandscape
@@ -83,9 +66,6 @@ struct VideoPlayerScreen: View {
                 visibilityTracker.player = nil
                 progressTracker.player = nil
             }
-            // Backgrounding never reaches `onDisappear`, and an app killed while
-            // backgrounded never runs anything again, so this is the last chance
-            // to write the playhead for the "exits the app" case.
             .onChange(of: scenePhase) { _, phase in
                 guard phase != .active else { return }
                 model.persistPosition()
@@ -98,8 +78,6 @@ struct VideoPlayerScreen: View {
             }
             .onReceive(player: model.player, assign: \.isBuffering, to: $isBuffering)
     }
-
-    // MARK: - Layout
 
     private var inlineLayout: some View {
         ScrollView {
@@ -129,12 +107,6 @@ struct VideoPlayerScreen: View {
         .smoothScrolling()
         .musicScreenBackground()
     }
-
-    /// The inline surface stands down while the full-screen cover is up.
-    ///
-    /// An `AVPlayerLayer` can only be attached to one player at a time, so
-    /// leaving a second `VideoView` alive underneath the cover would steal the
-    /// layer back and leave one of the two black.
     @ViewBuilder
     private var inlinePlayerSurface: some View {
         if isFullScreen {
@@ -157,15 +129,10 @@ struct VideoPlayerScreen: View {
         }
     }
 
-    // MARK: - Playback
-
     private func start() {
         progressTracker.player = model.player
         visibilityTracker.player = model.player
         quality = model.quality
-
-        // False when this screen was restored onto a video already playing in
-        // Picture in Picture, which must not be interrupted or restarted.
         if model.load(video) {
             AudioPlayerManager.shared.pauseIfPlaying()
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.videoWillPlay, object: nil)
@@ -182,8 +149,6 @@ struct VideoPlayerScreen: View {
         withAnimation(AppMotion.standard) { appeared = true }
     }
 }
-
-/// The full-screen presentation: nothing but the video and its controls.
 private struct VideoFullScreenPlayer: View {
     @ObservedObject var player: Player
     @ObservedObject var progressTracker: ProgressTracker
@@ -219,8 +184,6 @@ private struct VideoFullScreenPlayer: View {
         .allowsLandscapeOrientation()
     }
 }
-
-/// Stands in for the video while it is playing in the full-screen cover.
 private struct VideoInlinePlaceholder: View {
     let video: GalleryVideo
 
@@ -237,13 +200,6 @@ private struct VideoInlinePlaceholder: View {
         }
     }
 }
-
-/// The video surface and its controls.
-///
-/// Split out so it can observe the `Player` directly. The player is owned by
-/// `VideoPlaybackModel` (which has to outlive the screen for Picture in
-/// Picture), and reaching through an unobserved model would leave `error` and
-/// `playbackState` changes unnoticed.
 private struct VideoPlayerSurface: View {
     @ObservedObject var player: Player
     @ObservedObject var progressTracker: ProgressTracker
@@ -260,13 +216,6 @@ private struct VideoPlayerSurface: View {
 
     var body: some View {
         ZStack {
-            // Deliberately no `.supportsPictureInPicture()`. That path makes
-            // `VideoView` build Picture in Picture host views on every player
-            // publish, and this screen tears the surface down and rebuilds it
-            // when entering and leaving the full-screen cover — which churned
-            // AVKit's PiP observers and could wedge playback on pause or exit.
-            // Supporting PiP properly needs a restoration delegate and an entry
-            // point in the UI; see the note in VideoPlaybackModel.
             VideoView(player: player)
                 .gravity(gravity)
 
@@ -292,9 +241,6 @@ private struct VideoPlayerSurface: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { visibilityTracker.toggle() }
-        // Deliberately outside the visibility-gated overlay: the banner is a
-        // timed notice about what just happened, not a transport control, so
-        // tapping to hide the controls must not take it away with them.
         .overlay(alignment: .topLeading) {
             if let resumedFrom, player.error == nil {
                 VideoResumeBanner(
@@ -309,12 +255,6 @@ private struct VideoPlayerSurface: View {
         .animation(AppMotion.quick, value: resumedFrom)
     }
 }
-
-/// Says where playback picked up, and offers the way out of it.
-///
-/// Resuming silently is the wrong default for a gallery: a viewer who opens a
-/// video expecting the start needs to see that it did something else, and needs
-/// one tap to undo it.
 private struct VideoResumeBanner: View {
     let position: TimeInterval
     let onStartFromBeginning: () -> Void
@@ -329,8 +269,6 @@ private struct VideoResumeBanner: View {
             .scaledSystemFont(size: 12, weight: .semibold)
             .monospacedDigit()
             .foregroundStyle(.white)
-            // The inline surface is only as wide as a 16:9 box on a phone, so
-            // the notice has to give way rather than push the actions off it.
             .lineLimit(1)
             .minimumScaleFactor(0.8)
 
@@ -353,14 +291,6 @@ private struct VideoResumeBanner: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(width: 24, height: 24)
-                    // 24pt is well under the 44pt minimum touch target, and
-                    // "Start Over" sits one 10pt gap away, so a mis-tap
-                    // restarted the video instead of dismissing the notice.
-                    // The padding takes the tappable area to 44pt and is then
-                    // removed from layout again, so the banner keeps its
-                    // height and the mark keeps its size. 10pt on the leading
-                    // side fills exactly the stack's spacing, leaving the two
-                    // targets adjacent rather than overlapping.
                     .padding(10)
                     .contentShape(Rectangle())
                     .padding(-10)

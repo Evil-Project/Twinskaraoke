@@ -86,8 +86,6 @@ struct PlaylistListView: View {
             }
             prefetchArtwork()
         }
-        // Page 1 may land after onAppear; bootstrap re-runs only while the
-        // loader is still empty (see PlaylistListLoader.bootstrap).
         .onChange(of: playlists.map(\.id)) { _, _ in
             if let apiURL {
                 loader.bootstrap(initial: playlists, urlBuilder: apiURL)

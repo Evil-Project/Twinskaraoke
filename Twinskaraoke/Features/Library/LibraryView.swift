@@ -41,12 +41,6 @@ struct PlaylistSongCountLabel: View {
 }
 
 struct LibraryView: View {
-    /// Owned here, on the view that owns the NavigationStack, and passed down.
-    ///
-    /// Apple's guidance for the zoom transition is that the namespace belongs to
-    /// the stack root rather than to a pushed screen — see the discussion under
-    /// developer.apple.com/forums/thread/810944. It previously lived on
-    /// PlaylistsGridScreen, one level below the stack.
     @Namespace private var zoomNamespace
     @State var viewModel = PlaylistsViewModel()
     @State private var recentSongsViewModel = LibrarySongsViewModel()
@@ -102,7 +96,6 @@ struct LibraryView: View {
                     AccountToolbarButton()
                 }
             }
-            // `refreshLibraryAndWait()` plays the trigger tick itself.
             .refreshable {
                 await refreshLibraryAndWait()
             }
@@ -129,9 +122,6 @@ struct LibraryView: View {
                 recentSongsViewModel.loadIfNeeded()
             }
             .onChange(of: favorites.favoriteIDs) { _, _ in
-                // Every star tap anywhere in the app fires this; LibraryView is a
-                // tab root that is always alive, so coalesce rapid toggles into a
-                // single refetch instead of fetching the whole list per tap.
                 favoritesRefreshTask?.cancel()
                 favoritesRefreshTask = Task { @MainActor in
                     try? await Task.sleep(for: .seconds(1))
@@ -301,9 +291,6 @@ struct LibraryView: View {
             LibraryLinkSeparator()
         }
     }
-
-    /// Fire-and-forget variant for the toolbar button, which has no way to show
-    /// progress and so has nothing to wait on.
     private func refreshLibrary() {
         AppHaptic.selection.play()
         favorites.loadIfNeeded()
@@ -311,9 +298,6 @@ struct LibraryView: View {
         viewModel.fetchFavoriteSongs(force: true)
         recentSongsViewModel.refresh()
     }
-
-    /// Awaitable variant for pull-to-refresh; keeps the refresh spinner alive
-    /// until every library section has actually finished loading.
     private func refreshLibraryAndWait() async {
         AppHaptic.selection.play()
         favorites.loadIfNeeded()
@@ -530,8 +514,6 @@ struct LibrarySongsView: View {
         .task {
             viewModel.loadIfNeeded()
         }
-        // Diffing on displayedSongs (Equatable) avoids allocating the prefix
-        // id array on every body eval; it only builds when the list changes.
         .onChange(of: viewModel.displayedSongs) { _, newSongs in
             let visible = Array(newSongs.prefix(18))
             let ids = visible.map(\.id)
@@ -694,7 +676,6 @@ struct PlaylistListRow: View {
 
 struct PlaylistsGridScreen: View {
     let viewModel: PlaylistsViewModel
-    /// Supplied by LibraryView, which owns the NavigationStack.
     let zoomNamespace: Namespace.ID
     private let userManager = UserPlaylistsManager.shared
     private let favorites = FavoritesManager.shared
@@ -754,12 +735,6 @@ struct PlaylistsGridScreen: View {
         }
         .smoothScrolling()
         .navigationTitle("Playlists")
-        // Inline, matching PlaylistListView. A large title has to collapse into
-        // the bar when this screen pushes, and the zoom transition leaves the
-        // screen on display while that happens — so the title visibly slid up
-        // on open and sprang back on return. Nothing to collapse, nothing to
-        // animate. PlaylistListView pushes the same detail view and never
-        // showed the bounce, because it was already inline.
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,

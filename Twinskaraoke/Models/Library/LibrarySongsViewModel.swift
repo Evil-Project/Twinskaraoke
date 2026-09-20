@@ -90,9 +90,6 @@ final class LibrarySongsViewModel {
             rebuildDisplayedSongs()
         }
     }
-
-    // Sorting is the expensive half of a rebuild; cache it per (sort, songs)
-    // so search keystrokes only pay for the filter pass.
     private var sortedSongs: [Song] {
         if let sortCache,
            sortCache.sort == sort,
@@ -163,11 +160,6 @@ final class LibrarySongsViewModel {
         canLoadMore = true
         fetch(page: 1, replace: true)
     }
-
-    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
-    /// until the songs have actually finished loading. Deliberately not an
-    /// `async` overload of `refresh()` — in an async context Swift would
-    /// prefer the async overload and recurse.
     func refreshSongs() async {
         refresh()
         await activeTask?.value
@@ -214,9 +206,6 @@ final class LibrarySongsViewModel {
             "sortBy": "CreatedAt",
             "sortDescending": true,
         ])
-
-        // Routed through KaraokeAPIClient.data so 401s trigger the
-        // session-expired flow and transient failures get retried.
         activeTask = Task { [weak self] in
             do {
                 if let token = try CredentialStore.requestToken() {
@@ -278,9 +267,6 @@ final class LibrarySongsViewModel {
             songs += pageSongs.filter { !existing.contains($0.id) }
         }
         rebuildDisplayedSongs()
-
-        // The server paginates on the unfiltered count; using the filtered
-        // pageSongs here would stop infinite scroll on a page with filtered items.
         canLoadMore = decoded.count == pageSize
         if !pageSongs.isEmpty || replace {
             self.page = page

@@ -14,14 +14,7 @@ struct TwinskaraokeApp: App {
 
     init() {
         AppPerformance.event("App Initialization")
-        if AppRuntime.isUITestMode,
-           ProcessInfo.processInfo.arguments.contains("-UITestResetRecentlyPlayed")
-        {
-            RecentlyPlayedStore.resetPersistedHistoryForUITesting()
-        }
         ImageCacheConfig.applyLimits()
-        // Mirrors the signed-in session to the paired watch, which has no way
-        // to sign in on its own. No-op on devices that can't pair one.
         WatchSessionPublisher.shared.activate()
         IOSAppShortcuts.updateAppShortcutParameters()
         WidgetSnapshotPublisher.shared.start()

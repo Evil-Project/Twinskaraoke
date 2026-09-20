@@ -3,9 +3,6 @@ import Foundation
 #if canImport(UIKit)
     import UIKit
 #endif
-
-/// Network fetches backing the full-screen player's cover-art actions, so the
-/// view only holds intent handlers and the async work is task-cancellable.
 nonisolated enum CoverArtService {
     struct ArtistCredit: Sendable {
         let name: String?
@@ -18,8 +15,6 @@ nonisolated enum CoverArtService {
     }
 
     #if canImport(UIKit)
-        /// Downloads and decodes off-main; a full-HD decode on the main queue
-        /// can hitch the player UI.
         static func fetchImage(from url: URL) async -> UIImage? {
             guard let data = try? await URLSession.shared.data(from: url).0 else { return nil }
             return UIImage(data: data)
@@ -38,8 +33,6 @@ nonisolated enum CoverArtService {
         let imageURL = ArtworkURLBuilder.variantURL(from: baseURL, variant: .hero) ?? baseURL
         return RandomArt(imageURL: imageURL, artistCredit: item.artistCredit)
     }
-
-    /// Artist credit embedded in a song's `coverArt` payload, if present.
     static func fetchArtistCredit(songID: String) async -> ArtistCredit? {
         guard let request = try? KaraokeAPIClient.request(
             pathSegments: ["api", "songs", songID]

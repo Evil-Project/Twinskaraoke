@@ -10,8 +10,6 @@ final class PlaylistsViewModel {
     private(set) var favoritesErrorMessage: String?
     var isLoading = false
     var isLoadingFavorites = false
-    /// Server + saved + user playlists, merged and deduped once per source
-    /// change instead of on every view body evaluation.
     private(set) var combinedPlaylists: [Playlist] = []
     @ObservationIgnored private var hasLoadedPlaylists = false
     @ObservationIgnored private var hasLoadedFavoriteSongs = false
@@ -20,11 +18,6 @@ final class PlaylistsViewModel {
     @ObservationIgnored private let favoriteSongsRefresh = RefreshTracker()
 
     init() {
-        // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
-        // and `$favoriteIDs`. `observeContinuously` already hops to the next
-        // main-actor turn before calling back, which is what the old
-        // `.receive(on: DispatchQueue.main)` was there for — observation fires
-        // from willSet, so the recompute must not read pre-write values.
         sourceObservation = observeContinuously({
             _ = self.playlists
             _ = self.favoriteSongs
@@ -61,11 +54,6 @@ final class PlaylistsViewModel {
             .map { $0.asPlaylist() }
             .filter { !existingIDs.contains($0.id) }
         let next = uniqueUser + all
-        // Guarded because @Observable publishes on every write, including one
-        // that stores an identical value, and `favoritesPlaylist` builds a fresh
-        // struct on each call — so an unguarded assignment re-renders the whole
-        // library on any unrelated source change. Combine's removeDuplicates
-        // used to absorb this.
         guard next != combinedPlaylists else { return }
         combinedPlaylists = next
     }

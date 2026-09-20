@@ -99,11 +99,6 @@ final class ArtistsViewModel {
         canLoadMore = true
         load(reset: true)
     }
-
-    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
-    /// until the artists have actually finished loading. Deliberately not an
-    /// `async` overload of `refresh()` — in an async context Swift would
-    /// prefer the async overload and recurse.
     func refreshArtists() async {
         refresh()
         await activeTask?.value
@@ -136,8 +131,6 @@ final class ArtistsViewModel {
         loadGeneration += 1
         let generation = loadGeneration
         activeTask = Task { [weak self] in
-            // KaraokeAPIClient.data throws on non-2xx and posts
-            // .karaokeSessionExpired on 401.
             let data = try? await KaraokeAPIClient.data(for: request)
             self?.applyArtistsResponse(data, reset: reset, generation: generation)
         }
@@ -214,7 +207,6 @@ final class ArtistDetailViewModel {
             } catch let error as URLError {
                 self?.applyArtistDetailResponse(nil, error: error, id: id, generation: generation)
             } catch {
-                // Non-2xx and other API failures map to the generic load error.
                 self?.applyArtistDetailResponse(nil, error: nil, id: id, generation: generation)
             }
         }

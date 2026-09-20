@@ -16,8 +16,6 @@ final class RecentlyAddedTracker {
     }
 
     func registerIfNew(_ ids: [String]) {
-        // Mutate a local copy and assign once so a batch of new IDs publishes
-        // a single dates change instead of one per inserted ID.
         var updated = dates
         var changed = false
         let now = Date()

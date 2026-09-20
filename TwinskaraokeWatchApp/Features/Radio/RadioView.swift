@@ -16,8 +16,6 @@ struct RadioView: View {
     private var playbackAnimation: Animation? {
         reduceMotion ? nil : .easeInOut(duration: 0.18)
     }
-
-    /// The station is only "on" while this app is the one streaming it.
     private var isTunedIn: Bool {
         audioManager.isRadioMode
     }
@@ -91,9 +89,6 @@ struct RadioView: View {
             radio.start()
         }
         .onDisappear {
-            // `stop` keeps polling alive if the station is still streaming —
-            // the Now Playing card outlives this view — and retires it once
-            // playback ends.
             radio.stop()
             WatchArtworkPrefetcher.shared.cancel(reason: "radio")
         }
@@ -223,9 +218,6 @@ private struct RadioStatusPill: View {
             )
     }
 }
-
-/// Metadata-only row: the station decides what plays, so these are not
-/// tappable the way a library song is.
 private struct RadioTrackRow: View {
     let song: RadioNowPlaying.SongInfo
 

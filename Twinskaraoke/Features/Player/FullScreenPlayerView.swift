@@ -51,15 +51,9 @@ private struct PlayerLayoutMetrics {
     private var isRoomy: Bool {
         contentHeight >= 1000
     }
-
-    /// iPad-class canvas. Slide Over and half-width Split View stay on the
-    /// compact phone layout, which reads better at those widths.
     var usesPadLayout: Bool {
         containerSize.width >= 600 && contentHeight >= 600
     }
-
-    /// Landscape iPad: lyrics fill the top, transport spans a bar along the
-    /// bottom. Portrait instead keeps artwork and transport in a left rail.
     var padUsesBottomBar: Bool {
         usesPadLayout
             && containerSize.width >= 900
@@ -85,8 +79,6 @@ private struct PlayerLayoutMetrics {
         return min(widthBound, heightFraction, maxSize)
     }
 
-    // MARK: - iPad geometry
-
     var padOuterPadding: CGFloat {
         if containerSize.width >= 1180 { return 44 }
         if containerSize.width >= 860 { return 34 }
@@ -96,14 +88,9 @@ private struct PlayerLayoutMetrics {
     var padColumnSpacing: CGFloat {
         containerSize.width >= 1000 ? 34 : 26
     }
-
-    /// Keeps the layout from stretching edge to edge on a 13" canvas.
     var padContentMaxWidth: CGFloat {
         padUsesBottomBar ? 1160 : 1120
     }
-
-    /// Lyric lines are short, so a full-width panel would strand a lot of empty
-    /// space to the right of the text in landscape.
     var padLyricsPanelMaxWidth: CGFloat {
         padUsesBottomBar ? 880 : .infinity
     }
@@ -115,8 +102,6 @@ private struct PlayerLayoutMetrics {
     var padRailArtSize: CGFloat {
         min(padRailWidth, contentHeight * 0.34, 360)
     }
-
-    /// Lyrics-off layout: artwork carries the screen, transport sits below it.
     var padArtworkSize: CGFloat {
         min(containerSize.width * 0.5, contentHeight * 0.44, 460)
     }
@@ -124,8 +109,6 @@ private struct PlayerLayoutMetrics {
     var padArtworkContentMaxWidth: CGFloat {
         560
     }
-
-    /// Clears the drag handle pinned to the top of the player.
     var padTopInset: CGFloat {
         26
     }
@@ -226,33 +209,18 @@ private struct PlayerLayoutMetrics {
     var lyricsSubtitleSize: CGFloat {
         isCompactHeight ? 12 : 13
     }
-
-    /// A `GeometryReader` reports a zero size before the first layout pass;
-    /// layout decisions that stick (the initial player surface) wait for this.
     var hasResolvedGeometry: Bool {
         containerSize.width > 0 && containerSize.height > 0
     }
 }
-
-/// The soft filled circle the player's actions sit on, Apple Music's treatment
-/// for favorite, more and the queue-mode badge on Playing Next. It is a theme
-/// token rather than a literal grey here so the three title surfaces and the
-/// badge in ``PlayerBottomToolbar`` cannot drift apart.
 private let playerTitleButtonBackground = Color.appPlayerActionFill
 
 private func playerTitleIconColor(isActive _: Bool = false) -> Color {
     Color.primary
 }
-
-/// How far the filled circle sits inside the button's hit target. The tap area
-/// stays a full 44pt; only the circle shrinks, so it hugs the glyph the way
-/// Apple Music's does instead of filling the whole target.
 private let playerTitleButtonChromeInset: CGFloat = 10
 
 private extension View {
-    /// The circular background worn by the player's title-surface buttons, and
-    /// the hit target underneath it. The iPad control bar sits on its own glass
-    /// and skips the circle, but keeps the target.
     @ViewBuilder
     func playerTitleButtonChrome(_ isVisible: Bool, size: CGFloat) -> some View {
         if isVisible {
@@ -269,11 +237,6 @@ private extension View {
         }
     }
 }
-
-/// The favorite toggle shared by the player's three title surfaces: the compact
-/// title row, the compact lyrics header and the iPad landscape control bar.
-/// They differ only in metrics and chrome, so the toggle, haptics, symbol
-/// effect and accessibility live here rather than in triplicate.
 private struct PlayerFavoriteButton: View {
     let song: Song
     var font: Font = .title3
@@ -321,9 +284,6 @@ private struct PlayerFavoriteButton: View {
         )
     }
 }
-
-/// The overflow menu paired with ``PlayerFavoriteButton`` on the same three
-/// surfaces.
 private struct PlayerMoreMenu: View {
     let song: Song
     var font: Font = AM.Font.playerGlyph
@@ -355,6 +315,8 @@ struct FullScreenPlayerView: View {
     @Environment(\.playerSafeAreaInsets) private var injectedSafeAreaInsets
     @Environment(\.playerClosingContentOpacity) private var closingContentOpacity
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingQueue = false
     @State private var showLyrics = false
@@ -380,12 +342,6 @@ struct FullScreenPlayerView: View {
         Group {
             if let song {
                 GeometryReader { geo in
-                    // Injected when hosted by `NowPlayingOverlay`, which ignores
-                    // the safe area so the player can paint edge to edge — a
-                    // reader below that point reports zero insets, which used to
-                    // put the content under the status bar and, by inflating
-                    // `contentHeight` past the compact breakpoint, enlarge every
-                    // font on the screen.
                     let safeTop = injectedSafeAreaInsets?.top ?? geo.safeAreaInsets.top
                     let safeBottom = injectedSafeAreaInsets?.bottom ?? geo.safeAreaInsets.bottom
                     let metrics = PlayerLayoutMetrics(
@@ -442,8 +398,6 @@ struct FullScreenPlayerView: View {
                     title: isEasterEgg ? easterEggArtistName : coverArtArtistName,
                     subtitle: isEasterEgg ? easterEggArtistLink : coverArtArtistLink
                 )
-                // Named so a test can assert this did *not* open. Dragging the
-                // player down from the artwork used to bring it up by accident.
                 .accessibilityIdentifier("CoverArtViewer")
                 .onDisappear {
                     easterEggImageURL = nil
@@ -496,17 +450,12 @@ struct FullScreenPlayerView: View {
                         hasNoLyrics: upcomingLyricsViewModel.hasNoLyrics
                     )
                 } else if upcomingLyricsViewModel.isLoading {
-                    // Prefetch for this song may still be in flight; the
-                    // isLoading handoff below adopts it (or fetches on
-                    // failure) instead of firing a duplicate GET.
                 } else {
                     lyricsViewModel.fetch(songID: id)
                 }
             }
         }
         .onChange(of: upcomingLyricsViewModel.isLoading) { _, isLoading in
-            // Hand off an in-flight prefetch that just settled: adopt it when
-            // it landed for the current song, otherwise fetch fresh.
             guard !isLoading, !audioManager.isRadioMode,
                   let id = audioManager.currentSong?.id,
                   lyricsViewModel.loadedSongID != id
@@ -530,7 +479,6 @@ struct FullScreenPlayerView: View {
             }
         }
         .onChange(of: audioManager.isRadioMode) { _, isRadio in
-            // Radio has no lyrics; leaving it restores the canvas default.
             showLyrics = isRadio ? false : usesPadCanvas
         }
         .onChange(of: audioManager.aiEnabled) { _, enabled in
@@ -577,16 +525,8 @@ struct FullScreenPlayerView: View {
             syncSurfaceToCanvas(metrics: metrics)
         }
     }
-
-    /// An iPad-class canvas opens straight into live lyrics — there is room for
-    /// them alongside the artwork, so the artwork-only view isn't the useful
-    /// default there. This is a canvas decision, not a device one: a Slide Over
-    /// or half-width Split View window runs the compact layout and should land
-    /// on artwork. Geometry is only known once the player has laid out, so the
-    /// initial surface is applied here rather than seeded from the device idiom.
     private func syncSurfaceToCanvas(metrics: PlayerLayoutMetrics) {
         guard metrics.hasResolvedGeometry else { return }
-        // Kept in sync so leaving radio mode can restore the canvas default.
         if usesPadCanvas != metrics.usesPadLayout {
             usesPadCanvas = metrics.usesPadLayout
         }
@@ -671,10 +611,6 @@ struct FullScreenPlayerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(showLyrics ? "FullScreenPlayer.layout.compactLyrics" : "FullScreenPlayer.layout.compact")
     }
-
-    /// Lyrics-first iPad player. Portrait keeps artwork and transport together
-    /// in a left rail with lyrics beside them; landscape hands the top of the
-    /// canvas to the lyrics and spreads the transport along the bottom.
     private func padLyricsLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
         Group {
             if metrics.padUsesBottomBar {
@@ -697,8 +633,6 @@ struct FullScreenPlayerView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("FullScreenPlayer.layout.wideLyrics")
     }
-
-    /// Lyrics-off iPad player: artwork centred with the transport beneath it.
     private func padArtworkLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {
         VStack(spacing: 0) {
             Spacer(minLength: 12)
@@ -727,8 +661,6 @@ struct FullScreenPlayerView: View {
 
     private func padSideRail(song: Song, metrics: PlayerLayoutMetrics) -> some View {
         VStack(spacing: 0) {
-            // The artwork floats in the space above the transport rather than
-            // pinning to the top, which would strand a gap in the middle.
             Spacer(minLength: 0)
             PlayerArtworkView(
                 song: song,
@@ -747,8 +679,6 @@ struct FullScreenPlayerView: View {
         }
         .frame(maxHeight: .infinity)
     }
-
-    /// Progress, transport, volume and the toolbar as one bottom-anchored block.
     private func padTransportStack(song: Song, metrics: PlayerLayoutMetrics) -> some View {
         VStack(spacing: 0) {
             progressSection(song: song, metrics: metrics)
@@ -759,9 +689,6 @@ struct FullScreenPlayerView: View {
             padToolbar(song: song, horizontalPadding: 12)
         }
     }
-
-    /// Landscape transport: now playing on the left, transport centred, output
-    /// and volume on the right.
     private func padControlBar(song: Song, metrics: PlayerLayoutMetrics) -> some View {
         VStack(spacing: 6) {
             progressSection(song: song, metrics: metrics)
@@ -774,8 +701,6 @@ struct FullScreenPlayerView: View {
                     .frame(width: metrics.padBarTransportMaxWidth)
 
                 VStack(spacing: 6) {
-                    // The song's own actions move into this cluster so the
-                    // now playing group keeps its width for the title.
                     HStack(spacing: 0) {
                         padFavoriteButton(song: song)
                             .padding(.top, 16)
@@ -824,9 +749,6 @@ struct FullScreenPlayerView: View {
             SongContextPreview(song: song)
         }
     }
-
-    /// The control bar already sits on glass, so its actions drop the circular
-    /// chrome the other two surfaces wear.
     private func padFavoriteButton(song: Song) -> some View {
         PlayerFavoriteButton(song: song, showsChrome: false)
     }
@@ -894,9 +816,6 @@ struct FullScreenPlayerView: View {
 
     private var dismissBar: some View {
         Button {
-            // No haptic here: `collapse()` plays `.dismiss` itself, so every
-            // route out of the player feels the same. It used to be needed,
-            // back when the presentation only stored a flag.
             presentation.collapse()
         } label: {
             Capsule()
@@ -956,9 +875,6 @@ struct FullScreenPlayerView: View {
         .padding(.horizontal, metrics.horizontalPadding)
         .padding(.bottom, 10)
     }
-
-    /// The song title and its actions live in the rail (portrait) or the control
-    /// bar (landscape), so the panel header only labels the column.
     private func padLyricsHeader(song _: Song) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text("Lyrics")
@@ -1011,9 +927,6 @@ struct FullScreenPlayerView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Now playing")
             .accessibilityValue("\(song.title), \(song.displayArtist)")
-            // Not a `Spacer`: the titles are flexible now, and two flexible
-            // children split the free width between them, which would start a
-            // title scrolling while half the row sat empty beside it.
             .padding(.trailing, 8)
             PlayerFavoriteButton(
                 song: song,
@@ -1106,12 +1019,6 @@ struct FullScreenPlayerView: View {
         @Environment(AudioPlayerManager.self) private var audioManager
 
         var body: some View {
-            // This read is load-bearing. `audioManager.playbackTime` is a
-            // computed property over the AVPlayer, so it registers nothing with
-            // observation — reading `clock.progress`, which ticks with playback,
-            // is what re-evaluates this view and advances the highlighted line.
-            // Under @ObservedObject merely holding `clock` subscribed the view;
-            // @Observable only tracks properties that are actually read.
             let _ = clock.progress
             LyricsView(
                 lyrics: lyrics,
@@ -1242,7 +1149,10 @@ struct FullScreenPlayerView: View {
                             .transition(.opacity)
                     } else {
                         TimelineView(
-                            .animation(minimumInterval: DisplayRefreshRate.lightweightAnimationInterval)
+                            .animation(
+                                minimumInterval: DisplayRefreshRate.lightweightAnimationInterval,
+                                paused: reduceEffects || !animationsActive
+                            )
                         ) { context in
                             Circle()
                                 .trim(from: 0, to: 0.82)
@@ -1372,7 +1282,6 @@ struct FullScreenPlayerView: View {
         }
         Task {
             guard let credit = await CoverArtService.fetchArtistCredit(songID: songID) else { return }
-            // A slow response for a previous song must not label the current one.
             guard audioManager.currentSong?.id == songID else { return }
             coverArtArtistName = credit.name
             coverArtArtistLink = credit.link

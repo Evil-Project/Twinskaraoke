@@ -273,9 +273,6 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineBlur: CGFloat {
-        // Depth-of-field: the active line stays crisp while lines soften with
-        // distance, like Apple Music. Skipped under reduce motion, where the
-        // constant refocusing would read as movement.
         guard !reduceMotion, !isCurrent else { return 0 }
         return min(2.0, 0.7 * CGFloat(distance))
     }

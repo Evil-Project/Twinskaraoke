@@ -80,9 +80,6 @@ final class FavoritesManager {
         Task {
             let ok = await send(songID: songID)
             if ok {
-                // Serialize invalidation ahead of the reload below: a racing
-                // load()/reload() must not read the pre-toggle list from the
-                // cache and commit stale star state as loaded.
                 await KaraokeAPIClient.invalidateFavoriteSongs()
             }
             await MainActor.run {
@@ -111,11 +108,6 @@ final class FavoritesManager {
                 scheduleReloadAfterMutationsIfNeeded()
             }
         }
-        // Read from the same source as the Favorites playlist. The old
-        // /api/user/favorites ID list did not match the playlist's songs
-        // (starred songs showed an inactive star everywhere), while
-        // favoriteSongs() returns the complete set and shares the
-        // FavoriteSongsCache with the playlist.
         let songs: [Song]
         do {
             songs = try await KaraokeAPIClient.favoriteSongs()
@@ -146,17 +138,6 @@ final class FavoritesManager {
             await self?.load()
         }
     }
-
-    /// Moves one favorite from `oldOrder` to `newOrder`.
-    ///
-    /// Favorites keep a user-defined order server-side even though this manager
-    /// only tracks membership as an unordered `Set`: the ordered list is what
-    /// `KaraokeAPIClient.favoriteSongs()` returns, so a successful write is
-    /// observed by invalidating that cache rather than by mutating state here.
-    ///
-    /// Unlike the per-song toggle this is a fixed path — `save-order` is the
-    /// literal last segment, not a song ID. One move per call, carrying both
-    /// ends of it, for the same reason the playlist route does; see `moveSong`.
     func moveFavorite(songID: String, from oldOrder: Int, to newOrder: Int) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
         guard let req = try? KaraokeAPIClient.jsonArrayRequest(
@@ -167,18 +148,8 @@ final class FavoritesManager {
         await KaraokeAPIClient.invalidateFavoriteSongs()
         return true
     }
-
-    /// Adds without flipping. Safe to call on a song already favourited, which
-    /// `toggle` is not — see the note on `remove`.
     func add(songID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
-        // Refuses to overlap another mutation for the same song, exactly as
-        // `toggle` does. Both halves of the check below are unsafe while one is
-        // in flight: a removal leaves the ID in `favoriteIDs` until it lands, so
-        // the fast path would report success for a song about to disappear —
-        // and skipping the fast path is worse, because `send` is a PUT that
-        // *flips* membership and would remove the song rather than add it.
-        // Reporting failure lets the caller show it and retry.
         guard !inFlight.contains(songID) else { return false }
         guard !favoriteIDs.contains(songID) else { return true }
 
@@ -186,25 +157,13 @@ final class FavoritesManager {
         defer { endMutation(songID, generation: generation) }
 
         guard await send(songID: songID) else { return false }
-        // Invalidated before the generation check, matching `toggle`: if
-        // `clear()` lands mid-request the cache still holds the pre-mutation
-        // list, and a later load would read it as current.
         await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
         favoriteIDs.insert(songID)
         return true
     }
-
-    /// Unconditional removal, deliberately not routed through `toggle`.
-    ///
-    /// `toggle` sends PUT, which *flips* membership. For a multi-select delete
-    /// that is the wrong verb twice over: `data(for:)` retries idempotent
-    /// requests, so a lost response would re-add the song, and a song already
-    /// gone would come back rather than stay removed. DELETE on the same path
-    /// is unambiguous, and a 404 means the caller already got what it asked for.
     func remove(songID: String) async -> Bool {
         guard CredentialStore.isAuthenticated else { return false }
-        // Same non-overlap rule as `add` and `toggle`; see `add`.
         guard !inFlight.contains(songID) else { return false }
         guard var req = try? KaraokeAPIClient.request(
             pathSegments: ["api", "user", "favorites", songID]
@@ -224,21 +183,11 @@ final class FavoritesManager {
             ok = false
         }
         guard ok else { return false }
-        // Before the generation check, for the reason given in `add`.
         await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
         favoriteIDs.remove(songID)
         return true
     }
-
-    /// Registers a mutation *before* its request is awaited.
-    ///
-    /// `load()` only commits its result when `mutationRevision` is unchanged and
-    /// `inFlight` is empty. A mutation that is not registered satisfies both
-    /// conditions for the whole duration of its request, so a load already in
-    /// flight can finish afterwards and overwrite the change with the
-    /// pre-mutation list — silently un-adding or re-adding a song. `toggle`
-    /// has always done this; `add` and `remove` must too.
     private func beginMutation(_ songID: String) -> Int {
         inFlight.insert(songID)
         mutationRevision &+= 1

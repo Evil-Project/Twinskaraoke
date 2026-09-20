@@ -1,10 +1,4 @@
 import SwiftUI
-
-/// Persistent transport strip pinned to the bottom of the window.
-///
-/// The Mac idiom for a media app, and the deliberate replacement for the iOS
-/// LNPopup miniplayer — that library is iOS/Catalyst-only, and a drag-up popup
-/// would be wrong here regardless.
 struct PlayerBar: View {
     @Environment(MacAudioManager.self) private var audio
     @State private var scrubTime: Double?
@@ -24,8 +18,6 @@ struct PlayerBar: View {
         }
         .background(.bar)
     }
-
-    // MARK: - Sections
 
     private var nowPlaying: some View {
         HStack(spacing: 10) {
@@ -91,8 +83,6 @@ struct PlayerBar: View {
                 ),
                 in: 0...max(audio.duration, 1),
                 onEditingChanged: { editing in
-                    // Commit on release only: seeking on every drag frame makes
-                    // AVPlayer stutter.
                     guard !editing, let target = scrubTime else { return }
                     audio.seek(to: target)
                     scrubTime = nil
@@ -122,8 +112,6 @@ struct PlayerBar: View {
         }
         .frame(maxWidth: 160, alignment: .trailing)
     }
-
-    // MARK: - Helpers
 
     private var displayedTime: Double {
         scrubTime ?? audio.currentTime

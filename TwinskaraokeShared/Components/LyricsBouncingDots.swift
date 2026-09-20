@@ -6,10 +6,12 @@ struct LyricsBouncingDots: View {
     var dotSize: CGFloat = 9
     var color: Color = .primary
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.appAnimationsActive) private var animationsActive
     @State private var loopPhase: Date = .now
     private let loopCycle: TimeInterval = 1.6
     var body: some View {
-        if reduceMotion {
+        if reduceMotion || reduceEffects || !animationsActive {
             HStack(spacing: dotSize * 0.55) {
                 ForEach(0 ..< 3, id: \.self) { _ in
                     Circle()

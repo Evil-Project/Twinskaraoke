@@ -16,21 +16,17 @@ struct ContentView: View {
     @State private var selection: MacDestination? = .home
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        // The player bar spans the whole window rather than living inside the
-        // detail pane — the Music.app arrangement, and the reason this reads as
-        // a Mac app instead of a resized iPad one.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                sidebar
+            } detail: {
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
             PlayerBar()
+                .fixedSize(horizontal: false, vertical: true)
         }
-        // Account belongs in the window toolbar, not the sidebar list: the
-        // Playlists section grows without bound, and a sidebar row below it
-        // scrolls out of reach as soon as the user has a dozen playlists.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -44,19 +40,14 @@ struct ContentView: View {
         }
         .environment(auth)
         .task {
-            await playlists.loadIfNeeded()
             FavoritesManager.shared.loadIfNeeded()
-            await auth.refreshAccount()
         }
-        // This .task runs once for the window's lifetime, so signing in or out
-        // would otherwise leave the sidebar showing the previous user's
-        // playlists (or the public fallback) until a manual refresh.
-        .onChange(of: auth.isLoggedIn) { _, _ in
+        .task(id: auth.isLoggedIn) {
             playlists.invalidate()
-            Task {
-                await playlists.reload()
-                await auth.refreshAccount()
-            }
+            guard auth.isLoggedIn else { return }
+            async let playlistLoad: Void = playlists.reload()
+            async let accountRefresh: Void = auth.refreshAccount()
+            _ = await (playlistLoad, accountRefresh)
         }
     }
 
@@ -85,8 +76,6 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if playlists.playlists.isEmpty, let error = playlists.errorMessage {
-                    // Previously this section just rendered nothing, making a
-                    // failed load indistinguishable from an empty account.
                     VStack(alignment: .leading, spacing: 4) {
                         Text(error)
                             .font(.caption)
@@ -104,9 +93,6 @@ struct ContentView: View {
                         .tag(MacDestination.playlist(id: playlist.id, name: playlist.name))
                 }
             }
-            // Refresh lives here rather than in the toolbar: macOS merges the
-            // sidebar and detail toolbars into one window toolbar, so a second
-            // arrow.clockwise button sat next to the detail view's own refresh.
             .contextMenu {
                 Button("Refresh Playlists") {
                     Task { await playlists.reload() }
@@ -130,8 +116,6 @@ struct ContentView: View {
             FavoritesView()
         case .playlist(let id, let name):
             PlaylistDetailView(playlistID: id, playlistName: name)
-                // Rebuild the view (and its view model) when the selection
-                // moves to a different playlist.
                 .id(id)
         case .account:
             AccountView()

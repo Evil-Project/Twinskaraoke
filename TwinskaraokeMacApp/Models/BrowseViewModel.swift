@@ -1,7 +1,5 @@
 import Foundation
 import Observation
-
-/// Backs the Home screen: a trending shelf and a latest-releases shelf.
 @MainActor
 @Observable
 final class BrowseViewModel {
@@ -11,6 +9,7 @@ final class BrowseViewModel {
     private(set) var errorMessage: String?
 
     private var hasLoaded = false
+    private var generation = 0
 
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
@@ -18,31 +17,40 @@ final class BrowseViewModel {
     }
 
     func reload() async {
+        generation &+= 1
+        let requestGeneration = generation
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
-
-        // Kick both off together, then unwrap each separately: one shelf
-        // failing shouldn't blank the other.
+        defer {
+            if generation == requestGeneration {
+                isLoading = false
+            }
+        }
         async let trendingTask = KaraokeAPIClient.trendingSongs(days: 7, take: 24)
         async let latestTask = KaraokeAPIClient.latestReleases(pageSize: 48, take: 24)
 
         do {
-            trending = try await trendingTask
+            let songs = try await trendingTask
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            trending = songs
         } catch {
-            noteFailure(error)
+            noteFailure(error, generation: requestGeneration)
         }
         do {
-            latest = try await latestTask
+            let songs = try await latestTask
+            guard generation == requestGeneration, !Task.isCancelled else { return }
+            latest = songs
         } catch {
-            noteFailure(error)
+            noteFailure(error, generation: requestGeneration)
         }
 
-        hasLoaded = !trending.isEmpty || !latest.isEmpty
+        if generation == requestGeneration {
+            hasLoaded = !trending.isEmpty || !latest.isEmpty
+        }
     }
 
-    private func noteFailure(_ error: Error) {
-        guard !(error is CancellationError), errorMessage == nil else { return }
+    private func noteFailure(_ error: Error, generation requestGeneration: Int) {
+        guard generation == requestGeneration, !(error is CancellationError), errorMessage == nil else { return }
         errorMessage = String(localized: "Couldn't load songs. Check your connection and try again.")
     }
 }

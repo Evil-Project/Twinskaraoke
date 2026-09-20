@@ -1,8 +1,5 @@
 import html from "./index.html" with { type: "text" };
 
-// Origins allowed to call this worker cross-origin. The easter-egg page is
-// served from this same worker, so browser calls are same-origin anyway;
-// this list only covers the first-party app/web origins.
 const ALLOWED_ORIGINS = new Set([
   "https://twinskaraoke.com",
   "https://www.twinskaraoke.com",
@@ -44,9 +41,6 @@ export default {
       });
     }
 
-    // NOTE: /api/verify is intentional easter-egg theater — it randomly
-    // succeeds or fails and verifies nothing. Real authentication must
-    // never depend on this endpoint.
     if (url.pathname === "/api/verify" && request.method === "POST") {
       return handleVerify(request, env);
     }

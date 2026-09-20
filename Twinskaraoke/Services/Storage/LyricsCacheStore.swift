@@ -6,9 +6,6 @@ nonisolated enum LyricsCacheVariant: String, Sendable {
 }
 
 nonisolated enum LyricsCacheStore {
-    // Entries are KB-sized JSON documents, so I/O stays synchronous on the
-    // caller; the lock serializes clear() with loads/saves so a save can't
-    // write into a directory clear() just deleted.
     private nonisolated static let ioLock = NSLock()
 
     nonisolated static let cacheDirectory: URL = {
