@@ -21,7 +21,7 @@ final class SongsViewModel {
                 let songs = try await KaraokeAPIClient.trendingSongs(take: 20)
                 self.songs = songs
             } catch {
-                loadError = "Check your connection and try again."
+                loadError = String(localized: "Check your connection and try again.")
             }
         }
     }

@@ -25,8 +25,8 @@ struct NewFeaturedRail: View {
                 LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
                     if let primary {
                         NewFeatureCard(
-                            kicker: "Updated Playlist",
-                            title: "New Tracks",
+                            kicker: String(localized: "Updated Playlist"),
+                            title: String(localized: "New Tracks"),
                             subtitle: primary.displayArtist.isEmpty ? "Twinskaraoke" : primary.displayArtist,
                             song: primary,
                             context: songs,
@@ -36,7 +36,7 @@ struct NewFeaturedRail: View {
                     }
                     if let secondary {
                         NewFeatureCard(
-                            kicker: "Featured Release",
+                            kicker: String(localized: "Featured Release"),
                             title: secondary.title,
                             subtitle: secondary.displayArtist,
                             song: secondary,

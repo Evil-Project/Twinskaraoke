@@ -46,7 +46,7 @@ struct QueueView: View {
                     QueueModeButton(
                         symbol: "shuffle",
                         isActive: audioManager.isShuffled,
-                        accessibilityLabel: "Shuffle",
+                        accessibilityLabel: String(localized: "Shuffle"),
                         accessibilityValue: audioManager.isShuffled ? "On" : "Off"
                     ) {
                         audioManager.toggleShuffle()
@@ -54,7 +54,7 @@ struct QueueView: View {
                     QueueModeButton(
                         symbol: audioManager.repeatMode.symbol,
                         isActive: audioManager.repeatMode.isActive,
-                        accessibilityLabel: "Repeat",
+                        accessibilityLabel: String(localized: "Repeat"),
                         accessibilityValue: repeatModeDescription
                     ) {
                         audioManager.toggleRepeat()
@@ -62,7 +62,7 @@ struct QueueView: View {
                     QueueModeButton(
                         symbol: "infinity",
                         isActive: audioManager.autoplayEnabled,
-                        accessibilityLabel: "Autoplay",
+                        accessibilityLabel: String(localized: "Autoplay"),
                         accessibilityValue: audioManager.autoplayEnabled ? "On" : "Off"
                     ) {
                         audioManager.toggleAutoplay()
@@ -84,8 +84,8 @@ struct QueueView: View {
                 }
                 if upNext.isEmpty {
                     MusicEmptyState(
-                        title: "No songs queued",
-                        message: "Songs you play next will appear here."
+                        title: String(localized: "No songs queued"),
+                        message: String(localized: "Songs you play next will appear here.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityElement(children: .combine)

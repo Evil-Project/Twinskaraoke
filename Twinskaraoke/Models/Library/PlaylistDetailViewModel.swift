@@ -70,9 +70,9 @@ class PlaylistDetailViewModel {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     var emptyStateMessage: String {
         if loadFailed {
-            return "The playlist couldn't be loaded. Check your connection and try again."
+            return String(localized: "The playlist couldn't be loaded. Check your connection and try again.")
         }
-        return "Tap refresh to check for new songs."
+        return String(localized: "Tap refresh to check for new songs.")
     }
 
     func reload(playlistID: String, fallback: [Song]? = nil) {

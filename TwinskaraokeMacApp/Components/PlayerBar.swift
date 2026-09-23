@@ -32,7 +32,7 @@ struct PlayerBar: View {
             SongArtwork(url: audio.currentSong?.thumbnailURL, size: 42)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(audio.currentSong?.displayTitle ?? "Nothing Playing")
+                Text(audio.currentSong?.displayTitle ?? String(localized: "Nothing Playing"))
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 Text(audio.currentSong?.displayArtist ?? "—")

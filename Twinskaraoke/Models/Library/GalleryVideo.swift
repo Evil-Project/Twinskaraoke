@@ -18,7 +18,7 @@ nonisolated enum VideoQuality: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .auto: "Auto"
+        case .auto: String(localized: "Auto")
         case .p1080: "1080p"
         case .p720: "720p"
         case .p480: "480p"
@@ -185,7 +185,7 @@ nonisolated struct GalleryVideo: Codable, Identifiable, Equatable, Sendable {
             else { return nil }
             return trimmed
         }
-        return candidates.first ?? "Untitled Video"
+        return candidates.first ?? String(localized: "Untitled Video")
     }
 
     var isWatchalongVideo: Bool {

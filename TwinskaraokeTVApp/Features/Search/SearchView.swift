@@ -25,8 +25,8 @@ struct SearchView: View {
         if viewModel.searchText.trimmingCharacters(in: .whitespaces).isEmpty {
             TVEmptyState(
                 systemImage: "magnifyingglass",
-                title: "Find something to sing",
-                message: "Search the catalog for songs and artists."
+                title: String(localized: "Find something to sing"),
+                message: String(localized: "Search the catalog for songs and artists.")
             )
         } else if viewModel.isLoading && viewModel.resolvedResults.isEmpty {
             ProgressView()
@@ -38,8 +38,8 @@ struct SearchView: View {
         } else if viewModel.resolvedResults.isEmpty {
             TVEmptyState(
                 systemImage: "questionmark.circle",
-                title: "No results",
-                message: "Try a different song or artist."
+                title: String(localized: "No results"),
+                message: String(localized: "Try a different song or artist.")
             )
         } else {
             resultsList

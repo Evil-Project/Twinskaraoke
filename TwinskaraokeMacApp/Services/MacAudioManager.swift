@@ -19,9 +19,9 @@ enum MacPlaybackMode: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .listLoop: "Repeat All"
-        case .songLoop: "Repeat One"
-        case .shuffle: "Shuffle"
+        case .listLoop: String(localized: "Repeat All")
+        case .songLoop: String(localized: "Repeat One")
+        case .shuffle: String(localized: "Shuffle")
         }
     }
 }
@@ -174,7 +174,7 @@ final class MacAudioManager {
         duration = 0
 
         guard let url = song.audioURL else {
-            handleFailure("This song has no playable audio.")
+            handleFailure(String(localized: "This song has no playable audio."))
             return
         }
 
@@ -201,7 +201,7 @@ final class MacAudioManager {
                     }
                     self.updateNowPlayingInfo()
                 case .failed:
-                    self.handleFailure(item.error?.localizedDescription ?? "Couldn't play this song.")
+                    self.handleFailure(item.error?.localizedDescription ?? String(localized: "Couldn't play this song."))
                 default:
                     break
                 }

@@ -132,7 +132,7 @@ final class ArtistDetailViewModel {
             pathSegments: ["api", "artist", id]
         ) else {
             isLoading = false
-            errorMessage = "The artist could not be loaded right now."
+            errorMessage = String(localized: "The artist could not be loaded right now.")
             return
         }
         isLoading = true
@@ -162,17 +162,17 @@ final class ArtistDetailViewModel {
         }
 
         guard error == nil else {
-            errorMessage = "Check your connection and try again."
+            errorMessage = String(localized: "Check your connection and try again.")
             return
         }
         guard let data
         else {
-            errorMessage = "The artist could not be loaded right now."
+            errorMessage = String(localized: "The artist could not be loaded right now.")
             return
         }
 
         guard let decoded = try? JSONDecoder().decode(Artist.self, from: data) else {
-            errorMessage = "The artist could not be loaded right now."
+            errorMessage = String(localized: "The artist could not be loaded right now.")
             return
         }
 

@@ -59,15 +59,15 @@ struct ProfileDetailView: View {
                 }
                 if unlocked.isEmpty, locked.isEmpty {
                     MusicEmptyState(
-                        title: "No Badges Yet",
-                        message: "Sing more songs to start unlocking profile badges."
+                        title: String(localized: "No Badges Yet"),
+                        message: String(localized: "Sing more songs to start unlocking profile badges.")
                     )
                     .padding(.vertical, 28)
                     .transition(emptyStateTransition)
                 }
                 if !unlocked.isEmpty {
                     BadgeGridSection(
-                        title: "Unlocked",
+                        title: String(localized: "Unlocked"),
                         items: unlocked,
                         headerCount: profile?.unlockedBadges,
                         cols: cols,
@@ -77,7 +77,7 @@ struct ProfileDetailView: View {
                 }
                 if !locked.isEmpty {
                     BadgeGridSection(
-                        title: "Locked",
+                        title: String(localized: "Locked"),
                         items: locked,
                         headerCount: nil,
                         cols: cols,
@@ -244,11 +244,11 @@ private struct ProfileStatsCard: View {
     let level: Int
     var body: some View {
         HStack(spacing: 0) {
-            stat(value: "\(unlocked)", label: "Unlocked")
+            stat(value: "\(unlocked)", label: String(localized: "Unlocked"))
             Divider().frame(height: 32)
-            stat(value: "\(total)", label: "Total")
+            stat(value: "\(total)", label: String(localized: "Total"))
             Divider().frame(height: 32)
-            stat(value: "\(level)", label: "Level")
+            stat(value: "\(level)", label: String(localized: "Level"))
         }
         .padding(.vertical, 12)
         .background(
@@ -383,7 +383,7 @@ private struct NextBadgeCallout: View {
     }
 
     private var progressText: String {
-        guard badge.conditionValue > 0 else { return "View badge details" }
+        guard badge.conditionValue > 0 else { return String(localized: "View badge details") }
         return "\(badge.currentProgress) / \(badge.conditionValue)"
     }
 

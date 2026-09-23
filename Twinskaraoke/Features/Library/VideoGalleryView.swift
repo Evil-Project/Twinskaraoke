@@ -17,18 +17,18 @@ struct VideoGalleryView: View {
                     .padding(.top, AM.Spacing.l)
             } else if let message = viewModel.errorMessage, viewModel.videos.isEmpty {
                 VideoGalleryStateView(
-                    title: "Couldn't Load Videos",
+                    title: String(localized: "Couldn't Load Videos"),
                     message: message,
-                    buttonTitle: "Try Again"
+                    buttonTitle: String(localized: "Try Again")
                 ) {
                     viewModel.refresh()
                 }
                 .frame(maxWidth: .infinity, minHeight: 420)
             } else if viewModel.videos.isEmpty {
                 VideoGalleryStateView(
-                    title: "No Videos",
-                    message: "Recent Twinskaraoke videos will appear here.",
-                    buttonTitle: "Refresh"
+                    title: String(localized: "No Videos"),
+                    message: String(localized: "Recent Twinskaraoke videos will appear here."),
+                    buttonTitle: String(localized: "Refresh")
                 ) {
                     viewModel.refresh()
                 }
@@ -206,7 +206,7 @@ private struct VideoGalleryLoadMoreFooter: View {
             if isLoading {
                 ProgressView().controlSize(.regular)
             } else {
-                MusicEmptyActionButton(title: "Load More") {
+                MusicEmptyActionButton(title: String(localized: "Load More")) {
                     AppHaptic.selection.play()
                     onLoadMore()
                 }
@@ -296,7 +296,7 @@ private struct VideoGalleryCell: View {
 
 private struct VideoGallerySkeleton: View {
     var body: some View {
-        CenteredLoadingView(label: "Loading videos")
+        CenteredLoadingView(label: String(localized: "Loading videos"))
     }
 }
 
@@ -334,12 +334,12 @@ private struct VideoGalleryStateView: View {
 
             VStack(spacing: AM.Spacing.s) {
                 VideoGalleryHintRow(
-                    title: "Karaoke videos",
-                    message: "New uploads from the Twinskaraoke feed appear here."
+                    title: String(localized: "Karaoke videos"),
+                    message: String(localized: "New uploads from the Twinskaraoke feed appear here.")
                 )
                 VideoGalleryHintRow(
-                    title: "Refresh the feed",
-                    message: "Pull down or tap retry when the video service is slow."
+                    title: String(localized: "Refresh the feed"),
+                    message: String(localized: "Pull down or tap retry when the video service is slow.")
                 )
             }
             .frame(maxWidth: 360)

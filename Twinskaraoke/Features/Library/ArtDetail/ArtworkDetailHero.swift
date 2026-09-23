@@ -60,7 +60,7 @@ struct ArtworkDetailHero: View {
                         ArtworkDetailPill(systemImage: "heart.fill", title: "\(upvotes)", tint: .pink)
                     }
                     if trimmed(art.credit) != nil {
-                        ArtworkDetailPill(systemImage: "person.crop.square", title: "Credits", tint: .blue)
+                        ArtworkDetailPill(systemImage: "person.crop.square", title: String(localized: "Credits"), tint: .blue)
                     }
                     if fullResURL != nil {
                         ArtworkDetailPill(systemImage: "photo", title: "HD", tint: Color.appAccent)

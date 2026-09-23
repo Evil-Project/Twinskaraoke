@@ -773,7 +773,7 @@ struct PlaylistDetailView: View {
                     PlaylistPlayback.playInOrder(first, from: playlist, context: songs)
                 }
             } label: {
-                LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Play playlist")
@@ -781,7 +781,7 @@ struct PlaylistDetailView: View {
                 AppHaptic.selection.play()
                 PlaylistPlayback.playShuffled(from: playlist, songs: songs)
             } label: {
-                LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Shuffle playlist")
@@ -860,7 +860,7 @@ private struct PlaylistLoadingRows: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
     var body: some View {
-        CenteredLoadingView(label: "Loading playlist songs")
+        CenteredLoadingView(label: String(localized: "Loading playlist songs"))
     }
 }
 
@@ -869,13 +869,13 @@ private struct PlaylistEmptyStateView: View {
     let message: String
     let onRefresh: () -> Void
     private var title: String {
-        isFavorites ? "No Favorites Yet" : "No Songs"
+        isFavorites ? String(localized: "No Favorites Yet") : String(localized: "No Songs")
     }
 
     private var resolvedMessage: String {
         guard !message.hasPrefix("The playlist") else { return message }
         if isFavorites {
-            return "Favorite songs to build this playlist automatically."
+            return String(localized: "Favorite songs to build this playlist automatically.")
         }
         return message
     }
@@ -883,7 +883,7 @@ private struct PlaylistEmptyStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             MusicEmptyState(title: title, message: resolvedMessage)
-            MusicEmptyActionButton(title: "Refresh") {
+            MusicEmptyActionButton(title: String(localized: "Refresh")) {
                 onRefresh()
             }
         }

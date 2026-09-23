@@ -10,17 +10,17 @@ struct HomeView: View {
             } else if let error = model.errorMessage, model.trending.isEmpty, model.latest.isEmpty {
                 StateMessage(
                     systemImage: "exclamationmark.triangle",
-                    title: "Couldn't load Home",
+                    title: String(localized: "Couldn't load Home"),
                     subtitle: error
                 )
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         if !model.trending.isEmpty {
-                            SongShelf(title: "Trending This Week", songs: model.trending)
+                            SongShelf(title: String(localized: "Trending This Week"), songs: model.trending)
                         }
                         if !model.latest.isEmpty {
-                            SongShelf(title: "Latest Releases", songs: model.latest)
+                            SongShelf(title: String(localized: "Latest Releases"), songs: model.latest)
                         }
                     }
                     .padding(.vertical, 20)
@@ -81,15 +81,15 @@ struct SearchView: View {
     @ViewBuilder
     private var content: some View {
         if let error = model.errorMessage {
-            StateMessage(systemImage: "exclamationmark.triangle", title: "Search failed", subtitle: error)
+            StateMessage(systemImage: "exclamationmark.triangle", title: String(localized: "Search failed"), subtitle: error)
         } else if model.query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
             StateMessage(
                 systemImage: "magnifyingglass",
-                title: "Search Twinskaraoke",
-                subtitle: "Type at least two characters to find songs."
+                title: String(localized: "Search Twinskaraoke"),
+                subtitle: String(localized: "Type at least two characters to find songs.")
             )
         } else if model.results.isEmpty && !model.isSearching {
-            StateMessage(systemImage: "questionmark.circle", title: "No results")
+            StateMessage(systemImage: "questionmark.circle", title: String(localized: "No results"))
         } else {
             List(model.results) { song in
                 SongRow(song: song, context: model.results)
@@ -108,18 +108,18 @@ struct FavoritesView: View {
             if !auth.isLoggedIn {
                 StateMessage(
                     systemImage: "person.crop.circle.badge.questionmark",
-                    title: "Sign in to see favourites",
-                    subtitle: "Your favourites sync with your Twinskaraoke account."
+                    title: String(localized: "Sign in to see favourites"),
+                    subtitle: String(localized: "Your favourites sync with your Twinskaraoke account.")
                 )
             } else if model.isLoading && model.songs.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.errorMessage, model.songs.isEmpty {
-                StateMessage(systemImage: "exclamationmark.triangle", title: "Couldn't load", subtitle: error)
+                StateMessage(systemImage: "exclamationmark.triangle", title: String(localized: "Couldn't load"), subtitle: error)
             } else if model.songs.isEmpty {
                 StateMessage(
                     systemImage: "heart",
-                    title: "No favourites yet",
-                    subtitle: "Songs you favourite will show up here."
+                    title: String(localized: "No favourites yet"),
+                    subtitle: String(localized: "Songs you favourite will show up here.")
                 )
             } else {
                 List(model.songs) { song in
@@ -144,9 +144,9 @@ struct PlaylistDetailView: View {
             if model.isLoading && model.songs.isEmpty {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.errorMessage, model.songs.isEmpty {
-                StateMessage(systemImage: "exclamationmark.triangle", title: "Couldn't load", subtitle: error)
+                StateMessage(systemImage: "exclamationmark.triangle", title: String(localized: "Couldn't load"), subtitle: error)
             } else if model.songs.isEmpty {
-                StateMessage(systemImage: "music.note.list", title: "This playlist is empty")
+                StateMessage(systemImage: "music.note.list", title: String(localized: "This playlist is empty"))
             } else {
                 List(model.songs) { song in
                     SongRow(song: song, context: model.songs)

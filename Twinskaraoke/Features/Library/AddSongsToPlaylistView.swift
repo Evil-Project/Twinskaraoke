@@ -77,7 +77,7 @@ struct AddSongsToPlaylistView: View {
     @ViewBuilder
     private var content: some View {
         if isSearching, results.isEmpty {
-            CenteredLoadingView(label: "Searching songs")
+            CenteredLoadingView(label: String(localized: "Searching songs"))
         } else if results.isEmpty {
             MusicEmptyState(
                 title: hasSearched ? String(localized: "No Results") : String(localized: "Find Songs"),

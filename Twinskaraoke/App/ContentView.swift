@@ -258,11 +258,11 @@ private enum RootSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .home: "Home"
+        case .home: String(localized: "Home")
         case .new: "New"
-        case .radio: "Radio"
-        case .library: "Library"
-        case .search: "Search"
+        case .radio: String(localized: "Radio")
+        case .library: String(localized: "Library")
+        case .search: String(localized: "Search")
         }
     }
 
@@ -311,8 +311,8 @@ private enum RootSectionGroup: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .discover: "Discover"
-        case .collection: "Collection"
+        case .discover: String(localized: "Discover")
+        case .collection: String(localized: "Collection")
         }
     }
 

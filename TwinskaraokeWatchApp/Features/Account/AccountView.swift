@@ -57,11 +57,11 @@ struct AccountView: View {
                         systemImage: "iphone",
                         tint: .blue,
                         title: auth.linkState == .awaitingPhone
-                            ? "Waiting for iPhone"
-                            : "Sign in on iPhone",
+                            ? String(localized: "Waiting for iPhone")
+                            : String(localized: "Sign in on iPhone"),
                         value: auth.linkState == .awaitingPhone
-                            ? "Your session is ready but your iPhone is out of reach. Keep it nearby."
-                            : "Sign in on your iPhone and this watch follows automatically."
+                            ? String(localized: "Your session is ready but your iPhone is out of reach. Keep it nearby.")
+                            : String(localized: "Sign in on your iPhone and this watch follows automatically.")
                     )
 
                     if auth.linkState == .awaitingPhone {
@@ -86,7 +86,7 @@ struct AccountView: View {
                     WatchHaptic.play(showsFullGuestID ? .success : .click)
                 } label: {
                     WatchAccountTokenRow(
-                        title: "Guest ID",
+                        title: String(localized: "Guest ID"),
                         value: guestIDText,
                         showsFullValue: showsFullGuestID
                     )
@@ -99,7 +99,7 @@ struct AccountView: View {
                 WatchAccountStatusRow(
                     systemImage: "antenna.radiowaves.left.and.right",
                     tint: .appAccent,
-                    title: "Service",
+                    title: String(localized: "Service"),
                     value: serviceRegionText
                 )
             }
@@ -108,14 +108,14 @@ struct AccountView: View {
                 WatchAccountStatusRow(
                     systemImage: "applewatch",
                     tint: .blue,
-                    title: "Plays On This Watch",
-                    value: "Playback is independent — starting a song here does not move it to your iPhone"
+                    title: String(localized: "Plays On This Watch"),
+                    value: String(localized: "Playback is independent — starting a song here does not move it to your iPhone")
                 )
                 WatchAccountStatusRow(
                     systemImage: "checkmark.seal.fill",
                     tint: .green,
-                    title: auth.linkState == .signedIn ? "Signed in" : "Guest playback",
-                    value: "Ready for browsing and music"
+                    title: auth.linkState == .signedIn ? String(localized: "Signed in") : String(localized: "Guest playback"),
+                    value: String(localized: "Ready for browsing and music")
                 )
             }
 
@@ -123,7 +123,7 @@ struct AccountView: View {
                 WatchAccountStatusRow(
                     systemImage: "internaldrive",
                     tint: .indigo,
-                    title: "Downloaded Audio",
+                    title: String(localized: "Downloaded Audio"),
                     value: cacheSizeText
                 )
 
@@ -190,7 +190,7 @@ struct AccountView: View {
     }
 
     private var serviceRegionText: String {
-        StorageHost.api.contains(".cn") ? "China CDN" : "Global CDN"
+        StorageHost.api.contains(".cn") ? String(localized: "China CDN") : String(localized: "Global CDN")
     }
 }
 
@@ -233,9 +233,9 @@ private struct WatchAccountHeader: View {
             }
 
             HStack(spacing: 6) {
-                WatchAccountPill(systemImage: "music.note", title: "Browse")
+                WatchAccountPill(systemImage: "music.note", title: String(localized: "Browse"))
                 if linkState == .signedIn {
-                    WatchAccountPill(systemImage: "iphone", title: "Synced")
+                    WatchAccountPill(systemImage: "iphone", title: String(localized: "Synced"))
                 }
             }
         }
@@ -255,17 +255,17 @@ private struct WatchAccountHeader: View {
 
     private var displayName: String {
         if let username, !username.isEmpty { return username }
-        return "Guest Listener"
+        return String(localized: "Guest Listener")
     }
 
     private var statusText: String {
         switch linkState {
         case .signedIn:
-            "Signed in from iPhone"
+            String(localized: "Signed in from iPhone")
         case .awaitingPhone:
-            "Waiting for iPhone"
+            String(localized: "Waiting for iPhone")
         case .signedOut:
-            "Not signed in"
+            String(localized: "Not signed in")
         }
     }
 }

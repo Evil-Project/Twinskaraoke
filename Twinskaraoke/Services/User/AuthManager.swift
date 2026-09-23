@@ -103,7 +103,7 @@ final class AuthManager: NSObject {
     private func handleExpiredSession() {
         guard isLoggedIn else { return }
         logout()
-        errorMessage = "Your session expired — please sign in again"
+        errorMessage = String(localized: "Your session expired — please sign in again")
     }
 
     private func loadPersisted() {
@@ -179,7 +179,7 @@ final class AuthManager: NSObject {
     func login(username: String, password: String) async {
         guard !isLoading else { return }
         guard !username.isEmpty, !password.isEmpty else {
-            errorMessage = "Please fill in all fields"
+            errorMessage = String(localized: "Please fill in all fields")
             return
         }
         isLoading = true
@@ -575,12 +575,12 @@ final class AuthManager: NSObject {
     private func friendlyError(_ error: Error) -> String {
         if let e = error as? AuthError {
             switch e {
-            case .http(401, _): return "Invalid username or password"
-            case let .http(c, _): return "Server error (\(c))"
-            case .parse: return "Unexpected server response"
-            case .invalidCallback: return "Authentication failed — try again"
+            case .http(401, _): return String(localized: "Invalid username or password")
+            case let .http(c, _): return String(localized: "Server error (\(c))")
+            case .parse: return String(localized: "Unexpected server response")
+            case .invalidCallback: return String(localized: "Authentication failed — try again")
             case .cancelled: return ""
-            case .notSignedIn: return "You need to sign in first"
+            case .notSignedIn: return String(localized: "You need to sign in first")
             }
         }
         return error.localizedDescription

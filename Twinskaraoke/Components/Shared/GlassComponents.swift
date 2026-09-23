@@ -81,7 +81,7 @@ struct GlassXButton: View {
 
     var action: () -> Void
     var size: CGFloat = 44
-    var accessibilityLabel = "Close"
+    var accessibilityLabel = String(localized: "Close")
 
     var body: some View {
         Button(action: action) {
@@ -104,7 +104,7 @@ struct GlassCheckmarkButton: View {
     var action: () -> Void
     var size: CGFloat = 44
     var isEnabled: Bool = true
-    var accessibilityLabel = "Done"
+    var accessibilityLabel = String(localized: "Done")
 
     var body: some View {
         Button(action: action) {

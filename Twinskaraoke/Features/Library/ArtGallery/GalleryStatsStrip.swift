@@ -7,11 +7,11 @@ struct GalleryStatsStrip: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            stat(value: "\(artistCount)", label: artistCount == 1 ? "Artist" : "Artists")
+            stat(value: "\(artistCount)", label: artistCount == 1 ? String(localized: "Artist") : String(localized: "Artists"))
             Divider().frame(height: 30)
-            stat(value: "\(artworkCount)", label: artworkCount == 1 ? "Artwork" : "Artworks")
+            stat(value: "\(artworkCount)", label: artworkCount == 1 ? String(localized: "Artwork") : String(localized: "Artworks"))
             Divider().frame(height: 30)
-            stat(value: "\(totalUpvotes)", label: totalUpvotes == 1 ? "Like" : "Likes")
+            stat(value: "\(totalUpvotes)", label: totalUpvotes == 1 ? String(localized: "Like") : String(localized: "Likes"))
         }
         .padding(.vertical, 12)
         .background(Color.appSecondaryBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

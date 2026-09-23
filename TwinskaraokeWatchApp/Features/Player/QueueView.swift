@@ -61,7 +61,7 @@ struct QueueView: View {
                     }
                     .buttonStyle(.watchPressable)
                     .accessibilityLabel(audioManager.isPlaying ? "Pause \(current.title)" : "Play \(current.title)")
-                    .accessibilityValue("\(current.artistName), \(audioManager.isPlaying ? "Playing" : "Paused")")
+                    .accessibilityValue("\(current.artistName), \(audioManager.isPlaying ? String(localized: "Playing") : String(localized: "Paused"))")
                     .accessibilityHint("Controls the current song.")
                     .accessibilityIdentifier("WatchQueue.nowPlaying")
                 }
@@ -90,16 +90,16 @@ struct QueueView: View {
                 if audioManager.currentSong == nil {
                     WatchEmptyState(
                         systemImage: "list.bullet",
-                        title: "Queue Empty",
-                        message: "Play a song to build an up next queue."
+                        title: String(localized: "Queue Empty"),
+                        message: String(localized: "Play a song to build an up next queue.")
                     )
                     .listRowBackground(Color.clear)
                 } else {
                     Section("Playing Next") {
                         WatchEmptyState(
                             systemImage: "text.line.first.and.arrowtriangle.forward",
-                            title: "End of Queue",
-                            message: "Choose more songs to keep singing."
+                            title: String(localized: "End of Queue"),
+                            message: String(localized: "Choose more songs to keep singing.")
                         )
                         .listRowBackground(Color.clear)
                     }
@@ -148,9 +148,9 @@ struct QueueView: View {
 
     private func queuePositionText(offset: Int, total: Int) -> String {
         if total == 1 {
-            return "Up next"
+            return String(localized: "Up next")
         }
-        return "Up next \(offset + 1) of \(total)"
+        return String(localized: "Up next \(offset + 1) of \(total)")
     }
 }
 
@@ -228,7 +228,7 @@ private struct WatchQueuedSongRow: View {
 
     private var accessibilityValue: String {
         var parts = [song.artistName]
-        parts.append(isUpNext ? "Up next" : "Queued \(offset + 1) of \(total)")
+        parts.append(isUpNext ? String(localized: "Up next") : String(localized: "Queued \(offset + 1) of \(total)"))
         if !song.durationText.isEmpty {
             parts.append(song.durationText)
         }
@@ -297,7 +297,7 @@ private struct WatchQueueSummaryCard: View {
                     tint: .primary,
                     fill: Color.secondary.opacity(0.13),
                     isDisabled: isLoading,
-                    accessibilityLabel: "Previous Track",
+                    accessibilityLabel: String(localized: "Previous Track"),
                     action: previousAction
                 )
 
@@ -307,7 +307,7 @@ private struct WatchQueueSummaryCard: View {
                     iconSize: 20,
                     tint: .white,
                     fill: Color.appAccent,
-                    accessibilityLabel: isPlaying ? "Pause" : "Play",
+                    accessibilityLabel: isPlaying ? String(localized: "Pause") : String(localized: "Play"),
                     action: playPauseAction
                 )
 
@@ -318,7 +318,7 @@ private struct WatchQueueSummaryCard: View {
                     tint: .primary,
                     fill: Color.secondary.opacity(0.13),
                     isDisabled: isLoading,
-                    accessibilityLabel: "Next Track",
+                    accessibilityLabel: String(localized: "Next Track"),
                     action: nextAction
                 )
             }

@@ -135,12 +135,12 @@ struct TVCreatePlaylistSheet: View {
     /// remote goes dead until the request lands.
     private var actions: some View {
         HStack(spacing: 20) {
-            TVActionButton(title: "Cancel", systemImage: "xmark") {
+            TVActionButton(title: String(localized: "Cancel"), systemImage: "xmark") {
                 dismiss()
             }
 
             TVActionButton(
-                title: isSaving ? "Creating…" : "Create Playlist",
+                title: isSaving ? String(localized: "Creating…") : String(localized: "Create Playlist"),
                 systemImage: "plus"
             ) {
                 save()

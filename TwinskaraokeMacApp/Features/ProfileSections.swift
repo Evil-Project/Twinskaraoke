@@ -10,7 +10,7 @@ struct ProfileHeader: View {
             avatar
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(auth.profile?.displayName ?? auth.username ?? "Signed in")
+                Text(auth.profile?.displayName ?? auth.username ?? String(localized: "Signed in"))
                     .font(.title2.weight(.semibold))
 
                 HStack(spacing: 10) {
@@ -94,10 +94,10 @@ struct UploadLimitsSection: View {
                 .font(.headline)
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                metric("Songs", "\(limits.currentSongCount) / \(limits.maxSongs)")
-                metric("Storage", "\(Self.bytes(limits.usedStorageBytes)) / \(Self.bytes(limits.maxStorageBytes))")
-                metric("Playlists", "\(limits.currentPlaylistCount) / \(limits.playlistLimit)")
-                metric("Songs per playlist", "\(limits.songPerPlaylistLimit)")
+                metric(String(localized: "Songs"), "\(limits.currentSongCount) / \(limits.maxSongs)")
+                metric(String(localized: "Storage"), "\(Self.bytes(limits.usedStorageBytes)) / \(Self.bytes(limits.maxStorageBytes))")
+                metric(String(localized: "Playlists"), "\(limits.currentPlaylistCount) / \(limits.playlistLimit)")
+                metric(String(localized: "Songs per playlist"), "\(limits.songPerPlaylistLimit)")
             }
         }
     }

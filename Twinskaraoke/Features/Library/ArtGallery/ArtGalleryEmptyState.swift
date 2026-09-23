@@ -7,12 +7,12 @@ struct ArtGalleryEmptyState: View {
     var body: some View {
         VStack(spacing: 16) {
             MusicEmptyState(
-                title: isError ? "Artwork Couldn't Load" : "No Artwork Yet",
+                title: isError ? String(localized: "Artwork Couldn't Load") : String(localized: "No Artwork Yet"),
                 message: isError
-                    ? "Check your connection and try loading the gallery again."
-                    : "New cover art and artist galleries will appear here."
+                    ? String(localized: "Check your connection and try loading the gallery again.")
+                    : String(localized: "New cover art and artist galleries will appear here.")
             )
-            MusicEmptyActionButton(title: isError ? "Try Again" : "Refresh") {
+            MusicEmptyActionButton(title: isError ? String(localized: "Try Again") : String(localized: "Refresh")) {
                 onRefresh()
             }
         }

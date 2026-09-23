@@ -29,7 +29,7 @@ final class RandomSongsViewModel {
         if let errorMessage {
             return errorMessage
         }
-        return "Refresh to roll a new set of songs."
+        return String(localized: "Refresh to roll a new set of songs.")
     }
 
     func loadIfNeeded() async {
@@ -79,9 +79,9 @@ final class RandomSongsViewModel {
     private static func message(for error: Error) -> String {
         switch error {
         case let KaraokeAPIClient.APIError.httpStatus(statusCode):
-            "The server returned HTTP \(statusCode)."
+            String(localized: "The server returned HTTP \(statusCode).")
         case KaraokeAPIClient.APIError.decodeFailed:
-            "The random songs response could not be read."
+            String(localized: "The random songs response could not be read.")
         default:
             error.localizedDescription
         }

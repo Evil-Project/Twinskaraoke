@@ -146,10 +146,10 @@ struct QRSignInPanel: View {
 
     private var headline: String {
         switch auth.qrPhase {
-        case .idle, .creating: "Preparing your sign-in code…"
-        case .waiting: "Scan with the Twinskaraoke app"
-        case .completing: "Signing you in…"
-        case .expired: "That code timed out for security. Get a new one."
+        case .idle, .creating: String(localized: "Preparing your sign-in code…")
+        case .waiting: String(localized: "Scan with the Twinskaraoke app")
+        case .completing: String(localized: "Signing you in…")
+        case .expired: String(localized: "That code timed out for security. Get a new one.")
         }
     }
 

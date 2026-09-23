@@ -615,10 +615,10 @@ struct SettingsView: View {
 
     private var aiStrengthLabel: String {
         let s = audioManager.aiVocalStrength
-        if s >= 0.99 { return "Maximum" }
-        if s >= 0.75 { return "Strong" }
-        if s >= 0.45 { return "Medium" }
-        if s >= 0.15 { return "Light" }
+        if s >= 0.99 { return String(localized: "Maximum") }
+        if s >= 0.75 { return String(localized: "Strong") }
+        if s >= 0.45 { return String(localized: "Medium") }
+        if s >= 0.15 { return String(localized: "Light") }
         return "Off"
     }
 
@@ -635,11 +635,11 @@ struct SettingsView: View {
     }
 
     private func strengthText(_ v: Float) -> String {
-        if v < 0.15 { return "Almost off" }
-        if v < 0.45 { return "Light" }
-        if v < 0.75 { return "Medium" }
-        if v < 0.95 { return "Strong" }
-        return "Maximum"
+        if v < 0.15 { return String(localized: "Almost off") }
+        if v < 0.45 { return String(localized: "Light") }
+        if v < 0.75 { return String(localized: "Medium") }
+        if v < 0.95 { return String(localized: "Strong") }
+        return String(localized: "Maximum")
     }
 }
 
@@ -781,36 +781,36 @@ private enum SettingsDestructiveAction {
     case clearRecentlyPlayed
     var title: String {
         switch self {
-        case .removeDownloads: "Remove all downloads?"
-        case .clearImageCache: "Clear image cache?"
-        case .clearMusicCache: "Clear music cache?"
-        case .clearLyricsCache: "Clear lyrics cache?"
-        case .clearRecentlyPlayed: "Clear recently played history?"
+        case .removeDownloads: String(localized: "Remove all downloads?")
+        case .clearImageCache: String(localized: "Clear image cache?")
+        case .clearMusicCache: String(localized: "Clear music cache?")
+        case .clearLyricsCache: String(localized: "Clear lyrics cache?")
+        case .clearRecentlyPlayed: String(localized: "Clear recently played history?")
         }
     }
 
     var message: String {
         switch self {
         case .removeDownloads:
-            "All offline downloads on this device will be removed."
+            String(localized: "All offline downloads on this device will be removed.")
         case .clearImageCache:
-            "Cached artwork and images will be removed. They will download again as you use the app."
+            String(localized: "Cached artwork and images will be removed. They will download again as you use the app.")
         case .clearMusicCache:
-            "Cached audio files and AI stems will be removed. Songs may buffer again the next time you play them."
+            String(localized: "Cached audio files and AI stems will be removed. Songs may buffer again the next time you play them.")
         case .clearLyricsCache:
-            "Cached lyrics and lyric translations will be removed."
+            String(localized: "Cached lyrics and lyric translations will be removed.")
         case .clearRecentlyPlayed:
-            "Your recently played history will be removed from this device."
+            String(localized: "Your recently played history will be removed from this device.")
         }
     }
 
     var actionLabel: String {
         switch self {
-        case .removeDownloads: "Remove All Downloads"
-        case .clearImageCache: "Clear Image Cache"
-        case .clearMusicCache: "Clear Music Cache"
-        case .clearLyricsCache: "Clear Lyrics Cache"
-        case .clearRecentlyPlayed: "Clear Recently Played"
+        case .removeDownloads: String(localized: "Remove All Downloads")
+        case .clearImageCache: String(localized: "Clear Image Cache")
+        case .clearMusicCache: String(localized: "Clear Music Cache")
+        case .clearLyricsCache: String(localized: "Clear Lyrics Cache")
+        case .clearRecentlyPlayed: String(localized: "Clear Recently Played")
         }
     }
 }

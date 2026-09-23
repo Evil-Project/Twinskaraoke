@@ -71,7 +71,7 @@ struct RadioView: View {
                 }
             } else if let error = radio.refreshErrorMessage {
                 WatchLoadErrorState(
-                    title: "Radio Unavailable",
+                    title: String(localized: "Radio Unavailable"),
                     message: error,
                     retryAction: { Task { await radio.refresh() } }
                 )
@@ -165,7 +165,7 @@ private struct RadioNowPlayingCard: View {
             HStack(spacing: 6) {
                 RadioStatusPill(
                     systemImage: isTunedIn ? "waveform" : "dot.radiowaves.left.and.right",
-                    title: isTunedIn ? "Live" : station.name
+                    title: isTunedIn ? String(localized: "Live") : station.name
                 )
                 if let listeners {
                     RadioStatusPill(
@@ -246,7 +246,7 @@ private struct RadioTrackRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title ?? song.text ?? "Unknown")
+                Text(song.title ?? song.text ?? String(localized: "Unknown"))
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                 if let artist = song.artist {
@@ -261,7 +261,7 @@ private struct RadioTrackRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(song.title ?? song.text ?? "Unknown")
+        .accessibilityLabel(song.title ?? song.text ?? String(localized: "Unknown"))
         .accessibilityValue(song.artist ?? "")
     }
 }

@@ -71,7 +71,7 @@ final class SearchViewModel {
             } catch {
                 guard let self, self.queryToken == token else { return }
                 self.results = []
-                self.loadError = "Check your connection and try again."
+                self.loadError = String(localized: "Check your connection and try again.")
                 self.finishSearch(token: token)
             }
         }

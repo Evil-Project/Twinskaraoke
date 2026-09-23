@@ -44,7 +44,7 @@ struct PlaylistDetailView: View {
                 .listRowBackground(Color.clear)
             } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
                 WatchLoadErrorState(
-                    title: "Couldn't Load Playlist",
+                    title: String(localized: "Couldn't Load Playlist"),
                     message: loadError,
                     retryAction: { viewModel.fetchSongs() }
                 )
@@ -52,8 +52,8 @@ struct PlaylistDetailView: View {
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
-                    title: "Playlist Empty",
-                    message: "Songs added to \(playlistName) will appear here."
+                    title: String(localized: "Playlist Empty"),
+                    message: String(localized: "Songs added to \(playlistName) will appear here.")
                 )
                 .listRowBackground(Color.clear)
             } else {
@@ -119,8 +119,8 @@ struct PlaylistDetailView: View {
 
     private var songCountText: String {
         let count = viewModel.songs.count
-        if count == 1 { return "1 song" }
-        return "\(count) songs"
+        if count == 1 { return String(localized: "1 song") }
+        return String(localized: "\(count) songs")
     }
 
     private var totalDurationText: String {
@@ -181,9 +181,9 @@ struct PlaylistDetailView: View {
     }
 
     private func accessibilityValue(for song: Song, offset: Int, isCurrent: Bool) -> String {
-        var parts = [song.artistName, "Track \(offset + 1) of \(viewModel.songs.count)"]
+        var parts = [song.artistName, String(localized: "Track \(offset + 1) of \(viewModel.songs.count)")]
         if isCurrent {
-            parts.append(audioManager.isPlaying ? "Playing" : "Paused")
+            parts.append(audioManager.isPlaying ? String(localized: "Playing") : String(localized: "Paused"))
         } else {
             parts.append(song.durationText)
         }
@@ -233,7 +233,7 @@ private struct WatchPlaylistDetailHeader: View {
 
             HStack(spacing: 8) {
                 WatchPlaylistHeaderButton(
-                    title: "Play",
+                    title: String(localized: "Play"),
                     systemName: "play.fill",
                     tint: .white,
                     fill: Color.appAccent,
@@ -241,7 +241,7 @@ private struct WatchPlaylistDetailHeader: View {
                 )
 
                 WatchPlaylistHeaderButton(
-                    title: "Shuffle",
+                    title: String(localized: "Shuffle"),
                     systemName: "shuffle",
                     tint: .appAccent,
                     fill: Color.appAccent.opacity(0.14),

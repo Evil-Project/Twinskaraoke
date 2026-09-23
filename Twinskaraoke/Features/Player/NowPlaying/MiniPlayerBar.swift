@@ -233,9 +233,9 @@ private struct MiniPlayerTransportControls: View, Equatable {
 
     private var playPauseAccessibilityLabel: String {
         if isRadioMode {
-            return isPlaying ? "Stop live radio" : "Play live radio"
+            return isPlaying ? String(localized: "Stop live radio") : String(localized: "Play live radio")
         }
-        return isPlaying ? "Pause" : "Play"
+        return isPlaying ? String(localized: "Pause") : String(localized: "Play")
     }
 
     private var playPauseSymbol: String {

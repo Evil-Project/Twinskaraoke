@@ -1039,10 +1039,10 @@ struct FullScreenPlayerView: View {
                     progress: $clock.progress,
                     isScrubbing: $audioManager.isEditingProgress,
                     onSeekEnd: { fraction in audioManager.seek(to: fraction) },
-                    accessibilityLabel: "Playback position",
+                    accessibilityLabel: String(localized: "Playback position"),
                     accessibilityValueText:
-                    "\(formattedTime(elapsed)) elapsed, \(formattedTime(max(0, duration - elapsed))) remaining",
-                    accessibilityHint: "Drag or swipe up and down to seek.",
+                    String(localized: "\(formattedTime(elapsed)) elapsed, \(formattedTime(max(0, duration - elapsed))) remaining"),
+                    accessibilityHint: String(localized: "Drag or swipe up and down to seek."),
                     scrubValueText: formattedTime(duration * clock.progress)
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
@@ -1132,7 +1132,7 @@ struct FullScreenPlayerView: View {
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .commit))
             .accessibilityLabel(audioManager.isPlaying ? "Pause" : "Play")
-            .accessibilityValue(audioManager.currentSong?.title ?? "Current song")
+            .accessibilityValue(audioManager.currentSong?.title ?? String(localized: "Current song"))
             Button {
                 audioManager.playNextOrRandom()
             } label: {
@@ -1249,28 +1249,28 @@ struct FullScreenPlayerView: View {
     }
 
     private var lyricsTranslationAccessibilityLabel: String {
-        if showTranslatedLyrics { return "Hide Translated Lyrics" }
-        if lyricsViewModel.hasTranslatedLyrics { return "Show Translated Lyrics" }
-        return "Translate Lyrics"
+        if showTranslatedLyrics { return String(localized: "Hide Translated Lyrics") }
+        if lyricsViewModel.hasTranslatedLyrics { return String(localized: "Show Translated Lyrics") }
+        return String(localized: "Translate Lyrics")
     }
 
     private var lyricsTranslationAccessibilityValue: String {
         if showTranslatedLyrics { return "On" }
         switch lyricsViewModel.translationState {
         case .idle: return "Off"
-        case .translating: return "Translating"
-        case .ready: return "Available"
-        case .unavailable: return "Unavailable"
-        case .failed: return "Failed"
+        case .translating: return String(localized: "Translating")
+        case .ready: return String(localized: "Available")
+        case .unavailable: return String(localized: "Unavailable")
+        case .failed: return String(localized: "Failed")
         }
     }
 
     private var lyricsTranslationAccessibilityHint: String {
-        if lyricsViewModel.hasNoLyrics { return "Lyrics are not available for this song." }
+        if lyricsViewModel.hasNoLyrics { return String(localized: "Lyrics are not available for this song.") }
         if lyricsViewModel.hasTranslatedLyrics {
-            return "Toggles translated lyrics."
+            return String(localized: "Toggles translated lyrics.")
         }
-        return "Requests translated lyrics."
+        return String(localized: "Requests translated lyrics.")
     }
 
     private func saveCoverArt(url: URL?) {
@@ -1302,7 +1302,7 @@ struct FullScreenPlayerView: View {
                 }
             #endif
             guard coverArtSaveGeneration == generation else { return }
-            coverArtSaveStatus = .failed("Couldn't save")
+            coverArtSaveStatus = .failed(String(localized: "Couldn't save"))
             resetCoverArtSaveStatusLater(generation: generation)
         }
     }

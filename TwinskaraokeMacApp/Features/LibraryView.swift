@@ -18,11 +18,11 @@ struct LibraryView: View {
             } else if let error = model.errorMessage, model.playlists.isEmpty {
                 StateMessage(
                     systemImage: "exclamationmark.triangle",
-                    title: "Couldn't load the library",
+                    title: String(localized: "Couldn't load the library"),
                     subtitle: error
                 )
             } else if model.playlists.isEmpty {
-                StateMessage(systemImage: "books.vertical", title: "Nothing here yet")
+                StateMessage(systemImage: "books.vertical", title: String(localized: "Nothing here yet"))
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 18) {

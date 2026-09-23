@@ -171,7 +171,7 @@ struct LibraryView: View {
 
             HStack(alignment: .top, spacing: AM.Spacing.xxl) {
                 VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
-                    LibraryOverviewGroup(title: "Library") {
+                    LibraryOverviewGroup(title: String(localized: "Library")) {
                         libraryPrimaryLinksContent
                     }
                 }
@@ -213,26 +213,26 @@ struct LibraryView: View {
         VStack(spacing: 0) {
             libraryLink(
                 icon: "music.note.list",
-                title: "Playlists",
+                title: String(localized: "Playlists"),
                 destination: PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
             )
-            libraryLink(icon: "music.mic", title: "Artists", destination: ArtistsView())
-            libraryLink(icon: "music.note", title: "Songs", destination: LibrarySongsView())
+            libraryLink(icon: "music.mic", title: String(localized: "Artists"), destination: ArtistsView())
+            libraryLink(icon: "music.note", title: String(localized: "Songs"), destination: LibrarySongsView())
             libraryLink(
                 icon: "arrow.down.circle",
-                title: "Downloaded",
+                title: String(localized: "Downloaded"),
                 destination: DownloadedSongsView()
             )
             libraryLink(
                 icon: "arrow.up.circle",
-                title: "Uploaded",
+                title: String(localized: "Uploaded"),
                 destination: UploadedSongsView()
             )
-            libraryLink(icon: "paintpalette", title: "Art Gallery", destination: ArtGalleryView())
-            libraryLink(icon: "play.rectangle", title: "Video Gallery", destination: VideoGalleryView())
+            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery"), destination: ArtGalleryView())
+            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery"), destination: VideoGalleryView())
             libraryLink(
                 icon: "shuffle",
-                title: "Random Songs",
+                title: String(localized: "Random Songs"),
                 destination: RandomSongsView(),
                 showsDivider: false
             )
@@ -287,7 +287,7 @@ private struct LibraryToolbarActions: View {
     let onRefresh: () -> Void
 
     var body: some View {
-        ToolbarCapsuleMenu(accessibilityLabel: "More Library Actions") {
+        ToolbarCapsuleMenu(accessibilityLabel: String(localized: "More Library Actions")) {
             Button(action: onCreatePlaylist) {
                 Label("New Playlist", systemImage: "text.badge.plus")
             }
@@ -347,7 +347,7 @@ private struct WideLibraryHero: View {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.74)
-                    PlaylistSongCountLabel(playlist: playlist, fallbackText: "Playlist")
+                    PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -359,7 +359,7 @@ private struct WideLibraryHero: View {
                             PlaylistPlayback.playInOrder(first, from: playlist, context: playableSongs)
                         }
                     } label: {
-                        LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                        LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
                     }
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
@@ -368,7 +368,7 @@ private struct WideLibraryHero: View {
                         AppHaptic.selection.play()
                         PlaylistPlayback.playShuffled(from: playlist, songs: playableSongs)
                     } label: {
-                        LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                        LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
                     }
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
@@ -537,13 +537,13 @@ struct LibrarySongsView: View {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {
-                LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
-                LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
         }
@@ -554,7 +554,7 @@ struct LibrarySongsView: View {
             MusicEmptyState(title: emptyTitle(isSearching: isSearching), message: emptyMessage(isSearching: isSearching))
 
             if viewModel.loadFailed, !isSearching {
-                MusicEmptyActionButton(title: "Try Again") {
+                MusicEmptyActionButton(title: String(localized: "Try Again")) {
                     AppHaptic.selection.play()
                     viewModel.refresh()
                 }
@@ -564,15 +564,15 @@ struct LibrarySongsView: View {
     }
 
     private func emptyTitle(isSearching: Bool) -> String {
-        if isSearching { return "No Results" }
-        if viewModel.loadFailed { return "Couldn't Load Songs" }
-        return "No Songs"
+        if isSearching { return String(localized: "No Results") }
+        if viewModel.loadFailed { return String(localized: "Couldn't Load Songs") }
+        return String(localized: "No Songs")
     }
 
     private func emptyMessage(isSearching: Bool) -> String {
-        if isSearching { return "Try another song or artist." }
-        if viewModel.loadFailed { return "Check your connection and try again." }
-        return "Songs you load from Twins Karaoke will appear here."
+        if isSearching { return String(localized: "Try another song or artist.") }
+        if viewModel.loadFailed { return String(localized: "Check your connection and try again.") }
+        return String(localized: "Songs you load from Twins Karaoke will appear here.")
     }
 
     private var skeletonRows: some View {
@@ -637,7 +637,7 @@ struct PlaylistListRow: View {
                 Text(playlist.name)
                     .font(.subheadline)
                     .lineLimit(1)
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: "Playlist")
+                PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -676,10 +676,10 @@ struct PlaylistsGridScreen: View {
                     PlaylistsSkeletonView()
                 } else if displayed.isEmpty {
                     MusicEmptyState(
-                        title: searchText.isEmpty ? "No Playlists" : "No Results",
+                        title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),
                         message: searchText.isEmpty
-                            ? "Playlists you add will appear here."
-                            : "Try another playlist name."
+                            ? String(localized: "Playlists you add will appear here.")
+                            : String(localized: "Try another playlist name.")
                     )
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.top, 48)
@@ -726,7 +726,7 @@ struct PlaylistsGridScreen: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     ToolbarIconButton(
                         systemImage: "plus",
-                        accessibilityLabel: "New Playlist",
+                        accessibilityLabel: String(localized: "New Playlist"),
                         foregroundColor: .appAccent
                     ) {
                         showCreateSheet = true
@@ -766,7 +766,7 @@ struct PlaylistGridCell: View {
                     .lineLimit(1)
                 PlaylistSongCountLabel(
                     playlist: playlist,
-                    fallbackText: prefersDetailCount ? nil : "Playlist",
+                    fallbackText: prefersDetailCount ? nil : String(localized: "Playlist"),
                     prefersDetailCount: prefersDetailCount
                 )
                     .font(AM.Font.tileCaption)
@@ -824,7 +824,7 @@ struct PlaylistContextPreview: View {
                     .font(AM.Font.tileTitle)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: "Playlist")
+                PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
                     .font(AM.Font.tileCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -835,6 +835,6 @@ struct PlaylistContextPreview: View {
 
 struct PlaylistsSkeletonView: View {
     var body: some View {
-        CenteredLoadingView(label: "Loading playlists")
+        CenteredLoadingView(label: String(localized: "Loading playlists"))
     }
 }

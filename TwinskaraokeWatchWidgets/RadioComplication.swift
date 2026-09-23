@@ -15,7 +15,7 @@ struct RadioEntry: TimelineEntry {
     static let placeholder = RadioEntry(
         date: .now,
         title: "Twinskaraoke Radio",
-        artist: "Live"
+        artist: String(localized: "Live")
     )
 }
 

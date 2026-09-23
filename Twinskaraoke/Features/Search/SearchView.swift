@@ -171,7 +171,7 @@ private struct SearchResultsSummaryHeader: View {
     }
 
     private var resultCountText: String {
-        resultCount == 1 ? "1 song" : "\(resultCount) songs"
+        resultCount == 1 ? String(localized: "1 song") : String(localized: "\(resultCount) songs")
     }
 }
 
@@ -377,10 +377,10 @@ private struct BrowseCategoriesView: View {
                 destination: PublicPlaylistsCollectionView(viewModel: publicPlaylistsVM)
             ) {
                 SearchFeaturedShortcutTile(
-                    title: "Public Playlists",
+                    title: String(localized: "Public Playlists"),
                     subtitle: publicPlaylistsVM.errorMessage ?? (publicPlaylistsVM.isLoadingMore && publicPlaylistsVM.playlists.isEmpty
-                        ? "Loading playlists…"
-                        : publicPlaylistsVM.playlists.isEmpty ? "Community mixes" : "\(publicPlaylistsVM.playlists.count) playlists"),
+                        ? String(localized: "Loading playlists…")
+                        : publicPlaylistsVM.playlists.isEmpty ? String(localized: "Community mixes") : String(localized: "\(publicPlaylistsVM.playlists.count) playlists")),
                     gradient: [
                         Color(red: 0.19, green: 0.55, blue: 0.96),
                         Color(red: 0.12, green: 0.22, blue: 0.58),
@@ -414,12 +414,12 @@ private struct BrowseCategoriesView: View {
     @ViewBuilder
     private var genresGridContent: some View {
         if genresVM.isLoading, genresVM.genres.isEmpty {
-            CenteredLoadingView(label: "Loading categories")
+            CenteredLoadingView(label: String(localized: "Loading categories"))
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else if genresVM.genres.isEmpty {
             MusicEmptyState(
-                title: "Genres Unavailable",
-                message: "Pull down to refresh browse categories."
+                title: String(localized: "Genres Unavailable"),
+                message: String(localized: "Pull down to refresh browse categories.")
             )
             .padding(.top, AM.Spacing.s)
             .transition(.opacity)
@@ -566,7 +566,7 @@ private struct GenreDetailLoadingView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                CenteredLoadingView(minHeight: 160, label: "Loading \(genre.name) songs")
+                CenteredLoadingView(minHeight: 160, label: String(localized: "Loading \(genre.name) songs"))
             }
             .padding(.bottom, AM.Spacing.l)
         }
@@ -625,7 +625,7 @@ struct SearchCategorySongCollectionView: View {
 
 private struct SearchResultsLoadingView: View {
     var body: some View {
-        CenteredLoadingView(label: "Searching songs")
+        CenteredLoadingView(label: String(localized: "Searching songs"))
     }
 }
 
@@ -635,12 +635,12 @@ private struct SearchErrorStateView: View {
 
     var body: some View {
         SearchRecoveryStateView(
-            title: "Search Unavailable",
+            title: String(localized: "Search Unavailable"),
             message: message,
-            actionTitle: "Try Again",
+            actionTitle: String(localized: "Try Again"),
             hints: [
-                ("Network", "Check Wi-Fi or cellular data"),
-                ("Backend", "The karaoke catalog may need a moment"),
+                (String(localized: "Network"), String(localized: "Check Wi-Fi or cellular data")),
+                (String(localized: "Backend"), String(localized: "The karaoke catalog may need a moment")),
             ],
             onAction: onRetry
         )
@@ -801,7 +801,7 @@ private struct SearchCategoryLoadingView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                CenteredLoadingView(minHeight: 160, label: "Loading \(title) songs")
+                CenteredLoadingView(minHeight: 160, label: String(localized: "Loading \(title) songs"))
             }
             .padding(.bottom, AM.Spacing.l)
         }
@@ -815,12 +815,12 @@ private struct SearchCategoryEmptyView: View {
     let onRetry: () -> Void
     var body: some View {
         SearchRecoveryStateView(
-            title: "No Songs",
+            title: String(localized: "No Songs"),
             message: message,
-            actionTitle: "Refresh",
+            actionTitle: String(localized: "Refresh"),
             hints: [
-                ("Category", "Try a broader style or mood"),
-                ("Catalog", "New songs appear as the library updates"),
+                (String(localized: "Category"), String(localized: "Try a broader style or mood")),
+                (String(localized: "Catalog"), String(localized: "New songs appear as the library updates")),
             ],
             onAction: onRetry
         )

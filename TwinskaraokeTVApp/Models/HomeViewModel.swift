@@ -22,7 +22,7 @@ final class HomeViewModel {
                 trending = try await trendingResult
                 latest = (try? await latestResult) ?? []
             } catch {
-                loadError = "Check your connection and try again."
+                loadError = String(localized: "Check your connection and try again.")
             }
         }
     }

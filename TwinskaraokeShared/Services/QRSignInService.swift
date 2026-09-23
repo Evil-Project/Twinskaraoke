@@ -95,11 +95,11 @@ nonisolated enum QRSignIn {
         var errorDescription: String? {
             switch self {
             case .invalidResponse, .missingToken:
-                "Couldn’t start a sign-in code. Try again."
+                String(localized: "Couldn’t start a sign-in code. Try again.")
             case let .httpStatus(code):
                 code == 429
-                    ? "Too many attempts. Wait a moment and try again."
-                    : "Couldn’t reach Twinskaraoke (\(code))."
+                    ? String(localized: "Too many attempts. Wait a moment and try again.")
+                    : String(localized: "Couldn’t reach Twinskaraoke (\(code)).")
             }
         }
     }

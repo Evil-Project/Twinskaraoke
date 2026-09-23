@@ -36,7 +36,7 @@ class AudioManager {
     /// Up-next slice of the queue plus its summary string, recomputed only when
     /// the queue or current track changes (views re-evaluate on every 0.5s tick).
     private(set) var upNextSongs: [Song] = []
-    private(set) var queueSummaryText = "End of queue"
+    private(set) var queueSummaryText = String(localized: "End of queue")
     var playbackMode: PlaybackMode = .listLoop
     var isShuffleOn = false
     var volume: Double = AudioManager.storedVolume()
@@ -102,18 +102,18 @@ class AudioManager {
     private func refreshUpNext() {
         guard let index = resolvedCurrentQueueIndex else {
             upNextSongs = []
-            queueSummaryText = "End of queue"
+            queueSummaryText = String(localized: "End of queue")
             return
         }
         let nextIndex = index + 1
         guard nextIndex < queue.endIndex else {
             upNextSongs = []
-            queueSummaryText = "End of queue"
+            queueSummaryText = String(localized: "End of queue")
             return
         }
         let songs = Array(queue[nextIndex...])
         upNextSongs = songs
-        let countText = songs.count == 1 ? "1 song next" : "\(songs.count) songs next"
+        let countText = songs.count == 1 ? String(localized: "1 song next") : String(localized: "\(songs.count) songs next")
         queueSummaryText = "\(countText) - \(Self.queueDurationText(for: songs))"
     }
 

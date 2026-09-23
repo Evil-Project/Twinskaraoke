@@ -136,12 +136,12 @@ struct SongRow: View {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel(statusLabel("Downloaded"))
+                        .accessibilityLabel(statusLabel(String(localized: "Downloaded")))
                         .transition(statusTransition)
                 } else if downloadState.status.isDownloading {
                     ProgressView()
                         .controlSize(.small)
-                        .accessibilityLabel(statusLabel("Downloading"))
+                        .accessibilityLabel(statusLabel(String(localized: "Downloading")))
                         .transition(statusTransition)
                 } else if !song.durationText.isEmpty {
                     Text(song.durationText)
@@ -493,41 +493,41 @@ private struct SongRowAccessibilityModifier: ViewModifier {
             values.append(song.durationText)
         }
         if playback.currentSongID == song.id {
-            values.append(playback.isPlaying ? "Now playing" : "Current song")
+            values.append(playback.isPlaying ? String(localized: "Now playing") : String(localized: "Current song"))
         }
         if isPending {
-            values.append("Loading")
+            values.append(String(localized: "Loading"))
         }
         if favorites.isFavorite(song.id) {
-            values.append("Favorite")
+            values.append(String(localized: "Favorite"))
         }
         if downloadState.status.isDownloaded {
-            values.append("Downloaded")
+            values.append(String(localized: "Downloaded"))
         } else if downloadState.status.isDownloading {
-            values.append("Downloading")
+            values.append(String(localized: "Downloading"))
         }
         return values.joined(separator: ", ")
     }
 
     private var accessibilityHint: String {
         if isPending {
-            return "Preparing playback. More song actions are available from the row menu."
+            return String(localized: "Preparing playback. More song actions are available from the row menu.")
         }
-        return "Double tap to play. Swipe up or down for playback and library actions."
+        return String(localized: "Double tap to play. Swipe up or down for playback and library actions.")
     }
 
     private var favoriteActionTitle: String {
-        favorites.isFavorite(song.id) ? "Remove from Favorites" : "Favorite"
+        favorites.isFavorite(song.id) ? String(localized: "Remove from Favorites") : String(localized: "Favorite")
     }
 
     private var downloadActionTitle: String {
         if downloadState.status.isDownloaded {
-            return "Remove Download"
+            return String(localized: "Remove Download")
         }
         if downloadState.status.isDownloading {
-            return "Cancel Download"
+            return String(localized: "Cancel Download")
         }
-        return "Download"
+        return String(localized: "Download")
     }
 
     private func toggleFavorite() {

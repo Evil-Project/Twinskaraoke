@@ -29,14 +29,14 @@ struct FavoritesView: View {
             if auth.linkState != .signedIn {
                 WatchEmptyState(
                     systemImage: "iphone",
-                    title: "Sign In to See Favorites",
-                    message: "Sign in on your iPhone and your starred songs appear here."
+                    title: String(localized: "Sign In to See Favorites"),
+                    message: String(localized: "Sign in on your iPhone and your starred songs appear here.")
                 )
                 .listRowBackground(Color.clear)
             } else if viewModel.needsPhoneSession, viewModel.songs.isEmpty {
                 WatchLoadErrorState(
-                    title: "Waiting for iPhone",
-                    message: "Your session hasn't reached this watch yet. Keep your iPhone nearby.",
+                    title: String(localized: "Waiting for iPhone"),
+                    message: String(localized: "Your session hasn't reached this watch yet. Keep your iPhone nearby."),
                     retryAction: {
                         auth.syncNow()
                         viewModel.fetch(force: true)
@@ -51,7 +51,7 @@ struct FavoritesView: View {
                 }
             } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
                 WatchLoadErrorState(
-                    title: "Couldn't Load Favorites",
+                    title: String(localized: "Couldn't Load Favorites"),
                     message: loadError,
                     retryAction: { viewModel.fetch(force: true) }
                 )
@@ -59,8 +59,8 @@ struct FavoritesView: View {
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "star",
-                    title: "No Favorites",
-                    message: "Songs you star show up here."
+                    title: String(localized: "No Favorites"),
+                    message: String(localized: "Songs you star show up here.")
                 )
                 .listRowBackground(Color.clear)
             } else {

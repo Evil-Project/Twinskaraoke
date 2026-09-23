@@ -200,10 +200,10 @@ private struct BadgeRarityPill: View {
     let rarity: Int
     private var label: String {
         switch rarity {
-        case 0: "Common"
-        case 1: "Rare"
-        case 2: "Epic"
-        default: "Legendary"
+        case 0: String(localized: "Common")
+        case 1: String(localized: "Rare")
+        case 2: String(localized: "Epic")
+        default: String(localized: "Legendary")
         }
     }
 

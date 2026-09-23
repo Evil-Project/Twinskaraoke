@@ -30,7 +30,7 @@ struct RadioQueueArtwork: View {
 
 extension RadioNowPlaying.SongInfo {
     var displayTitle: String {
-        title ?? text ?? "Live Radio"
+        title ?? text ?? String(localized: "Live Radio")
     }
 
     var displayArtist: String {

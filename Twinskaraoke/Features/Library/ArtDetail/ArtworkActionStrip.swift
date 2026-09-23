@@ -9,7 +9,7 @@ struct ArtworkActionStrip: View {
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onOpen) {
-                ArtworkActionLabel(systemImage: "arrow.up.left.and.arrow.down.right", title: "View")
+                ArtworkActionLabel(systemImage: "arrow.up.left.and.arrow.down.right", title: String(localized: "View"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
 
@@ -21,7 +21,7 @@ struct ArtworkActionStrip: View {
 
             if let url {
                 ShareLink(item: url) {
-                    ArtworkActionLabel(systemImage: "square.and.arrow.up", title: "Share")
+                    ArtworkActionLabel(systemImage: "square.and.arrow.up", title: String(localized: "Share"))
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
             }

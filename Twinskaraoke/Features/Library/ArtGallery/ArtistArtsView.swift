@@ -194,8 +194,8 @@ private struct ArtistArtsStatsRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ArtistArtsStatPill(value: "\(artworkCount)", label: artworkCount == 1 ? "Artwork" : "Artworks")
-            ArtistArtsStatPill(value: "\(totalUpvotes)", label: totalUpvotes == 1 ? "Like" : "Likes")
+            ArtistArtsStatPill(value: "\(artworkCount)", label: artworkCount == 1 ? String(localized: "Artwork") : String(localized: "Artworks"))
+            ArtistArtsStatPill(value: "\(totalUpvotes)", label: totalUpvotes == 1 ? String(localized: "Like") : String(localized: "Likes"))
         }
     }
 }
@@ -225,8 +225,8 @@ private struct ArtistArtworkEmptyState: View {
     var body: some View {
         VStack(spacing: 14) {
             MusicEmptyState(
-                title: "No Artwork Yet",
-                message: "Artwork credited to \(artistName) will appear here."
+                title: String(localized: "No Artwork Yet"),
+                message: String(localized: "Artwork credited to \(artistName) will appear here.")
             )
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)

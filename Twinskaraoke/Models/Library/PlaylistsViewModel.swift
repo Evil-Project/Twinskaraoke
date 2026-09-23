@@ -113,7 +113,7 @@ final class PlaylistsViewModel {
                 hasLoadedPlaylists = true
                 RecentlyAddedTracker.shared.registerIfNew(loaded.map(\.id))
             } catch {
-                errorMessage = "Playlists couldn’t be loaded. Pull to refresh to retry."
+                errorMessage = String(localized: "Playlists couldn’t be loaded. Pull to refresh to retry.")
             }
         })
     }
@@ -132,7 +132,7 @@ final class PlaylistsViewModel {
                 }
                 hasLoadedFavoriteSongs = true
             } catch {
-                favoritesErrorMessage = "Favourite songs couldn’t be loaded. Pull to refresh to retry."
+                favoritesErrorMessage = String(localized: "Favourite songs couldn’t be loaded. Pull to refresh to retry.")
             }
         })
     }

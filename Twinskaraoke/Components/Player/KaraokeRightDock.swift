@@ -41,10 +41,10 @@ struct KaraokeRightDock: View {
 
     private var dockAccessibilityValue: String {
         if audioManager.karaokeMode {
-            return "On, removal level \(vocalRemovalPercent)%"
+            return String(localized: "On, removal level \(vocalRemovalPercent)%")
         }
         if shouldShowProcessingIndicator {
-            return isProcessing ? "Preparing, \(processingPercentText)" : "Preparing"
+            return isProcessing ? String(localized: "Preparing, \(processingPercentText)") : String(localized: "Preparing")
         }
         return "Off"
     }
@@ -172,7 +172,7 @@ struct KaraokeRightDock: View {
     private var karaokeButtonAccessibilityValue: String {
         if audioManager.karaokeMode { return "On" }
         if shouldShowProcessingIndicator {
-            return isProcessing ? "Preparing, \(processingPercentText)" : "Preparing"
+            return isProcessing ? String(localized: "Preparing, \(processingPercentText)") : String(localized: "Preparing")
         }
         return "Off"
     }
@@ -180,10 +180,10 @@ struct KaraokeRightDock: View {
     private var karaokeButtonAccessibilityHint: String {
         if canActivateKaraoke {
             return audioManager.karaokeMode
-                ? "Disables vocal removal."
-                : "Enables vocal removal and opens the removal level control."
+                ? String(localized: "Disables vocal removal.")
+                : String(localized: "Enables vocal removal and opens the removal level control.")
         }
-        return "Vocal removal is preparing for this song."
+        return String(localized: "Vocal removal is preparing for this song.")
     }
 
     private func adjustVocalRemoval(_ direction: AccessibilityAdjustmentDirection) {

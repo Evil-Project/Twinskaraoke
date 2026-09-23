@@ -36,8 +36,8 @@ struct LibraryView: View {
         } else if viewModel.playlists.isEmpty {
             TVEmptyState(
                 systemImage: "music.note.list",
-                title: "No playlists yet",
-                message: "Curated playlists will appear here."
+                title: String(localized: "No playlists yet"),
+                message: String(localized: "Curated playlists will appear here.")
             )
         } else {
             ScrollView {

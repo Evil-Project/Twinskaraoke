@@ -137,7 +137,7 @@ final class ShimejiResourceManager: NSObject {
         downloadTask = nil
 
         guard let tempURL else {
-            state = .failed(error?.localizedDescription ?? "Download failed.")
+            state = .failed(error?.localizedDescription ?? String(localized: "Download failed."))
             return
         }
 
@@ -150,7 +150,7 @@ final class ShimejiResourceManager: NSObject {
         do {
             try FileManager.default.moveItem(at: tempURL, to: stagedZip)
         } catch {
-            state = .failed("Couldn't stage the download: \(error.localizedDescription)")
+            state = .failed(String(localized: "Couldn't stage the download: \(error.localizedDescription)"))
             return
         }
 
@@ -189,7 +189,7 @@ final class ShimejiResourceManager: NSObject {
                       generation == self.operationGeneration
                 else { return }
                 self.installationTask = nil
-                self.state = .failed("Couldn't set up the pack: \(error.localizedDescription)")
+                self.state = .failed(String(localized: "Couldn't set up the pack: \(error.localizedDescription)"))
             }
         }
     }
@@ -245,7 +245,7 @@ final class ShimejiResourceManager: NSObject {
                 throw NSError(
                     domain: "Shimeji",
                     code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "This pack needs a newer version of the app."]
+                    userInfo: [NSLocalizedDescriptionKey: String(localized: "This pack needs a newer version of the app.")]
                 )
             }
             return PreparedPack(manifest: manifest, stagingDirectory: stagingDirectory)

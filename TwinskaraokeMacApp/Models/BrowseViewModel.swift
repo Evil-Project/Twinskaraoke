@@ -43,6 +43,6 @@ final class BrowseViewModel {
 
     private func noteFailure(_ error: Error) {
         guard !(error is CancellationError), errorMessage == nil else { return }
-        errorMessage = "Couldn't load songs. Check your connection and try again."
+        errorMessage = String(localized: "Couldn't load songs. Check your connection and try again.")
     }
 }

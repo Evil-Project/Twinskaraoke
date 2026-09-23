@@ -27,7 +27,7 @@ final class PlaylistDetailViewModel {
             do {
                 songs = try await KaraokeAPIClient.playlistSongs(id: playlistID)
             } catch {
-                loadError = "Check your connection and try again."
+                loadError = String(localized: "Check your connection and try again.")
             }
         }
     }

@@ -25,7 +25,7 @@ final class PlaylistsViewModel {
                     sortDescending: false
                 )
             } catch {
-                loadError = "Check your connection and try again."
+                loadError = String(localized: "Check your connection and try again.")
             }
         }
     }

@@ -5,9 +5,9 @@ struct AppleMusicProgressBar: View {
     @Binding var progress: Double
     @Binding var isScrubbing: Bool
     let onSeekEnd: (Double) -> Void
-    var accessibilityLabel: String = "Progress"
+    var accessibilityLabel: String = String(localized: "Progress")
     var accessibilityValueText: String?
-    var accessibilityHint: String = "Swipe up or down to adjust."
+    var accessibilityHint: String = String(localized: "Swipe up or down to adjust.")
     var scrubValueText: String?
     @State private var scrubHaptics = ScrubHapticFeedback()
     #if DEBUG
@@ -48,7 +48,7 @@ struct AppleMusicProgressBar: View {
         .tint(.primary)
         .frame(minHeight: 44)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValueText ?? "\(Int(progress * 100)) percent")
+        .accessibilityValue(accessibilityValueText ?? String(localized: "\(Int(progress * 100)) percent"))
         .accessibilityHint(accessibilityHint)
         .background {
             #if DEBUG
