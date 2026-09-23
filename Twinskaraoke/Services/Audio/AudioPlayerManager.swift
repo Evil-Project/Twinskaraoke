@@ -75,7 +75,7 @@ final class AudioPlayerManager {
     @ObservationIgnored private var sessionPersistenceReady = false
     @ObservationIgnored private var sessionRestoreAllowed = true
     @ObservationIgnored private var sessionRestoring = false
-    // Launch arguments never change; checked on every progress tick.
+    // Resolved once: launch arguments are fixed, and the check runs on every progress tick.
     private static let usesSessionPersistence: Bool = {
         let arguments = ProcessInfo.processInfo.arguments
         return !arguments.contains("-UITestMode") || arguments.contains("-UITestPlaybackSession")
