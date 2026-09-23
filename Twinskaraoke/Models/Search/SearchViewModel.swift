@@ -131,7 +131,7 @@ final class PublicPlaylistsViewModel {
                 guard token == requestToken else { return }
                 // Keep the current items on a failed replace fetch so the view
                 // can retry instead of landing on a dead-end empty state.
-                errorMessage = "Playlists couldn’t be loaded. Pull to refresh to retry."
+                errorMessage = String(localized: "Playlists couldn’t be loaded. Pull to refresh to retry.")
             }
         }
         // Only the replacing fetch is what pull-to-refresh waits on; tracking a
@@ -612,9 +612,9 @@ final class SearchCategorySongsViewModel {
 
     var emptyStateMessage: String {
         if loadFailed {
-            return "The category couldn’t be loaded. Check your connection and try again."
+            return String(localized: "The category couldn’t be loaded. Check your connection and try again.")
         }
-        return "Try another category or search term."
+        return String(localized: "Try another category or search term.")
     }
 
     private func fetch() {
@@ -747,13 +747,13 @@ final class SearchViewModel {
                 return
             } catch KaraokeAPIClient.APIError.httpStatus(_) {
                 guard !Task.isCancelled else { return }
-                applySearchFailure("Search returned an unexpected response. Try again.", token: token)
+                applySearchFailure(String(localized: "Search returned an unexpected response. Try again."), token: token)
             } catch KaraokeAPIClient.APIError.decodeFailed {
                 guard !Task.isCancelled else { return }
-                applySearchFailure("Search results couldn't be read. Try again.", token: token)
+                applySearchFailure(String(localized: "Search results couldn't be read. Try again."), token: token)
             } catch {
                 guard !Task.isCancelled else { return }
-                applySearchFailure("Check your connection and try again.", token: token)
+                applySearchFailure(String(localized: "Check your connection and try again."), token: token)
             }
         }
     }

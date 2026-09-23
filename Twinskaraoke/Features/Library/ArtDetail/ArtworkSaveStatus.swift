@@ -1,3 +1,5 @@
+import Foundation
+
 enum ArtworkSaveStatus: Equatable {
     case idle
     case saving
@@ -12,13 +14,13 @@ enum ArtworkSaveStatus: Equatable {
     var accessibilityLabel: String {
         switch self {
         case .saving:
-            "Saving artwork"
+            String(localized: "Saving artwork")
         case .success:
-            "Artwork saved"
+            String(localized: "Artwork saved")
         case .failed:
-            "Artwork save failed"
+            String(localized: "Artwork save failed")
         case .idle:
-            "Save artwork"
+            String(localized: "Save artwork")
         }
     }
 }

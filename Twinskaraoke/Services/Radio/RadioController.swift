@@ -134,8 +134,8 @@ final class RadioController {
 
         refreshErrorMessage =
             nowPlaying == nil
-                ? "Radio metadata is temporarily unavailable."
-                : "Couldn't refresh radio metadata."
+                ? String(localized: "Radio metadata is temporarily unavailable.")
+                : String(localized: "Couldn't refresh radio metadata.")
     }
 
     private func metadataSignature(for info: RadioNowPlaying.SongInfo) -> String {

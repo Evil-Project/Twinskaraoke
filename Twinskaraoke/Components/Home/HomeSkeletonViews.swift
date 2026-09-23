@@ -4,7 +4,7 @@ struct HomeSkeletonView: View {
     var availableWidth: CGFloat = 390
 
     var body: some View {
-        BrowseLoadingPlaceholder(availableWidth: availableWidth, label: "Loading Home")
+        BrowseLoadingPlaceholder(availableWidth: availableWidth, label: String(localized: "Loading Home"))
     }
 }
 
@@ -12,7 +12,7 @@ struct NewSkeletonView: View {
     var availableWidth: CGFloat = 390
 
     var body: some View {
-        BrowseLoadingPlaceholder(availableWidth: availableWidth, label: "Loading New", featured: true)
+        BrowseLoadingPlaceholder(availableWidth: availableWidth, label: String(localized: "Loading New"), featured: true)
     }
 }
 

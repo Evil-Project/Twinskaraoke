@@ -32,7 +32,7 @@ struct SongsView: View {
                 }
             } else if let loadError = viewModel.loadError, viewModel.songs.isEmpty {
                 WatchLoadErrorState(
-                    title: "Couldn't Load Songs",
+                    title: String(localized: "Couldn't Load Songs"),
                     message: loadError,
                     retryAction: { viewModel.fetchSongs() }
                 )
@@ -40,8 +40,8 @@ struct SongsView: View {
             } else if viewModel.songs.isEmpty {
                 WatchEmptyState(
                     systemImage: "music.note.list",
-                    title: "No Songs",
-                    message: "Trending songs will appear here."
+                    title: String(localized: "No Songs"),
+                    message: String(localized: "Trending songs will appear here.")
                 )
                 .listRowBackground(Color.clear)
             } else {
@@ -177,7 +177,7 @@ private struct WatchSongsLibraryHeader: View {
 
             HStack(spacing: 8) {
                 WatchSongsHeaderButton(
-                    title: "Play",
+                    title: String(localized: "Play"),
                     systemName: "play.fill",
                     tint: .white,
                     fill: Color.appAccent,
@@ -185,7 +185,7 @@ private struct WatchSongsLibraryHeader: View {
                 )
 
                 WatchSongsHeaderButton(
-                    title: "Shuffle",
+                    title: String(localized: "Shuffle"),
                     systemName: "shuffle",
                     tint: .appAccent,
                     fill: Color.appAccent.opacity(0.14),
@@ -208,7 +208,7 @@ private struct WatchSongsLibraryHeader: View {
     }
 
     private var summaryText: String {
-        let countText = songCount == 1 ? "1 song" : "\(songCount) songs"
+        let countText = songCount == 1 ? String(localized: "1 song") : String(localized: "\(songCount) songs")
         return "\(countText) - \(durationText)"
     }
 }

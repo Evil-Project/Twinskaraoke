@@ -321,7 +321,7 @@ final class AudioManager {
         }
 
         guard let nextIndex = queue.indices.first(where: { !failedQueueIndices.contains($0) }) else {
-            playbackError = "Unable to play this queue. Check your connection and try again."
+            playbackError = String(localized: "Unable to play this queue. Check your connection and try again.")
             updateNowPlayingInfo()
             return
         }

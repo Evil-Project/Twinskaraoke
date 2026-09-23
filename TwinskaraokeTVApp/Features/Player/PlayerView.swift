@@ -11,8 +11,8 @@ struct PlayerView: View {
             if audioManager.currentSong == nil {
                 TVEmptyState(
                     systemImage: "play.circle",
-                    title: "Nothing playing",
-                    message: "Pick a song from Home, Search, or your Library to start."
+                    title: String(localized: "Nothing playing"),
+                    message: String(localized: "Pick a song from Home, Search, or your Library to start.")
                 )
             } else {
                 content
@@ -169,7 +169,7 @@ struct PlayerView: View {
                 .shuffle,
                 systemImage: "shuffle",
                 isActive: audioManager.isShuffleOn,
-                accessibilityLabel: audioManager.isShuffleOn ? "Turn Shuffle Off" : "Turn Shuffle On"
+                accessibilityLabel: audioManager.isShuffleOn ? String(localized: "Turn Shuffle Off") : String(localized: "Turn Shuffle On")
             ) {
                 audioManager.toggleShuffle()
             }
@@ -177,7 +177,7 @@ struct PlayerView: View {
             transportButton(
                 .previous,
                 systemImage: "backward.fill",
-                accessibilityLabel: "Previous Track"
+                accessibilityLabel: String(localized: "Previous Track")
             ) {
                 audioManager.playPrevious()
             }
@@ -186,7 +186,7 @@ struct PlayerView: View {
                 .playPause,
                 systemImage: audioManager.isPlaying ? "pause.fill" : "play.fill",
                 iconWidth: 60,
-                accessibilityLabel: audioManager.isPlaying ? "Pause" : "Play"
+                accessibilityLabel: audioManager.isPlaying ? String(localized: "Pause") : String(localized: "Play")
             ) {
                 audioManager.togglePlayPause()
             }
@@ -194,7 +194,7 @@ struct PlayerView: View {
             transportButton(
                 .next,
                 systemImage: "forward.fill",
-                accessibilityLabel: "Next Track"
+                accessibilityLabel: String(localized: "Next Track")
             ) {
                 audioManager.playNextOrRandom()
             }
@@ -203,7 +203,7 @@ struct PlayerView: View {
                 .repeatMode,
                 systemImage: audioManager.playbackMode.iconName,
                 isActive: audioManager.playbackMode == .singleLoop,
-                accessibilityLabel: "Repeat Mode"
+                accessibilityLabel: String(localized: "Repeat Mode")
             ) {
                 audioManager.toggleMode()
             }

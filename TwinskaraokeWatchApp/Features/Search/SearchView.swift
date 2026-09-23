@@ -61,8 +61,8 @@ struct SearchView: View {
                 if trimmedSearchText.isEmpty {
                     WatchEmptyState(
                         systemImage: "magnifyingglass",
-                        title: "Search",
-                        message: "Find songs, artists, and new favorites."
+                        title: String(localized: "Search"),
+                        message: String(localized: "Find songs, artists, and new favorites.")
                     )
                     .listRowBackground(Color.clear)
                 } else if viewModel.isLoading, viewModel.results.isEmpty {
@@ -74,7 +74,7 @@ struct SearchView: View {
                     .listRowBackground(Color.clear)
                 } else if let loadError = viewModel.loadError, viewModel.results.isEmpty {
                     WatchLoadErrorState(
-                        title: "Search Failed",
+                        title: String(localized: "Search Failed"),
                         message: loadError,
                         retryAction: { viewModel.performSearch(query: trimmedSearchText) }
                     )
@@ -82,8 +82,8 @@ struct SearchView: View {
                 } else if viewModel.results.isEmpty {
                     WatchEmptyState(
                         systemImage: "music.mic",
-                        title: "No Results",
-                        message: "Try another song title or artist."
+                        title: String(localized: "No Results"),
+                        message: String(localized: "Try another song title or artist.")
                     )
                     .listRowBackground(Color.clear)
                 } else {
@@ -182,12 +182,12 @@ struct SearchView: View {
 
     private func accessibilityHint(for result: WatchSearchResult) -> String {
         guard let song = result.song else {
-            return "This result cannot be played on Apple Watch."
+            return String(localized: "This result cannot be played on Apple Watch.")
         }
         if audioManager.currentSong?.id == song.id {
-            return "Double tap to open the current song."
+            return String(localized: "Double tap to open the current song.")
         }
-        return "Double tap to play this result."
+        return String(localized: "Double tap to play this result.")
     }
 
     private func clearSearch() {
@@ -236,9 +236,9 @@ private struct WatchSearchResultsSummary: View {
     }
 
     private var resultCountText: String {
-        let base = totalCount == 1 ? "1 result" : "\(totalCount) results"
+        let base = totalCount == 1 ? String(localized: "1 result") : String(localized: "\(totalCount) results")
         guard playableCount != totalCount else { return base }
-        let playable = playableCount == 1 ? "1 playable" : "\(playableCount) playable"
+        let playable = playableCount == 1 ? String(localized: "1 playable") : String(localized: "\(playableCount) playable")
         return "\(base) - \(playable)"
     }
 }

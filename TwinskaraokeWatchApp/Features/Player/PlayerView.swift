@@ -204,8 +204,8 @@ struct PlayerView: View {
         } else {
             WatchEmptyState(
                 systemImage: "music.note",
-                title: "No Song Playing",
-                message: "Choose a song from Home, Songs, or Search."
+                title: String(localized: "No Song Playing"),
+                message: String(localized: "Choose a song from Home, Songs, or Search.")
             )
             .navigationTitle("Now Playing")
         }
@@ -334,9 +334,9 @@ struct PlayerView: View {
                             tint: .primary,
                             fill: Color.secondary.opacity(0.14),
                             isDisabled: audioManager.isLoading,
-                            accessibilityLabel: "Previous Track",
-                            accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
-                            accessibilityHint: "Restarts the song or plays the previous track."
+                            accessibilityLabel: String(localized: "Previous Track"),
+                            accessibilityValue: audioManager.isLoading ? String(localized: "Unavailable while loading") : nil,
+                            accessibilityHint: String(localized: "Restarts the song or plays the previous track.")
                         ) {
                             audioManager.playPrevious()
                             WatchHaptic.play(.previous)
@@ -349,9 +349,9 @@ struct PlayerView: View {
                         iconSize: metrics.primaryControlIconSize,
                         tint: .white,
                         fill: Color.appAccent,
-                        accessibilityLabel: audioManager.isPlaying ? "Pause" : "Play",
-                        accessibilityValue: audioManager.isLoading ? "Loading" : song.title,
-                        accessibilityHint: audioManager.isPlaying ? "Pauses \(song.title)." : "Plays \(song.title)."
+                        accessibilityLabel: audioManager.isPlaying ? String(localized: "Pause") : String(localized: "Play"),
+                        accessibilityValue: audioManager.isLoading ? String(localized: "Loading") : song.title,
+                        accessibilityHint: audioManager.isPlaying ? String(localized: "Pauses \(song.title).") : String(localized: "Plays \(song.title).")
                     ) {
                         togglePlayPause()
                     }
@@ -364,9 +364,9 @@ struct PlayerView: View {
                             tint: .primary,
                             fill: Color.secondary.opacity(0.14),
                             isDisabled: audioManager.isLoading,
-                            accessibilityLabel: "Next Track",
-                            accessibilityValue: audioManager.isLoading ? "Unavailable while loading" : nil,
-                            accessibilityHint: "Skips to the next track."
+                            accessibilityLabel: String(localized: "Next Track"),
+                            accessibilityValue: audioManager.isLoading ? String(localized: "Unavailable while loading") : nil,
+                            accessibilityHint: String(localized: "Skips to the next track.")
                         ) {
                             audioManager.playNext()
                             WatchHaptic.play(.next)
@@ -529,21 +529,21 @@ struct PlayerView: View {
     private var progressAccessibilityValue: String {
         let remaining = max(0, audioManager.duration - audioManager.currentTime)
         guard audioManager.duration > 0 else {
-            return audioManager.isLoading ? "Loading" : "0:00 elapsed"
+            return audioManager.isLoading ? String(localized: "Loading") : String(localized: "0:00 elapsed")
         }
-        return "\(formatTime(audioManager.currentTime)) elapsed, \(formatTime(remaining)) remaining"
+        return String(localized: "\(formatTime(audioManager.currentTime)) elapsed, \(formatTime(remaining)) remaining")
     }
 
     private var queueAccessibilityValue: String {
         let count = audioManager.upNextSongs.count
-        if count == 0 { return "No songs queued" }
-        if count == 1 { return "1 song queued" }
-        return "\(count) songs queued"
+        if count == 0 { return String(localized: "No songs queued") }
+        if count == 1 { return String(localized: "1 song queued") }
+        return String(localized: "\(count) songs queued")
     }
 
     private func playerStateAccessibilityValue(for song: Song) -> String {
         if audioManager.isLoading {
-            return "\(song.title), \(song.artistName), loading"
+            return String(localized: "\(song.title), \(song.artistName), loading")
         }
         return "\(song.title), \(song.artistName), \(audioManager.isPlaying ? "playing" : "paused")"
     }

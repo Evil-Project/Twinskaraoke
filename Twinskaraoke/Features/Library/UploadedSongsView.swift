@@ -123,7 +123,7 @@ struct UploadedSongsView: View {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {
-                LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Play uploaded songs")
@@ -131,7 +131,7 @@ struct UploadedSongsView: View {
             Button {
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
-                LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Shuffle uploaded songs")
@@ -143,7 +143,7 @@ struct UploadedSongsView: View {
             MusicEmptyState(title: emptyTitle(isSearching: isSearching), message: emptyMessage(isSearching: isSearching))
 
             if viewModel.loadFailed {
-                MusicEmptyActionButton(title: "Try Again") {
+                MusicEmptyActionButton(title: String(localized: "Try Again")) {
                     Task {
                         await viewModel.refresh()
                     }
@@ -154,19 +154,19 @@ struct UploadedSongsView: View {
     }
 
     private func emptyTitle(isSearching: Bool) -> String {
-        if isSearching { return "No Results" }
-        if viewModel.requiresSignIn { return "Sign In Required" }
-        if viewModel.loadFailed { return "Couldn't Load Uploads" }
-        return "No Uploads"
+        if isSearching { return String(localized: "No Results") }
+        if viewModel.requiresSignIn { return String(localized: "Sign In Required") }
+        if viewModel.loadFailed { return String(localized: "Couldn't Load Uploads") }
+        return String(localized: "No Uploads")
     }
 
     private func emptyMessage(isSearching: Bool) -> String {
-        if isSearching { return "Try another song or artist." }
+        if isSearching { return String(localized: "Try another song or artist.") }
         if viewModel.requiresSignIn {
-            return "Sign in from Account to see the songs you've uploaded, then pull to refresh."
+            return String(localized: "Sign in from Account to see the songs you've uploaded, then pull to refresh.")
         }
-        if viewModel.loadFailed { return "Check your connection and try again." }
-        return "Songs uploaded through Twins Karaoke will appear here."
+        if viewModel.loadFailed { return String(localized: "Check your connection and try again.") }
+        return String(localized: "Songs uploaded through Twins Karaoke will appear here.")
     }
 
     private var loadingRow: some View {

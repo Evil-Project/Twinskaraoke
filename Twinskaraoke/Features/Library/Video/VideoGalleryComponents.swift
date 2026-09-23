@@ -325,7 +325,7 @@ private struct VideoPlayerActionRow: View {
         if let url = video.shareURL {
             HStack(spacing: 10) {
                 ShareLink(item: url) {
-                    VideoActionButtonLabel(systemImage: "square.and.arrow.up", title: "Share")
+                    VideoActionButtonLabel(systemImage: "square.and.arrow.up", title: String(localized: "Share"))
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
 
@@ -334,7 +334,7 @@ private struct VideoPlayerActionRow: View {
                         AppHaptic.selection.play()
                         UIPasteboard.general.url = url
                     } label: {
-                        VideoActionButtonLabel(systemImage: "link", title: "Copy")
+                        VideoActionButtonLabel(systemImage: "link", title: String(localized: "Copy"))
                     }
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
                 #endif

@@ -514,7 +514,7 @@ struct AccountToolbarButton: View {
     }
 
     private var accessibilityLabel: String {
-        displayName.isEmpty ? "Account" : "Account, \(displayName)"
+        displayName.isEmpty ? String(localized: "Account") : String(localized: "Account, \(displayName)")
     }
 }
 

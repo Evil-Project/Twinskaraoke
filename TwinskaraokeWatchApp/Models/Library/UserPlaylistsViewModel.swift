@@ -65,7 +65,7 @@ final class UserPlaylistsViewModel {
                 self?.finishLoad(generation: generation)
             } catch {
                 guard let self, self.loadGeneration == generation else { return }
-                self.loadError = "Check your connection and try again."
+                self.loadError = String(localized: "Check your connection and try again.")
                 self.finishLoad(generation: generation)
             }
         }

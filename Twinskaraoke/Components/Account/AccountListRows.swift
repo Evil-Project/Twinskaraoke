@@ -35,13 +35,13 @@ struct ProfileHeaderRow: View {
     private var profileAccessibilityValue: String {
         var parts: [String] = []
         if let level {
-            parts.append("Level \(level)")
+            parts.append(String(localized: "Level \(level)"))
         }
         if let levelTitle, !levelTitle.isEmpty {
             parts.append(levelTitle)
         }
         if let xpToNextLevel, xpToNextLevel > 0 {
-            parts.append("\(xpToNextLevel) XP to next level")
+            parts.append(String(localized: "\(xpToNextLevel) XP to next level"))
         }
         return parts.joined(separator: ", ")
     }
@@ -137,7 +137,7 @@ struct UnlockedBadgesRow: View {
     }
 
     private func accessibilityValue(for badge: Badge) -> String {
-        var parts = [badge.unlocked ? "Unlocked" : "Locked", "Rarity \(badge.rarity)"]
+        var parts = [badge.unlocked ? String(localized: "Unlocked") : String(localized: "Locked"), String(localized: "Rarity \(badge.rarity)")]
         if !badge.unlocked, badge.conditionValue > 0 {
             parts.append("\(badge.currentProgress) of \(badge.conditionValue)")
         }

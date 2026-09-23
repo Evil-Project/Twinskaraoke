@@ -215,7 +215,7 @@ struct WatchSongRow: View {
     private var accessibilityValue: String {
         var parts = [song.artistName]
         if isCurrent {
-            parts.append(isPlaying ? "Playing" : "Paused")
+            parts.append(isPlaying ? String(localized: "Playing") : String(localized: "Paused"))
         } else if showsDuration, !song.durationText.isEmpty {
             parts.append(song.durationText)
         }

@@ -28,10 +28,10 @@ struct ArtistsView: View {
                 if viewModel.loadFailed, isQueryEmpty {
                     VStack(spacing: AM.Spacing.l) {
                         MusicEmptyState(
-                            title: "Couldn't Load Artists",
-                            message: "Check your connection and try again."
+                            title: String(localized: "Couldn't Load Artists"),
+                            message: String(localized: "Check your connection and try again.")
                         )
-                        MusicEmptyActionButton(title: "Try Again") {
+                        MusicEmptyActionButton(title: String(localized: "Try Again")) {
                             AppHaptic.selection.play()
                             viewModel.refresh()
                         }
@@ -39,10 +39,10 @@ struct ArtistsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     MusicEmptyState(
-                        title: isQueryEmpty ? "No Artists" : "No Results",
+                        title: isQueryEmpty ? String(localized: "No Artists") : String(localized: "No Results"),
                         message: isQueryEmpty
-                            ? "Artists you load from Twinskaraoke will appear here."
-                            : "Try another artist."
+                            ? String(localized: "Artists you load from Twinskaraoke will appear here.")
+                            : String(localized: "Try another artist.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -90,7 +90,7 @@ struct ArtistsView: View {
 
 private struct ArtistsSkeletonView: View {
     var body: some View {
-        CenteredLoadingView(label: "Loading artists")
+        CenteredLoadingView(label: String(localized: "Loading artists"))
     }
 }
 
@@ -201,17 +201,17 @@ struct ArtistDetailView: View {
                         ArtistSongsSkeleton()
                     } else if let message = loader.errorMessage {
                         ArtistDetailStateView(
-                            title: "Couldn't Load Songs",
+                            title: String(localized: "Couldn't Load Songs"),
                             message: message,
-                            buttonTitle: "Try Again"
+                            buttonTitle: String(localized: "Try Again")
                         ) {
                             loader.load(id: artist.id, fallback: artist, force: true)
                         }
                     } else if loader.hasLoadedDetail {
                         ArtistDetailStateView(
-                            title: "No Songs",
-                            message: "Songs by \(current.name) will appear here when they are available.",
-                            buttonTitle: "Refresh"
+                            title: String(localized: "No Songs"),
+                            message: String(localized: "Songs by \(current.name) will appear here when they are available."),
+                            buttonTitle: String(localized: "Refresh")
                         ) {
                             loader.load(id: artist.id, fallback: artist, force: true)
                         }
@@ -285,7 +285,7 @@ struct ArtistDetailView: View {
             } label: {
                 LibraryActionButtonLabel(
                     symbol: "play.fill",
-                    text: "Play"
+                    text: String(localized: "Play")
                 )
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
@@ -294,7 +294,7 @@ struct ArtistDetailView: View {
             } label: {
                 LibraryActionButtonLabel(
                     symbol: "shuffle",
-                    text: "Shuffle"
+                    text: String(localized: "Shuffle")
                 )
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
@@ -340,7 +340,7 @@ private struct ArtistSongRow: View {
 
 private struct ArtistSongsSkeleton: View {
     var body: some View {
-        CenteredLoadingView(label: "Loading artist songs")
+        CenteredLoadingView(label: String(localized: "Loading artist songs"))
     }
 }
 
@@ -379,12 +379,12 @@ private struct ArtistDetailStateView: View {
 
             VStack(spacing: AM.Spacing.s) {
                 ArtistDetailHintRow(
-                    title: "Artist catalog",
-                    message: "Songs appear here as the backend returns this artist's tracks."
+                    title: String(localized: "Artist catalog"),
+                    message: String(localized: "Songs appear here as the backend returns this artist's tracks.")
                 )
                 ArtistDetailHintRow(
-                    title: "Use song menus",
-                    message: "Queue, favorite, download, or add songs to playlists."
+                    title: String(localized: "Use song menus"),
+                    message: String(localized: "Queue, favorite, download, or add songs to playlists.")
                 )
             }
             .frame(maxWidth: 360)
@@ -444,7 +444,7 @@ private struct ArtistActionsMenu: View {
 
     private var downloadTitle: String {
         let downloadedCount = songs.count - pendingDownloads.count - downloadingCount
-        return downloadedCount > 0 ? "Download Remaining" : "Download"
+        return downloadedCount > 0 ? String(localized: "Download Remaining") : String(localized: "Download")
     }
 
     init(songs: [Song]) {

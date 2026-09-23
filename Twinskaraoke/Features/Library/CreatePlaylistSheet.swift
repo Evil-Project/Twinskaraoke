@@ -34,8 +34,8 @@ struct CreatePlaylistSheet: View {
 
                     VStack(spacing: 14) {
                         CreatePlaylistTextField(
-                            title: "Name",
-                            prompt: "Playlist Name",
+                            title: String(localized: "Name"),
+                            prompt: String(localized: "Playlist Name"),
                             text: $name,
                             axis: .horizontal
                         )
@@ -48,8 +48,8 @@ struct CreatePlaylistSheet: View {
                         Divider()
 
                         CreatePlaylistTextField(
-                            title: "Description",
-                            prompt: "Optional",
+                            title: String(localized: "Description"),
+                            prompt: String(localized: "Optional"),
                             text: $playlistDescription,
                             axis: .vertical
                         )
@@ -152,7 +152,7 @@ struct CreatePlaylistSheet: View {
                 dismiss()
             } else {
                 AppHaptic.error.play()
-                errorMessage = "Failed to create playlist. Please try again."
+                errorMessage = String(localized: "Failed to create playlist. Please try again.")
             }
         }
     }

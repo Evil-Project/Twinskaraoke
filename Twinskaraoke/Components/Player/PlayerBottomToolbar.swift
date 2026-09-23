@@ -23,9 +23,9 @@ enum PlayerQueueModeBadge {
 
     var label: String {
         switch self {
-        case .shuffle: "Shuffle on"
-        case .repeatAll: "Repeat all"
-        case .repeatOne: "Repeat one"
+        case .shuffle: String(localized: "Shuffle on")
+        case .repeatAll: String(localized: "Repeat all")
+        case .repeatOne: String(localized: "Repeat one")
         }
     }
 
@@ -62,8 +62,8 @@ struct PlayerBottomToolbar: View {
     /// modifier changes the button's identity, which kills the badge's
     /// transition every time a mode goes on or off.
     private var queueModeAccessibilityValue: String {
-        if audioManager.isRadioMode { return "Live radio" }
-        return queueModeBadge?.label ?? "Playing in order"
+        if audioManager.isRadioMode { return String(localized: "Live radio") }
+        return queueModeBadge?.label ?? String(localized: "Playing in order")
     }
 
     private var badgeAnimation: Animation? {

@@ -25,10 +25,10 @@ struct PlaylistListView: View {
         ScrollView {
             if displayedPlaylists.isEmpty {
                 MusicEmptyState(
-                    title: searchText.isEmpty ? "No Playlists" : "No Results",
+                    title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),
                     message: searchText.isEmpty
-                        ? "Playlists will appear here."
-                        : "Try another playlist name."
+                        ? String(localized: "Playlists will appear here.")
+                        : String(localized: "Try another playlist name.")
                 )
                 .frame(maxWidth: .infinity, minHeight: 360)
             } else {

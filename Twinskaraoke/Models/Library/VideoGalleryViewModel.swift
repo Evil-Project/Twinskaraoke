@@ -66,7 +66,7 @@ final class VideoGalleryViewModel {
                 URLQueryItem(name: "sortDescending", value: "True"),
             ]
         ) else {
-            errorMessage = "The video gallery endpoint is unavailable."
+            errorMessage = String(localized: "The video gallery endpoint is unavailable.")
             return
         }
         isLoading = true
@@ -87,14 +87,14 @@ final class VideoGalleryViewModel {
             } catch KaraokeAPIClient.APIError.httpStatus(let statusCode) {
                 self?.applyVideosResponse(
                     nil,
-                    failureMessage: "The server returned HTTP \(statusCode).",
+                    failureMessage: String(localized: "The server returned HTTP \(statusCode)."),
                     reset: reset,
                     generation: generation
                 )
             } catch {
                 self?.applyVideosResponse(
                     nil,
-                    failureMessage: "The video response could not be read.",
+                    failureMessage: String(localized: "The video response could not be read."),
                     reset: reset,
                     generation: generation
                 )
@@ -119,7 +119,7 @@ final class VideoGalleryViewModel {
             return
         }
         guard let data, let decoded = try? JSONDecoder().decode(VideosResponse.self, from: data) else {
-            errorMessage = "The video response could not be read."
+            errorMessage = String(localized: "The video response could not be read.")
             return
         }
 

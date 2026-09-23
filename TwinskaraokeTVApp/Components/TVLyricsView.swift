@@ -131,7 +131,7 @@ struct TVLyricsView: View {
                 Text("Couldn't load lyrics")
                     .font(.title3.bold())
                 if let onRetry {
-                    TVTextButton(title: "Retry", action: onRetry)
+                    TVTextButton(title: String(localized: "Retry"), action: onRetry)
                 }
             }
         } else if hasNoLyrics {

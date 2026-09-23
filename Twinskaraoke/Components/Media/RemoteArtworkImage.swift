@@ -338,7 +338,7 @@ struct MusicArtworkPlaceholder: View {
 
 struct CenteredLoadingView: View {
     var minHeight: CGFloat = 280
-    var label: String = "Loading"
+    var label: String = String(localized: "Loading")
 
     var body: some View {
         ProgressView()

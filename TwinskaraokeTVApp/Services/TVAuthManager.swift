@@ -94,7 +94,7 @@ final class TVAuthManager {
         guard !isAuthenticating else { return }
         let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUsername.isEmpty, !password.isEmpty else {
-            authError = "Enter your username and password."
+            authError = String(localized: "Enter your username and password.")
             return
         }
 
@@ -300,7 +300,7 @@ final class TVAuthManager {
         }
 
         if didFail {
-            profileError = "Some account details couldn’t be refreshed. Try again."
+            profileError = String(localized: "Some account details couldn’t be refreshed. Try again.")
         }
     }
 
@@ -407,7 +407,7 @@ final class TVAuthManager {
     private func expireSession() async {
         guard isLoggedIn else { return }
         await signOut()
-        authError = "Your session expired. Sign in again."
+        authError = String(localized: "Your session expired. Sign in again.")
     }
 
     private static func authorizedData(path: String) async throws -> Data {
@@ -453,19 +453,19 @@ final class TVAuthManager {
         if let authError = error as? AuthError {
             switch authError {
             case .httpStatus(401):
-                return "That username or password isn’t correct."
+                return String(localized: "That username or password isn’t correct.")
             case let .httpStatus(statusCode):
-                return "The server returned an error (\(statusCode)). Try again."
+                return String(localized: "The server returned an error (\(statusCode)). Try again.")
             case .invalidResponse:
-                return "The server sent an unexpected response."
+                return String(localized: "The server sent an unexpected response.")
             }
         }
         if error is DecodingError {
-            return "The server sent an unexpected response."
+            return String(localized: "The server sent an unexpected response.")
         }
         if let urlError = error as? URLError, urlError.code == .timedOut {
-            return "The request timed out. Check your connection and try again."
+            return String(localized: "The request timed out. Check your connection and try again.")
         }
-        return "Couldn’t sign in. Check your connection and try again."
+        return String(localized: "Couldn’t sign in. Check your connection and try again.")
     }
 }

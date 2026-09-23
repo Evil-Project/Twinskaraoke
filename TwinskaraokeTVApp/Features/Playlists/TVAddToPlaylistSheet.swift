@@ -62,14 +62,14 @@ struct TVAddToPlaylistSheet: View {
         } else if let loadError = manager.loadError, manager.playlists.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
                 message(loadError)
-                TVActionButton(title: "Retry", systemImage: "arrow.clockwise") {
+                TVActionButton(title: String(localized: "Retry"), systemImage: "arrow.clockwise") {
                     manager.load()
                 }
             }
         } else if manager.playlists.isEmpty {
             VStack(alignment: .leading, spacing: 20) {
                 message(String(localized: "You don’t have any playlists yet."))
-                TVActionButton(title: "New Playlist", systemImage: "plus") {
+                TVActionButton(title: String(localized: "New Playlist"), systemImage: "plus") {
                     isCreating = true
                 }
             }

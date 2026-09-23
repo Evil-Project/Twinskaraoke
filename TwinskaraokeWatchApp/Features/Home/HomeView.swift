@@ -63,7 +63,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Now Playing")
-                        .accessibilityValue("\(currentSong.title), \(currentSong.artistName), \(audioManager.isPlaying ? "Playing" : "Paused")")
+                        .accessibilityValue("\(currentSong.title), \(currentSong.artistName), \(audioManager.isPlaying ? String(localized: "Playing") : String(localized: "Paused"))")
                         .accessibilityHint("Double tap to open the player.")
                     }
                 }
@@ -121,7 +121,7 @@ struct HomeView: View {
                     browseLink(
                         .playlists,
                         title: "Playlists",
-                        subtitle: "Curated playlists",
+                        subtitle: String(localized: "Curated playlists"),
                         systemImage: "music.note.list",
                         tint: .appAccent,
                         identifier: "WatchHome.playlists",
@@ -131,7 +131,7 @@ struct HomeView: View {
                         browseLink(
                             .favorites,
                             title: "Favorites",
-                            subtitle: "Songs you starred",
+                            subtitle: String(localized: "Songs you starred"),
                             systemImage: "star.fill",
                             tint: .yellow,
                             identifier: "WatchHome.favorites",
@@ -141,7 +141,7 @@ struct HomeView: View {
                     browseLink(
                         .songs,
                         title: "Songs",
-                        subtitle: "Trending songs",
+                        subtitle: String(localized: "Trending songs"),
                         systemImage: "music.note",
                         tint: .purple,
                         identifier: "WatchHome.songs",
@@ -150,7 +150,7 @@ struct HomeView: View {
                     browseLink(
                         .radio,
                         title: "Radio",
-                        subtitle: "Listen live",
+                        subtitle: String(localized: "Listen live"),
                         systemImage: "dot.radiowaves.left.and.right",
                         tint: .orange,
                         identifier: "WatchHome.radio",
@@ -159,7 +159,7 @@ struct HomeView: View {
                     browseLink(
                         .search,
                         title: "Search",
-                        subtitle: "Find songs and artists",
+                        subtitle: String(localized: "Find songs and artists"),
                         systemImage: "magnifyingglass",
                         tint: .blue,
                         identifier: "WatchHome.search",
@@ -250,11 +250,11 @@ struct HomeView: View {
     private var accountSubtitle: String {
         switch auth.linkState {
         case .signedIn:
-            auth.username ?? "Signed in"
+            auth.username ?? String(localized: "Signed in")
         case .awaitingPhone:
-            "Waiting for iPhone"
+            String(localized: "Waiting for iPhone")
         case .signedOut:
-            "Guest session"
+            String(localized: "Guest session")
         }
     }
 
@@ -308,9 +308,9 @@ private struct WatchHomeHeader: View {
 
     private var statusText: String {
         guard let currentSongTitle, !currentSongTitle.isEmpty else {
-            return "Trending and library"
+            return String(localized: "Trending and library")
         }
-        return isPlaying ? "Playing \(currentSongTitle)" : "Paused \(currentSongTitle)"
+        return isPlaying ? String(localized: "Playing \(currentSongTitle)") : String(localized: "Paused \(currentSongTitle)")
     }
 }
 

@@ -131,7 +131,7 @@ struct AccountView: View {
                     || auth.isAuthenticating
             )
 
-            TVTextButton(title: "Sign in with your phone instead") {
+            TVTextButton(title: String(localized: "Sign in with your phone instead")) {
                 usePasswordSignIn = false
             }
             .frame(maxWidth: .infinity)
@@ -170,7 +170,7 @@ struct AccountView: View {
 
                 HStack(spacing: 28) {
                     TVActionButton(
-                        title: auth.isRefreshing ? "Refreshing…" : "Refresh Profile",
+                        title: auth.isRefreshing ? String(localized: "Refreshing…") : String(localized: "Refresh Profile"),
                         systemImage: "arrow.clockwise"
                     ) {
                         Task { await auth.refreshAccount() }
@@ -178,7 +178,7 @@ struct AccountView: View {
                     .disabled(auth.isRefreshing)
 
                     TVActionButton(
-                        title: "Sign Out",
+                        title: String(localized: "Sign Out"),
                         systemImage: "rectangle.portrait.and.arrow.right",
                         isDestructive: true
                     ) {
@@ -260,28 +260,28 @@ struct AccountView: View {
     private func limitsSection(_ limits: UploadLimits) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             TVSectionHeader(
-                title: "Account Usage",
-                subtitle: "Your upload and playlist allowances"
+                title: String(localized: "Account Usage"),
+                subtitle: String(localized: "Your upload and playlist allowances")
             )
 
             HStack(spacing: 28) {
                 TVAccountMetric(
-                    title: "Songs",
+                    title: String(localized: "Songs"),
                     value: "\(limits.currentSongCount.formatted()) / \(limits.maxSongs.formatted())",
                     systemImage: "music.note"
                 )
                 TVAccountMetric(
-                    title: "Storage",
+                    title: String(localized: "Storage"),
                     value: "\(Self.bytes(limits.usedStorageBytes)) / \(Self.bytes(limits.maxStorageBytes))",
                     systemImage: "externaldrive"
                 )
                 TVAccountMetric(
-                    title: "Playlists",
+                    title: String(localized: "Playlists"),
                     value: "\(limits.currentPlaylistCount.formatted()) / \(limits.playlistLimit.formatted())",
                     systemImage: "music.note.list"
                 )
                 TVAccountMetric(
-                    title: "Songs per Playlist",
+                    title: String(localized: "Songs per Playlist"),
                     value: limits.songPerPlaylistLimit.formatted(),
                     systemImage: "list.number"
                 )
@@ -295,8 +295,8 @@ struct AccountView: View {
     private var badgesSection: some View {
         VStack(alignment: .leading, spacing: 24) {
             TVSectionHeader(
-                title: "Badges",
-                subtitle: "\(auth.badges.filter(\.unlocked).count) of \(auth.badges.count) unlocked"
+                title: String(localized: "Badges"),
+                subtitle: String(localized: "\(auth.badges.filter(\.unlocked).count) of \(auth.badges.count) unlocked")
             )
 
             LazyVGrid(
@@ -434,7 +434,7 @@ private struct AccountBadgeCardView: View {
     }
 
     private var progressText: String {
-        guard badge.conditionValue > 0 else { return "Locked" }
+        guard badge.conditionValue > 0 else { return String(localized: "Locked") }
         return "\(badge.currentProgress.formatted()) of \(badge.conditionValue.formatted())"
     }
 }

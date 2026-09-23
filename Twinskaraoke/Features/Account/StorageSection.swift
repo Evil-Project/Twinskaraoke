@@ -16,7 +16,7 @@ struct StorageSection: View {
             VStack(spacing: 14) {
                 StorageMeterRow(
                     icon: "music.note",
-                    label: "Songs Uploaded",
+                    label: String(localized: "Songs Uploaded"),
                     valueText: "\(limits.currentSongCount)/\(limits.maxSongs)",
                     ratio: ratio(limits.currentSongCount, limits.maxSongs),
                     barHeight: 4
@@ -24,7 +24,7 @@ struct StorageSection: View {
                 Divider()
                 StorageMeterRow(
                     icon: "internaldrive",
-                    label: "Storage Used",
+                    label: String(localized: "Storage Used"),
                     valueText: storageValueText,
                     ratio: storageRatio,
                     barHeight: 6
@@ -32,7 +32,7 @@ struct StorageSection: View {
                 Divider()
                 StorageMeterRow(
                     icon: "music.note.list",
-                    label: "Playlists",
+                    label: String(localized: "Playlists"),
                     valueText: "\(limits.currentPlaylistCount)/\(limits.playlistLimit)",
                     ratio: ratio(limits.currentPlaylistCount, limits.playlistLimit),
                     barHeight: 4

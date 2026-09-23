@@ -37,8 +37,8 @@ struct PlaylistsView: View {
         if !manager.isSignedIn {
             TVEmptyState(
                 systemImage: "person.crop.circle",
-                title: "Sign in to see your playlists",
-                message: "Open the Account tab and pair this Apple TV with your phone to get your playlists here."
+                title: String(localized: "Sign in to see your playlists"),
+                message: String(localized: "Open the Account tab and pair this Apple TV with your phone to get your playlists here.")
             )
         } else if let error = manager.loadError, manager.playlists.isEmpty {
             TVLoadErrorState(message: error) { manager.load() }
@@ -74,8 +74,8 @@ struct PlaylistsView: View {
                         .accessibilityLabel("Create playlist")
 
                         TVPosterCaption(
-                            title: "New Playlist",
-                            subtitle: "Start a playlist",
+                            title: String(localized: "New Playlist"),
+                            subtitle: String(localized: "Start a playlist"),
                             width: cardWidth
                         )
                     }

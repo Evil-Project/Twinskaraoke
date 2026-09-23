@@ -233,7 +233,7 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var accessibilityLabel: String {
-        line.isInstrumental ? "Instrumental break" : line.text
+        line.isInstrumental ? String(localized: "Instrumental break") : line.text
     }
 
     private var accessibilityValue: String {
@@ -249,9 +249,9 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineStatus: String {
-        if isCurrent { return "Current lyric" }
-        if isPast { return "Past lyric" }
-        return "Upcoming lyric"
+        if isCurrent { return String(localized: "Current lyric") }
+        if isPast { return String(localized: "Past lyric") }
+        return String(localized: "Upcoming lyric")
     }
 
     private var lineAnimation: Animation? {
@@ -295,9 +295,9 @@ private func formattedLyricTime(_ seconds: TimeInterval) -> String {
 
 private func introAccessibilityValue(startTime: TimeInterval) -> String {
     if startTime <= 1 {
-        return "No intro"
+        return String(localized: "No intro")
     }
-    return "First lyric at \(formattedLyricTime(startTime))"
+    return String(localized: "First lyric at \(formattedLyricTime(startTime))")
 }
 
 private extension LyricsView {
@@ -306,8 +306,8 @@ private extension LyricsView {
         if didFail {
             VStack(spacing: 14) {
                 MusicEmptyState(
-                    title: "Couldn't load lyrics",
-                    message: "Check your connection and try again."
+                    title: String(localized: "Couldn't load lyrics"),
+                    message: String(localized: "Check your connection and try again.")
                 )
                 if let onRetry {
                     Button {
@@ -329,8 +329,8 @@ private extension LyricsView {
             .padding(.horizontal, 28)
         } else if hasNoLyrics {
             MusicEmptyState(
-                title: "No lyrics for this song",
-                message: "Lyrics will appear here when they are available."
+                title: String(localized: "No lyrics for this song"),
+                message: String(localized: "Lyrics will appear here when they are available.")
             )
         } else {
             LyricsLoadingSkeleton()

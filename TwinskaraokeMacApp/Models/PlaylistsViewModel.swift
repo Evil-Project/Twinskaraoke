@@ -52,7 +52,7 @@ final class MacPlaylistsViewModel {
         } catch {
             guard requestGeneration == generation else { return }
             playlists = []
-            errorMessage = "Couldn't load your playlists."
+            errorMessage = String(localized: "Couldn't load your playlists.")
         }
     }
 
@@ -96,7 +96,7 @@ final class MacLibraryViewModel {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = "Couldn't load the library."
+            errorMessage = String(localized: "Couldn't load the library.")
         }
     }
 }
@@ -123,7 +123,7 @@ final class MacPlaylistDetailViewModel {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = "Couldn't load this playlist."
+            errorMessage = String(localized: "Couldn't load this playlist.")
         }
     }
 }
@@ -145,7 +145,7 @@ final class MacFavoritesViewModel {
         } catch is CancellationError {
             return
         } catch {
-            errorMessage = "Couldn't load your favourites."
+            errorMessage = String(localized: "Couldn't load your favourites.")
         }
     }
 }

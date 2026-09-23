@@ -30,7 +30,7 @@ struct TVQRSignInPanel: View {
                     .tint(.appAccent)
                 }
 
-                TVTextButton(title: "Sign in with password instead") {
+                TVTextButton(title: String(localized: "Sign in with password instead")) {
                     // Choosing password sign-in retires the code. `.onDisappear`
                     // below deliberately lets a live session outlive the panel,
                     // so without this an already-scanned code could complete
@@ -149,13 +149,13 @@ struct TVQRSignInPanel: View {
     private var headline: String {
         switch auth.qrPhase {
         case .idle, .creating:
-            "Preparing your sign-in code…"
+            String(localized: "Preparing your sign-in code…")
         case .waiting:
-            "Scan with the Twinskaraoke app"
+            String(localized: "Scan with the Twinskaraoke app")
         case .completing:
-            "Signing you in…"
+            String(localized: "Signing you in…")
         case .expired:
-            "That code timed out for security. Get a new one."
+            String(localized: "That code timed out for security. Get a new one.")
         }
     }
 

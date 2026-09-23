@@ -56,12 +56,12 @@ struct RadioQueueView: View {
                         }
                         stationControls
                         if let next = nextSong {
-                            section(title: "Up Next") {
+                            section(title: String(localized: "Up Next")) {
                                 row(song: next, isCurrent: false)
                             }
                         }
                         if !history.isEmpty {
-                            section(title: "Recently Played") {
+                            section(title: String(localized: "Recently Played")) {
                                 VStack(spacing: 0) {
                                     ForEach(history.enumerated().map { PositionedRadioQueueHistoryItem(offset: $0.offset, item: $0.element) }) { positioned in
                                         row(song: positioned.item.song, isCurrent: false)
@@ -75,8 +75,8 @@ struct RadioQueueView: View {
                         }
                         if !hasSchedule {
                             MusicEmptyState(
-                                title: "Radio Schedule Unavailable",
-                                message: "Pull down to refresh live station metadata."
+                                title: String(localized: "Radio Schedule Unavailable"),
+                                message: String(localized: "Pull down to refresh live station metadata.")
                             )
                             .padding(.top, 36)
                             .transition(emptyStateTransition)
@@ -105,7 +105,7 @@ struct RadioQueueView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(radio.nowPlaying?.station.name ?? "Radio")
+                Text(radio.nowPlaying?.station.name ?? String(localized: "Radio"))
                     .font(.headline)
                     .foregroundStyle(.primary)
                 if let listeners = radio.nowPlaying?.listeners {
@@ -134,7 +134,7 @@ struct RadioQueueView: View {
             } label: {
                 LibraryActionButtonLabel(
                     symbol: isLivePlaying ? "pause.fill" : "play.fill",
-                    text: isLivePlaying ? "Pause Live" : "Play Live"
+                    text: isLivePlaying ? String(localized: "Pause Live") : String(localized: "Play Live")
                 )
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
@@ -146,7 +146,7 @@ struct RadioQueueView: View {
                 AppHaptic.selection.play()
                 Task { await radio.refresh() }
             } label: {
-                LibraryActionButtonLabel(symbol: "arrow.clockwise", text: "Refresh")
+                LibraryActionButtonLabel(symbol: "arrow.clockwise", text: String(localized: "Refresh"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Refresh radio metadata")

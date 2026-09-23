@@ -93,8 +93,8 @@ struct PlaylistDetailView: View {
             // state users reach immediately rather than an edge case.
             TVEmptyState(
                 systemImage: "music.note.list",
-                title: "No songs yet",
-                message: "Add songs to this playlist from the Twinskaraoke app on your phone, tablet, or the web."
+                title: String(localized: "No songs yet"),
+                message: String(localized: "Add songs to this playlist from the Twinskaraoke app on your phone, tablet, or the web.")
             )
             .frame(height: 400)
         } else {

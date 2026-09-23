@@ -122,8 +122,8 @@ struct AddToPlaylistSheet: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             MusicEmptyState(
-                title: "No Playlists",
-                message: "Create a playlist first to save this song."
+                title: String(localized: "No Playlists"),
+                message: String(localized: "Create a playlist first to save this song.")
             )
             Button {
                 AppHaptic.commit.play()
@@ -254,11 +254,11 @@ private struct AddToPlaylistRow: View {
         case .idle:
             SongCountText.songs(playlist.songCount)
         case .adding:
-            "Adding..."
+            String(localized: "Adding...")
         case .added:
-            "Added"
+            String(localized: "Added")
         case .failed:
-            "Could not add. Tap to retry."
+            String(localized: "Could not add. Tap to retry.")
         }
     }
 
@@ -312,18 +312,18 @@ private struct AddToPlaylistRow: View {
         case .idle:
             "Add to \(playlist.name), \(SongCountText.songs(playlist.songCount))"
         case .adding:
-            "Adding to \(playlist.name)"
+            String(localized: "Adding to \(playlist.name)")
         case .added:
-            "Added to \(playlist.name)"
+            String(localized: "Added to \(playlist.name)")
         case .failed:
-            "Could not add to \(playlist.name). Tap to retry."
+            String(localized: "Could not add to \(playlist.name). Tap to retry.")
         }
     }
 }
 
 private struct AddToPlaylistLoadingRows: View {
     var body: some View {
-        CenteredLoadingView(minHeight: 200, label: "Loading playlists")
+        CenteredLoadingView(minHeight: 200, label: String(localized: "Loading playlists"))
     }
 }
 

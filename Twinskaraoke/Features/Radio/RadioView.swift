@@ -56,7 +56,7 @@ struct RadioView: View {
                     LazyVStack(spacing: 0) {
                         if radio.nowPlaying == nil, radio.refreshErrorMessage != nil, !radio.isRefreshing {
                             RadioUnavailableView(
-                                message: radio.refreshErrorMessage ?? "Radio metadata is temporarily unavailable.",
+                                message: radio.refreshErrorMessage ?? String(localized: "Radio metadata is temporarily unavailable."),
                                 isRefreshing: radio.isRefreshing
                             ) {
                                 Task { await retryRadioRefresh() }
@@ -83,7 +83,7 @@ struct RadioView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     ToolbarIconButton(
                         systemImage: "list.bullet",
-                        accessibilityLabel: "Live Schedule"
+                        accessibilityLabel: String(localized: "Live Schedule")
                     ) {
                         showLiveSchedule()
                     }
@@ -328,7 +328,7 @@ struct RadioView: View {
             radioActions
         } preview: {
             RadioStationContextPreview(
-                title: song?.displayTitle ?? np?.station.name ?? "Live Radio",
+                title: song?.displayTitle ?? np?.station.name ?? String(localized: "Live Radio"),
                 subtitle: song?.displayArtist ?? np?.station.description ?? "Twinskaraoke Radio",
                 artworkURL: song?.artworkURL
             )
@@ -363,7 +363,7 @@ struct RadioView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 RadioLiveBadge(isActive: isLivePlaying)
-                Text(song?.displayArtist ?? station?.description ?? "Live radio")
+                Text(song?.displayArtist ?? station?.description ?? String(localized: "Live radio"))
                     .font(.headline)
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(1)
@@ -519,20 +519,20 @@ private struct RadioLiveStatusStrip: View {
     private var statusPills: some View {
         RadioStatusPill(
             systemImage: isPlaying ? "speaker.wave.2.fill" : "dot.radiowaves.left.and.right",
-            text: isPlaying ? "On Air" : "Live Ready",
+            text: isPlaying ? "On Air" : String(localized: "Live Ready"),
             tint: .appAccent
         )
         if let listenerCount {
             RadioStatusPill(
                 systemImage: "person.2.fill",
-                text: listenerCount == 1 ? "1 listening" : "\(listenerCount) listening",
+                text: listenerCount == 1 ? String(localized: "1 listening") : String(localized: "\(listenerCount) listening"),
                 tint: .secondary
             )
         }
         if let lastUpdated {
             RadioStatusPill(
                 systemImage: "clock",
-                text: "Updated \(lastUpdated.formatted(.relative(presentation: .named)))",
+                text: String(localized: "Updated \(lastUpdated.formatted(.relative(presentation: .named)))"),
                 tint: .secondary
             )
         }
@@ -605,10 +605,10 @@ private struct RadioUnavailableView: View {
     var body: some View {
         VStack(spacing: 18) {
             MusicEmptyState(
-                title: "Radio Unavailable",
+                title: String(localized: "Radio Unavailable"),
                 message: message
             )
-            MusicEmptyActionButton(title: isRefreshing ? "Refreshing" : "Try Again") {
+            MusicEmptyActionButton(title: isRefreshing ? String(localized: "Refreshing") : String(localized: "Try Again")) {
                 onRetry()
             }
             .disabled(isRefreshing)
@@ -706,6 +706,6 @@ private struct RadioHistoryRow: View {
 
 struct RadioSkeletonView: View {
     var body: some View {
-        CenteredLoadingView(label: "Loading Radio")
+        CenteredLoadingView(label: String(localized: "Loading Radio"))
     }
 }

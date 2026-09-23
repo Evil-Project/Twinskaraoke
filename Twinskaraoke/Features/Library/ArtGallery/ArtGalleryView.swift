@@ -51,7 +51,7 @@ struct ArtGalleryView: View {
                     .padding(.horizontal, 16)
                     if !topArtists.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            GallerySectionHeader(title: "Featured Artists")
+                            GallerySectionHeader(title: String(localized: "Featured Artists"))
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(alignment: .top, spacing: 14) {
                                     ForEach(topArtists) { artist in
@@ -69,7 +69,7 @@ struct ArtGalleryView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 12) {
-                        GallerySectionHeader(title: "All Artists")
+                        GallerySectionHeader(title: String(localized: "All Artists"))
                         LazyVStack(spacing: 0) {
                             ForEach(Array(viewModel.artists.enumerated()), id: \.element.id) { idx, artist in
                                 NavigationLink {

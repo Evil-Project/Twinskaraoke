@@ -12,10 +12,10 @@ enum LibrarySongSort: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .recentlyAdded: "Recently Added"
-        case .title: "Title"
-        case .artist: "Artist"
-        case .duration: "Duration"
+        case .recentlyAdded: String(localized: "Recently Added")
+        case .title: String(localized: "Title")
+        case .artist: String(localized: "Artist")
+        case .duration: String(localized: "Duration")
         }
     }
 

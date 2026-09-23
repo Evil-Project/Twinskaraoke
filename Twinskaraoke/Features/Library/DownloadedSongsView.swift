@@ -152,9 +152,9 @@ struct DownloadedSongsView: View {
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         if hours > 0 {
-            return "\(hours) hr \(minutes) min"
+            return String(localized: "\(hours) hr \(minutes) min")
         }
-        return "\(minutes) min"
+        return String(localized: "\(minutes) min")
     }
 
     private func heroHeader(width: CGFloat) -> some View {
@@ -199,14 +199,14 @@ struct DownloadedSongsView: View {
             Button {
                 playInOrder()
             } label: {
-                LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Play downloaded songs")
             Button {
                 shuffle()
             } label: {
-                LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.75, haptic: .commit))
             .accessibilityLabel("Shuffle downloaded songs")
@@ -348,19 +348,19 @@ private struct DownloadedEmptyStateView: View {
 
             VStack(spacing: AM.Spacing.s) {
                 DownloadedEmptyHintRow(
-                    title: "Open a song menu",
-                    message: "Use a track's context menu from Home, Search, or Library."
+                    title: String(localized: "Open a song menu"),
+                    message: String(localized: "Use a track's context menu from Home, Search, or Library.")
                 )
                 DownloadedEmptyHintRow(
-                    title: "Choose Download",
-                    message: "Downloaded songs stay playable when the network drops."
+                    title: String(localized: "Choose Download"),
+                    message: String(localized: "Downloaded songs stay playable when the network drops.")
                 )
             }
             .frame(maxWidth: 360)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
 
-            MusicEmptyActionButton(title: "Refresh") {
+            MusicEmptyActionButton(title: String(localized: "Refresh")) {
                 onRefresh()
             }
         }

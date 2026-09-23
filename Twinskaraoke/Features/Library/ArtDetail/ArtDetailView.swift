@@ -121,7 +121,7 @@ struct ArtDetailView: View {
                         saveLoadedImage(image, generation: generation)
                         return
                     }
-                    saveStatus = .failed(error?.localizedDescription ?? "Couldn't save")
+                    saveStatus = .failed(error?.localizedDescription ?? String(localized: "Couldn't save"))
                     resetSaveStatusLater(generation: generation)
                 }
             }

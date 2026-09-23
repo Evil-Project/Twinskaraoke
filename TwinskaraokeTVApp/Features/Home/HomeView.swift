@@ -25,9 +25,9 @@ struct HomeView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 56) {
-                shelf(title: "Trending", subtitle: "What everyone's singing", songs: viewModel.trending)
+                shelf(title: String(localized: "Trending"), subtitle: String(localized: "What everyone's singing"), songs: viewModel.trending)
                 if !viewModel.latest.isEmpty {
-                    shelf(title: "New Releases", subtitle: "Fresh from the catalog", songs: viewModel.latest)
+                    shelf(title: String(localized: "New Releases"), subtitle: String(localized: "Fresh from the catalog"), songs: viewModel.latest)
                 }
             }
             .padding(.vertical, 60)

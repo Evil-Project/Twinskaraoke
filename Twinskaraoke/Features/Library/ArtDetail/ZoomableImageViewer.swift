@@ -187,13 +187,13 @@ struct ZoomableImageViewer: View {
     private var saveAccessibilityLabel: String {
         switch saveStatus {
         case .saving:
-            "Saving image"
+            String(localized: "Saving image")
         case .success:
-            "Image saved"
+            String(localized: "Image saved")
         case .failed:
-            "Image save failed"
+            String(localized: "Image save failed")
         case .idle:
-            "Save image"
+            String(localized: "Save image")
         }
     }
 }

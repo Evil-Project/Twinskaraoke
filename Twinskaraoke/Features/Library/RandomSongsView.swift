@@ -12,7 +12,7 @@ struct RandomSongsView: View {
 
     private var titleSubtitle: String {
         if viewModel.songs.isEmpty {
-            return viewModel.isLoading ? "Finding songs" : "A fresh karaoke mix"
+            return viewModel.isLoading ? String(localized: "Finding songs") : String(localized: "A fresh karaoke mix")
         }
         return SongCountText.songs(viewModel.songs.count)
     }
@@ -187,13 +187,13 @@ struct RandomSongsView: View {
             }
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
         } else if viewModel.isLoading {
-            CenteredLoadingView(label: "Loading random songs")
+            CenteredLoadingView(label: String(localized: "Loading random songs"))
                 .transition(.opacity)
         } else {
             RandomSongsStateView(
-                title: viewModel.errorMessage == nil ? "No Random Songs" : "Couldn't Load Songs",
+                title: viewModel.errorMessage == nil ? String(localized: "No Random Songs") : String(localized: "Couldn't Load Songs"),
                 message: viewModel.emptyStateMessage,
-                buttonTitle: "Refresh",
+                buttonTitle: String(localized: "Refresh"),
                 onRefresh: refresh
             )
             .padding(.top, 14)
@@ -212,7 +212,7 @@ struct RandomSongsView: View {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {
-                LibraryActionButtonLabel(symbol: "play.fill", text: "Play")
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Play random songs")
@@ -221,7 +221,7 @@ struct RandomSongsView: View {
                 AppHaptic.selection.play()
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
-                LibraryActionButtonLabel(symbol: "shuffle", text: "Shuffle")
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Shuffle random songs")

@@ -65,21 +65,21 @@ struct QRApproveView: View {
                 statusCard(
                     icon: "hourglass",
                     tint: .appAccent,
-                    title: "Approving...",
-                    subtitle: "Keep this screen open while the web session is confirmed."
+                    title: String(localized: "Approving..."),
+                    subtitle: String(localized: "Keep this screen open while the web session is confirmed.")
                 )
             case .success:
                 statusCard(
                     icon: "checkmark.circle.fill",
                     tint: .green,
-                    title: "Signed in on web",
-                    subtitle: "You can return to your browser."
+                    title: String(localized: "Signed in on web"),
+                    subtitle: String(localized: "You can return to your browser.")
                 )
             case let .failure(msg):
                 statusCard(
                     icon: "exclamationmark.triangle.fill",
                     tint: .orange,
-                    title: "Couldn't sign in",
+                    title: String(localized: "Couldn't sign in"),
                     subtitle: msg,
                     retry: true
                 )
@@ -162,7 +162,7 @@ struct QRApproveView: View {
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.primary)
                 Text(
-                    "Approving signs in \(auth.currentUsername ?? "your account") on the device showing this QR code."
+                    "Approving signs in \(auth.currentUsername ?? String(localized: "your account")) on the device showing this QR code."
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -173,13 +173,13 @@ struct QRApproveView: View {
             VStack(spacing: 0) {
                 QRInfoRow(
                     symbol: "person.crop.circle",
-                    title: "Account",
-                    value: auth.currentUsername ?? "Current user"
+                    title: String(localized: "Account"),
+                    value: auth.currentUsername ?? String(localized: "Current user")
                 )
                 Divider().padding(.leading, 40)
                 QRInfoRow(
                     symbol: "display",
-                    title: "Web session",
+                    title: String(localized: "Web session"),
                     value: String(sessionId.prefix(8)).uppercased()
                 )
             }
@@ -192,7 +192,7 @@ struct QRApproveView: View {
                     AppHaptic.commit.play()
                     Task { await approve(sessionId: sessionId) }
                 } label: {
-                    QRActionLabel(title: "Approve", systemImage: "checkmark.circle.fill", isPrimary: true)
+                    QRActionLabel(title: String(localized: "Approve"), systemImage: "checkmark.circle.fill", isPrimary: true)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
 
@@ -202,7 +202,7 @@ struct QRApproveView: View {
                         phase = .scanning
                     }
                 } label: {
-                    QRActionLabel(title: "Cancel", systemImage: "xmark.circle", isPrimary: false)
+                    QRActionLabel(title: String(localized: "Cancel"), systemImage: "xmark.circle", isPrimary: false)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
             }
@@ -254,7 +254,7 @@ struct QRApproveView: View {
                 }
             } label: {
                 QRActionLabel(
-                    title: retry ? "Try Again" : "Done",
+                    title: retry ? String(localized: "Try Again") : String(localized: "Done"),
                     systemImage: retry ? "arrow.clockwise" : "checkmark",
                     isPrimary: true
                 )
@@ -283,7 +283,7 @@ struct QRApproveView: View {
         case .untrusted:
             AppHaptic.error.play()
             withOptionalAnimation(phaseAnimation) {
-                phase = .failure("This QR code doesn't come from an official Twinskaraoke website.")
+                phase = .failure(String(localized: "This QR code doesn't come from an official Twinskaraoke website."))
             }
         case .notSignIn:
             break
@@ -348,9 +348,9 @@ struct QRApproveView: View {
             }
         } catch let AuthManager.AuthError.http(code, _) {
             let msg = switch code {
-            case 404: "This QR code expired. Refresh it and try again."
-            case 401: "Your session expired. Sign in again."
-            default: "Server error (\(code))."
+            case 404: String(localized: "This QR code expired. Refresh it and try again.")
+            case 401: String(localized: "Your session expired. Sign in again.")
+            default: String(localized: "Server error (\(code)).")
             }
             AppHaptic.error.play()
             withOptionalAnimation(phaseAnimation) {
@@ -400,7 +400,7 @@ struct QRApproveView: View {
     }
 
     private static let cameraUnavailableMessage =
-        "This device can't open the camera right now. Check that the camera is working, then try again."
+        String(localized: "This device can't open the camera right now. Check that the camera is working, then try again.")
 
     private var contentTransition: AnyTransition {
         reduceMotion
@@ -476,7 +476,7 @@ private struct QRPermissionDeniedView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Button(action: openSettings) {
-                QRActionLabel(title: "Open Settings", systemImage: "gearshape.fill", isPrimary: true)
+                QRActionLabel(title: String(localized: "Open Settings"), systemImage: "gearshape.fill", isPrimary: true)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
         }
@@ -512,12 +512,12 @@ private struct QRCameraUnavailableView: View {
             }
             VStack(spacing: 10) {
                 Button(action: retry) {
-                    QRActionLabel(title: "Try Again", systemImage: "arrow.clockwise", isPrimary: true)
+                    QRActionLabel(title: String(localized: "Try Again"), systemImage: "arrow.clockwise", isPrimary: true)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
 
                 Button(action: dismiss) {
-                    QRActionLabel(title: "Done", systemImage: "checkmark", isPrimary: false)
+                    QRActionLabel(title: String(localized: "Done"), systemImage: "checkmark", isPrimary: false)
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78))
             }
@@ -939,32 +939,32 @@ private final class QRCameraController: UIViewController {
         metadataDelegate: AVCaptureMetadataOutputObjectsDelegate
     ) -> String? {
         guard let device = preferredVideoDevice else {
-            return "This device doesn't have an available camera for scanning QR codes."
+            return String(localized: "This device doesn't have an available camera for scanning QR codes.")
         }
 
         let input: AVCaptureDeviceInput
         do {
             input = try AVCaptureDeviceInput(device: device)
         } catch {
-            return "The camera couldn't be opened. Check that it isn't blocked by another app, then try again."
+            return String(localized: "The camera couldn't be opened. Check that it isn't blocked by another app, then try again.")
         }
 
         session.beginConfiguration()
         defer { session.commitConfiguration() }
 
         guard session.canAddInput(input) else {
-            return "The camera couldn't be prepared for scanning."
+            return String(localized: "The camera couldn't be prepared for scanning.")
         }
         session.addInput(input)
 
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else {
-            return "The QR scanner couldn't start on this device."
+            return String(localized: "The QR scanner couldn't start on this device.")
         }
         session.addOutput(output)
 
         guard output.availableMetadataObjectTypes.contains(.qr) else {
-            return "This camera doesn't support QR code scanning."
+            return String(localized: "This camera doesn't support QR code scanning.")
         }
 
         output.setMetadataObjectsDelegate(metadataDelegate, queue: .main)
@@ -980,7 +980,7 @@ private final class QRCameraController: UIViewController {
         ) { [weak self] _ in
             // Delivered on the main queue (queue: .main above).
             MainActor.assumeIsolated {
-                self?.reportFailure("The camera stopped unexpectedly. Check that it is working, then try again.")
+                self?.reportFailure(String(localized: "The camera stopped unexpectedly. Check that it is working, then try again."))
             }
         }
     }

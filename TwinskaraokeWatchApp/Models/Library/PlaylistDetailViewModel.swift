@@ -42,7 +42,7 @@ final class PlaylistDetailViewModel {
                 // over; a personal playlist showing its inline songs does not
                 // need an error about the fetch that would have replaced them.
                 if songs.isEmpty {
-                    loadError = "Check your connection and try again."
+                    loadError = String(localized: "Check your connection and try again.")
                 }
             }
         }

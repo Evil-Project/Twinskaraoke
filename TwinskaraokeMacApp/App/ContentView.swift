@@ -38,8 +38,8 @@ struct ContentView: View {
                 } label: {
                     AccountToolbarIcon(auth: auth)
                 }
-                .help(auth.isLoggedIn ? (auth.username ?? "Account") : "Sign in to Twinskaraoke")
-                .accessibilityLabel(auth.isLoggedIn ? (auth.username ?? "Account") : "Sign In")
+                .help(auth.isLoggedIn ? (auth.username ?? String(localized: "Account")) : "Sign in to Twinskaraoke")
+                .accessibilityLabel(auth.isLoggedIn ? (auth.username ?? String(localized: "Account")) : "Sign In")
             }
         }
         .environment(auth)

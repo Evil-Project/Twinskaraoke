@@ -128,8 +128,8 @@ final class RadioController {
             // A failed poll while already tuned in is a blip, not an outage:
             // the stream keeps playing, so say less about it.
             refreshErrorMessage = nowPlaying == nil
-                ? "Radio is temporarily unavailable."
-                : "Couldn't refresh what's playing."
+                ? String(localized: "Radio is temporarily unavailable.")
+                : String(localized: "Couldn't refresh what's playing.")
         }
     }
 

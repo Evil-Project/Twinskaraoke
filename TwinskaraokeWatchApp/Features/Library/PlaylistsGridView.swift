@@ -138,7 +138,7 @@ struct PlaylistsGridView: View {
                     .frame(width: 28)
                     .accessibilityHidden(true)
 
-                Text(userViewModel.loadError ?? "Check your connection and try again.")
+                Text(userViewModel.loadError ?? String(localized: "Check your connection and try again."))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -202,7 +202,7 @@ struct PlaylistsGridView: View {
             .padding(.top, 24)
         } else if let loadError = viewModel.loadError, viewModel.playlists.isEmpty {
             WatchLoadErrorState(
-                title: "Couldn't Load Playlists",
+                title: String(localized: "Couldn't Load Playlists"),
                 message: loadError,
                 retryAction: { viewModel.fetchMusic() }
             )
@@ -211,8 +211,8 @@ struct PlaylistsGridView: View {
         } else if viewModel.playlists.isEmpty {
             WatchEmptyState(
                 systemImage: "music.note.list",
-                title: "No Playlists",
-                message: "Curated playlists will appear here."
+                title: String(localized: "No Playlists"),
+                message: String(localized: "Curated playlists will appear here.")
             )
             .padding(.horizontal, 10)
             .padding(.top, 16)
@@ -295,8 +295,8 @@ private struct WatchPlaylistsHeader: View {
     }
 
     private var summaryText: String {
-        let playlists = playlistCount == 1 ? "1 playlist" : "\(playlistCount) playlists"
-        let songs = songCount == 1 ? "1 song" : "\(songCount) songs"
+        let playlists = playlistCount == 1 ? String(localized: "1 playlist") : String(localized: "\(playlistCount) playlists")
+        let songs = songCount == 1 ? String(localized: "1 song") : String(localized: "\(songCount) songs")
         return "\(playlists) - \(songs)"
     }
 }

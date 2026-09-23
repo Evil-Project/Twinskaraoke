@@ -117,7 +117,7 @@ struct BrowseSongCollectionView: View {
     }
 
     private var songCountText: String {
-        songs.count == 1 ? "1 song" : "\(songs.count) songs"
+        songs.count == 1 ? String(localized: "1 song") : String(localized: "\(songs.count) songs")
     }
 
     @ViewBuilder
@@ -173,8 +173,8 @@ struct BrowseSongCollectionView: View {
             }
         } else {
             MusicEmptyState(
-                title: "No Songs",
-                message: "This collection does not have playable songs yet."
+                title: String(localized: "No Songs"),
+                message: String(localized: "This collection does not have playable songs yet.")
             )
             .padding(.top, AM.Spacing.s)
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))

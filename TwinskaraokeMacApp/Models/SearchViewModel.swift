@@ -53,7 +53,7 @@ final class MacSearchViewModel {
         } catch {
             guard !Task.isCancelled, queryToken == token else { return }
             results = []
-            errorMessage = "Search failed. Please try again."
+            errorMessage = String(localized: "Search failed. Please try again.")
         }
     }
 

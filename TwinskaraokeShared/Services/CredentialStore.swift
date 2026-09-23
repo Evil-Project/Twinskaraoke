@@ -6,7 +6,7 @@ nonisolated enum CredentialStore {
     case keychain(OSStatus)
 
     var errorDescription: String? {
-      "Couldn't securely save your sign-in. Please try again."
+      String(localized: "Couldn't securely save your sign-in. Please try again.")
     }
   }
 

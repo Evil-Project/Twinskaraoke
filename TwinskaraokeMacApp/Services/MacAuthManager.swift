@@ -97,7 +97,7 @@ final class MacAuthManager {
         }
 
         if didFail {
-            profileError = "Some account details couldn't be refreshed. Try again."
+            profileError = String(localized: "Some account details couldn't be refreshed. Try again.")
         }
     }
 
@@ -167,10 +167,10 @@ final class MacAuthManager {
 
         var errorDescription: String? {
             switch self {
-            case .http(401, _): "Incorrect username or password."
-            case .http(let code, _): "The server returned an error (\(code))."
-            case .parse: "Couldn't read the server's response."
-            case .invalidCallback: "Authentication failed — please try again."
+            case .http(401, _): String(localized: "Incorrect username or password.")
+            case .http(let code, _): String(localized: "The server returned an error (\(code)).")
+            case .parse: String(localized: "Couldn't read the server's response.")
+            case .invalidCallback: String(localized: "Authentication failed — please try again.")
             case .cancelled: ""
             }
         }
@@ -193,7 +193,7 @@ final class MacAuthManager {
         guard !isLoading else { return }
         let trimmed = rawUsername.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !password.isEmpty else {
-            errorMessage = "Please fill in all fields."
+            errorMessage = String(localized: "Please fill in all fields.")
             return
         }
 

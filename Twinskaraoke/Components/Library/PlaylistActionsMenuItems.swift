@@ -77,7 +77,7 @@ struct PlaylistActionsMenuItems: View {
                     AppHaptic.success.play()
                     downloads.download(songs: pendingSongs)
                 } label: {
-                    let label = pendingCount < songs.count ? "Download Remaining" : "Download"
+                    let label = pendingCount < songs.count ? String(localized: "Download Remaining") : String(localized: "Download")
                     Label(label, systemImage: "arrow.down.circle")
                 }
             }

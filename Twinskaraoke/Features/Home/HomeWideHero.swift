@@ -10,9 +10,9 @@ struct WideHomeHero: View {
     var body: some View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
             WideSongHeroCard(
-                eyebrow: "Listen Now",
+                eyebrow: String(localized: "Listen Now"),
                 title: song?.title ?? playlist?.name ?? "Twinskaraoke",
-                subtitle: song?.displayArtist.isEmpty == false ? song?.displayArtist ?? "" : "Fresh karaoke picks for your next session",
+                subtitle: song?.displayArtist.isEmpty == false ? song?.displayArtist ?? "" : String(localized: "Fresh karaoke picks for your next session"),
                 song: song,
                 context: context,
                 playlist: playlist
@@ -20,11 +20,11 @@ struct WideHomeHero: View {
             .frame(minWidth: 0, maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                WideHeroModuleTitle(title: "Start Here", subtitle: "Fast actions")
+                WideHeroModuleTitle(title: String(localized: "Start Here"), subtitle: String(localized: "Fast actions"))
                 if let song {
                     WideHeroActionRow(
                         systemImage: "play.fill",
-                        title: "Play Latest",
+                        title: String(localized: "Play Latest"),
                         subtitle: song.title
                     ) {
                         AppHaptic.selection.play()
@@ -35,7 +35,7 @@ struct WideHomeHero: View {
                     NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
                         WideHeroActionRowContent(
                             systemImage: "music.note.list",
-                            title: "Open Top Pick",
+                            title: String(localized: "Open Top Pick"),
                             subtitle: playlist.name
                         )
                     }
@@ -44,7 +44,7 @@ struct WideHomeHero: View {
                 if let secondarySong {
                     WideHeroActionRow(
                         systemImage: "shuffle",
-                        title: "Shuffle Mix",
+                        title: String(localized: "Shuffle Mix"),
                         subtitle: secondarySong.title
                     ) {
                         AppHaptic.selection.play()
@@ -69,9 +69,9 @@ struct WideNewHero: View {
     var body: some View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
             WideSongHeroCard(
-                eyebrow: "New Music",
+                eyebrow: String(localized: "New Music"),
                 title: primary?.title ?? "New",
-                subtitle: primary?.displayArtist.isEmpty == false ? primary?.displayArtist ?? "" : "The newest songs and latest releases",
+                subtitle: primary?.displayArtist.isEmpty == false ? primary?.displayArtist ?? "" : String(localized: "The newest songs and latest releases"),
                 song: primary,
                 context: context,
                 playlist: playlist
@@ -79,18 +79,18 @@ struct WideNewHero: View {
             .frame(minWidth: 0, maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                WideHeroModuleTitle(title: "Fresh Picks", subtitle: "Updated for large screens")
+                WideHeroModuleTitle(title: String(localized: "Fresh Picks"), subtitle: String(localized: "Updated for large screens"))
                 if let primary {
-                    WideHeroSongRow(song: primary, context: context, label: "Featured Release")
+                    WideHeroSongRow(song: primary, context: context, label: String(localized: "Featured Release"))
                 }
                 if let secondary {
-                    WideHeroSongRow(song: secondary, context: context.isEmpty ? [secondary] : context, label: "Trending Now")
+                    WideHeroSongRow(song: secondary, context: context.isEmpty ? [secondary] : context, label: String(localized: "Trending Now"))
                 }
                 if let playlist {
                     NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
                         WideHeroActionRowContent(
                             systemImage: "square.grid.2x2.fill",
-                            title: "New This Week",
+                            title: String(localized: "New This Week"),
                             subtitle: playlist.name
                         )
                     }
