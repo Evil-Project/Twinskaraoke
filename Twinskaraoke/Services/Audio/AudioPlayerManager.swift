@@ -75,10 +75,12 @@ final class AudioPlayerManager {
     @ObservationIgnored private var sessionPersistenceReady = false
     @ObservationIgnored private var sessionRestoreAllowed = true
     @ObservationIgnored private var sessionRestoring = false
-    private var usesSessionPersistence: Bool {
-        !ProcessInfo.processInfo.arguments.contains("-UITestMode")
-            || ProcessInfo.processInfo.arguments.contains("-UITestPlaybackSession")
-    }
+    // Launch arguments never change; checked on every progress tick.
+    private static let usesSessionPersistence: Bool = {
+        let arguments = ProcessInfo.processInfo.arguments
+        return !arguments.contains("-UITestMode") || arguments.contains("-UITestPlaybackSession")
+    }()
+    private var usesSessionPersistence: Bool { Self.usesSessionPersistence }
     var queue: [Song] { queueState.items }
     var isEditingProgress = false
     var volume: Double = 1.0

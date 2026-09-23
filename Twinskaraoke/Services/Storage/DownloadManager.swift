@@ -296,8 +296,8 @@ final class DownloadManager {
     private nonisolated func files(for songID: String, sourceURL: URL? = nil) -> SongFiles {
         let directory = downloadDirectory(for: songID)
         let source = sourceFileURL(for: songID)
-        let persistedSourceURL = readSourceURL(at: source).flatMap(URL.init(string:))
-        let resolvedSourceURL = sourceURL ?? persistedSourceURL
+        // Callers usually pass the source they already read; only fall back to disk.
+        let resolvedSourceURL = sourceURL ?? readSourceURL(at: source).flatMap(URL.init(string:))
         let audio = if let resolvedSourceURL {
             Self.downloadedAudioURL(in: directory, sourceURL: resolvedSourceURL)
         } else {
@@ -673,26 +673,31 @@ final class DownloadManager {
             return
         }
         var nextInProgress = inProgress
-        var acceptedAny = false
+        var accepted: [Song] = []
 
         for song in songs {
             guard song.audioURL != nil else { continue }
             if downloadedIDs.contains(song.id), immediatelyPlayableURL(for: song) != nil { continue }
             guard !nextInProgress.contains(song.id) else { continue }
-
-            pendingDownloads[song.id] = PendingDownload(song: song, token: UUID())
-            guard persistPendingDownloads() else {
-                pendingDownloads.removeValue(forKey: song.id)
-                continue
-            }
-            pendingWiFiRepairs.removeValue(forKey: song.id)
             nextInProgress.insert(song.id)
-            queuedDownloads[song.id] = song
-            queuedDownloadOrder.append(song.id)
-            acceptedAny = true
+            accepted.append(song)
         }
 
-        guard acceptedAny else { return }
+        guard !accepted.isEmpty else { return }
+        // One journal write for the whole batch: writing per song re-encodes
+        // the growing journal each time, which is quadratic for "download all".
+        for song in accepted {
+            pendingDownloads[song.id] = PendingDownload(song: song, token: UUID())
+        }
+        guard persistPendingDownloads() else {
+            for song in accepted { pendingDownloads.removeValue(forKey: song.id) }
+            return
+        }
+        for song in accepted {
+            pendingWiFiRepairs.removeValue(forKey: song.id)
+            queuedDownloads[song.id] = song
+            queuedDownloadOrder.append(song.id)
+        }
         if !isLoggingDownloadQueue {
             isLoggingDownloadQueue = true
             completedInCurrentQueue = 0
@@ -1027,11 +1032,12 @@ final class DownloadManager {
     }
 
     func cancel(songID: String) {
+        let wasActive = inProgress.contains(songID)
         cancelWork(songID: songID)
         // Counts as an incomplete batch: without this a queue where the user
         // cancelled one song still satisfies `failedInCurrentQueue == 0` and
         // celebrates as though everything landed.
-        cancelledInCurrentQueue += 1
+        if wasActive { cancelledInCurrentQueue += 1 }
         updatePublishedState { $0.inProgress.remove(songID) }
         startQueuedDownloadsIfPossible()
         logDownloadQueueCompletionIfNeeded()
@@ -1074,11 +1080,12 @@ final class DownloadManager {
         let uniqueSongIDs = Set(songIDs)
         guard !uniqueSongIDs.isEmpty else { return }
         for songID in uniqueSongIDs {
-            cancelWork(songID: songID)
+            cancelWork(songID: songID, persist: false)
             pendingWiFiRepairs.removeValue(forKey: songID)
             validDownloadCache.removeValue(forKey: songID)
             downloadedMetadata.removeValue(forKey: songID)
         }
+        _ = persistPendingDownloads()
         stageDownloadsForDeletion(songIDs: uniqueSongIDs)
         updatePublishedState { state in
             state.inProgress.subtract(uniqueSongIDs)
