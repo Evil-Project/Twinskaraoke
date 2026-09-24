@@ -36,16 +36,36 @@ struct MiniPlayerGesture: UIViewRepresentable {
             let regions = allRegions.filter(\.isVisible)
             let acceptsTap = !regions.contains { $0.isTransport && $0.convert($0.bounds, to: window).contains(point) }
             let inBar = regions.contains { !$0.isTransport && $0.convert($0.bounds, to: window).contains(point) }
-            let modal = Self.hasPresentedController(window.rootViewController)
+            let modal = Self.hasCoveringPresentation(window.rootViewController)
             let eligible = recognizer.canBegin()
             if eligible && !modal { recognizer.acceptsTap = acceptsTap }
             let accepted = eligible && !modal && inBar
             return accepted
         }
 
-        private static func hasPresentedController(_ controller: UIViewController?) -> Bool {
+        /// Whether something is presented over the bar.
+        ///
+        /// An active search is a presentation too — the search tab presents its
+        /// `UISearchController`, and it stays presented after switching to
+        /// another tab — but it covers only its own tab's content. The accessory
+        /// stays on screen above it, so treating it as a modal left the mini
+        /// player dead on every tab from the first search until that search was
+        /// cancelled. Anything the search presents in turn (a sheet from a
+        /// result's menu) still counts.
+        ///
+        /// A child reports its ancestors' presentations as its own, so only the
+        /// actual presenter answers for each one; that is also what stops the
+        /// walk from re-entering a search controller through its own results.
+        private static func hasCoveringPresentation(_ controller: UIViewController?) -> Bool {
             guard let controller else { return false }
-            return controller.presentedViewController != nil || controller.children.contains { hasPresentedController($0) }
+            if let presented = controller.presentedViewController,
+               presented.presentingViewController === controller
+            {
+                if !(presented is UISearchController) || hasCoveringPresentation(presented) {
+                    return true
+                }
+            }
+            return controller.children.contains { hasCoveringPresentation($0) }
         }
 
         @objc private func handle() {
