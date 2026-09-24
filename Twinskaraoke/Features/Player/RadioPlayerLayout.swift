@@ -185,7 +185,7 @@ struct RadioPlayerLayout: View {
     }
 
     private var canFavoriteRadioSong: Bool {
-        radioFavoriteID != nil
+        radioFavoriteID != nil && favorites.isAvailable
     }
 }
 

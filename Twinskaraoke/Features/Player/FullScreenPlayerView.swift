@@ -308,9 +308,17 @@ private struct PlayerFavoriteButton: View {
             .playerTitleButtonChrome(showsChrome, size: size)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
+        // Signed out there is nothing to save a favorite to. Dimmed rather
+        // than hidden, so the title row keeps its shape.
+        .disabled(!favorites.isAvailable)
+        .opacity(favorites.isAvailable ? 1 : 0.4)
         .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
         .accessibilityValue(song.title)
-        .accessibilityHint("Updates favorites for the current song.")
+        .accessibilityHint(
+            favorites.isAvailable
+                ? String(localized: "Updates favorites for the current song.")
+                : String(localized: "Sign in to use favorites.")
+        )
     }
 }
 

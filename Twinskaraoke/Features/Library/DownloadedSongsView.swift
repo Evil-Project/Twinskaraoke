@@ -425,19 +425,21 @@ private struct DownloadedSongMenuItems: View {
             Label("Play Last", systemImage: "text.append")
         }
 
-        Button {
-            let wasFavorite = favorites.isFavorite(song.id)
-            favorites.toggle(songID: song.id)
-            if wasFavorite {
-                AppHaptic.selection.play()
-            } else {
-                AppHaptic.success.play()
-            }
-        } label: {
-            if favorites.isFavorite(song.id) {
-                Label("Remove from Favorites", systemImage: "star.slash")
-            } else {
-                Label("Favorite", systemImage: "star")
+        if favorites.isAvailable {
+            Button {
+                let wasFavorite = favorites.isFavorite(song.id)
+                favorites.toggle(songID: song.id)
+                if wasFavorite {
+                    AppHaptic.selection.play()
+                } else {
+                    AppHaptic.success.play()
+                }
+            } label: {
+                if favorites.isFavorite(song.id) {
+                    Label("Remove from Favorites", systemImage: "star.slash")
+                } else {
+                    Label("Favorite", systemImage: "star")
+                }
             }
         }
 
