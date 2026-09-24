@@ -65,6 +65,34 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         return autoplayEnabled ? .autoplay : .stop
     }
 
+    /// Where Next goes. Repeat One loops a song that ends on its own; a skip
+    /// is the listener asking to leave it, so it moves on as if repeat were
+    /// off. Routing the button through `advance` replayed the same song, so
+    /// Next could never leave it while Repeat One was on.
+    func skip(
+        after current: Song?,
+        repeatMode: RepeatMode,
+        autoplayEnabled: Bool
+    ) -> Advance {
+        advance(
+            after: current,
+            repeatMode: repeatMode == .one ? .off : repeatMode,
+            autoplayEnabled: autoplayEnabled
+        )
+    }
+
+    /// Past this many seconds into a song, Previous starts it over instead of
+    /// going back a song, as Apple Music does. A tap meant to hear the start
+    /// again should not lose the song you were listening to.
+    static let previousRestartThreshold: TimeInterval = 3
+
+    /// The song Previous should play, or `nil` when it should restart the
+    /// current one instead.
+    func previous(before current: Song?, elapsed: TimeInterval) -> Song? {
+        if elapsed > Self.previousRestartThreshold { return nil }
+        return previous(before: current)
+    }
+
     func previous(before current: Song?) -> Song? {
         guard let current,
               let index = items.firstIndex(where: { $0.id == current.id }),
