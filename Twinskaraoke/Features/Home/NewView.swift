@@ -19,7 +19,7 @@ struct NewView: View {
                         if viewModel.isLoading {
                             NewSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
-                        } else if viewModel.loadFailed {
+                        } else if viewModel.newIsEmpty {
                             HomeLoadFailedView(title: String(localized: "Couldn't load New")) {
                                 viewModel.fetchHomeData(force: true)
                             }

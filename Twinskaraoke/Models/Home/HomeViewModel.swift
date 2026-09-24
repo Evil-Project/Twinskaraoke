@@ -18,10 +18,23 @@ final class HomeViewModel {
     var canLoadMoreTopPicks = true
     var latestSingle: Song?
     var latestSingleContext: [Song] = []
-    /// Every Home request failed and there is nothing to show, as when the app
-    /// opens offline. Home used to render as a bare title with no way to tell
-    /// why, and stayed that way until pulled to refresh.
-    private(set) var loadFailed = false
+    /// Set once a load has finished, whether or not anything came back.
+    private(set) var hasFinishedLoading = false
+
+    /// Home has nothing from the network to show: every request failed (as
+    /// when the app opens offline) or came back empty. Home used to render as
+    /// a bare title with no way to tell why, and stayed that way until pulled
+    /// to refresh.
+    var homeIsEmpty: Bool {
+        newIsEmpty && suggestions.isEmpty
+    }
+
+    /// The same for New, which does not show suggestions: suggestions alone
+    /// would otherwise leave New blank while Home still had something.
+    var newIsEmpty: Bool {
+        hasFinishedLoading && !isLoading
+            && trending.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
+    }
     // Bookkeeping the views never read; keep it out of the observation graph.
     @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var topPicksPage = 0
@@ -89,25 +102,20 @@ final class HomeViewModel {
                 latestSingle = loadedReleases.first
                 latestSingleContext = loadedReleases
             }
-            let nothingLoaded = loadedTrending == nil && loadedSuggestions == nil
-                && loadedTopPicks.playlists == nil && loadedReleases == nil
-            loadFailed = nothingLoaded && hasNoContent
-            // Let the next appearance or activation try again instead of
-            // treating a failed first load as done.
-            if loadFailed { hasLoaded = false }
+            hasFinishedLoading = true
             isLoading = false
             homeLoadTask = nil
+            // Let the next appearance or activation try again instead of
+            // treating a load that left a screen empty as done.
+            if newIsEmpty { hasLoaded = false }
         }
     }
 
-    private var hasNoContent: Bool {
-        trending.isEmpty && suggestions.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
-    }
-
-    /// Retries a Home that failed to load at all. Called when the app becomes
-    /// active, which is usually when a connection has come back.
+    /// Retries a load that left Home or New with nothing to show. Called when
+    /// the app becomes active, which is usually when a connection has come
+    /// back.
     func retryIfLoadFailed() {
-        guard loadFailed, !isLoading, homeLoadTask == nil else { return }
+        guard newIsEmpty, homeLoadTask == nil else { return }
         fetchHomeData(force: true)
     }
 

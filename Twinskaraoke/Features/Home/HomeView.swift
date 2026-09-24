@@ -20,11 +20,22 @@ struct HomeView: View {
                         if viewModel.isLoading {
                             HomeSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
-                        } else if viewModel.loadFailed {
-                            HomeLoadFailedView {
-                                viewModel.fetchHomeData(force: true)
+                        } else if viewModel.homeIsEmpty {
+                            VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
+                                HomeLoadFailedView {
+                                    viewModel.fetchHomeData(force: true)
+                                }
+                                .frame(minHeight: recentlyPlayed.playlists.isEmpty ? proxy.size.height * 0.6 : nil)
+                                // Played playlists are stored on the device, so
+                                // they stay available alongside the error.
+                                if !recentlyPlayed.playlists.isEmpty {
+                                    PlaylistCarousel(
+                                        title: String(localized: "Recently Played"),
+                                        playlists: recentlyPlayed.playlists
+                                    )
+                                    .accessibilityIdentifier("Home.RecentlyPlayed")
+                                }
                             }
-                            .frame(minHeight: proxy.size.height * 0.6)
                             .transition(.opacity)
                         } else {
                             homeOverview(availableWidth: proxy.size.width)
