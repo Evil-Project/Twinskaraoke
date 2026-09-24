@@ -365,6 +365,13 @@ struct SongActionsMenuItems: View {
 
         Button {
             AppHaptic.selection.play()
+            AudioPlayerManager.shared.playLast(song: song)
+        } label: {
+            Label("Play Last", systemImage: "text.append")
+        }
+
+        Button {
+            AppHaptic.selection.play()
             onAddToPlaylist()
         } label: {
             Label("Add to Playlist", systemImage: "plus.circle")
@@ -478,6 +485,10 @@ private struct SongRowAccessibilityModifier: ViewModifier {
             .accessibilityAction(named: "Play Next") {
                 AppHaptic.selection.play()
                 AudioPlayerManager.shared.playNext(song: song)
+            }
+            .accessibilityAction(named: "Play Last") {
+                AppHaptic.selection.play()
+                AudioPlayerManager.shared.playLast(song: song)
             }
             .accessibilityAction(named: favoriteActionTitle) {
                 toggleFavorite()

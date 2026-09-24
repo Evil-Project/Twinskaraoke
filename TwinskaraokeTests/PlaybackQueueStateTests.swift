@@ -46,6 +46,53 @@ struct PlaybackQueueStateTests {
         #expect(state.items.map(\.id) == ["0", "1", "3", "2"])
     }
 
+    @Test("Play Last appends once after everything up next")
+    func insertLastAppendsAndDeduplicates() {
+        let songs = fixtures(5)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: Array(songs.prefix(4)))
+
+        state.insertLast(songs[4], after: songs[1])
+        #expect(state.items.map(\.id) == ["0", "1", "2", "3", "4"])
+
+        // A song already up next moves to the end instead of appearing twice.
+        state.insertLast(songs[2], after: songs[1])
+        #expect(state.items.map(\.id) == ["0", "1", "3", "4", "2"])
+
+        // The current song is never moved away from its place.
+        state.insertLast(songs[1], after: songs[1])
+        #expect(state.items.map(\.id) == ["0", "1", "3", "4", "2"])
+    }
+
+    @Test("Play Last stays last when shuffle is turned off")
+    func insertLastSurvivesUnshuffle() throws {
+        let songs = fixtures(5)
+        var state = PlaybackQueueState()
+        let selection = state.beginShuffled(
+            songs: Array(songs.prefix(4)),
+            selecting: { $0[1] },
+            shuffling: { Array($0.reversed()) }
+        )
+        let current = try #require(selection)
+
+        state.insertLast(songs[4], after: current)
+        #expect(state.items.last == songs[4])
+
+        state.toggleShuffle(current: current)
+        #expect(state.items.map(\.id) == ["0", "1", "2", "3", "4"])
+    }
+
+    @Test("Play Last on the final song makes it the next one")
+    func insertLastAfterFinalSongChangesAdvance() {
+        let songs = fixtures(3)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: Array(songs.prefix(2)))
+        #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: true) == .autoplay)
+
+        state.insertLast(songs[2], after: songs[1])
+        #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: true) == .play(songs[2]))
+    }
+
     @Test("Disabling shuffle restores the exact original order")
     func shuffleRestoresOriginalOrder() {
         let songs = fixtures(4)

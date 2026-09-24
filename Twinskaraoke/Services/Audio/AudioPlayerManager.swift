@@ -1574,6 +1574,27 @@ final class AudioPlayerManager {
         upcomingSong = nil
     }
 
+    func playLast(song: Song) {
+        guard !isRadioMode else {
+            play(song: song)
+            return
+        }
+        guard let current = currentSong else {
+            play(song: song)
+            return
+        }
+
+        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
+        queueState.insertLast(song, after: current)
+        // Appending usually leaves the song after this one alone, and with it
+        // any crossfade already prepared into it. It changes only when this was
+        // the last song, and only then is the prepared transition stale.
+        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore {
+            transitionCoordinator.reset()
+            upcomingSong = nil
+        }
+    }
+
     private func startPlayingFile(
         _ url: URL,
         startAt: TimeInterval = 0,

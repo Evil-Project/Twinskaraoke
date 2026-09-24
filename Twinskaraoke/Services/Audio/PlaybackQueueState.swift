@@ -45,6 +45,17 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         }
     }
 
+    /// Queues `song` after everything already up next — Apple Music's Play
+    /// Last. Like Play Next, a song already waiting elsewhere in the queue moves
+    /// rather than appearing twice, and it lands at the end of the unshuffled
+    /// order too, so turning shuffle off keeps it last.
+    mutating func insertLast(_ song: Song, after current: Song) {
+        items = Self.appending(song, to: items, current: current)
+        if !originalItems.isEmpty {
+            originalItems = Self.appending(song, to: originalItems, current: current)
+        }
+    }
+
     func advance(
         after current: Song?,
         repeatMode: RepeatMode,
@@ -155,6 +166,17 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         guard song.id != current.id else { return updated }
         let currentIndex = updated.firstIndex(where: { $0.id == current.id }) ?? 0
         updated.insert(song, at: min(currentIndex + 1, updated.count))
+        return updated
+    }
+
+    private static func appending(_ song: Song, to source: [Song], current: Song) -> [Song] {
+        var updated = source
+        updated.removeAll { $0.id == song.id && $0.id != current.id }
+        if !updated.contains(where: { $0.id == current.id }) {
+            updated.insert(current, at: 0)
+        }
+        guard song.id != current.id else { return updated }
+        updated.append(song)
         return updated
     }
 }
