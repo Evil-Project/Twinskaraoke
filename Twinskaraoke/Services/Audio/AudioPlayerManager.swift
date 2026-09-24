@@ -63,6 +63,9 @@ final class AudioPlayerManager {
     var currentSong: Song? { didSet { scheduleSessionSave() } }
     var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
+    /// Why the current song failed to load, shown with it until the next
+    /// attempt. Pressing play retries.
+    private(set) var loadFailure: PlaybackLoadFailure?
 
     var progress: Double {
         get { PlaybackClock.shared.progress }
@@ -1490,6 +1493,7 @@ final class AudioPlayerManager {
         lastKnownPlaybackTime = 0
         progress = 0
         currentSong = song
+        loadFailure = nil
         if UserDefaults.standard.bool(forKey: "nk.downloadOnPlay"), song.audioURL != nil {
             DownloadManager.shared.download(song: song)
         }
@@ -1598,6 +1602,7 @@ final class AudioPlayerManager {
         streamStartedAt = nil
         currentPlaybackURL = url
         aiStemSwitchInFlightSongID = nil
+        loadFailure = nil
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
         avEngine.play(url: url, startAt: max(0, startAt)) { [weak self] in
             #if canImport(UIKit)
@@ -1910,6 +1915,15 @@ final class AudioPlayerManager {
         return true
     }
 
+    private func reportLoadFailure(_ failure: PlaybackLoadFailure) {
+        loadFailure = failure
+        #if canImport(UIKit)
+            // The message appears under the song, which a VoiceOver user is
+            // unlikely to be focused on at that moment.
+            UIAccessibility.post(notification: .announcement, argument: failure.message)
+        #endif
+    }
+
     @discardableResult
     func togglePlayPause(source: String = #function) -> Bool {
         if isPlaybackRequested {
@@ -2210,6 +2224,7 @@ final class AudioPlayerManager {
         cancelPendingTransitionWork()
         avEngine.stop()
         aiStemSwitchInFlightSongID = nil
+        loadFailure = nil
         stopStreamPlayer()
         instrumentalTask?.cancel()
         instrumentalTask = nil
@@ -2276,6 +2291,7 @@ final class AudioPlayerManager {
         avEngine.stop()
         aiStemSwitchInFlightSongID = nil
         currentPlaybackURL = url
+        loadFailure = nil
         DebugLogger.log(
             "Starting cached remote playback for \(songID): source=\(playbackSourceDescription(url)), startAt=\(startAt), autoplay=\(autoplay)",
             category: .playback
@@ -2363,6 +2379,7 @@ final class AudioPlayerManager {
                         forceNowPlayingUpdate: true,
                         reason: "startStreamPlayback.cacheFailed"
                     )
+                    reportLoadFailure(PlaybackLoadFailure(error))
                     // Nothing downstream will release the transition task on
                     // this path: playback never reaches startPlayingFile, and
                     // an autoplay handoff has already cleared its token, so

@@ -50,6 +50,12 @@ final class NowPlayingSnapshotState {
         snapshot.isRadioMode
     }
 
+    /// Set while the current song has failed to load; shown in place of the
+    /// artist so the bar says why it is sitting paused.
+    var failureMessage: String? {
+        snapshot.failureMessage
+    }
+
     private var snapshot = NowPlayingSnapshot()
     @ObservationIgnored private var pendingSnapshot = NowPlayingSnapshot()
     @ObservationIgnored private var publishTask: Task<Void, Never>?
@@ -62,6 +68,7 @@ final class NowPlayingSnapshotState {
             _ = manager.nowPlayingArtwork
             _ = manager.isPlaying
             _ = manager.isRadioMode
+            _ = manager.loadFailure
         }, onChange: { [weak self] in
             self?.rebuildPendingSnapshot()
         })
@@ -77,6 +84,7 @@ final class NowPlayingSnapshotState {
         pendingSnapshot.artwork = manager.nowPlayingArtwork
         pendingSnapshot.isPlaying = manager.isPlaying
         pendingSnapshot.isRadioMode = manager.isRadioMode
+        pendingSnapshot.failureMessage = manager.loadFailure?.message
         scheduleSnapshotPublish()
     }
 
@@ -101,6 +109,7 @@ private struct NowPlayingSnapshot {
     var artwork: UIImage?
     var isPlaying = false
     var isRadioMode = false
+    var failureMessage: String?
 
     func matches(_ other: NowPlayingSnapshot) -> Bool {
         id == other.id
@@ -109,5 +118,6 @@ private struct NowPlayingSnapshot {
             && artwork === other.artwork
             && isPlaying == other.isPlaying
             && isRadioMode == other.isRadioMode
+            && failureMessage == other.failureMessage
     }
 }

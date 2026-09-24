@@ -146,7 +146,15 @@ struct MiniPlayerBar: View {
                 gap: Self.marqueeGap,
                 isPaused: presentation.isExpanded
             )
-            if !snapshot.subtitle.isEmpty {
+            if let failure = snapshot.failureMessage {
+                MarqueeText(
+                    text: failure,
+                    font: subtitleFont,
+                    color: .red,
+                    gap: Self.marqueeGap,
+                    isPaused: presentation.isExpanded
+                )
+            } else if !snapshot.subtitle.isEmpty {
                 MarqueeText(
                     text: snapshot.subtitle,
                     font: subtitleFont,
@@ -175,7 +183,8 @@ struct MiniPlayerBar: View {
     }
 
     private var accessibilityValue: String {
-        snapshot.subtitle.isEmpty ? snapshot.title : "\(snapshot.title), \(snapshot.subtitle)"
+        let detail = snapshot.failureMessage ?? snapshot.subtitle
+        return detail.isEmpty ? snapshot.title : "\(snapshot.title), \(detail)"
     }
 }
 

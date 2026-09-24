@@ -1048,7 +1048,17 @@ struct FullScreenPlayerView: View {
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.progressTopPadding)
                 HStack {
-                    Text(formattedTime(elapsed))
+                    // In the elapsed slot rather than a row of its own, so a
+                    // failure does not shift the transport under the finger
+                    // about to press play again.
+                    if let failure = audioManager.loadFailure {
+                        Label(failure.message, systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    } else {
+                        Text(formattedTime(elapsed))
+                    }
                     Spacer()
                     Text(formattedTime(max(0, duration - elapsed)))
                 }
