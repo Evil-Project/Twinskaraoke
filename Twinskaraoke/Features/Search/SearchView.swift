@@ -40,7 +40,26 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
-                Group {
+                ZStack {
+                    // Always mounted, and only hidden while another state is on
+                    // screen. Swapped out for the results list, the browse page
+                    // lost its scroll position with every search.
+                    SearchLandingView(
+                        recentSearches: recentSearches,
+                        pendingSongID: pendingSongID,
+                        onPlay: { song in playSelection(song, context: [song]) }
+                    ) {
+                        BrowseCategoriesView(
+                            availableWidth: proxy.size.width,
+                            genresVM: genresVM,
+                            topChartVM: topChartVM,
+                            publicPlaylistsVM: publicPlaylistsVM
+                        )
+                    }
+                    .opacity(showsLanding ? 1 : 0)
+                    .allowsHitTesting(showsLanding)
+                    .accessibilityHidden(!showsLanding)
+
                     if viewModel.isSearching, viewModel.results.isEmpty {
                         SearchResultsLoadingView()
                             .transition(.opacity)
@@ -55,21 +74,7 @@ struct SearchView: View {
                     } else if viewModel.results.isEmpty, viewModel.hasActiveQuery {
                         SearchNoResultsStateView(query: viewModel.searchText)
                             .transition(resultsEmptyTransition)
-                    } else if viewModel.results.isEmpty {
-                        SearchLandingView(
-                            recentSearches: recentSearches,
-                            pendingSongID: pendingSongID,
-                            onPlay: { song in playSelection(song, context: [song]) }
-                        ) {
-                            BrowseCategoriesView(
-                                availableWidth: proxy.size.width,
-                                genresVM: genresVM,
-                                topChartVM: topChartVM,
-                                publicPlaylistsVM: publicPlaylistsVM
-                            )
-                        }
-                        .transition(.opacity)
-                    } else {
+                    } else if !viewModel.results.isEmpty {
                         List {
                             SearchResultsSummaryHeader(
                                 query: viewModel.searchText,
@@ -104,6 +109,7 @@ struct SearchView: View {
                         .transition(.opacity)
                     }
                 }
+                .animation(reduceMotion ? nil : AppMotion.quick, value: showsLanding)
                 .musicScreenBackground()
             }
             .navigationTitle("Search")
@@ -139,6 +145,11 @@ struct SearchView: View {
                 ArtworkPrefetcher.shared.cancel(reason: "search results")
             }
         }
+    }
+
+    /// No query, and nothing loading or found for one.
+    private var showsLanding: Bool {
+        !viewModel.hasActiveQuery && viewModel.results.isEmpty && !viewModel.isSearching
     }
 
     private func playSelection(_ song: Song, context: [Song]) {

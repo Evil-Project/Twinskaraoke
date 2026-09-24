@@ -553,6 +553,9 @@ final class AuthManager: NSObject {
     private func clearAccountScopedState() {
         FavoritesManager.shared.clear()
         UserPlaylistsManager.shared.clear()
+        // Search history is personal too; the next account on this device
+        // should not start with the previous one's picks.
+        RecentSearchesStore.shared.clear()
         Task { await KaraokeAPIClient.invalidateAccountScopedCaches() }
     }
 
