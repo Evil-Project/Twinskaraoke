@@ -30,7 +30,7 @@ struct RadioQueueTrackRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if isCurrent {
-                    Text(isPlaying ? "On air now" : "Live station")
+                    Text(isPlaying ? String(localized: "On air now") : String(localized: "Live station"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
