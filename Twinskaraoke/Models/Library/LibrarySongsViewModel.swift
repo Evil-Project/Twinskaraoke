@@ -70,8 +70,11 @@ final class LibrarySongsViewModel {
             return
         }
         isSearchingRemotely = true
+        // The loader is captured on its own and `self` only reacquired after
+        // it returns: the view model owns this task, so holding `self` across
+        // the await would keep it alive for as long as a request hangs.
+        let searchSongs = searchSongs
         remoteSearchTask = Task { [weak self] in
-            guard let self else { return }
             let found: [Song]
             do {
                 found = try await searchSongs(query)
@@ -79,7 +82,7 @@ final class LibrarySongsViewModel {
                 guard !Task.isCancelled else { return }
                 found = []
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self else { return }
             remoteResults = found.filter { !Self.isPlaceholder($0) }
             remoteQuery = query
             isSearchingRemotely = false
