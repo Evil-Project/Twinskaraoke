@@ -29,6 +29,38 @@ struct SleepTimerTests {
         #expect(timer.deadline == nil)
     }
 
+    @Test func endOfSongStopsOnceWithoutADeadline() {
+        var expired = false
+        let timer = SleepTimer { expired = true }
+        #expect(!timer.consumeEndOfSong())
+
+        timer.startEndOfSong()
+        #expect(timer.isActive)
+        #expect(timer.deadline == nil)
+        #expect(timer.consumeEndOfSong())
+        // Stops at one song end, not every one after it.
+        #expect(!timer.consumeEndOfSong())
+        #expect(!timer.isActive)
+        // The time-based expiry path is not involved.
+        #expect(!expired)
+    }
+
+    @Test func endOfSongAndDurationsReplaceEachOther() throws {
+        let timer = SleepTimer {}
+        timer.startEndOfSong()
+        timer.start(minutes: 30)
+        #expect(!timer.endsWithCurrentSong)
+        _ = try #require(timer.deadline)
+
+        timer.startEndOfSong()
+        #expect(timer.deadline == nil)
+        #expect(timer.endsWithCurrentSong)
+
+        timer.cancel()
+        #expect(!timer.isActive)
+        #expect(!timer.consumeEndOfSong())
+    }
+
     @Test func replacingTimerDiscardsOldDeadline() throws {
         var expired = false
         let timer = SleepTimer { expired = true }
