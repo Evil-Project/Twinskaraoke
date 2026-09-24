@@ -19,6 +19,12 @@ struct NewView: View {
                         if viewModel.isLoading {
                             NewSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
+                        } else if viewModel.loadFailed {
+                            HomeLoadFailedView(title: String(localized: "Couldn't load New")) {
+                                viewModel.fetchHomeData(force: true)
+                            }
+                            .frame(minHeight: proxy.size.height * 0.6)
+                            .transition(.opacity)
                         } else {
                             newOverview(availableWidth: proxy.size.width)
                                 .transition(.opacity)

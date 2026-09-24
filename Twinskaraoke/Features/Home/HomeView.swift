@@ -274,14 +274,16 @@ private extension View {
 }
 
 /// Shown when nothing on Home could be loaded, which almost always means no
-/// connection. Downloads still play, so it says where to find them.
-private struct HomeLoadFailedView: View {
+/// connection. Downloads still play, so it says where to find them. New shares
+/// Home's data, so it shows the same state.
+struct HomeLoadFailedView: View {
+    var title = String(localized: "Couldn't load Home")
     let onRetry: () -> Void
 
     var body: some View {
         VStack(spacing: AM.Spacing.l) {
             MusicEmptyState(
-                title: String(localized: "Couldn't load Home"),
+                title: title,
                 message: String(localized: "Check your connection and try again. Your downloads are in Library.")
             )
             MusicEmptyActionButton(title: String(localized: "Try Again")) {
@@ -291,6 +293,6 @@ private struct HomeLoadFailedView: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("Home.LoadFailed")
+        .accessibilityIdentifier("HomeLoadFailed")
     }
 }
