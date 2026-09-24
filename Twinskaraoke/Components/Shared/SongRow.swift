@@ -5,23 +5,41 @@ import Observation
 @Observable
 private final class SongDownloadRowState {
     private(set) var status: SongDownloadStatus
+    @ObservationIgnored private let songID: String
     @ObservationIgnored private var observation: ObservationToken?
 
+    /// Deliberately does not start observing. A row builds one of these in its
+    /// `@State` initializer, which runs every time the row is re-created —
+    /// measured at several times per visible row per scroll gesture — and
+    /// SwiftUI keeps only the first. Each discarded instance used to leave a
+    /// registration parked in `DownloadManager`'s registrar until the next
+    /// download change, so browsing without downloading piled them up and the
+    /// next download fired them all at once.
     init(songID: String) {
-        let manager = DownloadManager.shared
-        status = manager.status(for: songID)
+        self.songID = songID
+        status = DownloadManager.shared.status(for: songID)
+    }
+
+    /// Called from the row's `onAppear`, so only the instance SwiftUI kept
+    /// registers, and only once.
+    func startObserving() {
+        guard observation == nil else { return }
+        refresh()
         // Replaces `statusPublisher(for:).dropFirst().removeDuplicates()`:
         // observation only fires on change (the `dropFirst`), and the guarded
-        // assignment below is the `removeDuplicates` — without it every row in
-        // a list would re-render on any other song's download progress.
+        // assignment in `refresh` is the `removeDuplicates` — without it every
+        // row in a list would re-render on any other song's download progress.
         observation = observeContinuously({
             _ = DownloadManager.shared.downloadedIDs
             _ = DownloadManager.shared.inProgress
         }, onChange: { [weak self] in
-            guard let self else { return }
-            let next = DownloadManager.shared.status(for: songID)
-            if status != next { status = next }
+            self?.refresh()
         })
+    }
+
+    private func refresh() {
+        let next = DownloadManager.shared.status(for: songID)
+        if status != next { status = next }
     }
 }
 
@@ -170,6 +188,7 @@ struct SongRow: View {
         }
         .padding(.vertical, size == .regular ? 5 : 3)
         .contentShape(Rectangle())
+        .onAppear { downloadState.startObserving() }
         .contextMenu {
             songActions
         } preview: {
@@ -468,6 +487,7 @@ private struct SongRowAccessibilityModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .onAppear { downloadState.startObserving() }
             .accessibilityLabel(song.title)
             .accessibilityValue(accessibilityValue)
             .accessibilityHint(accessibilityHint)
