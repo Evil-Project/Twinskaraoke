@@ -52,6 +52,7 @@ private struct PopupHostView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 AudioPlayerManager.shared.sleepTimer.checkExpiry()
+                homeViewModel.retryIfLoadFailed()
                 DownloadManager.shared.retryRestoration()
                 FavoritesManager.shared.loadIfNeeded()
                 UserPlaylistsManager.shared.loadIfNeeded()

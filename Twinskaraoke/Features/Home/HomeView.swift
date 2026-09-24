@@ -20,6 +20,12 @@ struct HomeView: View {
                         if viewModel.isLoading {
                             HomeSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
+                        } else if viewModel.loadFailed {
+                            HomeLoadFailedView {
+                                viewModel.fetchHomeData(force: true)
+                            }
+                            .frame(minHeight: proxy.size.height * 0.6)
+                            .transition(.opacity)
                         } else {
                             homeOverview(availableWidth: proxy.size.width)
                                 .transition(.opacity)
@@ -264,5 +270,27 @@ private struct ShelfEntranceModifier: ViewModifier {
 private extension View {
     func shelfEntrance(index: Int) -> some View {
         modifier(ShelfEntranceModifier(index: index))
+    }
+}
+
+/// Shown when nothing on Home could be loaded, which almost always means no
+/// connection. Downloads still play, so it says where to find them.
+private struct HomeLoadFailedView: View {
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(spacing: AM.Spacing.l) {
+            MusicEmptyState(
+                title: String(localized: "Couldn't load Home"),
+                message: String(localized: "Check your connection and try again. Your downloads are in Library.")
+            )
+            MusicEmptyActionButton(title: String(localized: "Try Again")) {
+                AppHaptic.selection.play()
+                onRetry()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("Home.LoadFailed")
     }
 }

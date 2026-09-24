@@ -18,6 +18,10 @@ final class HomeViewModel {
     var canLoadMoreTopPicks = true
     var latestSingle: Song?
     var latestSingleContext: [Song] = []
+    /// Every Home request failed and there is nothing to show, as when the app
+    /// opens offline. Home used to render as a bare title with no way to tell
+    /// why, and stayed that way until pulled to refresh.
+    private(set) var loadFailed = false
     // Bookkeeping the views never read; keep it out of the observation graph.
     @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var topPicksPage = 0
@@ -85,9 +89,26 @@ final class HomeViewModel {
                 latestSingle = loadedReleases.first
                 latestSingleContext = loadedReleases
             }
+            let nothingLoaded = loadedTrending == nil && loadedSuggestions == nil
+                && loadedTopPicks.playlists == nil && loadedReleases == nil
+            loadFailed = nothingLoaded && hasNoContent
+            // Let the next appearance or activation try again instead of
+            // treating a failed first load as done.
+            if loadFailed { hasLoaded = false }
             isLoading = false
             homeLoadTask = nil
         }
+    }
+
+    private var hasNoContent: Bool {
+        trending.isEmpty && suggestions.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
+    }
+
+    /// Retries a Home that failed to load at all. Called when the app becomes
+    /// active, which is usually when a connection has come back.
+    func retryIfLoadFailed() {
+        guard loadFailed, !isLoading, homeLoadTask == nil else { return }
+        fetchHomeData(force: true)
     }
 
     /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
