@@ -419,6 +419,13 @@ struct SongActionsMenuItems: View {
                 Label("Download", systemImage: "arrow.down.circle")
             }
         }
+
+        if let pageURL = StorageHost.webPage(for: song) {
+            Divider()
+            ShareLink(item: pageURL, subject: Text(song.title), preview: SharePreview(song.title)) {
+                Label("Share Song…", systemImage: "square.and.arrow.up")
+            }
+        }
     }
 }
 

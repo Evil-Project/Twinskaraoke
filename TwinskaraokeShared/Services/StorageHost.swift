@@ -17,6 +17,17 @@ nonisolated enum StorageHost {
     isChinaRegion ? "https://idk.neurokaraoke.com.cn" : "https://idk.neurokaraoke.com"
   }
 
+  /// The web player, whose pages are what a shared link opens. Song pages
+  /// carry their own link preview (title, artwork, description).
+  static let webPlayer = "https://twinskaraoke.com"
+
+  /// The web player's page for a song, or `nil` for a personal upload, which
+  /// has no public page to open.
+  static func webPage(for song: Song) -> URL? {
+    guard song.userUploaded != true else { return nil }
+    return URL(string: webPlayer)?.appending(path: "song/\(song.id)")
+  }
+
   private static var isChinaRegion: Bool { resolvedIsChinaRegion }
 
   /// Resolved once per process: the `nk.storageRegion` override is a debug key
