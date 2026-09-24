@@ -2,6 +2,14 @@ import SwiftUI
 
 struct SearchView: View {
     @State var viewModel = SearchViewModel()
+    // Owned here rather than by the browse page, which is torn down whenever
+    // results replace it. Owned there, clearing a search rebuilt all three and
+    // fetched genres, the chart and public playlists again, and the page came
+    // back scrolled to the top.
+    @State private var genresVM = GenresViewModel()
+    @State private var topChartVM = TopChartViewModel()
+    @State private var publicPlaylistsVM = PublicPlaylistsViewModel()
+    private let recentSearches = RecentSearchesStore.shared
 
     private let playback = PlaybackRowState.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -48,8 +56,19 @@ struct SearchView: View {
                         SearchNoResultsStateView(query: viewModel.searchText)
                             .transition(resultsEmptyTransition)
                     } else if viewModel.results.isEmpty {
-                        BrowseCategoriesView(availableWidth: proxy.size.width)
-                            .transition(.opacity)
+                        SearchLandingView(
+                            recentSearches: recentSearches,
+                            pendingSongID: pendingSongID,
+                            onPlay: { song in playSelection(song, context: [song]) }
+                        ) {
+                            BrowseCategoriesView(
+                                availableWidth: proxy.size.width,
+                                genresVM: genresVM,
+                                topChartVM: topChartVM,
+                                publicPlaylistsVM: publicPlaylistsVM
+                            )
+                        }
+                        .transition(.opacity)
                     } else {
                         List {
                             SearchResultsSummaryHeader(
@@ -62,10 +81,10 @@ struct SearchView: View {
 
                             ForEach(viewModel.results) { song in
                                 Button {
-                                    playSelection(song)
+                                    playSelection(song, context: viewModel.results)
                                 } label: {
                                     SearchResultRow(song: song, isPending: pendingSongID == song.id) {
-                                        playSelection(song)
+                                        playSelection(song, context: viewModel.results)
                                     }
                                 }
                                 .disabled(pendingSongID != nil)
@@ -122,12 +141,12 @@ struct SearchView: View {
         }
     }
 
-    private func playSelection(_ song: Song) {
+    private func playSelection(_ song: Song, context: [Song]) {
         guard pendingSongID == nil else { return }
+        recentSearches.record(song)
         guard playback.currentSongID != song.id else { return }
         AppHaptic.selection.play()
         pendingSongID = song.id
-        let context = viewModel.results
         playbackTask?.cancel()
         playbackTask = Task { @MainActor in
             await Task.yield()
@@ -175,11 +194,109 @@ private struct SearchResultsSummaryHeader: View {
     }
 }
 
+/// What Search shows before there is a query: the songs recently picked from
+/// results while the field is open, as Apple Music does, and the browse page
+/// otherwise.
+private struct SearchLandingView<Browse: View>: View {
+    let recentSearches: RecentSearchesStore
+    let pendingSongID: String?
+    let onPlay: (Song) -> Void
+    @ViewBuilder let browse: () -> Browse
+    @Environment(\.isSearching) private var isSearching
+    @Environment(\.appReduceMotion) private var reduceMotion
+
+    private var showsRecents: Bool {
+        isSearching && !recentSearches.songs.isEmpty
+    }
+
+    var body: some View {
+        ZStack {
+            // Kept mounted underneath so its shelves and scroll position
+            // survive opening and closing the field.
+            browse()
+                .opacity(showsRecents ? 0 : 1)
+                .allowsHitTesting(!showsRecents)
+                .accessibilityHidden(showsRecents)
+            if showsRecents {
+                RecentSearchesList(
+                    songs: recentSearches.songs,
+                    pendingSongID: pendingSongID,
+                    onPlay: onPlay,
+                    onRemove: { recentSearches.remove($0) },
+                    onClear: { recentSearches.clear() }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : AppMotion.quick, value: showsRecents)
+    }
+}
+
+private struct RecentSearchesList: View {
+    let songs: [Song]
+    let pendingSongID: String?
+    let onPlay: (Song) -> Void
+    let onRemove: (Song) -> Void
+    let onClear: () -> Void
+
+    var body: some View {
+        List {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Recently Searched")
+                    .font(AM.Font.sectionHeader)
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 12)
+                Button("Clear") {
+                    AppHaptic.dismiss.play()
+                    onClear()
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.appAccent)
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Clear Recent Searches")
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
+            .listRowSeparator(.hidden)
+
+            ForEach(songs) { song in
+                Button {
+                    onPlay(song)
+                } label: {
+                    SearchResultRow(song: song, isPending: pendingSongID == song.id) {
+                        onPlay(song)
+                    }
+                }
+                .disabled(pendingSongID != nil)
+                .buttonStyle(PressableButtonStyle())
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowSeparator(.hidden)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        AppHaptic.dismiss.play()
+                        onRemove(song)
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.immediately)
+        .smoothScrolling()
+        .musicScreenBackground()
+        .accessibilityIdentifier("Search.RecentlySearched")
+    }
+}
+
 private struct BrowseCategoriesView: View {
     let availableWidth: CGFloat
-    @State private var genresVM = GenresViewModel()
-    @State private var topChartVM = TopChartViewModel()
-    @State private var publicPlaylistsVM = PublicPlaylistsViewModel()
+    let genresVM: GenresViewModel
+    let topChartVM: TopChartViewModel
+    let publicPlaylistsVM: PublicPlaylistsViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let genres: [(String, [Color])] = [
         (
