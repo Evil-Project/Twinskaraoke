@@ -1570,8 +1570,7 @@ final class AudioPlayerManager {
         }
 
         queueState.insertNext(song, after: current)
-        transitionCoordinator.reset()
-        upcomingSong = nil
+        nextSongChanged()
     }
 
     func playLast(song: Song) {
@@ -1588,11 +1587,25 @@ final class AudioPlayerManager {
         queueState.insertLast(song, after: current)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
-        // the last song, and only then is the prepared transition stale.
+        // the last song, and only then is the prepared work stale.
         if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore {
-            transitionCoordinator.reset()
-            upcomingSong = nil
+            nextSongChanged()
         }
+    }
+
+    /// The listener queued a song that now comes next, so anything set up for
+    /// the old next song has to go. Resetting the coordinator alone left a
+    /// transition that was already scheduled or sounding to play into the old
+    /// song, skipping the queued one. An autoplay request, started because the
+    /// queue had run out, would replace the queue when it answered; the song
+    /// that ran out has ended by then, so the queued one starts instead.
+    private func nextSongChanged() {
+        if autoplayRequestToken != nil {
+            cancelAutoplayRequest()
+            playNextOrRandom()
+            return
+        }
+        cancelPendingTransitionWork()
     }
 
     private func startPlayingFile(
