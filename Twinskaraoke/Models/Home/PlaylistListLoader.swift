@@ -25,6 +25,67 @@ final class PlaylistListLoader {
 
     private var urlBuilder: ((Int, Int) -> String)?
 
+    /// Server matches for `searchedQuery`. `playlists` holds only the pages
+    /// scrolled into view, so filtering it alone could not find a playlist
+    /// further down the list, and said No Results.
+    private(set) var searchResults: [Playlist] = []
+    private(set) var searchedQuery = ""
+    private(set) var isSearching = false
+
+    /// Loaded playlists matching `query` straight away, then the server's
+    /// matches once they arrive, without duplicates.
+    func matches(for query: String, in loaded: [Playlist]) -> [Playlist] {
+        let local = loaded.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        guard searchedQuery == query else { return local }
+        var seen = Set(local.map(\.id))
+        return local + searchResults.filter { seen.insert($0.id).inserted }
+    }
+
+    /// Runs from the view's `task(id:)`, which cancels it when the query
+    /// changes; that is also the debounce. Lists without a server URL (the
+    /// ones handed every playlist up front) stay local.
+    func search(_ query: String) async {
+        guard !query.isEmpty, let url = searchURL(for: query) else {
+            searchedQuery = ""
+            searchResults = []
+            isSearching = false
+            return
+        }
+        isSearching = true
+        do {
+            try await Task.sleep(for: .milliseconds(300))
+            var request = URLRequest(url: url)
+            if let token = try readToken() {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            GuestIdentity.applyIfNeeded(to: &request)
+            let data = try await fetchData(request)
+            try Task.checkCancellation()
+            let page = try JSONDecoder().decode(LossyArray<PlaylistListItem>.self, from: data)
+            searchResults = page.elements.map { $0.asPlaylist() }
+                .filter { $0.name.localizedCaseInsensitiveContains(query) }
+            searchedQuery = query
+            isSearching = false
+        } catch {
+            guard !Task.isCancelled else { return }
+            searchResults = []
+            searchedQuery = query
+            isSearching = false
+        }
+    }
+
+    /// The list's own page URL with its `search` item set. Both builders in use
+    /// already carry an empty one; replacing it keeps their other parameters,
+    /// such as the setlist filter.
+    private func searchURL(for query: String) -> URL? {
+        guard let urlBuilder, var components = URLComponents(string: urlBuilder(0, 50)) else { return nil }
+        var items = components.queryItems ?? []
+        items.removeAll { $0.name == "search" }
+        items.append(URLQueryItem(name: "search", value: query))
+        components.queryItems = items
+        return components.url
+    }
+
     func bootstrap(initial: [Playlist], urlBuilder: @escaping (Int, Int) -> String) {
         // Re-bootstrap when the view opened before page 1 arrived: the loader
         // is still empty and loadMoreIfNeeded can't fire on an empty list.
