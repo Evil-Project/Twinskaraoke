@@ -124,6 +124,29 @@ struct PlaybackQueueStateTests {
         #expect(state.items.map(\.id) == ["2", "3", "1", "0"])
     }
 
+    @Test("Jumping within a shuffled queue keeps its order and restore order")
+    func jumpingWithinShuffledQueue() throws {
+        let songs = fixtures(5)
+        var state = PlaybackQueueState()
+        let selection = state.beginShuffled(
+            songs: songs,
+            selecting: { $0[1] },
+            shuffling: { Array($0.reversed()) }
+        )
+        _ = try #require(selection)
+        let shuffled = state.items
+        #expect(shuffled.map(\.id) == ["1", "4", "3", "2", "0"])
+
+        // Skipping to a queued song plays it with no new context.
+        state.replaceContext([], current: songs[3])
+        #expect(state.items == shuffled)
+        #expect(state.advance(after: songs[3], repeatMode: .off, autoplayEnabled: false) == .play(songs[2]))
+        #expect(state.previous(before: songs[3]) == songs[4])
+
+        state.toggleShuffle(current: songs[3])
+        #expect(state.items == songs)
+    }
+
     private func fixtures(_ count: Int) -> [Song] {
         (0..<count).map { index in
             Song(
