@@ -5450,6 +5450,58 @@
         }
       }
     },
+    "All" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaikki"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Усі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部"
+          }
+        }
+      }
+    },
     "All Artists" : {
       "localizations" : {
         "de" : {
@@ -25721,7 +25773,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New"
+            "value" : "Neu"
           }
         },
         "en" : {
@@ -25733,25 +25785,25 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New"
+            "value" : "Uutta"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New"
+            "value" : "Nouveautés"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New"
+            "value" : "新着"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New"
+            "value" : "Нове"
           }
         },
         "zh-Hans" : {
@@ -28531,7 +28583,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Aus"
           }
         },
         "en" : {
@@ -28543,25 +28595,25 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Pois"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Désactivé"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "オフ"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Вимкнено"
           }
         },
         "zh-Hans" : {
@@ -28691,7 +28743,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On"
+            "value" : "Ein"
           }
         },
         "en" : {
@@ -28703,25 +28755,25 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On"
+            "value" : "Päällä"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On"
+            "value" : "Activé"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On"
+            "value" : "オン"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On"
+            "value" : "Увімкнено"
           }
         },
         "zh-Hans" : {
@@ -28734,6 +28786,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開啟"
+          }
+        }
+      }
+    },
+    "On Air" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Sendung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On Air"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetyksessä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À l’antenne"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オンエア中"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В ефірі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在广播"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在廣播"
           }
         }
       }
@@ -28795,7 +28899,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On air now"
+            "value" : "Jetzt auf Sendung"
           }
         },
         "en" : {
@@ -28807,25 +28911,25 @@
         "fi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On air now"
+            "value" : "Nyt lähetyksessä"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On air now"
+            "value" : "En direct"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On air now"
+            "value" : "オンエア中"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On air now"
+            "value" : "Зараз в ефірі"
           }
         },
         "zh-Hans" : {
@@ -28940,6 +29044,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已開啟，消除程度 %lld%%"
+          }
+        }
+      }
+    },
+    "One" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Titel"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yksi"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un seul"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1曲"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Одна"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "單曲"
           }
         }
       }

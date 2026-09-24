@@ -619,7 +619,7 @@ struct SettingsView: View {
         if s >= 0.75 { return String(localized: "Strong") }
         if s >= 0.45 { return String(localized: "Medium") }
         if s >= 0.15 { return String(localized: "Light") }
-        return "Off"
+        return String(localized: "Off")
     }
 
     private var bassStrengthLabel: String {

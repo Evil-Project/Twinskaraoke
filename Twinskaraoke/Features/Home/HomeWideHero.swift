@@ -70,7 +70,7 @@ struct WideNewHero: View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
             WideSongHeroCard(
                 eyebrow: String(localized: "New Music"),
-                title: primary?.title ?? "New",
+                title: primary?.title ?? String(localized: "New"),
                 subtitle: primary?.displayArtist.isEmpty == false ? primary?.displayArtist ?? "" : String(localized: "The newest songs and latest releases"),
                 song: primary,
                 context: context,

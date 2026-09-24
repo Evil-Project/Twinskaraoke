@@ -54,7 +54,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         observeContentChanges()
 
         let playlists = makeRootListTemplate(title: String(localized: "Playlists"), tabTitle: String(localized: "Library"), systemImage: "music.note.list")
-        let latest = makeRootListTemplate(title: "New", tabTitle: "New", systemImage: "sparkles")
+        let latest = makeRootListTemplate(title: String(localized: "New"), tabTitle: String(localized: "New"), systemImage: "sparkles")
         let radio = makeRootListTemplate(title: String(localized: "Radio"), tabTitle: String(localized: "Radio"), systemImage: "dot.radiowaves.left.and.right")
         let upNext = makeRootListTemplate(title: String(localized: "Up Next"), tabTitle: String(localized: "Up Next"), systemImage: "list.bullet")
         let random = makeRootListTemplate(title: String(localized: "Random"), tabTitle: String(localized: "Random"), systemImage: "shuffle")

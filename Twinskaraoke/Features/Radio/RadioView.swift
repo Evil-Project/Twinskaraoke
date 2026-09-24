@@ -519,7 +519,7 @@ private struct RadioLiveStatusStrip: View {
     private var statusPills: some View {
         RadioStatusPill(
             systemImage: isPlaying ? "speaker.wave.2.fill" : "dot.radiowaves.left.and.right",
-            text: isPlaying ? "On Air" : String(localized: "Live Ready"),
+            text: isPlaying ? String(localized: "On Air") : String(localized: "Live Ready"),
             tint: .appAccent
         )
         if let listenerCount {

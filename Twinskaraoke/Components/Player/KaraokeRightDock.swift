@@ -46,7 +46,7 @@ struct KaraokeRightDock: View {
         if shouldShowProcessingIndicator {
             return isProcessing ? String(localized: "Preparing, \(processingPercentText)") : String(localized: "Preparing")
         }
-        return "Off"
+        return String(localized: "Off")
     }
 
     var body: some View {
@@ -170,11 +170,11 @@ struct KaraokeRightDock: View {
     }
 
     private var karaokeButtonAccessibilityValue: String {
-        if audioManager.karaokeMode { return "On" }
+        if audioManager.karaokeMode { return String(localized: "On") }
         if shouldShowProcessingIndicator {
             return isProcessing ? String(localized: "Preparing, \(processingPercentText)") : String(localized: "Preparing")
         }
-        return "Off"
+        return String(localized: "Off")
     }
 
     private var karaokeButtonAccessibilityHint: String {
