@@ -12,6 +12,77 @@ final class ArtistsViewModel {
     private let pageSize = 25
     private var loadGeneration = 0
     @ObservationIgnored private var activeTask: Task<Void, Never>?
+
+    /// Server matches for `searchedQuery`. `artists` holds only the pages
+    /// scrolled into view, so filtering it alone searched the first few dozen
+    /// names: anyone further down the alphabet came back as No Results.
+    private(set) var searchResults: [Artist] = []
+    private(set) var searchedQuery = ""
+    private(set) var isSearching = false
+    @ObservationIgnored private let searchArtists: @MainActor (String) async throws -> [Artist]
+
+    init(searchArtists: @escaping @MainActor (String) async throws -> [Artist] = ArtistsViewModel.remoteSearch) {
+        self.searchArtists = searchArtists
+    }
+
+    /// Everything that matches `query`: loaded artists straight away, plus the
+    /// server's matches once they arrive, in name order.
+    func matches(for query: String) -> [Artist] {
+        let local = artists.filter { Self.artist($0, matches: query) }
+        guard searchedQuery == query else { return local }
+        var seen = Set(local.map(\.id))
+        let merged = local + searchResults.filter { seen.insert($0.id).inserted }
+        return merged.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Runs from the view's `task(id:)`, which cancels it when the query
+    /// changes; that is also the debounce.
+    func search(_ query: String) async {
+        guard !query.isEmpty else {
+            searchedQuery = ""
+            searchResults = []
+            isSearching = false
+            return
+        }
+        isSearching = true
+        do {
+            try await Task.sleep(for: .milliseconds(300))
+            let found = try await searchArtists(query)
+            try Task.checkCancellation()
+            // The endpoint matches loosely; keep what the list's own filter
+            // would have kept.
+            searchResults = found.filter { Self.artist($0, matches: query) }
+            searchedQuery = query
+            isSearching = false
+        } catch is CancellationError {
+            return
+        } catch {
+            searchResults = []
+            searchedQuery = query
+            isSearching = false
+        }
+    }
+
+    private static func artist(_ artist: Artist, matches query: String) -> Bool {
+        artist.name.localizedCaseInsensitiveContains(query)
+            || artist.summary?.localizedCaseInsensitiveContains(query) == true
+    }
+
+    static func remoteSearch(_ query: String) async throws -> [Artist] {
+        let request = try KaraokeAPIClient.request(
+            path: "/api/artists",
+            queryItems: [
+                URLQueryItem(name: "startIndex", value: "0"),
+                URLQueryItem(name: "pageSize", value: "50"),
+                URLQueryItem(name: "search", value: query),
+                URLQueryItem(name: "sortBy", value: "Name"),
+                URLQueryItem(name: "sortDescending", value: "False"),
+            ]
+        )
+        let data = try await KaraokeAPIClient.data(for: request)
+        return try JSONDecoder().decode(LossyArray<Artist>.self, from: data).elements
+    }
+
     func fetchInitial() {
         guard artists.isEmpty, !isLoading else { return }
         page = 0
