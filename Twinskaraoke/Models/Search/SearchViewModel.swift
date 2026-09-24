@@ -660,6 +660,17 @@ final class SearchViewModel {
     var isSearching = false
     var searchErrorMessage: String?
 
+    /// Every match on the server for the current query, when a page reported
+    /// it. `results` holds only the pages loaded so far, so its count is not
+    /// the number of matches: a single page used to be all there was, and the
+    /// header announced "30 songs" for a query with a thousand.
+    private(set) var totalResultCount: Int?
+    private(set) var canLoadMore = false
+    private(set) var isLoadingMore = false
+    private(set) var loadMoreFailed = false
+
+    static let pageSize = 30
+
     /// Whether the field holds a query the search pipeline would actually run.
     /// Views must branch on this rather than `!searchText.isEmpty`: the
     /// pipeline trims before searching, so whitespace-only input clears the
@@ -677,13 +688,17 @@ final class SearchViewModel {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var lastDispatchedQuery = ""
+    @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
+    /// The query the loaded pages belong to, and the 1-based page after them.
+    @ObservationIgnored private var resultsQuery = ""
+    @ObservationIgnored private var nextPage = 2
 
-    @ObservationIgnored private let loadSongs: @MainActor (String) async throws -> [Song]
+    @ObservationIgnored private let loadPage: @MainActor (String, Int) async throws -> SongSearchPage
 
-    init(loadSongs: @escaping @MainActor (String) async throws -> [Song] = {
-        try await KaraokeAPIClient.searchSongs(query: $0, pageSize: 30)
+    init(loadPage: @escaping @MainActor (String, Int) async throws -> SongSearchPage = { query, page in
+        try await KaraokeAPIClient.searchSongPage(query: query, page: page, pageSize: SearchViewModel.pageSize)
     }) {
-        self.loadSongs = loadSongs
+        self.loadPage = loadPage
     }
 
     /// Replaces the former `$searchText.debounce().removeDuplicates()` pipeline:
@@ -731,6 +746,7 @@ final class SearchViewModel {
             return
         }
         searchTask?.cancel()
+        resetPaging()
         queryToken += 1
         let token = queryToken
         results = []
@@ -740,9 +756,9 @@ final class SearchViewModel {
         searchTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let songs = try await loadSongs(trimmedQuery)
+                let page = try await loadPage(trimmedQuery, 1)
                 guard !Task.isCancelled else { return }
-                applySearchResponse(songs, token: token)
+                applySearchResponse(page, query: trimmedQuery, token: token)
             } catch is CancellationError {
                 return
             } catch KaraokeAPIClient.APIError.httpStatus(_) {
@@ -758,19 +774,87 @@ final class SearchViewModel {
         }
     }
 
+    /// Fetches the next page once the list has scrolled close to its end.
+    func loadMoreIfNeeded(after song: Song) {
+        guard canLoadMore, !isLoadingMore, !loadMoreFailed,
+              let index = results.lastIndex(where: { $0.id == song.id }),
+              index >= results.count - 8
+        else { return }
+        loadMore()
+    }
+
+    func retryLoadMore() {
+        loadMoreFailed = false
+        loadMore()
+    }
+
+    private func loadMore() {
+        guard canLoadMore, !isLoadingMore, searchTask == nil else { return }
+        let token = queryToken
+        let query = resultsQuery
+        let page = nextPage
+        isLoadingMore = true
+        loadMoreFailed = false
+        loadMoreTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let response = try await loadPage(query, page)
+                guard !Task.isCancelled, queryToken == token else { return }
+                applyNextPage(response)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, queryToken == token else { return }
+                loadMoreTask = nil
+                isLoadingMore = false
+                loadMoreFailed = true
+            }
+        }
+    }
+
+    private func applyNextPage(_ response: SongSearchPage) {
+        loadMoreTask = nil
+        isLoadingMore = false
+        let known = Set(results.map(\.id))
+        let fresh = Self.uniqued(response.songs).filter { !known.contains($0.id) }
+        results.append(contentsOf: fresh)
+        if let total = response.totalCount {
+            totalResultCount = total
+        }
+        nextPage += 1
+        // A page that adds nothing new would otherwise be requested again
+        // every time the last row appears.
+        canLoadMore = !fresh.isEmpty && Self.hasMore(after: response, loadedCount: results.count)
+    }
+
+    private func resetPaging() {
+        loadMoreTask?.cancel()
+        loadMoreTask = nil
+        isLoadingMore = false
+        loadMoreFailed = false
+        canLoadMore = false
+        totalResultCount = nil
+        nextPage = 2
+    }
+
     private func clearSearch() {
         searchTask?.cancel()
         searchTask = nil
+        resetPaging()
         queryToken += 1
         results = []
         isSearching = false
         searchErrorMessage = nil
     }
 
-    private func applySearchResponse(_ loadedSongs: [Song], token: Int) {
+    private func applySearchResponse(_ page: SongSearchPage, query: String, token: Int) {
         guard queryToken == token else { return }
         searchTask = nil
-        results = loadedSongs
+        results = Self.uniqued(page.songs)
+        resultsQuery = query
+        totalResultCount = page.totalCount
+        nextPage = 2
+        canLoadMore = !results.isEmpty && Self.hasMore(after: page, loadedCount: results.count)
         searchErrorMessage = nil
         isSearching = false
     }
@@ -783,8 +867,24 @@ final class SearchViewModel {
         isSearching = false
     }
 
+    /// Trusts the server's total when it sent one; otherwise a full page
+    /// means there may be another.
+    private static func hasMore(after page: SongSearchPage, loadedCount: Int) -> Bool {
+        if let total = page.totalCount {
+            return loadedCount < total
+        }
+        return page.songs.count >= pageSize
+    }
+
+    /// The rows are identified by song ID, so a repeat would confuse the list.
+    private static func uniqued(_ songs: [Song]) -> [Song] {
+        var seen = Set<String>()
+        return songs.filter { seen.insert($0.id).inserted }
+    }
+
     deinit {
         searchDebounceTask?.cancel()
         searchTask?.cancel()
+        loadMoreTask?.cancel()
     }
 }

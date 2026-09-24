@@ -54,7 +54,7 @@ struct SearchView: View {
                         List {
                             SearchResultsSummaryHeader(
                                 query: viewModel.searchText,
-                                resultCount: viewModel.results.count
+                                resultCount: viewModel.totalResultCount ?? viewModel.results.count
                             )
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
@@ -72,6 +72,17 @@ struct SearchView: View {
                                 .buttonStyle(PressableButtonStyle())
                                 .listRowBackground(Color.clear)
                                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                                .onAppear {
+                                    viewModel.loadMoreIfNeeded(after: song)
+                                }
+                            }
+
+                            if viewModel.isLoadingMore || viewModel.loadMoreFailed {
+                                SearchResultsPagingFooter(isLoading: viewModel.isLoadingMore) {
+                                    viewModel.retryLoadMore()
+                                }
+                                .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                             }
                         }
@@ -137,6 +148,36 @@ struct SearchView: View {
             guard !Task.isCancelled, pendingSongID == song.id else { return }
             pendingSongID = nil
         }
+    }
+}
+
+/// The last row while the next page of results is loading, or the way to ask
+/// for it again when it failed. Failing quietly would leave the list looking
+/// complete when it is not.
+private struct SearchResultsPagingFooter: View {
+    let isLoading: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.regular)
+                    .accessibilityLabel("Loading more results")
+            } else {
+                VStack(spacing: 8) {
+                    Text("More results couldn’t be loaded.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button("Try Again", action: onRetry)
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.borderless)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 44)
+        .padding(.vertical, 8)
     }
 }
 
