@@ -561,6 +561,10 @@ final class AudioPlayerManager {
                 return
             }
             if handlePrematurePlaybackEndIfNeeded(source: "AVEngine") { return }
+            if sleepTimer.consumeEndOfSong() {
+                pauseCurrentPlayback(source: "sleepTimer.endOfSong")
+                return
+            }
             playNextOrRandom()
         }
         avEngine.onCrossfadeCompleted = { [weak self] in
@@ -1380,7 +1384,7 @@ final class AudioPlayerManager {
                     }
                     self.updateNowPlayingElapsed(t)
 
-                    if self.repeatMode != .one {
+                    if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
                         self.transitionCoordinator.poll(
                             currentTime: t,
                             totalDuration: dur,
@@ -1410,7 +1414,9 @@ final class AudioPlayerManager {
                 }
                 self.updateNowPlayingElapsed(t)
 
-                if self.repeatMode != .one {
+                // A crossfade would start the next song before this one ends,
+                // which is exactly when the end-of-song sleep timer stops.
+                if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
                     self.transitionCoordinator.poll(
                         currentTime: t,
                         totalDuration: totalDur,
@@ -1969,6 +1975,14 @@ final class AudioPlayerManager {
     func pauseIfPlaying() {
         guard isPlaybackRequested else { return }
         pauseCurrentPlayback(source: "pauseIfPlaying")
+    }
+
+    /// Pauses when the current song ends by itself. A transition already
+    /// prepared would carry playback into the next song first, so it is
+    /// dropped, and none is prepared while the timer is armed.
+    func startSleepTimerAtEndOfSong() {
+        sleepTimer.startEndOfSong()
+        cancelPendingTransitionWork()
     }
 
     func seek(to fraction: Double) {
