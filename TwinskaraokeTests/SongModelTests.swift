@@ -1149,6 +1149,27 @@ struct SongModelTests {
         #expect(song.hasArtistMetadata)
     }
 
+    @Test("Catalog songs link to their web player page; personal uploads do not")
+    func webPageLinks() {
+        func song(uploaded: Bool?) -> Song {
+            Song(
+                id: "6ce3c51e-06f5-42c4-aa7c-a7311b3918c1",
+                title: "Neurotic",
+                duration: 195,
+                absolutePath: nil,
+                cloudflareID: nil,
+                coverArt: nil,
+                originalArtists: ["Three Days Grace"],
+                coverArtists: ["Evil"],
+                userUploaded: uploaded
+            )
+        }
+        let expected = "https://twinskaraoke.com/song/6ce3c51e-06f5-42c4-aa7c-a7311b3918c1"
+        #expect(StorageHost.webPage(for: song(uploaded: nil))?.absoluteString == expected)
+        #expect(StorageHost.webPage(for: song(uploaded: false))?.absoluteString == expected)
+        #expect(StorageHost.webPage(for: song(uploaded: true)) == nil)
+    }
+
     @Test("artistName falls back to Unknown Artist for empty artist arrays")
     func artistNameFallsBackForEmptyArtistArrays() {
         let emptyCoverArtists = Song(
