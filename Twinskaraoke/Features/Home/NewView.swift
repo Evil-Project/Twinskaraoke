@@ -2,7 +2,6 @@ import SwiftUI
 
 struct NewView: View {
     @Environment(HomeViewModel.self) var viewModel
-    private let recentlyPlayed = RecentlyPlayedStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var artworkPrefetchTracker = ArtworkPrefetchTracker()
@@ -98,10 +97,6 @@ struct NewView: View {
                 NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
             }
 
-            if !recentlyPlayed.playlists.isEmpty {
-                NewPlaylistRail(title: String(localized: "Recently Released"), playlists: recentlyPlayed.playlists)
-            }
-
             if !viewModel.trending.isEmpty {
                 NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
             }
@@ -139,10 +134,6 @@ struct NewView: View {
                         NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
                     }
 
-                    if !recentlyPlayed.playlists.isEmpty {
-                        NewPlaylistRail(title: String(localized: "Recently Released"), playlists: recentlyPlayed.playlists)
-                    }
-
                     if !viewModel.trending.isEmpty {
                         NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
                     }
@@ -176,7 +167,7 @@ struct NewView: View {
     }
 
     private var artworkPrefetchPlaylists: [Playlist] {
-        Array((viewModel.recentPlaylists + recentlyPlayed.playlists).prefix(8))
+        Array(viewModel.recentPlaylists.prefix(8))
     }
 
     private var artworkPrefetchSignature: ArtworkPrefetchSignature {
