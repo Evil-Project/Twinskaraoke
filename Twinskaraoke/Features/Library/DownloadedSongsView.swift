@@ -419,6 +419,13 @@ private struct DownloadedSongMenuItems: View {
         }
 
         Button {
+            AppHaptic.selection.play()
+            AudioPlayerManager.shared.playLast(song: song)
+        } label: {
+            Label("Play Last", systemImage: "text.append")
+        }
+
+        Button {
             let wasFavorite = favorites.isFavorite(song.id)
             favorites.toggle(songID: song.id)
             if wasFavorite {
