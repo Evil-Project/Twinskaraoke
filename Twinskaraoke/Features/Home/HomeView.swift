@@ -20,6 +20,23 @@ struct HomeView: View {
                         if viewModel.isLoading {
                             HomeSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
+                        } else if viewModel.homeIsEmpty {
+                            VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
+                                HomeLoadFailedView {
+                                    viewModel.fetchHomeData(force: true)
+                                }
+                                .frame(minHeight: recentlyPlayed.playlists.isEmpty ? proxy.size.height * 0.6 : nil)
+                                // Played playlists are stored on the device, so
+                                // they stay available alongside the error.
+                                if !recentlyPlayed.playlists.isEmpty {
+                                    PlaylistCarousel(
+                                        title: String(localized: "Recently Played"),
+                                        playlists: recentlyPlayed.playlists
+                                    )
+                                    .accessibilityIdentifier("Home.RecentlyPlayed")
+                                }
+                            }
+                            .transition(.opacity)
                         } else {
                             homeOverview(availableWidth: proxy.size.width)
                                 .transition(.opacity)
@@ -264,5 +281,29 @@ private struct ShelfEntranceModifier: ViewModifier {
 private extension View {
     func shelfEntrance(index: Int) -> some View {
         modifier(ShelfEntranceModifier(index: index))
+    }
+}
+
+/// Shown when nothing on Home could be loaded, which almost always means no
+/// connection. Downloads still play, so it says where to find them. New shares
+/// Home's data, so it shows the same state.
+struct HomeLoadFailedView: View {
+    var title = String(localized: "Couldn't load Home")
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(spacing: AM.Spacing.l) {
+            MusicEmptyState(
+                title: title,
+                message: String(localized: "Check your connection and try again. Your downloads are in Library.")
+            )
+            MusicEmptyActionButton(title: String(localized: "Try Again")) {
+                AppHaptic.selection.play()
+                onRetry()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("HomeLoadFailed")
     }
 }

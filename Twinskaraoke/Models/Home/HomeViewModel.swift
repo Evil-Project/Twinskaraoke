@@ -18,6 +18,23 @@ final class HomeViewModel {
     var canLoadMoreTopPicks = true
     var latestSingle: Song?
     var latestSingleContext: [Song] = []
+    /// Set once a load has finished, whether or not anything came back.
+    private(set) var hasFinishedLoading = false
+
+    /// Home has nothing from the network to show: every request failed (as
+    /// when the app opens offline) or came back empty. Home used to render as
+    /// a bare title with no way to tell why, and stayed that way until pulled
+    /// to refresh.
+    var homeIsEmpty: Bool {
+        newIsEmpty && suggestions.isEmpty
+    }
+
+    /// The same for New, which does not show suggestions: suggestions alone
+    /// would otherwise leave New blank while Home still had something.
+    var newIsEmpty: Bool {
+        hasFinishedLoading && !isLoading
+            && trending.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
+    }
     // Bookkeeping the views never read; keep it out of the observation graph.
     @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var topPicksPage = 0
@@ -85,9 +102,21 @@ final class HomeViewModel {
                 latestSingle = loadedReleases.first
                 latestSingleContext = loadedReleases
             }
+            hasFinishedLoading = true
             isLoading = false
             homeLoadTask = nil
+            // Let the next appearance or activation try again instead of
+            // treating a load that left a screen empty as done.
+            if newIsEmpty { hasLoaded = false }
         }
+    }
+
+    /// Retries a load that left Home or New with nothing to show. Called when
+    /// the app becomes active, which is usually when a connection has come
+    /// back.
+    func retryIfLoadFailed() {
+        guard newIsEmpty, homeLoadTask == nil else { return }
+        fetchHomeData(force: true)
     }
 
     /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
