@@ -12,18 +12,25 @@ struct PlaylistListView: View {
         loader.playlists.isEmpty ? playlists : loader.playlists
     }
 
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var displayedPlaylists: [Playlist] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = trimmedQuery
         guard !query.isEmpty else { return allPlaylists }
-        return allPlaylists.filter { playlist in
-            playlist.name.localizedCaseInsensitiveContains(query)
-        }
+        return loader.matches(for: query, in: allPlaylists)
     }
 
 
     var body: some View {
         ScrollView {
-            if displayedPlaylists.isEmpty {
+            if displayedPlaylists.isEmpty, !trimmedQuery.isEmpty, loader.isSearching {
+                // Not "No Results" yet: the server has not answered.
+                ProgressView()
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity, minHeight: 360)
+            } else if displayedPlaylists.isEmpty {
                 MusicEmptyState(
                     title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),
                     message: searchText.isEmpty
@@ -88,6 +95,9 @@ struct PlaylistListView: View {
         }
         .onChange(of: Array(displayedPlaylists.prefix(12)).map(\.id)) { _, _ in
             prefetchArtwork()
+        }
+        .task(id: trimmedQuery) {
+            await loader.search(trimmedQuery)
         }
         .onDisappear {
             ArtworkPrefetcher.shared.cancel(reason: "playlist list")
