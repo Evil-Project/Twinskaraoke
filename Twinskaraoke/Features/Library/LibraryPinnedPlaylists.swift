@@ -9,6 +9,11 @@ struct LibraryPinnedPlaylists: View {
     let zoomNamespace: Namespace.ID
     @Environment(\.appReduceMotion) private var reduceMotion
     private let pins = PinnedPlaylistsStore.shared
+    /// Songs for pins that arrive without them: a stored pin, or a playlist
+    /// the library list returns without its songs. A context menu is
+    /// snapshotted when it opens, so without songs already in hand the pin's
+    /// menu would have no Play, Shuffle or Download.
+    @State private var loadedSongs: [String: [Song]] = [:]
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: AM.Spacing.m, alignment: .top),
@@ -38,7 +43,7 @@ struct LibraryPinnedPlaylists: View {
                 }
                 .buttonStyle(PressableButtonStyle(haptic: .selection))
                 .contextMenu {
-                    PlaylistActionsMenuItems(playlist: playlist, songs: playlist.songListDTOs ?? [])
+                    PlaylistActionsMenuItems(playlist: playlist, songs: songs(for: playlist))
                 } preview: {
                     PlaylistContextPreview(playlist: playlist)
                 }
@@ -58,5 +63,39 @@ struct LibraryPinnedPlaylists: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Pinned")
         .accessibilityIdentifier("Library.Pinned")
+        // Runs each time Library appears, so the menu doesn't play a list
+        // that changed since. The API caches playlist details for a minute,
+        // which keeps a repeat cheap and warms the pin's own detail screen.
+        .task(id: playlists.map(\.id)) {
+            await loadMissingSongs()
+        }
+    }
+
+    private func songs(for playlist: Playlist) -> [Song] {
+        if let songs = playlist.songListDTOs, !songs.isEmpty {
+            return songs
+        }
+        return loadedSongs[playlist.id] ?? []
+    }
+
+    private func loadMissingSongs() async {
+        let missing = playlists
+            .filter { $0.songListDTOs?.isEmpty ?? true }
+            .map(\.id)
+        guard !missing.isEmpty else { return }
+        await withTaskGroup(of: (String, [Song]?).self) { group in
+            for id in missing {
+                group.addTask {
+                    (id, try? await KaraokeAPIClient.playlistSongs(id: id))
+                }
+            }
+            for await (id, songs) in group {
+                guard !Task.isCancelled else { return }
+                // A failed load keeps what an earlier visit found.
+                if let songs {
+                    loadedSongs[id] = songs
+                }
+            }
+        }
     }
 }
