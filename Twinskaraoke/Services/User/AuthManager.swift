@@ -47,6 +47,12 @@ final class AuthManager: NSObject {
         nonisolated static let sessionCommitted = "nk.sessionCommitted"
     }
 
+    /// The committed account's id, readable without an instance: AccountView
+    /// mints its own AuthManager per visit, so app-wide stores cannot hold one.
+    static var persistedUserID: String? {
+        UserDefaults.standard.string(forKey: K.userId)
+    }
+
     private enum Endpoint {
         static var login: String {
             "\(StorageHost.api)/api/auth/login"
@@ -160,6 +166,7 @@ final class AuthManager: NSObject {
         if previousUserID != userId {
             clearAccountScopedState()
         }
+        PinnedPlaylistsStore.shared.switchAccount(to: userId)
         authToken = token
         currentUserId = userId
         currentUsername = username
@@ -548,6 +555,7 @@ final class AuthManager: NSObject {
         [K.userId, K.username, K.avatar, K.sessionCommitted].forEach {
             defaults.removeObject(forKey: $0)
         }
+        PinnedPlaylistsStore.shared.switchAccount(to: nil)
     }
 
     private func clearAccountScopedState() {
