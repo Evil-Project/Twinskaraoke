@@ -10,18 +10,23 @@ struct ArtistsView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var displayedArtists: [Artist] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = trimmedQuery
         guard !query.isEmpty else { return viewModel.artists }
-        return viewModel.artists.filter { artist in
-            artist.name.localizedCaseInsensitiveContains(query)
-                || artist.summary?.localizedCaseInsensitiveContains(query) == true
-        }
+        return viewModel.matches(for: query)
     }
 
     var body: some View {
         Group {
             if viewModel.artists.isEmpty, viewModel.isLoading {
+                ArtistsSkeletonView()
+                    .transition(.opacity)
+            } else if displayedArtists.isEmpty, !isQueryEmpty, viewModel.isSearching {
+                // Not "No Results" yet: the server has not answered.
                 ArtistsSkeletonView()
                     .transition(.opacity)
             } else if displayedArtists.isEmpty {
@@ -85,6 +90,9 @@ struct ArtistsView: View {
             await viewModel.refreshArtists()
         }
         .onAppear { viewModel.fetchInitial() }
+        .task(id: trimmedQuery) {
+            await viewModel.search(trimmedQuery)
+        }
     }
 }
 

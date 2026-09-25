@@ -29,6 +29,21 @@ final class LibrarySongsViewModel {
     private var sortCache: (sort: LibrarySongSort, generation: UInt64, songs: [Song])?
     private let pageSize = 40
 
+    /// Server matches for `remoteQuery`. `songs` holds only the pages scrolled
+    /// into view — a few dozen of a catalog of thousands — so filtering it
+    /// alone could not find most songs, and said so as No Results.
+    private(set) var isSearchingRemotely = false
+    private var remoteResults: [Song] = []
+    private var remoteQuery = ""
+    @ObservationIgnored private var remoteSearchTask: Task<Void, Never>?
+    @ObservationIgnored private let searchSongs: @MainActor (String) async throws -> [Song]
+
+    init(searchSongs: @escaping @MainActor (String) async throws -> [Song] = {
+        try await KaraokeAPIClient.searchSongs(query: $0, pageSize: 100)
+    }) {
+        self.searchSongs = searchSongs
+    }
+
     /// Replaces `$searchText.debounce(200ms).removeDuplicates()`. Filtering a
     /// large library runs localized comparisons per song, so keystrokes must
     /// still coalesce.
@@ -39,6 +54,39 @@ final class LibrarySongsViewModel {
             guard !Task.isCancelled, let self else { return }
             guard searchText != lastRebuiltSearchText else { return }
             lastRebuiltSearchText = searchText
+            rebuildDisplayedSongs()
+            startRemoteSearch()
+        }
+    }
+
+    private func startRemoteSearch() {
+        remoteSearchTask?.cancel()
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            remoteSearchTask = nil
+            remoteQuery = ""
+            remoteResults = []
+            isSearchingRemotely = false
+            return
+        }
+        isSearchingRemotely = true
+        // The loader is captured on its own and `self` only reacquired after
+        // it returns: the view model owns this task, so holding `self` across
+        // the await would keep it alive for as long as a request hangs.
+        let searchSongs = searchSongs
+        remoteSearchTask = Task { [weak self] in
+            let found: [Song]
+            do {
+                found = try await searchSongs(query)
+            } catch {
+                guard !Task.isCancelled else { return }
+                found = []
+            }
+            guard !Task.isCancelled, let self else { return }
+            remoteResults = found.filter { !Self.isPlaceholder($0) }
+            remoteQuery = query
+            isSearchingRemotely = false
+            remoteSearchTask = nil
             rebuildDisplayedSongs()
         }
     }
@@ -52,7 +100,13 @@ final class LibrarySongsViewModel {
         {
             return sortCache.songs
         }
-        let sorted: [Song] = switch sort {
+        let sorted = Self.sorted(songs, by: sort)
+        sortCache = (sort, songsGeneration, sorted)
+        return sorted
+    }
+
+    private static func sorted(_ songs: [Song], by sort: LibrarySongSort) -> [Song] {
+        switch sort {
         case .recentlyAdded:
             songs
         case .title:
@@ -64,8 +118,10 @@ final class LibrarySongsViewModel {
         case .duration:
             songs.sorted { $0.duration < $1.duration }
         }
-        sortCache = (sort, songsGeneration, sorted)
-        return sorted
+    }
+
+    private static func isPlaceholder(_ song: Song) -> Bool {
+        song.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
     }
 
     private func rebuildDisplayedSongs() {
@@ -76,11 +132,20 @@ final class LibrarySongsViewModel {
             displayedSongs = sorted
             return
         }
-        displayedSongs = sorted.filter { song in
+        let local = sorted.filter { song in
             song.title.localizedCaseInsensitiveContains(query)
                 || song.displayArtist.localizedCaseInsensitiveContains(query)
                 || song.displayTitle.localizedCaseInsensitiveContains(query)
         }
+        guard remoteQuery == query, !remoteResults.isEmpty else {
+            displayedSongs = local
+            return
+        }
+        var seen = Set(local.map(\.id))
+        let extra = remoteResults.filter { seen.insert($0.id).inserted }
+        // Recently Added has no order to merge into beyond what the pages
+        // give; the other sorts apply across both.
+        displayedSongs = sort == .recentlyAdded ? local + extra : Self.sorted(local + extra, by: sort)
     }
 
     func loadIfNeeded() {
@@ -202,9 +267,7 @@ final class LibrarySongsViewModel {
             }
             return
         }
-        let filtered = decoded.filter {
-            !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
-        }
+        let filtered = decoded.filter { !Self.isPlaceholder($0) }
         let pageSongs = filtered.isEmpty ? decoded : filtered
 
         if replace {
@@ -240,5 +303,6 @@ final class LibrarySongsViewModel {
 
     deinit {
         activeTask?.cancel()
+        remoteSearchTask?.cancel()
     }
 }

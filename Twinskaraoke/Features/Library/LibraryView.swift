@@ -415,6 +415,9 @@ struct LibrarySongsView: View {
         List {
             if viewModel.isLoading, songs.isEmpty {
                 skeletonRows
+            } else if songs.isEmpty, isSearching, viewModel.isSearchingRemotely {
+                // Not "No Results" yet: the server has not answered.
+                skeletonRows
             } else if songs.isEmpty {
                 emptyState(isSearching: isSearching)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
