@@ -9,6 +9,11 @@ final class UserPlaylistsManager {
     private(set) var playlists: [UserPlaylist] = []
     private(set) var isLoading = false
 
+    /// Playlists belong to the account: creating one or adding to one needs a
+    /// signed-in session. Stored so views update, refreshed on the paths that
+    /// sign-in and sign-out already take (`fetchPlaylists`, `clear`).
+    private(set) var isAvailable = CredentialStore.isAuthenticated
+
     private var loaded = false
     private var stateGeneration = 0
     private var forcedReloadPending = false
@@ -18,6 +23,7 @@ final class UserPlaylistsManager {
     }
 
     func fetchPlaylists(force: Bool = true) {
+        refreshAvailability()
         guard !isLoading else {
             if force {
                 forcedReloadPending = true
@@ -222,7 +228,13 @@ final class UserPlaylistsManager {
         )
     }
 
+    private func refreshAvailability() {
+        let available = CredentialStore.isAuthenticated
+        if isAvailable != available { isAvailable = available }
+    }
+
     func clear() {
+        refreshAvailability()
         stateGeneration += 1
         playlists = []
         loaded = false

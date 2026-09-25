@@ -119,7 +119,23 @@ struct AddToPlaylistSheet: View {
         }
     }
 
+    @ViewBuilder
     private var emptyState: some View {
+        if manager.isAvailable {
+            noPlaylistsState
+        } else {
+            // Signed out there is nowhere to save a playlist, so offering to
+            // create one would only fail.
+            MusicEmptyState(
+                title: String(localized: "Sign In to Use Playlists"),
+                message: String(localized: "Sign in from Account to create playlists and add songs to them.")
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        }
+    }
+
+    private var noPlaylistsState: some View {
         VStack(spacing: 18) {
             MusicEmptyState(
                 title: String(localized: "No Playlists"),

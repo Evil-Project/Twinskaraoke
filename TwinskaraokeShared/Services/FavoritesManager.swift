@@ -7,6 +7,15 @@ import Observation
 final class FavoritesManager {
     static let shared = FavoritesManager()
     private(set) var favoriteIDs: Set<String> = []
+
+    /// Favorites live in the account, so changing them needs a signed-in
+    /// session and `toggle` ignores anything else. Controls read this to stay
+    /// out of the way when signed out, instead of acknowledging a tap with a
+    /// success haptic and then doing nothing.
+    ///
+    /// Stored rather than read straight from the keychain so views update: the
+    /// sign-in and sign-out paths already call `reload()` and `clear()`.
+    private(set) var isAvailable = CredentialStore.isAuthenticated
     private var inFlight: Set<String> = []
     private var loaded = false
     private var isLoading = false
@@ -21,6 +30,7 @@ final class FavoritesManager {
     }
 
     func loadIfNeeded() {
+        refreshAvailability()
         guard !loaded, !isLoading else { return }
         if let lastLoadFailure, Date().timeIntervalSince(lastLoadFailure) < loadFailureRetryDelay {
             return
@@ -29,11 +39,13 @@ final class FavoritesManager {
     }
 
     func reload() {
+        refreshAvailability()
         guard !isLoading else { return }
         Task { @MainActor in await load() }
     }
 
     func clear() {
+        refreshAvailability()
         stateGeneration += 1
         favoriteIDs = []
         inFlight = []
@@ -44,8 +56,14 @@ final class FavoritesManager {
         reloadAfterMutations = false
     }
 
+    private func refreshAvailability() {
+        let available = CredentialStore.isAuthenticated
+        if isAvailable != available { isAvailable = available }
+    }
+
     func toggle(songID: String) {
-        guard CredentialStore.isAuthenticated else { return }
+        refreshAvailability()
+        guard isAvailable else { return }
         guard !inFlight.contains(songID) else { return }
         let wasFavorite = favoriteIDs.contains(songID)
         if wasFavorite {

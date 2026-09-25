@@ -389,14 +389,19 @@ struct SongActionsMenuItems: View {
             Label("Play Last", systemImage: "text.append")
         }
 
-        Button {
-            AppHaptic.selection.play()
-            onAddToPlaylist()
-        } label: {
-            Label("Add to Playlist", systemImage: "plus.circle")
+        if UserPlaylistsManager.shared.isAvailable {
+            Button {
+                AppHaptic.selection.play()
+                onAddToPlaylist()
+            } label: {
+                Label("Add to Playlist", systemImage: "plus.circle")
+            }
         }
 
-        if let playlistRemoval {
+        // Also gated on the account: a playlist screen left on the stack
+        // across a sign-out still supplies a removal closure that can no
+        // longer write anything.
+        if let playlistRemoval, UserPlaylistsManager.shared.isAvailable {
             Button(role: .destructive) {
                 AppHaptic.warning.play()
                 playlistRemoval.remove(song)
@@ -405,19 +410,21 @@ struct SongActionsMenuItems: View {
             }
         }
 
-        Button {
-            let wasFavorite = favorites.isFavorite(song.id)
-            favorites.toggle(songID: song.id)
-            if wasFavorite {
-                AppHaptic.selection.play()
-            } else {
-                AppHaptic.success.play()
-            }
-        } label: {
-            if favorites.isFavorite(song.id) {
-                Label("Remove from Favorites", systemImage: "star.slash")
-            } else {
-                Label("Favorite", systemImage: "star")
+        if favorites.isAvailable {
+            Button {
+                let wasFavorite = favorites.isFavorite(song.id)
+                favorites.toggle(songID: song.id)
+                if wasFavorite {
+                    AppHaptic.selection.play()
+                } else {
+                    AppHaptic.success.play()
+                }
+            } label: {
+                if favorites.isFavorite(song.id) {
+                    Label("Remove from Favorites", systemImage: "star.slash")
+                } else {
+                    Label("Favorite", systemImage: "star")
+                }
             }
         }
 
@@ -510,8 +517,12 @@ private struct SongRowAccessibilityModifier: ViewModifier {
                 AppHaptic.selection.play()
                 AudioPlayerManager.shared.playLast(song: song)
             }
-            .accessibilityAction(named: favoriteActionTitle) {
-                toggleFavorite()
+            .accessibilityActions {
+                if favorites.isAvailable {
+                    Button(favoriteActionTitle) {
+                        toggleFavorite()
+                    }
+                }
             }
             .accessibilityAction(named: downloadActionTitle) {
                 performDownloadAction()
