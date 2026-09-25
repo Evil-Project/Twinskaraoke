@@ -216,7 +216,7 @@ private struct MiniPlayerTransportControls: View, Equatable {
             // Radio has nothing to skip to, and the minimized bar has no room.
             if showsNext, !isRadioMode {
                 Button {
-                    AudioPlayerManager.shared.playNextOrRandom()
+                    AudioPlayerManager.shared.skipToNext()
                 } label: {
                     Image(systemName: "forward.fill")
                         .font(.title3.weight(.semibold))

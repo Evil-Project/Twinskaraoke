@@ -1134,7 +1134,7 @@ struct FullScreenPlayerView: View {
             .accessibilityLabel(audioManager.isPlaying ? "Pause" : "Play")
             .accessibilityValue(audioManager.currentSong?.title ?? String(localized: "Current song"))
             Button {
-                audioManager.playNextOrRandom()
+                audioManager.skipToNext()
             } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: sideSize, weight: .bold))

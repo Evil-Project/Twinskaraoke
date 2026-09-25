@@ -1985,17 +1985,33 @@ final class AudioPlayerManager {
         updateNowPlayingInfo(reloadArtwork: false)
     }
 
+    /// Moves on when a song ends by itself, which is where Repeat One loops.
     func playNextOrRandom() {
         if isRadioMode { return }
+        perform(queueState.advance(
+            after: currentSong,
+            repeatMode: repeatMode,
+            autoplayEnabled: autoplayEnabled
+        ))
+    }
+
+    /// The Next button and the lock-screen command. Unlike a song ending, a
+    /// skip leaves the song even with Repeat One on.
+    func skipToNext() {
+        if isRadioMode { return }
+        perform(queueState.skip(
+            after: currentSong,
+            repeatMode: repeatMode,
+            autoplayEnabled: autoplayEnabled
+        ))
+    }
+
+    private func perform(_ advance: PlaybackQueueState.Advance) {
         transitionCoordinator.reset()
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif
-        switch queueState.advance(
-            after: currentSong,
-            repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled
-        ) {
+        switch advance {
         case .replayCurrent:
             guard let current = currentSong else { return }
             // Repeat-one replay: not a new listen, so don't count it again.
@@ -2019,7 +2035,7 @@ final class AudioPlayerManager {
 
     func playPrevious() {
         if isRadioMode { return }
-        guard let previous = queueState.previous(before: currentSong) else {
+        guard let previous = queueState.previous(before: currentSong, elapsed: playbackTime) else {
             seek(to: 0)
             return
         }
@@ -2988,7 +3004,7 @@ final class AudioPlayerManager {
             guard let self else { return .commandFailed }
             return performOnMain {
                 DebugLogger.log("Remote next command received", category: .playback)
-                self.playNextOrRandom()
+                self.skipToNext()
                 return .success
             }
         }
