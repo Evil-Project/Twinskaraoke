@@ -1265,9 +1265,9 @@ struct FullScreenPlayerView: View {
     }
 
     private var lyricsTranslationAccessibilityValue: String {
-        if showTranslatedLyrics { return "On" }
+        if showTranslatedLyrics { return String(localized: "On") }
         switch lyricsViewModel.translationState {
-        case .idle: return "Off"
+        case .idle: return String(localized: "Off")
         case .translating: return String(localized: "Translating")
         case .ready: return String(localized: "Available")
         case .unavailable: return String(localized: "Unavailable")

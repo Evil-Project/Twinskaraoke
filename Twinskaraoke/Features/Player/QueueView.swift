@@ -47,7 +47,7 @@ struct QueueView: View {
                         symbol: "shuffle",
                         isActive: audioManager.isShuffled,
                         accessibilityLabel: String(localized: "Shuffle"),
-                        accessibilityValue: audioManager.isShuffled ? "On" : "Off"
+                        accessibilityValue: audioManager.isShuffled ? String(localized: "On") : String(localized: "Off")
                     ) {
                         audioManager.toggleShuffle()
                     }
@@ -63,7 +63,7 @@ struct QueueView: View {
                         symbol: "infinity",
                         isActive: audioManager.autoplayEnabled,
                         accessibilityLabel: String(localized: "Autoplay"),
-                        accessibilityValue: audioManager.autoplayEnabled ? "On" : "Off"
+                        accessibilityValue: audioManager.autoplayEnabled ? String(localized: "On") : String(localized: "Off")
                     ) {
                         audioManager.toggleAutoplay()
                     }
@@ -307,9 +307,9 @@ struct QueueView: View {
 
     private var repeatModeDescription: String {
         switch audioManager.repeatMode {
-        case .off: "Off"
-        case .all: "All"
-        case .one: "One"
+        case .off: String(localized: "Off")
+        case .all: String(localized: "All")
+        case .one: String(localized: "One")
         }
     }
 

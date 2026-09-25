@@ -260,7 +260,7 @@ private enum RootSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .home: String(localized: "Home")
-        case .new: "New"
+        case .new: String(localized: "New")
         case .radio: String(localized: "Radio")
         case .library: String(localized: "Library")
         case .search: String(localized: "Search")

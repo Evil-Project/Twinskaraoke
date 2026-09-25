@@ -399,7 +399,7 @@ struct PlayerView: View {
                             }
                             .buttonStyle(.watchPressable)
                             .accessibilityLabel("Favorite")
-                            .accessibilityValue(isFavorite ? "On" : "Off")
+                            .accessibilityValue(isFavorite ? String(localized: "On") : String(localized: "Off"))
                             .accessibilityHint(
                                 isFavorite
                                     ? "Removes \(song.title) from your favorites."
@@ -420,7 +420,7 @@ struct PlayerView: View {
                         }
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Shuffle")
-                        .accessibilityValue(audioManager.isShuffleOn ? "On" : "Off")
+                        .accessibilityValue(audioManager.isShuffleOn ? String(localized: "On") : String(localized: "Off"))
                         .accessibilityHint(audioManager.isShuffleOn ? "Turns shuffle off." : "Turns shuffle on.")
                         Button {
                             audioManager.toggleMode()

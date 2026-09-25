@@ -88,7 +88,7 @@ struct PlayerBottomToolbar: View {
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.85, dim: 0.55, haptic: .selection))
                 .accessibilityLabel(showLyrics ? "Hide Lyrics" : "Show Lyrics")
-                .accessibilityValue(showLyrics ? "On" : "Off")
+                .accessibilityValue(showLyrics ? String(localized: "On") : String(localized: "Off"))
             }
             #if canImport(UIKit)
                 ZStack {
