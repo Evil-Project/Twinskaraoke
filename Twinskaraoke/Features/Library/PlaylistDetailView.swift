@@ -160,8 +160,14 @@ struct PlaylistDetailView: View {
             prefetchTask = nil
             let songs = loader.songs ?? playlist.songListDTOs ?? []
             guard !songs.isEmpty else { return }
-            prefetchedIDs = Array(songs.prefix(18)).map(\.id)
-            prefetchArtwork(songs: songs)
+            // The window follows what the list shows, as the displayedSongs
+            // observer's does: a search opened inside the delay is showing
+            // its results, and that observer stood aside meanwhile. The warm
+            // still covers the whole playlist.
+            let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let displayed = isSearching ? filteredSongs : songs
+            prefetchedIDs = Array(displayed.prefix(18)).map(\.id)
+            prefetchArtwork(songs: displayed)
             warmCollectionIfNeeded()
         }
     }
