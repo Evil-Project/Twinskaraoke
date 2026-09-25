@@ -747,6 +747,45 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertTrue(waitUntil(timeout: 8) { app.buttons["PlayerDismissHandle"].isHittable })
   }
 
+  /// An active search must not disable the mini player.
+  ///
+  /// The search tab presents its `UISearchController`, and the bar's gesture
+  /// treated any presentation as a modal covering it. So from the first search
+  /// until that search was cancelled, taps and swipes on the bar did nothing —
+  /// on the Search tab, and on every other tab too, because switching tabs
+  /// leaves the search presented.
+  func testMiniPlayerOpensWhileSearchIsActive() throws {
+    let app = launchApp(initialSection: "home")
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    XCTAssertTrue(waitUntil(timeout: 8) { self.miniPlayerIsHittable(in: app) })
+
+    openRootSection("Search", in: app)
+    let field = app.searchFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 8), "Missing the search field.")
+    field.tap()
+    // Return dismisses the keyboard, which otherwise covers the bar, and
+    // leaves the search presented.
+    field.typeText("wake\n")
+
+    let dismissHandle = app.buttons["PlayerDismissHandle"]
+    openMiniPlayer(in: app)
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { dismissHandle.isHittable },
+      "The mini player did not open while a search was active."
+    )
+    dismissHandle.tap()
+    XCTAssertTrue(waitUntil(timeout: 5) { self.miniPlayerIsHittable(in: app) })
+
+    openRootSection("Home", in: app)
+    openMiniPlayer(in: app)
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { dismissHandle.isHittable },
+      "The mini player did not open on another tab while a search was active."
+    )
+  }
+
   func testDraggingDownDismissesTheFullScreenPlayer() throws {
     let app = launchApp(initialSection: "home")
     XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
