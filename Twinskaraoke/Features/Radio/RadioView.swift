@@ -503,12 +503,23 @@ private struct RadioLiveStatusStrip: View {
     let lastUpdated: Date?
 
     var body: some View {
+        // One row when it fits. Otherwise the updated time, the longest pill
+        // and the one whose text keeps changing, gets a row of its own
+        // beneath the other two, instead of all three stacking into a column.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) {
                 statusPills
+                updatedPill
+            }
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    statusPills
+                }
+                updatedPill
             }
             VStack(spacing: 6) {
                 statusPills
+                updatedPill
             }
         }
         .frame(maxWidth: .infinity)
@@ -529,6 +540,10 @@ private struct RadioLiveStatusStrip: View {
                 tint: .secondary
             )
         }
+    }
+
+    @ViewBuilder
+    private var updatedPill: some View {
         if let lastUpdated {
             RadioStatusPill(
                 systemImage: "clock",
