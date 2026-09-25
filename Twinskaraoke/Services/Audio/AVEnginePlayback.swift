@@ -232,6 +232,9 @@ final class AVEnginePlayback {
         31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
     ]
     private var engineConfigObserver: Any?
+    /// Set by startEngineIfNeeded(), cleared when pause() or stop() pauses
+    /// the engine. The engine is not started until something plays.
+    private var wantsEngineRunning = false
 
     private nonisolated static let constrainedMemoryThreshold: UInt64 = 4 * 1024 * 1024 * 1024
     private nonisolated static let constrainedTransitionTicksPerSecond: Double = 18
@@ -313,12 +316,11 @@ final class AVEnginePlayback {
             if self.mode == .aiStems { self.onPlaybackEnded?() }
         }
 
+        // Built but not started: every playback path starts it through
+        // startEngineIfNeeded(). Starting it here rendered silence from launch
+        // until the first stop, and starting I/O activates the audio session,
+        // which interrupts another app's audio before anything was played.
         engine.isAutoShutdownEnabled = false
-        engine.prepare()
-        do { try engine.start() } catch {
-            DebugLogger.log("Audio engine start failed: \(error)", category: .playback)
-            onPlaybackError?(error)
-        }
 
         engineConfigObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -352,6 +354,7 @@ final class AVEnginePlayback {
     }
 
     func startEngineIfNeeded() {
+        wantsEngineRunning = true
         if !engine.isRunning {
             do {
                 engine.prepare()
@@ -366,7 +369,10 @@ final class AVEnginePlayback {
 
     private func handleEngineConfigurationChange() {
         DebugLogger.log("Audio engine configuration changed, isRunning=\(engine.isRunning)", category: .playback)
-        if !engine.isRunning {
+        // Only restart an engine playback wants running. A route change while
+        // paused, stopped or not yet played used to start it here, rendering
+        // silence and re-activating the session for nothing.
+        if wantsEngineRunning, !engine.isRunning {
             do {
                 engine.prepare()
                 try engine.start()
@@ -785,6 +791,7 @@ final class AVEnginePlayback {
         // keep treating the session as actively playing even when Now Playing rate
         // is 0.0. Pausing the engine makes app, lock-screen, and Control Center
         // play/pause state agree; resume() restarts it through startEngineIfNeeded().
+        wantsEngineRunning = false
         engine.pause()
     }
 
@@ -817,6 +824,7 @@ final class AVEnginePlayback {
         // AVPlayer and never touches the engine). Every engine playback path
         // (play/playStems/switchToStems/revertToMain/resume/beginCrossfade)
         // restarts it through startEngineIfNeeded().
+        wantsEngineRunning = false
         engine.pause()
     }
 

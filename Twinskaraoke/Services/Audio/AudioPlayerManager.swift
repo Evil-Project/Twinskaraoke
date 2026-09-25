@@ -137,7 +137,7 @@ final class AudioPlayerManager {
                 VocalSeparator.shared.cancel()
                 VocalSeparator.shared.cancelBackgroundAnalysis()
                 VocalSeparator.shared.cleanupRealtimeTemp()
-                if avEngine.mode == .aiStems { avEngine.revertToMain() }
+                if loadedEngine?.mode == .aiStems { loadedEngine?.revertToMain() }
             } else if aiAutoAnalyze, let song = currentSong, !isRadioMode {
                 triggerBackgroundAnalysis(for: song)
                 prepareBackgroundStemPlaybackIfPossible(for: song)
@@ -162,8 +162,8 @@ final class AudioPlayerManager {
                 preparedStemSongID = nil
                 deferredAIEffect = nil
                 VocalSeparator.shared.cancelBackgroundAnalysis()
-                if !anyAIEffectActive, avEngine.mode == .aiStems {
-                    avEngine.revertToMain()
+                if !anyAIEffectActive, loadedEngine?.mode == .aiStems {
+                    loadedEngine?.revertToMain()
                 }
             }
         }
@@ -281,7 +281,7 @@ final class AudioPlayerManager {
     var eqEnabled: Bool = UserDefaults.standard.bool(forKey: "nk.eqEnabled") {
         didSet {
             UserDefaults.standard.set(eqEnabled, forKey: "nk.eqEnabled")
-            avEngine.setEQEnabled(eqEnabled)
+            loadedEngine?.setEQEnabled(eqEnabled)
         }
     }
 
@@ -304,7 +304,7 @@ final class AudioPlayerManager {
     {
         didSet {
             UserDefaults.standard.set(eqGainsDB, forKey: "nk.eqGainsDB")
-            avEngine.setEQGains(eqGainsDB)
+            loadedEngine?.setEQGains(eqGainsDB)
             if !eqPresetIsApplying, eqPreset != .custom, eqGainsDB != eqPreset.gains {
                 eqPreset = .custom
             }
@@ -374,9 +374,22 @@ final class AudioPlayerManager {
         return defaultValue
     }
 
-    // Construct the graph only after init has configured/activated the audio
-    // session, so its fixed effects bus adopts the active hardware sample rate.
-    @ObservationIgnored private lazy var avEngine = AVEnginePlayback()
+    /// Built on first use, not at launch. `shared` is created while the first
+    /// frame renders (ContentView injects it), and building and starting the
+    /// graph there held that frame back by about 90 ms on an iPhone 17 Pro
+    /// Max. First use is normally a play request that performWhenReady has
+    /// already let through, so the graph still adopts the active session's
+    /// hardware sample rate. Reads that only report on playback — elapsed
+    /// time, duration, the AI mode — and the stop/pause calls go through
+    /// `loadedEngine`, so drawing the player for a restored song, or stopping
+    /// the radio, never builds it.
+    @ObservationIgnored private var loadedEngine: AVEnginePlayback?
+    private var avEngine: AVEnginePlayback {
+        if let loadedEngine { return loadedEngine }
+        let engine = makeEngine()
+        loadedEngine = engine
+        return engine
+    }
     private let transitionCoordinator = TransitionCoordinator()
     private var radioPlayer: AVPlayer?
     private var streamPlayer: AVPlayer?
@@ -542,7 +555,10 @@ final class AudioPlayerManager {
     // Private so `shared` stays the only instance: the audio session and the
     // remote-command centre it configures are process-wide singletons.
     private init() {
-        audioSessionController.prepareForPlayback()
+        // Category only. Activating a non-mixable `.playback` session here
+        // interrupted whatever another app was playing the moment Twinskaraoke
+        // opened; the first play activates it through performWhenReady.
+        audioSessionController.configureCategory()
         let cacheCleanupCutoff = Date()
         Task.detached(priority: .utility) {
             AudioCacheStore.cleanupLegacyArtifacts(createdBefore: cacheCleanupCutoff)
@@ -550,7 +566,96 @@ final class AudioPlayerManager {
         DebugLogger.log("AudioPlayerManager initializing", category: .playback)
         setupRemoteCommands()
 
-        avEngine.onPlaybackEnded = { [weak self] in
+        startPollTimer()
+
+        transitionCoordinator.onBeginTransition = { [weak self] plan in
+            self?.handleTransitionBegin(plan: plan)
+        }
+        transitionCoordinator.onTransitionPrepared = { [weak self] plan in
+            self?.schedulePreparedTransition(plan)
+        }
+        transitionCoordinator.onUpcomingSongDetermined = { [weak self] song in
+            self?.upcomingSong = song
+        }
+
+        // The former `FallbackArtProvider.objectWillChange -> objectWillChange`
+        // forwarding is gone: it existed only to invalidate views that derive
+        // artwork URLs through `Song`, and `@Observable` has no blanket
+        // invalidation. Those views now read `FallbackArtRevision.shared`
+        // directly, which is both narrower and no longer re-renders every
+        // observer of the player.
+        // AVAudioSession posts these off the main thread (route changes are
+        // documented as arriving on a secondary thread). Under Swift 6 these
+        // sink closures are main-actor-isolated, so delivering them on the
+        // posting thread traps. Hop to main first, as the watch and TV
+        // AudioManagers already do for the same handlers.
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleInterruption(note) }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleRouteChange(note) }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .vocalSeparatorDidCacheStems)
+            .sink { [weak self] note in
+                guard let self, let songID = note.object as? String else { return }
+                handleCachedStemsReady(songID: songID)
+            }
+            .store(in: &cancellables)
+        updateRouteIcon()
+        syncSystemVolume()
+        AVAudioSession.sharedInstance().publisher(for: \.outputVolume)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sysVol in
+                self?.syncSystemVolume(sysVol)
+            }
+            .store(in: &cancellables)
+        // Posted by the audio daemon when the media server restarts; the
+        // delivery thread is undocumented, so don't assume it is main.
+        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleMediaServicesReset() }
+            .store(in: &cancellables)
+        restorePlaybackSession()
+        #if canImport(UIKit)
+            NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
+                .merge(with: NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification))
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.restorePlaybackSession() }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.persistPlaybackSession() }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+                .sink { [weak self] _ in self?.handleMemoryWarning() }
+                .store(in: &cancellables)
+        #endif
+        scheduleEngineWarmUp()
+    }
+
+    /// Builds the engine's graph once launch has settled, so the first play
+    /// doesn't pay for it either (about 40 ms on an iPhone 17 Pro Max). It
+    /// waits a second, then runs in the run loop's default mode, which is
+    /// skipped while a scroll is tracking. It only builds the graph: starting
+    /// the engine activates the session, and that is the first play's job.
+    private func scheduleEngineWarmUp() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                MainActor.assumeIsolated {
+                    _ = self?.avEngine
+                }
+            }
+        }
+    }
+
+    /// Wires the engine's callbacks and applies the current EQ, which the EQ
+    /// observers only push into an engine that already exists.
+    private func makeEngine() -> AVEnginePlayback {
+        let engine = AVEnginePlayback()
+        engine.onPlaybackEnded = { [weak self] in
             guard let self, !self.isRadioMode else { return }
             guard isPlaying else { return }
             guard !avEngine.isCrossfading, !avEngine.isCrossfadePending else { return }
@@ -567,16 +672,16 @@ final class AudioPlayerManager {
             }
             playNextOrRandom()
         }
-        avEngine.onCrossfadeCompleted = { [weak self] in
+        engine.onCrossfadeCompleted = { [weak self] in
             guard let self else { return }
             transitionCoordinatorDidFinish()
         }
-        avEngine.onCrossfadeStarted = { [weak self] in
+        engine.onCrossfadeStarted = { [weak self] in
             guard let self, isStreamMode, !self.isRadioMode else { return }
             guard case let .crossfading(plan) = transitionCoordinator.state else { return }
             fadeOutStreamPlayer(duration: plan.fadeDuration)
         }
-        avEngine.onPlaybackError = { [weak self] error in
+        engine.onPlaybackError = { [weak self] error in
             guard let self else { return }
             DebugLogger.log("AVEngine playback error: \(error)", category: .playback)
             let failedStemSwitchSongID = aiStemSwitchInFlightSongID
@@ -658,78 +763,13 @@ final class AudioPlayerManager {
                 reason: "avEngine.onPlaybackEnded"
             )
         }
-        avEngine.onEngineConfigurationChange = { [weak self] in
+        engine.onEngineConfigurationChange = { [weak self] in
             self?.recoverFromEngineConfigChange()
         }
-        avEngine.setEQEnabled(eqEnabled)
-        avEngine.setEQGains(eqGainsDB)
-        startPollTimer()
-
-        transitionCoordinator.avEngine = avEngine
-        transitionCoordinator.onBeginTransition = { [weak self] plan in
-            self?.handleTransitionBegin(plan: plan)
-        }
-        transitionCoordinator.onTransitionPrepared = { [weak self] plan in
-            self?.schedulePreparedTransition(plan)
-        }
-        transitionCoordinator.onUpcomingSongDetermined = { [weak self] song in
-            self?.upcomingSong = song
-        }
-
-        // The former `FallbackArtProvider.objectWillChange -> objectWillChange`
-        // forwarding is gone: it existed only to invalidate views that derive
-        // artwork URLs through `Song`, and `@Observable` has no blanket
-        // invalidation. Those views now read `FallbackArtRevision.shared`
-        // directly, which is both narrower and no longer re-renders every
-        // observer of the player.
-        // AVAudioSession posts these off the main thread (route changes are
-        // documented as arriving on a secondary thread). Under Swift 6 these
-        // sink closures are main-actor-isolated, so delivering them on the
-        // posting thread traps. Hop to main first, as the watch and TV
-        // AudioManagers already do for the same handlers.
-        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleInterruption(note) }
-            .store(in: &cancellables)
-        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleRouteChange(note) }
-            .store(in: &cancellables)
-        NotificationCenter.default.publisher(for: .vocalSeparatorDidCacheStems)
-            .sink { [weak self] note in
-                guard let self, let songID = note.object as? String else { return }
-                handleCachedStemsReady(songID: songID)
-            }
-            .store(in: &cancellables)
-        updateRouteIcon()
-        syncSystemVolume()
-        AVAudioSession.sharedInstance().publisher(for: \.outputVolume)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] sysVol in
-                self?.syncSystemVolume(sysVol)
-            }
-            .store(in: &cancellables)
-        // Posted by the audio daemon when the media server restarts; the
-        // delivery thread is undocumented, so don't assume it is main.
-        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.handleMediaServicesReset() }
-            .store(in: &cancellables)
-        restorePlaybackSession()
-        #if canImport(UIKit)
-            NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
-                .merge(with: NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification))
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in self?.restorePlaybackSession() }
-                .store(in: &cancellables)
-            NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in self?.persistPlaybackSession() }
-                .store(in: &cancellables)
-            NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
-                .sink { [weak self] _ in self?.handleMemoryWarning() }
-                .store(in: &cancellables)
-        #endif
+        engine.setEQEnabled(eqEnabled)
+        engine.setEQGains(eqGainsDB)
+        transitionCoordinator.avEngine = engine
+        return engine
     }
 
     private func scheduleSessionSave(periodic: Bool = false) {
@@ -933,7 +973,7 @@ final class AudioPlayerManager {
             }
             return max(0, preferredResume)
         }
-        let currentTime = avEngine.currentTime
+        let currentTime = loadedEngine?.currentTime ?? 0
         if currentTime.isFinite, currentTime >= 0 {
             return currentTime
         }
@@ -951,8 +991,8 @@ final class AudioPlayerManager {
                 return streamDuration
             }
         }
-        if avEngine.currentURL != nil {
-            let audioDuration = avEngine.duration
+        if let engine = loadedEngine, engine.currentURL != nil {
+            let audioDuration = engine.duration
             if audioDuration.isFinite, audioDuration > 0 {
                 return audioDuration
             }
@@ -1062,7 +1102,7 @@ final class AudioPlayerManager {
         }
 
         if let remoteURL = song.audioURL {
-            avEngine.stop()
+            loadedEngine?.stop()
             let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
             startStreamPlayback(
                 url: remoteURL,
@@ -1110,8 +1150,8 @@ final class AudioPlayerManager {
         vocalEnhanceMode = false
         instrumentalEnhanceMode = false
         _suppressModeSwitch = false
-        if avEngine.mode == .aiStems {
-            avEngine.revertToMain()
+        if loadedEngine?.mode == .aiStems {
+            loadedEngine?.revertToMain()
         }
     }
 
@@ -1188,7 +1228,7 @@ final class AudioPlayerManager {
         let readyBlock: () -> Void = { [weak self] in
             guard let self else { return }
             aiStemSwitchInFlightSongID = nil
-            if !shouldResume { avEngine.pause() }
+            if !shouldResume { loadedEngine?.pause() }
             onReady?()
             #if canImport(UIKit)
                 endTrackTransitionBackgroundTask()
@@ -1224,7 +1264,7 @@ final class AudioPlayerManager {
         quickCutTimer?.cancel()
         quickCutTimer = nil
         if resetVolume {
-            avEngine.setMasterVolume(1.0)
+            loadedEngine?.setMasterVolume(1.0)
         }
     }
 
@@ -1235,7 +1275,7 @@ final class AudioPlayerManager {
         transitionStartTask = nil
         activeCrossfadePlan = nil
         cancelQuickCutTimer(resetVolume: resetVolume)
-        avEngine.cancelCrossfade()
+        loadedEngine?.cancelCrossfade()
         streamFadeGeneration &+= 1
         streamFadeTimer?.cancel()
         streamFadeTimer = nil
@@ -1304,8 +1344,8 @@ final class AudioPlayerManager {
             instrumentalEnhanceMode = false
             _suppressModeSwitch = false
         }
-        if avEngine.mode == .aiStems {
-            avEngine.revertToMain()
+        if loadedEngine?.mode == .aiStems {
+            loadedEngine?.revertToMain()
         }
         #if canImport(UIKit)
             AudioPlayerManager.artworkCache.removeAllObjects()
@@ -1334,7 +1374,7 @@ final class AudioPlayerManager {
     }
 
     private func applyAIMixVolumes() {
-        guard avEngine.mode == .aiStems else { return }
+        guard loadedEngine?.mode == .aiStems else { return }
         avEngine.resetInstrumentalEQ()
         if karaokeMode {
             avEngine.setAIMix(main: 0, vocals: max(0, 1.0 - aiVocalStrength), instrumental: 1)
@@ -1469,8 +1509,8 @@ final class AudioPlayerManager {
         isRadioMode = false
         radioArtworkURL = nil
         cancelPendingTransitionWork(resetVolume: resetTransitionVolume)
-        avEngine.cancelCrossfade()
-        avEngine.stop()
+        loadedEngine?.cancelCrossfade()
+        loadedEngine?.stop()
         aiStemSwitchInFlightSongID = nil
         instrumentalTask?.cancel()
         instrumentalTask = nil
@@ -1700,14 +1740,14 @@ final class AudioPlayerManager {
         suppressPlaybackEndedCallbacks()
         stopRadioPlayer()
         stopStreamPlayer()
-        avEngine.stop()
+        loadedEngine?.stop()
         aiStemSwitchInFlightSongID = nil
         separationGeneration &+= 1
         VocalSeparator.shared.cancel()
         VocalSeparator.shared.cancelBackgroundAnalysis()
         VocalSeparator.shared.cleanupRealtimeTemp()
-        if avEngine.mode == .aiStems {
-            avEngine.revertToMain()
+        if loadedEngine?.mode == .aiStems {
+            loadedEngine?.revertToMain()
         }
         let resumeAt = max(0, startAt.isFinite ? startAt : 0)
         guard resume else {
@@ -1833,7 +1873,7 @@ final class AudioPlayerManager {
         }
         cancelPendingTransitionWork()
         lastKnownPlaybackTime = activePlaybackTime()
-        avEngine.pause()
+        loadedEngine?.pause()
         aiStemSwitchInFlightSongID = nil
         setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")
         return true
@@ -1915,8 +1955,8 @@ final class AudioPlayerManager {
         // fully consumed but currentURL still set; resuming that node would
         // report isPlaying while rendering silence, so reload from the start
         // through the normal start-playing path instead.
-        let deckExhausted = avEngine.currentURL != nil && !avEngine.hasScheduledMedia
-        if !isPlaying, avEngine.currentURL == nil || deckExhausted {
+        let deckExhausted = loadedEngine.map { $0.currentURL != nil && !$0.hasScheduledMedia } ?? false
+        if !isPlaying, loadedEngine?.currentURL == nil || deckExhausted {
             let resumeAt = deckExhausted ? 0 : (preferredStreamResumeTime(for: song) ?? lastKnownPlaybackTime)
             if let fileURL = song.audioURL != nil ? immediateLocalPlaybackFileURL(for: song) : localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
@@ -2083,7 +2123,7 @@ final class AudioPlayerManager {
         case .autoplay:
             fetchAutoplaySongs()
         case .stop:
-            avEngine.pause()
+            loadedEngine?.pause()
             setPlaybackState(
                 playing: false,
                 buffering: false,
@@ -2297,7 +2337,7 @@ final class AudioPlayerManager {
             return
         }
         cancelPendingTransitionWork()
-        avEngine.stop()
+        loadedEngine?.stop()
         aiStemSwitchInFlightSongID = nil
         loadFailure = nil
         stopStreamPlayer()
@@ -2363,7 +2403,7 @@ final class AudioPlayerManager {
     ) {
         stopStreamPlayer()
         stopRadioPlayer()
-        avEngine.stop()
+        loadedEngine?.stop()
         aiStemSwitchInFlightSongID = nil
         currentPlaybackURL = url
         loadFailure = nil
@@ -2663,7 +2703,7 @@ final class AudioPlayerManager {
         // CacheManager removes files once, on its serial maintenance queue.
         // Keep cancellation and engine mutations on the main actor.
         temporarilyDisableAIEffects()
-        if avEngine.mode == .aiStems { avEngine.revertToMain() }
+        if loadedEngine?.mode == .aiStems { loadedEngine?.revertToMain() }
         if !isRadioMode, isBuffering {
             streamPlaybackRequested = false
             setPlaybackState(playing: false, buffering: false, reason: "clearCache")
@@ -2736,7 +2776,7 @@ final class AudioPlayerManager {
         guard aiEnabled, !isRadioMode, let song = currentSong else {
             VocalSeparator.shared.cancel()
             preparedStemSongID = nil
-            if avEngine.mode == .aiStems { avEngine.revertToMain() }
+            if loadedEngine?.mode == .aiStems { loadedEngine?.revertToMain() }
             if aiEnabled, aiAutoAnalyze, !isRadioMode, let song = currentSong {
                 triggerBackgroundAnalysis(for: song)
             }
@@ -2744,21 +2784,21 @@ final class AudioPlayerManager {
         }
         guard VocalSeparator.shared.isAvailable else {
             preparedStemSongID = nil
-            if avEngine.mode == .aiStems { avEngine.revertToMain() }
+            if loadedEngine?.mode == .aiStems { loadedEngine?.revertToMain() }
             return
         }
         let shouldKeepPreparedStems = keepPreparedStems(for: song)
         guard anyAIEffectActive || shouldKeepPreparedStems else {
             VocalSeparator.shared.cancel()
-            if avEngine.mode == .aiStems { avEngine.revertToMain() }
+            if loadedEngine?.mode == .aiStems { loadedEngine?.revertToMain() }
             if aiAutoAnalyze {
                 triggerBackgroundAnalysis(for: song)
             }
             return
         }
         if shouldKeepPreparedStems, !anyAIEffectActive {
-            if avEngine.mode == .aiStems {
-                avEngine.revertToMain()
+            if loadedEngine?.mode == .aiStems {
+                loadedEngine?.revertToMain()
             }
             triggerBackgroundAnalysis(for: song)
             return
@@ -2767,7 +2807,7 @@ final class AudioPlayerManager {
         if anyAIEffectActive {
             VocalSeparator.shared.cancelBackgroundAnalysis()
         }
-        if avEngine.mode == .aiStems {
+        if loadedEngine?.mode == .aiStems {
             applyAIMixVolumes()
             return
         }
@@ -2795,7 +2835,7 @@ final class AudioPlayerManager {
                 guard separationGeneration == gen,
                       currentSong?.id == song.id
                 else { return }
-                guard avEngine.mode != .aiStems else {
+                guard loadedEngine?.mode != .aiStems else {
                     applyAIMixVolumes()
                     return
                 }
