@@ -40,6 +40,8 @@ struct PlaylistDetailView: View {
     @State private var filterTask: Task<Void, Never>?
     @State private var favoritesRefreshTask: Task<Void, Never>?
     @State private var prefetchedIDs: [String] = []
+    /// The full list the whole-playlist warm last covered this visit.
+    @State private var warmedSongIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
     @State private var isEditing = false
@@ -145,15 +147,28 @@ struct PlaylistDetailView: View {
     /// because `loader.songs` is still nil at that point — so if the fetch landed
     /// inside the delay, this overwrote the authoritative warm with the stale one
     /// under the same reason key, and clobbered `prefetchedIDs` with it.
+    ///
+    /// Until it runs, the `displayedSongs` and `loader.songs` observers stand
+    /// aside (they check `prefetchTask`). Songs usually arrive well inside the
+    /// 400ms, and an observer prefetching them too warmed every playlist twice,
+    /// the first time inside the very transition this delay keeps clear.
     private func schedulePrefetch() {
         prefetchTask?.cancel()
         prefetchTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
+            prefetchTask = nil
             let songs = loader.songs ?? playlist.songListDTOs ?? []
             guard !songs.isEmpty else { return }
-            prefetchedIDs = Array(songs.prefix(18)).map(\.id)
-            prefetchArtwork(songs: songs)
+            // The window follows what the list shows, as the displayedSongs
+            // observer's does: a search opened inside the delay is showing
+            // its results, and that observer stood aside meanwhile. The warm
+            // still covers the whole playlist.
+            let isSearching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let displayed = isSearching ? filteredSongs : songs
+            prefetchedIDs = Array(displayed.prefix(18)).map(\.id)
+            prefetchArtwork(songs: displayed)
+            warmCollectionIfNeeded()
         }
     }
 
@@ -428,6 +443,7 @@ struct PlaylistDetailView: View {
         // Diffing on displayedSongs (Equatable) avoids allocating the prefix
         // id array on every body eval; it only builds when the list changes.
         .onChange(of: displayedSongs) { _, newSongs in
+            guard prefetchTask == nil else { return }
             let ids = Array(newSongs.prefix(18)).map(\.id)
             guard ids != prefetchedIDs else { return }
             prefetchedIDs = ids
@@ -469,6 +485,11 @@ struct PlaylistDetailView: View {
             withOptionalAnimation(reduceMotion || !canAnimate ? nil : AppMotion.quick) {
                 filteredSongs = next
             }
+            // The warm follows the loaded list, not the displayed one, so
+            // songs that arrive while a search is open are still warmed.
+            if prefetchTask == nil {
+                warmCollectionIfNeeded()
+            }
         }
         .onChange(of: favorites.favoriteIDs) { _, _ in
             guard playlist.isFavorites else { return }
@@ -499,6 +520,7 @@ struct PlaylistDetailView: View {
             // and since each playlist warms under its own reason key, opening
             // several in a row stacked them instead of replacing them.
             ArtworkPrefetcher.shared.cancelWarm(reason: "playlist warm \(playlist.id)")
+            warmedSongIDs = []
         }
     }
 
@@ -532,6 +554,7 @@ struct PlaylistDetailView: View {
         loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
     }
 
+    /// The cover and the rows just ahead of the visible ones.
     private func prefetchArtwork(songs: [Song]) {
         ArtworkPrefetcher.shared.prefetchPlaylists(
             [playlist],
@@ -544,9 +567,22 @@ struct PlaylistDetailView: View {
             reason: "playlist songs \(playlist.id)",
             variant: .row
         )
-        // The windowed prefetch above only stays just ahead of the visible
-        // rows, which a fast flick outruns. Warm the *whole* playlist onto disk
-        // as well, so a second visit scrolls with no placeholders at all.
+    }
+
+    /// The windowed prefetch only stays just ahead of the visible rows, which
+    /// a fast flick outruns. This warms the *whole* playlist onto disk as well,
+    /// so a second visit scrolls with no placeholders at all.
+    ///
+    /// It reads the full list rather than taking the displayed one. Search
+    /// results are a subset, and warming them under the same reason key
+    /// cancelled the full warm partway through a long playlist. It also skips
+    /// a list it has already warmed this visit, so a search, or a refresh that
+    /// returns the same songs, does not start it again.
+    private func warmCollectionIfNeeded() {
+        let songs = loader.songs ?? playlist.songListDTOs ?? []
+        let ids = songs.map(\.id)
+        guard !ids.isEmpty, ids != warmedSongIDs else { return }
+        warmedSongIDs = ids
         ArtworkPrefetcher.shared.warmCollection(
             songs: songs,
             reason: "playlist warm \(playlist.id)",
