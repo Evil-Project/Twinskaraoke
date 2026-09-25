@@ -390,6 +390,58 @@ final class TwinskaraokeUITests: XCTestCase {
     )
   }
 
+  /// Pinning from a playlist's menu puts it at the top of Library, above the
+  /// category list, where it opens the playlist; its own menu unpins it.
+  func testPinnedPlaylistAppearsAtTopOfLibrary() throws {
+    let app = launchApp(initialSection: "search")
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    openVisibleItem("Public Playlists", identifier: "SearchCategory.PublicPlaylists", in: app)
+    openVisibleItem(
+      "Karaoke Essentials",
+      identifier: "PlaylistList.ui-search-playlist-essentials",
+      in: app
+    )
+
+    let moreActions = app.buttons["PlaylistDetail.moreActions"]
+    XCTAssertTrue(moreActions.waitForExistence(timeout: 8), "Expected the playlist actions menu.")
+    moreActions.tap()
+    let pinAction = app.buttons["Pin Playlist"]
+    XCTAssertTrue(pinAction.waitForExistence(timeout: 5), "Expected Pin Playlist in the actions menu.")
+    pinAction.tap()
+
+    openRootSection("Library", in: app)
+    let pin = app.buttons["LibraryPin.ui-search-playlist-essentials"]
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { pin.isHittable },
+      "Expected the pinned playlist at the top of Library."
+    )
+    let playlistsLink = app.buttons["Playlists"].firstMatch
+    XCTAssertTrue(playlistsLink.waitForExistence(timeout: 5), "Expected the Playlists link.")
+    XCTAssertLessThan(
+      pin.frame.maxY,
+      playlistsLink.frame.minY,
+      "Pins belong above the category list."
+    )
+
+    pin.tap()
+    XCTAssertTrue(
+      app.navigationBars["Karaoke Essentials"].waitForExistence(timeout: 8)
+        || app.staticTexts["Karaoke Essentials"].waitForExistence(timeout: 8),
+      "Expected the pin to open its playlist."
+    )
+    navigateBack(in: app)
+
+    XCTAssertTrue(waitUntil(timeout: 8) { pin.isHittable }, "Expected to return to Library.")
+    pin.press(forDuration: 1.2)
+    let unpinAction = app.buttons["Unpin Playlist"]
+    XCTAssertTrue(unpinAction.waitForExistence(timeout: 5), "Expected Unpin Playlist in the pin's menu.")
+    unpinAction.tap()
+    XCTAssertTrue(
+      waitUntil(timeout: 5) { !pin.exists },
+      "Expected unpinning to remove the pin from Library."
+    )
+  }
+
   func testAdaptiveMusicShellShowsSidebarOrTabs() throws {
     // In portrait the balanced split view collapses the sidebar out of the
     // hierarchy, so an iPad would fall through to the compact tab assertions

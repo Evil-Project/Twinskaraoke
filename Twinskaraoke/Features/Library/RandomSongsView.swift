@@ -333,7 +333,7 @@ private struct RandomSongsActionsMenu: View {
 
         if !songs.isEmpty {
             Divider()
-            PlaylistActionsMenuItems(playlist: playlist, songs: songs)
+            PlaylistActionsMenuItems(playlist: playlist, songs: songs, allowsPinning: false)
         }
     }
 }

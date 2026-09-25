@@ -52,7 +52,9 @@ struct LibraryView: View {
     @State private var recentSongsViewModel = LibrarySongsViewModel()
     private let savedStore = SavedPlaylistsStore.shared
     private let favorites = FavoritesManager.shared
+    private let pinStore = PinnedPlaylistsStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
     @State private var favoritesRefreshTask: Task<Void, Never>?
@@ -64,10 +66,15 @@ struct LibraryView: View {
 
     var body: some View {
         let recentlyAddedSongs = Array(recentSongsViewModel.songs.prefix(12))
+        let pinned = pinnedPlaylists
         NavigationStack(path: $path) {
             GeometryReader { proxy in
                 ScrollView {
-                    libraryOverview(recentlyAddedSongs: recentlyAddedSongs, availableWidth: proxy.size.width)
+                    libraryOverview(
+                        recentlyAddedSongs: recentlyAddedSongs,
+                        pinned: pinned,
+                        availableWidth: proxy.size.width
+                    )
                         .padding(.top, AM.Spacing.s)
                         .padding(.bottom, AM.Spacing.l)
                 }
@@ -139,20 +146,48 @@ struct LibraryView: View {
     }
 
     @ViewBuilder
-    private func libraryOverview(recentlyAddedSongs: [Song], availableWidth: CGFloat) -> some View {
+    private func libraryOverview(recentlyAddedSongs: [Song], pinned: [Playlist], availableWidth: CGFloat) -> some View {
         if AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
             availableWidth: availableWidth
         ) {
-            wideLibraryOverview(recentlyAddedSongs: recentlyAddedSongs)
+            wideLibraryOverview(recentlyAddedSongs: recentlyAddedSongs, pinned: pinned)
         } else {
-            compactLibraryOverview(recentlyAddedSongs: recentlyAddedSongs)
+            compactLibraryOverview(recentlyAddedSongs: recentlyAddedSongs, pinned: pinned)
         }
     }
 
-    private func compactLibraryOverview(recentlyAddedSongs: [Song]) -> some View {
+    /// Pins resolved against the loaded library, so a renamed playlist or a
+    /// new cover shows without re-pinning; the stored copy covers a playlist
+    /// that isn't loaded. Favourite Songs needs an account to open.
+    private var pinnedPlaylists: [Playlist] {
+        let live = Dictionary(
+            viewModel.combinedPlaylists.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return pinStore.playlists.compactMap { pinned in
+            if pinned.isFavorites, !favorites.isAvailable { return nil }
+            return live[pinned.id] ?? pinned
+        }
+    }
+
+    private var pinAnimation: Animation? {
+        reduceMotion ? nil : AppMotion.snap
+    }
+
+    private func compactLibraryOverview(recentlyAddedSongs: [Song], pinned: [Playlist]) -> some View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
-            libraryPrimaryLinks
+            // Pins sit right on top of the category list, as in Apple Music,
+            // not a full section gap away from it.
+            VStack(alignment: .leading, spacing: AM.Spacing.s) {
+                if !pinned.isEmpty {
+                    LibraryPinnedPlaylists(playlists: pinned, zoomNamespace: zoomNamespace)
+                        .padding(.horizontal, AM.Spacing.screenMargin)
+                        .transition(.opacity)
+                }
+                libraryPrimaryLinks
+            }
+            .animation(pinAnimation, value: pinned.isEmpty)
 
             if !recentlyAddedSongs.isEmpty {
                 RecentlyAddedSection(songs: recentlyAddedSongs)
@@ -160,7 +195,7 @@ struct LibraryView: View {
         }
     }
 
-    private func wideLibraryOverview(recentlyAddedSongs: [Song]) -> some View {
+    private func wideLibraryOverview(recentlyAddedSongs: [Song], pinned: [Playlist]) -> some View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             if let featuredPlaylist = featuredWidePlaylist {
                 WideLibraryHero(
@@ -171,10 +206,17 @@ struct LibraryView: View {
 
             HStack(alignment: .top, spacing: AM.Spacing.xxl) {
                 VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
+                    if !pinned.isEmpty {
+                        LibraryOverviewGroup(title: String(localized: "Pinned")) {
+                            LibraryPinnedPlaylists(playlists: pinned, zoomNamespace: zoomNamespace)
+                        }
+                        .transition(.opacity)
+                    }
                     LibraryOverviewGroup(title: String(localized: "Library")) {
                         libraryPrimaryLinksContent
                     }
                 }
+                .animation(pinAnimation, value: pinned.isEmpty)
                 .frame(
                     minWidth: AM.Layout.wideInspectorWidth,
                     idealWidth: AM.Layout.wideInspectorWidth,
