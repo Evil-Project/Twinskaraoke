@@ -326,7 +326,7 @@ struct QueueView: View {
 
     private func playQueuedSong(_ song: Song) {
         AppHaptic.commit.play()
-        audioManager.play(song: song, context: audioManager.queue)
+        audioManager.skipToQueuedSong(song)
     }
 
     private func refreshUpNextSongs() {

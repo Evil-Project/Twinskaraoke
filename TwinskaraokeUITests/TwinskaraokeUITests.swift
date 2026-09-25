@@ -943,6 +943,39 @@ final class TwinskaraokeUITests: XCTestCase {
     )
   }
 
+  /// Tapping a song in Playing Next must jump to it, not rebuild the queue.
+  ///
+  /// It used to replay with the whole queue as a new context, which with
+  /// shuffle on reshuffled everything: tapping the last queued song put the
+  /// songs before it straight back into Playing Next.
+  func testTappingQueuedSongKeepsShuffledQueue() throws {
+    let app = launchApp(initialSection: "home")
+    openVisibleItem(
+      "Wake Me Up Before You Go-Go",
+      identifier: "HomeSongSection.Made for You.ui-home-song-1",
+      in: app
+    )
+    openMiniPlayer(in: app)
+    let queueButton = app.buttons["PlayerToolbar.PlayingNext"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { queueButton.isHittable })
+    queueButton.tap()
+
+    let shuffle = app.buttons["Shuffle"].firstMatch
+    XCTAssertTrue(shuffle.waitForExistence(timeout: 8))
+    shuffle.tap()
+    XCTAssertTrue(waitUntil(timeout: 5) { (shuffle.value as? String) == "On" })
+
+    let queued = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "3. "))
+    let last = queued.firstMatch
+    XCTAssertTrue(last.waitForExistence(timeout: 8), "Expected three songs in Playing Next.")
+    last.tap()
+
+    XCTAssertTrue(
+      app.staticTexts["No songs queued"].waitForExistence(timeout: 5),
+      "Jumping to the last queued song should leave nothing after it."
+    )
+  }
+
   func testQueueBrowsingAndReordering() throws {
     try verifyQueueEditing()
   }

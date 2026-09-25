@@ -2047,6 +2047,17 @@ final class AudioPlayerManager {
         play(song: pick)
     }
 
+    /// Jumps to a song that is already up next, leaving the queue as it is.
+    ///
+    /// Handing the queue back as the new context is the trap `playShuffled`
+    /// avoids: with shuffle on, it reshuffled everything, songs already played
+    /// included, and overwrote the order turning shuffle off restores with the
+    /// shuffled one. The songs skipped over stay behind the new current song,
+    /// where Previous reaches them.
+    func skipToQueuedSong(_ song: Song) {
+        play(song: song)
+    }
+
     func toggleAutoplay() {
         autoplayEnabled.toggle()
     }
