@@ -2058,7 +2058,11 @@ final class AudioPlayerManager {
             return
         }
         cancelPendingTransitionWork()
-        let audioDur = avEngine.duration
+        // Without an engine nothing is loaded yet: a restored, paused song
+        // seeked before the launch warm-up. The target still reaches
+        // lastKnownPlaybackTime, which the next play resumes from, so there is
+        // no reason to build the graph here.
+        let audioDur = loadedEngine?.duration ?? .nan
         let totalDur: Double
         if audioDur.isFinite, audioDur > 0 {
             totalDur = audioDur
@@ -2071,14 +2075,14 @@ final class AudioPlayerManager {
         guard target >= 0 else { return }
         lastKnownPlaybackTime = target
         var needsAIRefresh = false
-        if avEngine.mode == .aiStems {
+        if loadedEngine?.mode == .aiStems {
             if !avEngine.seek(to: target) {
                 avEngine.revertToMain()
                 _ = avEngine.seek(to: target)
                 needsAIRefresh = anyAIEffectActive
             }
         } else {
-            _ = avEngine.seek(to: target)
+            _ = loadedEngine?.seek(to: target)
             needsAIRefresh = anyAIEffectActive
         }
         if needsAIRefresh {
