@@ -40,6 +40,22 @@ struct AudioSessionControllerTests {
         })
     }
 
+    @Test func configuringTheCategoryDoesNotActivate() async {
+        let probe = ActivationProbe()
+        probe.controller.configureCategory()
+        probe.controller.configureCategory()
+        #expect(probe.configurations == 1)
+        #expect(probe.completions.isEmpty)
+
+        var played = false
+        #expect(!probe.controller.performWhenReady { played = true })
+        #expect(probe.completions.count == 1)
+        #expect(probe.configurations == 1)
+        probe.completions[0](true, nil)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(played)
+    }
+
     @Test func waitsForActivationAndCoalescesPlayback() async {
         let probe = ActivationProbe()
         var played: [Int] = []

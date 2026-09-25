@@ -54,6 +54,7 @@ protocol AudioSessionManaging: AnyObject {
     var hasPendingPlayback: Bool { get }
     func performWhenReady(_ operation: @escaping @MainActor () -> Void, replacingPending: Bool) -> Bool
     func cancelPendingPlayback()
+    func configureCategory()
     func prepareForPlayback()
     func markInterrupted()
     func resetAfterMediaServicesLoss()
@@ -142,6 +143,14 @@ final class AudioSessionController: AudioSessionManaging {
     var currentRoute: AudioRouteDescriptor {
         guard let output = session.currentRoute.outputs.first else { return .unavailable }
         return .resolve(portType: output.portType, name: output.portName)
+    }
+
+    /// Sets the playback category without activating the session. This is
+    /// what launch does: activating a non-mixable `.playback` session
+    /// interrupts another app's audio, and opening the app is not a request to
+    /// play. The first play activates through performWhenReady.
+    func configureCategory() {
+        _ = configureCategoryIfNeeded()
     }
 
     func prepareForPlayback() {

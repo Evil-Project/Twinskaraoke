@@ -85,7 +85,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D0F981D72F94C10A00FD69AB"
             BuildableName = "Twinskaraoke Watch App.app"
-            BlueprintName = "Twinskaraoke Watch App"
             ReferencedContainer = "container:Twinskaraoke.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -102,7 +101,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D0F981D72F94C10A00FD69AB"
             BuildableName = "Twinskaraoke Watch App.app"
-            BlueprintName = "Twinskaraoke Watch App"
             ReferencedContainer = "container:Twinskaraoke.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
