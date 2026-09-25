@@ -763,6 +763,14 @@ nonisolated struct PlaylistDetail: Codable, Sendable {
 
 nonisolated struct SearchResponse: Codable, Sendable {
   let items: [Song]
+  /// Every match on the server, not just this page. Optional because only
+  /// the paged song search is known to send it.
+  var totalCount: Int?
+}
+
+nonisolated struct SongSearchPage: Sendable {
+  let songs: [Song]
+  let totalCount: Int?
 }
 
 nonisolated struct SearchSongItem: Codable, Identifiable, Sendable {

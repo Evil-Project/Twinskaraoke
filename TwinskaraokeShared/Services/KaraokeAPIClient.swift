@@ -647,6 +647,19 @@ nonisolated enum KaraokeAPIClient {
     return try decodeSongSearchResults(from: data)
   }
 
+  /// One page of song search results, with the server's total when it sends
+  /// one. `page` is 1-based, as the API counts it.
+  static func searchSongPage(query: String, page: Int, pageSize: Int) async throws -> SongSearchPage {
+    let data = try await songSearchData(query: query, page: page, pageSize: pageSize)
+    if let decoded = try? JSONDecoder().decode(SearchResponse.self, from: data) {
+      return SongSearchPage(songs: decoded.items, totalCount: decoded.totalCount)
+    }
+    if let decoded = SongPayloadDecoder.decodeSongs(from: data) {
+      return SongSearchPage(songs: decoded, totalCount: nil)
+    }
+    throw APIError.decodeFailed
+  }
+
   static func searchSongItems(query: String, pageSize: Int) async throws -> [SearchSongItem] {
     let data = try await songSearchData(query: query, pageSize: pageSize)
     if let decoded = try? JSONDecoder().decode(SearchResponseRoot.self, from: data) {
@@ -657,12 +670,13 @@ nonisolated enum KaraokeAPIClient {
 
   private static func songSearchData(
     query: String,
+    page: Int = 1,
     pageSize: Int,
     sortBy: String? = nil,
     sortDescending: Bool? = nil
   ) async throws -> Data {
     var body: [String: Any] = [
-      "page": 1,
+      "page": max(1, page),
       "pageSize": pageSize,
       "search": query,
     ]
