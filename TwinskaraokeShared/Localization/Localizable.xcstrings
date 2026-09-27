@@ -1347,12 +1347,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld робота"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1363,6 +1357,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld робіт"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld робота"
                 }
               },
               "other" : {
@@ -1625,12 +1625,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld вподобання"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1641,6 +1635,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld вподобань"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld вподобання"
                 }
               },
               "other" : {
@@ -1725,12 +1725,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld слухач"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1741,6 +1735,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld слухачів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld слухач"
                 }
               },
               "other" : {
@@ -1813,12 +1813,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld слухає"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1829,6 +1823,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld слухають"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld слухає"
                 }
               },
               "other" : {
@@ -1959,12 +1959,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld хвилина"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1975,6 +1969,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld хвилин"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld хвилина"
                 }
               },
               "other" : {
@@ -2229,12 +2229,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld плейлист"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2245,6 +2239,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld плейлистів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld плейлист"
                 }
               },
               "other" : {
@@ -2299,12 +2299,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld результат"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2315,6 +2309,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld результатів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld результат"
                 }
               },
               "other" : {
@@ -2477,12 +2477,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld пісня"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2493,6 +2487,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld пісень"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld пісня"
                 }
               },
               "other" : {
@@ -2617,12 +2617,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Далі %lld пісня"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2633,6 +2627,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "Далі %lld пісень"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Далі %lld пісня"
                 }
               },
               "other" : {
@@ -27803,6 +27803,7 @@
       }
     },
     "No song is currently playing." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -37028,6 +37029,7 @@
       }
     },
     "Recently Released" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -37702,6 +37704,7 @@
       }
     },
     "Refresh this CarPlay list" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
