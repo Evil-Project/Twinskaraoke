@@ -1,5 +1,6 @@
 #if canImport(CarPlay) && canImport(UIKit)
 import CarPlay
+import MediaPlayer
 import SDWebImage
 import UIKit
 
@@ -17,8 +18,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var latestTemplate: CPListTemplate?
     private var radioTemplate: CPListTemplate?
     private var upNextTemplate: CPListTemplate?
+    private var queueTemplate: CPListTemplate?
     private var randomTemplate: CPListTemplate?
 
+    private struct PlaybackControlsState: Equatable {
+        let shuffled: Bool
+        let repeatMode: RepeatMode
+        let enabled: Bool
+    }
+    private var playbackControlsState: PlaybackControlsState?
+
+    private var libraryPage = 0
     private var serverPlaylists: [Playlist] = []
     private var favoritesSongCount = 0
     private var latestSongs: [Song] = []
@@ -53,7 +63,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         configureNowPlayingTemplate()
         observeContentChanges()
 
-        let playlists = makeRootListTemplate(title: String(localized: "Playlists"), tabTitle: String(localized: "Library"), systemImage: "music.note.list")
+        let playlists = makeRootListTemplate(title: String(localized: "Library"), tabTitle: String(localized: "Library"), systemImage: "music.note.list")
         let latest = makeRootListTemplate(title: String(localized: "New"), tabTitle: String(localized: "New"), systemImage: "sparkles")
         let radio = makeRootListTemplate(title: String(localized: "Radio"), tabTitle: String(localized: "Radio"), systemImage: "dot.radiowaves.left.and.right")
         let upNext = makeRootListTemplate(title: String(localized: "Up Next"), tabTitle: String(localized: "Up Next"), systemImage: "list.bullet")
@@ -85,6 +95,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         didDisconnectInterfaceController interfaceController: CPInterfaceController
     ) {
         CPNowPlayingTemplate.shared.remove(self)
+        CPNowPlayingTemplate.shared.updateNowPlayingButtons([])
+        playbackControlsState = nil
+        queueTemplate = nil
         interfaceController.delegate = nil
         contentTasks.values.forEach { $0.cancel() }
         playlistLoadTasks.values.forEach { $0.cancel() }
@@ -111,6 +124,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     func templateDidDisappear(_ aTemplate: CPTemplate, animated: Bool) {
+        if aTemplate === queueTemplate,
+           interfaceController?.templates.contains(where: { $0 === aTemplate }) != true {
+            queueTemplate = nil
+        }
         guard let interfaceController,
               !interfaceController.templates.contains(where: { $0 === aTemplate }),
               let playlistID = openPlaylistTemplates.first(where: { $0.value === aTemplate })?.key,
@@ -129,6 +146,55 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         nowPlayingTemplate.isUpNextButtonEnabled = true
         nowPlayingTemplate.upNextTitle = String(localized: "Up Next")
         nowPlayingTemplate.isAlbumArtistButtonEnabled = false
+        playbackControlsState = nil
+        refreshNowPlayingControls()
+    }
+
+    private func refreshNowPlayingControls() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.changeShuffleModeCommand.currentShuffleType = player.isShuffled ? .items : .off
+        switch player.repeatMode {
+        case .off: commands.changeRepeatModeCommand.currentRepeatType = .off
+        case .all: commands.changeRepeatModeCommand.currentRepeatType = .all
+        case .one: commands.changeRepeatModeCommand.currentRepeatType = .one
+        }
+        let template = CPNowPlayingTemplate.shared
+        template.isUpNextButtonEnabled = !player.isRadioMode
+        let state = PlaybackControlsState(
+            shuffled: player.isShuffled,
+            repeatMode: player.repeatMode,
+            enabled: player.currentSong != nil && !player.isRadioMode
+        )
+        guard state != playbackControlsState else { return }
+        playbackControlsState = state
+
+        // Use the same symbols and selected states as the phone's QueueView.
+        // Explicit images make repeat-one visible without relying on the head
+        // unit's rendering of the system repeat/shuffle buttons.
+        let shuffle = CPNowPlayingImageButton(image: UIImage(systemName: "shuffle") ?? UIImage()) { [weak self] _ in
+            guard let self, player.currentSong != nil, !player.isRadioMode else { return }
+            player.toggleShuffle()
+            refreshNowPlayingControls()
+        }
+        shuffle.isSelected = state.shuffled
+        shuffle.accessibilityLabel = String(localized: "Shuffle")
+        shuffle.accessibilityValue = state.shuffled ? String(localized: "On") : String(localized: "Off")
+
+        let repeatButton = CPNowPlayingImageButton(image: UIImage(systemName: state.repeatMode.symbol) ?? UIImage()) { [weak self] _ in
+            guard let self, player.currentSong != nil, !player.isRadioMode else { return }
+            player.toggleRepeat()
+            refreshNowPlayingControls()
+        }
+        repeatButton.isSelected = state.repeatMode.isActive
+        repeatButton.accessibilityLabel = String(localized: "Repeat")
+        switch state.repeatMode {
+        case .off: repeatButton.accessibilityValue = String(localized: "Off")
+        case .all: repeatButton.accessibilityValue = String(localized: "All")
+        case .one: repeatButton.accessibilityValue = String(localized: "One")
+        }
+        shuffle.isEnabled = state.enabled
+        repeatButton.isEnabled = state.enabled
+        template.updateNowPlayingButtons([shuffle, repeatButton])
     }
 
     private func observeContentChanges() {
@@ -142,6 +208,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             _ = self.player.currentSong
             _ = self.player.isPlaying
             _ = self.player.queue
+            _ = self.player.isShuffled
+            _ = self.player.repeatMode
+            _ = self.player.isRadioMode
+            _ = PinnedPlaylistsStore.shared.playlists
             _ = self.radio.nowPlaying
             _ = self.radio.isRefreshing
             _ = self.radio.refreshErrorMessage
@@ -226,7 +296,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 serverPlaylists = []
                 favoritesSongCount = FavoritesManager.shared.favoriteIDs.count
                 playlistsTemplate?.updateSections([
-                    controlsSection(reloadAction: { [weak self] in self?.loadPlaylists() }),
                     statusSection(String(localized: "Unable to Load Playlists"), detail: String(localized: "Check the connection and try again."), enabled: false),
                 ])
             }
@@ -246,7 +315,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard !Task.isCancelled else { return }
                 latestSongs = []
                 latestTemplate?.updateSections([
-                    controlsSection(reloadAction: { [weak self] in self?.loadLatestSongs() }),
                     statusSection(String(localized: "Unable to Load New Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
                 ])
             }
@@ -266,7 +334,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard !Task.isCancelled else { return }
                 randomSongs = []
                 randomTemplate?.updateSections([
-                    controlsSection(reloadAction: { [weak self] in self?.loadRandomSongs() }),
                     statusSection(String(localized: "Unable to Load Random Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
                 ])
             }
@@ -274,6 +341,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func refreshVisibleTemplates() {
+        refreshNowPlayingControls()
         rebuildPlaylistsTemplate()
         rebuildLatestTemplate()
         rebuildRadioTemplate()
@@ -293,19 +361,34 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let playlists = currentPlaylists()
         guard !playlists.isEmpty else {
             playlistsTemplate.updateSections([
-                controlsSection(reloadAction: { [weak self] in self?.loadPlaylists() }),
                 statusSection(String(localized: "No Playlists"), detail: String(localized: "Saved and server playlists will appear here."), enabled: false),
             ])
             return
         }
 
-        let items = playlists.prefix(maximumBrowseRows).map { playlist in
-            playlistListItem(playlist)
+        // Keep playlists one tap away and page in place on smaller head units.
+        let pageSize = max(1, min(maximumBrowseRows, CPListTemplate.maximumItemCount - 2))
+        libraryPage = min(libraryPage, (playlists.count - 1) / pageSize)
+        let start = libraryPage * pageSize
+        var items = playlists.dropFirst(start).prefix(pageSize).map(playlistListItem)
+        if libraryPage > 0 {
+            items.append(libraryPageItem(title: String(localized: "Previous Page", table: "CarPlay"), offset: -1))
         }
-        playlistsTemplate.updateSections([
-            controlsSection(reloadAction: { [weak self] in self?.loadPlaylists() }),
-            CPListSection(items: Array(items), header: String(localized: "Browse"), sectionIndexTitle: nil),
-        ])
+        if start + pageSize < playlists.count {
+            items.append(libraryPageItem(title: String(localized: "Next Page", table: "CarPlay"), offset: 1))
+        }
+        playlistsTemplate.updateSections([CPListSection(items: items)])
+    }
+
+    private func libraryPageItem(title: String, offset: Int) -> CPListItem {
+        let item = CPListItem(text: title, detailText: nil)
+        item.handler = { [weak self] _, completion in
+            guard let self else { completion(); return }
+            libraryPage += offset
+            rebuildPlaylistsTemplate()
+            completion()
+        }
+        return item
     }
 
     private func rebuildLatestTemplate() {
@@ -314,7 +397,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         guard !latestSongs.isEmpty else {
             latestTemplate.updateSections([
-                controlsSection(reloadAction: { [weak self] in self?.loadLatestSongs() }),
                 statusSection(String(localized: "No New Songs"), detail: String(localized: "Try reloading this list."), enabled: false),
             ])
             return
@@ -342,7 +424,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         guard !randomSongs.isEmpty else {
             randomTemplate.updateSections([
-                controlsSection(reloadAction: { [weak self] in self?.loadRandomSongs() }),
                 statusSection(String(localized: "No Random Songs"), detail: String(localized: "Try reloading this list."), enabled: false),
             ])
             return
@@ -412,12 +493,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let upNextTemplate else { return }
         configureNavigationButtons(for: upNextTemplate, reloadAction: nil)
         upNextTemplate.updateSections(upNextSections())
+        queueTemplate?.updateSections(upNextSections())
     }
 
     private func currentPlaylists() -> [Playlist] {
         let favorites = Playlist(
             id: Playlist.favoritesID,
-            name: "Favourite Songs",
+            name: String(localized: "Favourite Songs"),
             songCount: favoritesSongCount,
             mosaicMedia: nil,
             songListDTOs: nil
@@ -430,10 +512,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             playlists.append(playlist)
         }
 
-        UserPlaylistsManager.shared.playlists.map { $0.asPlaylist() }.forEach(append)
+        let personal = UserPlaylistsManager.shared.playlists.map { $0.asPlaylist() }
+        let saved = SavedPlaylistsStore.shared.playlists
+        let live = Dictionary((personal + [favorites] + saved + serverPlaylists).map { ($0.id, $0) },
+                              uniquingKeysWith: { first, _ in first })
         append(favorites)
+        PinnedPlaylistsStore.shared.playlists.forEach { append(live[$0.id] ?? $0) }
+        personal.forEach(append)
+        saved.forEach(append)
         serverPlaylists.forEach(append)
-        SavedPlaylistsStore.shared.playlists.forEach(append)
         return playlists
     }
 
@@ -503,10 +590,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard !Task.isCancelled else { return }
                 if openPlaylistSongs[playlist.id]?.isEmpty ?? true {
                     template.updateSections([
-                        controlsSection(reloadAction: { [weak self, weak template] in
-                            guard let self, let template else { return }
-                            self.loadPlaylistSongs(for: playlist, into: template)
-                        }),
                         statusSection(String(localized: "Unable to Load Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
                     ])
                 }
@@ -523,10 +606,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         guard !songs.isEmpty else {
             template.updateSections([
-                controlsSection(reloadAction: { [weak self, weak template] in
-                    guard let self, let template else { return }
-                    self.loadPlaylistSongs(for: playlist, into: template)
-                }),
                 statusSection(String(localized: "No Songs"), detail: String(localized: "This playlist is empty."), enabled: false),
             ])
             return
@@ -544,9 +623,16 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func showQueueTemplate() {
         guard let interfaceController else { return }
+        if let queueTemplate, interfaceController.templates.contains(where: { $0 === queueTemplate }) {
+            queueTemplate.updateSections(upNextSections())
+            interfaceController.pop(to: queueTemplate, animated: true) { _, _ in }
+            return
+        }
         let template = CPListTemplate(title: String(localized: "Up Next"), sections: upNextSections())
+        queueTemplate = template
         configureNavigationButtons(for: template, reloadAction: nil)
-        interfaceController.pushTemplate(template, animated: true) { [weak self] _, error in
+        interfaceController.pushTemplate(template, animated: true) { [weak self] success, error in
+            if !success { self?.queueTemplate = nil }
             if let error {
                 self?.log("Unable to show CarPlay queue: \(error.localizedDescription)")
             }
@@ -555,7 +641,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func upNextSections() -> [CPListSection] {
         let snapshot = upNextSnapshot()
-        var sections = [controlsSection(reloadAction: nil)]
+        var sections: [CPListSection] = []
 
         guard !snapshot.songs.isEmpty else {
             sections.append(
@@ -570,7 +656,18 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         sections.append(
             CPListSection(
-                items: songItems(snapshot.songs, context: snapshot.context),
+                items: snapshot.songs.prefix(maximumBrowseRows).map { song in
+                    let item = songItem(song, context: snapshot.context)
+                    item.handler = { [weak self] _, completion in
+                        if let self, upNextSnapshot().songs.contains(where: { $0.id == song.id }) {
+                            player.skipToQueuedSong(song)
+                            refreshVisibleTemplates()
+                            showNowPlaying()
+                        }
+                        completion()
+                    }
+                    return item
+                },
                 header: String(localized: "Coming Up"),
                 sectionIndexTitle: nil
             )
@@ -611,44 +708,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func configureNavigationButtons(for template: CPListTemplate, reloadAction: (() -> Void)?) {
         var buttons: [CPBarButton] = []
 
-        let nowButton = CPBarButton(title: "Now") { [weak self] _ in
-            self?.showNowPlaying()
-        }
-        nowButton.isEnabled = player.currentSong != nil
-        buttons.append(nowButton)
-
         if let reloadAction {
             buttons.append(CPBarButton(title: String(localized: "Reload")) { _ in reloadAction() })
         }
 
         template.trailingNavigationBarButtons = Array(buttons.prefix(2))
-    }
-
-    private func controlsSection(reloadAction: (() -> Void)?) -> CPListSection {
-        var items: [CPListItem] = []
-
-        let nowPlaying = CPListItem(
-            text: player.currentSong?.title ?? String(localized: "Now Playing"),
-            detailText: player.currentSong.map { songDetailText($0) } ?? String(localized: "No song is currently playing.")
-        )
-        nowPlaying.isEnabled = player.currentSong != nil
-        nowPlaying.isPlaying = player.currentSong != nil && player.isPlaying
-        nowPlaying.handler = { [weak self] _, completion in
-            self?.showNowPlaying()
-            completion()
-        }
-        items.append(nowPlaying)
-
-        if let reloadAction {
-            let reload = CPListItem(text: String(localized: "Reload"), detailText: String(localized: "Refresh this CarPlay list"))
-            reload.handler = { _, completion in
-                reloadAction()
-                completion()
-            }
-            items.append(reload)
-        }
-
-        return CPListSection(items: items, header: nil, sectionIndexTitle: nil)
     }
 
     private func radioControlsSection() -> CPListSection {
