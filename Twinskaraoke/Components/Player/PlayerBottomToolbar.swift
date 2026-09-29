@@ -24,8 +24,8 @@ enum PlayerQueueModeBadge {
     var label: String {
         switch self {
         case .shuffle: String(localized: "Shuffle on")
-        case .repeatAll: String(localized: "Repeat all")
-        case .repeatOne: String(localized: "Repeat one")
+        case .repeatAll: String(localized: "Repeat")
+        case .repeatOne: String(localized: "Repeat Once")
         }
     }
 

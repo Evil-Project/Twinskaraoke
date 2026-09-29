@@ -4,6 +4,17 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.magnettileman.Twinskaraoke</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>twinskaraoke</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -27,5 +38,7 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>WidgetAppGroupIdentifier</key>
+	<string>group.org.magnettilemanalt.Twinskaraoke</string>
 </dict>
 </plist>

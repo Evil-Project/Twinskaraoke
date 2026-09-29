@@ -31,9 +31,9 @@ nonisolated enum RepeatMode: Equatable, Sendable, Codable {
 
     func next() -> RepeatMode {
         switch self {
-        case .off: .all
-        case .all: .one
-        case .one: .off
+        case .off: .one
+        case .one: .all
+        case .all: .off
         }
     }
 }
@@ -94,7 +94,13 @@ final class AudioPlayerManager {
     private var deferredAIEffect: AudioEffect?
     var routeIcon: String = "airplayaudio"
     var routeName: String = ""
-    var repeatMode: RepeatMode = .off { didSet { scheduleSessionSave() } }
+    var repeatMode: RepeatMode = .off {
+        didSet {
+            if repeatMode == .one && oldValue != .one { repeatOnceRemaining = true }
+            scheduleSessionSave()
+        }
+    }
+    private(set) var repeatOnceRemaining = true
     var isShuffled: Bool { queueState.isShuffled }
     var autoplayEnabled: Bool = UserDefaults.standard.object(forKey: "nk.autoplayEnabled") as? Bool ?? true {
         didSet {
@@ -789,7 +795,8 @@ final class AudioPlayerManager {
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
         PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
             position: preferredStreamResumeTime(for: song) ?? playbackTime,
-            repeatMode: repeatMode, wasPlaying: isPlaying))
+            repeatMode: repeatMode, wasPlaying: isPlaying,
+            repeatOnceRemaining: repeatOnceRemaining))
     }
 
     private func restorePlaybackSession() {
@@ -803,6 +810,7 @@ final class AudioPlayerManager {
             currentSong = saved.song
             queueState = saved.queue
             repeatMode = saved.repeatMode
+            repeatOnceRemaining = saved.repeatOnceRemaining ?? true
             lastKnownPlaybackTime = saved.resumePosition
             progress = saved.song.duration > 0 ? saved.resumePosition / Double(saved.song.duration) : 0
             // Restore context without starting playback on launch.
@@ -1544,6 +1552,7 @@ final class AudioPlayerManager {
             DownloadManager.shared.download(song: song)
         }
         warmPlayerArtwork(for: song)
+        if !context.isEmpty { repeatOnceRemaining = true }
         queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
         // Songs with a remote source use the non-decompressing lookup; a
@@ -1633,12 +1642,12 @@ final class AudioPlayerManager {
             return
         }
 
-        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
+        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining)
         queueState.insertLast(song, after: current)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
         // the last song, and only then is the prepared work stale.
-        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore {
+        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining) != nextBefore {
             nextSongChanged()
         }
     }
@@ -2091,24 +2100,25 @@ final class AudioPlayerManager {
         updateNowPlayingInfo(reloadArtwork: false)
     }
 
-    /// Moves on when a song ends by itself, which is where Repeat One loops.
+    /// Moves on when a song ends by itself.
     func playNextOrRandom() {
         if isRadioMode { return }
         perform(queueState.advance(
             after: currentSong,
             repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled
+            autoplayEnabled: autoplayEnabled,
+            repeatOnceRemaining: repeatOnceRemaining
         ))
     }
 
-    /// The Next button and the lock-screen command. Unlike a song ending, a
-    /// skip leaves the song even with Repeat One on.
+    /// The Next button and lock-screen command follow the active queue order.
     func skipToNext() {
         if isRadioMode { return }
         perform(queueState.skip(
             after: currentSong,
             repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled
+            autoplayEnabled: autoplayEnabled,
+            repeatOnceRemaining: repeatOnceRemaining
         ))
     }
 
@@ -2118,10 +2128,9 @@ final class AudioPlayerManager {
             beginTrackTransitionBackgroundTask()
         #endif
         switch advance {
-        case .replayCurrent:
-            guard let current = currentSong else { return }
-            // Repeat-one replay: not a new listen, so don't count it again.
-            play(song: current, context: [], resetTransitionVolume: true, reportsPlayCount: false)
+        case .restartOnce(let first):
+            repeatOnceRemaining = false
+            play(song: first)
         case .play(let song):
             play(song: song)
         case .autoplay:
@@ -2157,11 +2166,13 @@ final class AudioPlayerManager {
     }
 
     func playInOrder(song: Song, context: [Song]) {
+        repeatOnceRemaining = true
         queueState.beginInOrder(context: context)
         play(song: song, context: context)
     }
 
     func playShuffled(from songs: [Song]) {
+        repeatOnceRemaining = true
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
         // The state already contains the shuffled queue and its original
         // ordering. Passing that queue back as a context would shuffle it a

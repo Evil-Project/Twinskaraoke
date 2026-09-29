@@ -22,6 +22,24 @@
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Sign simulator App Intents"
+               scriptText = "&quot;${SRCROOT}/Scripts/sign-simulator-intents.sh&quot;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "D0F981B42F94C10900FD69AB"
+                     BuildableName = "Twinskaraoke.app"
+                     BlueprintName = "Twinskaraoke"
+                     ReferencedContainer = "container:Twinskaraoke.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </BuildAction>
    <TestAction
       buildConfiguration = "Debug"

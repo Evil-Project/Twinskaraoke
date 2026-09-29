@@ -358,6 +358,7 @@ struct FullScreenPlayerView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingQueue = false
     @State private var showLyrics = false
+    @State private var handledLyricsRequest = 0
     @State private var didSetInitialSurface = false
     @State private var usesPadCanvas = false
     @State private var showKaraokeControls = false
@@ -537,7 +538,17 @@ struct FullScreenPlayerView: View {
                 showKaraokeControls = false
             }
         }
+        .onChange(of: AppRouter.shared.lyricsRequest) { _, request in
+            if request != handledLyricsRequest {
+                showLyrics = true
+                handledLyricsRequest = request
+            }
+        }
         .onAppear {
+            if AppRouter.shared.lyricsRequest != handledLyricsRequest {
+                showLyrics = true
+                handledLyricsRequest = AppRouter.shared.lyricsRequest
+            }
             favorites.loadIfNeeded()
             if let id = audioManager.currentSong?.id {
                 fetchCoverArtArtist(songID: id)
@@ -581,7 +592,7 @@ struct FullScreenPlayerView: View {
         }
         guard !didSetInitialSurface else { return }
         didSetInitialSurface = true
-        showLyrics = metrics.usesPadLayout
+        showLyrics = AppRouter.shared.lyricsRequest > 0 || metrics.usesPadLayout
     }
 
     private func compactMusicLayout(song: Song, metrics: PlayerLayoutMetrics) -> some View {

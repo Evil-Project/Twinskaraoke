@@ -116,23 +116,23 @@ struct PlaybackQueueStateTests {
         state.beginInOrder(context: songs)
 
         #expect(state.advance(after: songs[0], repeatMode: .off, autoplayEnabled: false) == .play(songs[1]))
-        #expect(state.advance(after: songs[1], repeatMode: .one, autoplayEnabled: false) == .replayCurrent)
+        #expect(state.advance(after: songs[1], repeatMode: .one, autoplayEnabled: false) == .restartOnce(songs[0]))
+        #expect(state.advance(after: songs[1], repeatMode: .one, autoplayEnabled: true, repeatOnceRemaining: false) == .stop)
         #expect(state.advance(after: songs[1], repeatMode: .all, autoplayEnabled: false) == .play(songs[0]))
         #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: true) == .autoplay)
         #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: false) == .stop)
     }
 
-    @Test("Next leaves the song under Repeat One; the song ending does not")
-    func skipIgnoresRepeatOne() {
+    @Test("Repeat Once wraps the playlist once, including when Next is tapped")
+    func skipFollowsRepeatOnce() {
         let songs = fixtures(3)
         var state = PlaybackQueueState()
         state.beginInOrder(context: songs)
 
-        #expect(state.advance(after: songs[0], repeatMode: .one, autoplayEnabled: false) == .replayCurrent)
+        #expect(state.advance(after: songs[0], repeatMode: .one, autoplayEnabled: false) == .play(songs[1]))
         #expect(state.skip(after: songs[0], repeatMode: .one, autoplayEnabled: false) == .play(songs[1]))
-        // At the end, a skip under Repeat One behaves as with repeat off.
-        #expect(state.skip(after: songs[2], repeatMode: .one, autoplayEnabled: true) == .autoplay)
-        #expect(state.skip(after: songs[2], repeatMode: .one, autoplayEnabled: false) == .stop)
+        #expect(state.skip(after: songs[2], repeatMode: .one, autoplayEnabled: true) == .restartOnce(songs[0]))
+        #expect(state.skip(after: songs[2], repeatMode: .one, autoplayEnabled: false, repeatOnceRemaining: false) == .stop)
         // Other modes skip exactly as the song ending would.
         #expect(state.skip(after: songs[2], repeatMode: .all, autoplayEnabled: false) == .play(songs[0]))
         #expect(state.skip(after: songs[0], repeatMode: .off, autoplayEnabled: false) == .play(songs[1]))

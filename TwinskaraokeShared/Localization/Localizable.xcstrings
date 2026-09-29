@@ -113,6 +113,9 @@
     "@%@" : {
 
     },
+    "%@" : {
+
+    },
     "%@ - %lld listening" : {
       "localizations" : {
         "de" : {
@@ -1347,12 +1350,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld робота"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1363,6 +1360,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld робіт"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld робота"
                 }
               },
               "other" : {
@@ -1625,12 +1628,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld вподобання"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1641,6 +1638,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld вподобань"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld вподобання"
                 }
               },
               "other" : {
@@ -1725,12 +1728,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld слухач"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1741,6 +1738,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld слухачів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld слухач"
                 }
               },
               "other" : {
@@ -1813,12 +1816,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld слухає"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1829,6 +1826,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld слухають"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld слухає"
                 }
               },
               "other" : {
@@ -1959,12 +1962,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld хвилина"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -1975,6 +1972,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld хвилин"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld хвилина"
                 }
               },
               "other" : {
@@ -2229,12 +2232,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld плейлист"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2245,6 +2242,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld плейлистів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld плейлист"
                 }
               },
               "other" : {
@@ -2299,12 +2302,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld результат"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2315,6 +2312,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld результатів"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld результат"
                 }
               },
               "other" : {
@@ -2477,12 +2480,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld пісня"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2493,6 +2490,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld пісень"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld пісня"
                 }
               },
               "other" : {
@@ -2617,12 +2620,6 @@
         "uk" : {
           "variations" : {
             "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Далі %lld пісня"
-                }
-              },
               "few" : {
                 "stringUnit" : {
                   "state" : "translated",
@@ -2633,6 +2630,12 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "Далі %lld пісень"
+                }
+              },
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Далі %lld пісня"
                 }
               },
               "other" : {
@@ -3121,6 +3124,12 @@
         }
       }
     },
+    "${action}" : {
+
+    },
+    "${setting}" : {
+
+    },
     "0:00 elapsed" : {
       "localizations" : {
         "de" : {
@@ -3166,6 +3175,9 @@
           }
         }
       }
+    },
+    "1 hour" : {
+
     },
     "1 listener" : {
       "localizations" : {
@@ -3712,6 +3724,9 @@
         }
       }
     },
+    "15 minutes" : {
+
+    },
     "15s" : {
       "localizations" : {
         "de" : {
@@ -3763,6 +3778,12 @@
           }
         }
       }
+    },
+    "30 minutes" : {
+
+    },
+    "45 minutes" : {
+
     },
     "404 Not Found" : {
       "localizations" : {
@@ -3858,6 +3879,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全新卡拉 OK 混音"
+          }
+        }
+      }
+    },
+    "A live stream has no song ending. Choose a timed sleep timer." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A live stream has no song ending. Choose a timed sleep timer."
           }
         }
       }
@@ -4355,6 +4388,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "加入「%@」"
+          }
+        }
+      }
+    },
+    "Add Current Song to Favorites" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Current Song to Favorites"
           }
         }
       }
@@ -5451,6 +5496,7 @@
       }
     },
     "All" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9103,6 +9149,18 @@
         }
       }
     },
+    "Check your connection and account, then try again." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your connection and account, then try again."
+          }
+        }
+      }
+    },
     "Check your connection and try again." : {
       "localizations" : {
         "de" : {
@@ -9344,6 +9402,9 @@
           }
         }
       }
+    },
+    "Choose a playlist in the Control Center control settings." : {
+
     },
     "Choose a song from Home, Songs, or Search." : {
       "localizations" : {
@@ -11409,6 +11470,13 @@
         }
       }
     },
+    "Control" : {
+
+    },
+    "Control Playback" : {
+      "comment" : "Title of the shortcut that allows the user to control playback.",
+      "isCommentAutoGenerated" : true
+    },
     "Controls the current song." : {
       "localizations" : {
         "de" : {
@@ -13433,6 +13501,18 @@
         }
       }
     },
+    "Cover Artists" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cover Artists"
+          }
+        }
+      }
+    },
     "Cover by %@" : {
       "localizations" : {
         "de" : {
@@ -14123,6 +14203,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目前歌曲"
+          }
+        }
+      }
+    },
+    "Current Song" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current Song"
           }
         }
       }
@@ -15132,6 +15224,14 @@
           }
         }
       }
+    },
+    "Don't Repeat" : {
+      "comment" : "Text for the accessibility value of the repeat button when repeat is off.",
+      "isCommentAutoGenerated" : true
+    },
+    "Don't Repeat." : {
+      "comment" : "Text displayed when the user toggles repeat mode to \"Don't Repeat.\"",
+      "isCommentAutoGenerated" : true
     },
     "done" : {
       "localizations" : {
@@ -16233,6 +16333,18 @@
         }
       }
     },
+    "Downloaded Songs" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded Songs"
+          }
+        }
+      }
+    },
     "Downloaded songs stay playable when the network drops." : {
       "localizations" : {
         "de" : {
@@ -17195,6 +17307,9 @@
         }
       }
     },
+    "End of song" : {
+
+    },
     "End of Song" : {
       "localizations" : {
         "de" : {
@@ -18102,6 +18217,10 @@
           }
         }
       }
+    },
+    "Favorite This Song" : {
+      "comment" : "Text for a shortcut to favorite the current song.",
+      "isCommentAutoGenerated" : true
     },
     "Favorites" : {
       "localizations" : {
@@ -26944,6 +27063,18 @@
         }
       }
     },
+    "Next Track in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Track in Twinskaraoke."
+          }
+        }
+      }
+    },
     "No Artists" : {
       "localizations" : {
         "de" : {
@@ -27803,6 +27934,7 @@
       }
     },
     "No song is currently playing." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -29413,6 +29545,7 @@
       }
     },
     "One" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -29660,6 +29793,30 @@
         }
       }
     },
+    "Open Lyrics" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Lyrics"
+          }
+        }
+      }
+    },
+    "Open Lyrics in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Lyrics in Twinskaraoke."
+          }
+        }
+      }
+    },
     "Open Notification Settings" : {
       "extractionState" : "manual",
       "generatesSymbol" : false,
@@ -29762,6 +29919,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開啟倉庫"
+          }
+        }
+      }
+    },
+    "Open Search" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Search"
           }
         }
       }
@@ -29998,6 +30167,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 iPhone 上開啟 Twinskaraoke，前往「帳號」→「在網頁上登入」，掃描代碼即可在此登入。"
+          }
+        }
+      }
+    },
+    "Open Twinskaraoke to choose a playlist." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Twinskaraoke to choose a playlist."
+          }
+        }
+      }
+    },
+    "Open Twinskaraoke to perform this action." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Twinskaraoke to perform this action."
           }
         }
       }
@@ -31146,6 +31339,18 @@
         }
       }
     },
+    "Original Artists" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Artists"
+          }
+        }
+      }
+    },
     "Password" : {
       "localizations" : {
         "de" : {
@@ -31676,6 +31881,18 @@
         }
       }
     },
+    "Personal Playlist" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal Playlist"
+          }
+        }
+      }
+    },
     "Pick a song from Home, Search, or your Library to start." : {
       "localizations" : {
         "de" : {
@@ -31982,6 +32199,9 @@
         }
       }
     },
+    "Play ${playlist}" : {
+
+    },
     "Play a playlist or song list to fill the queue." : {
       "localizations" : {
         "de" : {
@@ -32024,6 +32244,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放歌單或歌曲列表來填滿播放佇列。"
+          }
+        }
+      }
+    },
+    "Play a playlist, favorites, downloads, or live radio." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play a playlist, favorites, downloads, or live radio."
           }
         }
       }
@@ -32168,6 +32400,37 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放已下載歌曲"
+          }
+        }
+      }
+    },
+    "Play Downloaded Songs" : {
+
+    },
+    "Play Downloads" : {
+      "comment" : "Text for the \"Play Downloads\" shortcut.",
+      "isCommentAutoGenerated" : true
+    },
+    "Play Favorites" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Favorites"
+          }
+        }
+      }
+    },
+    "Play Favorites in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Favorites in Twinskaraoke."
           }
         }
       }
@@ -32472,6 +32735,18 @@
         }
       }
     },
+    "Play Live Radio in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Live Radio in Twinskaraoke."
+          }
+        }
+      }
+    },
     "Play live station" : {
       "localizations" : {
         "de" : {
@@ -32674,6 +32949,9 @@
         }
       }
     },
+    "Play or pause" : {
+
+    },
     "Play or Pause" : {
       "localizations" : {
         "de" : {
@@ -32716,6 +32994,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放或暫停"
+          }
+        }
+      }
+    },
+    "Play or Pause in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play or Pause in Twinskaraoke."
           }
         }
       }
@@ -32771,6 +33061,21 @@
           }
         }
       }
+    },
+    "Play Playlist" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Playlist"
+          }
+        }
+      }
+    },
+    "Play Playlist Control" : {
+
     },
     "Play Radio" : {
       "localizations" : {
@@ -32860,6 +33165,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放隨機歌曲"
+          }
+        }
+      }
+    },
+    "Play Twinskaraoke Radio" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Twinskaraoke Radio"
+          }
+        }
+      }
+    },
+    "Play Twinskaraoke Radio in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Twinskaraoke Radio in Twinskaraoke."
           }
         }
       }
@@ -32958,6 +33287,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回放"
+          }
+        }
+      }
+    },
+    "Playback Action" : {
+
+    },
+    "Playback Control" : {
+
+    },
+    "Playback has not started. Check your connection and try again in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback has not started. Check your connection and try again in Twinskaraoke."
           }
         }
       }
@@ -33724,6 +34071,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌單"
+          }
+        }
+      }
+    },
+    "Playlists and Actions" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playlists and Actions"
           }
         }
       }
@@ -35102,6 +35461,18 @@
         }
       }
     },
+    "Previous Track in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous Track in Twinskaraoke."
+          }
+        }
+      }
+    },
     "Primary Contact" : {
       "localizations" : {
         "de" : {
@@ -36032,6 +36403,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "待播放的歌曲: %1$lld 首 / 共 %2$lld 首"
+          }
+        }
+      }
+    },
+    "Quick Play" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick Play"
           }
         }
       }
@@ -37028,6 +37411,7 @@
       }
     },
     "Recently Released" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -37702,6 +38086,7 @@
       }
     },
     "Refresh this CarPlay list" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -39234,6 +39619,7 @@
       }
     },
     "Repeat all" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -39377,7 +39763,12 @@
         }
       }
     },
+    "Repeat Once" : {
+      "comment" : "The text for a player queue mode badge that repeats",
+      "isCommentAutoGenerated" : true
+    },
     "Repeat one" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -39474,6 +39865,14 @@
           }
         }
       }
+    },
+    "Repeat the playlist once." : {
+      "comment" : "Text describing the repeat mode when it's set to repeat the playlist once.",
+      "isCommentAutoGenerated" : true
+    },
+    "Repeat the playlist." : {
+      "comment" : "Text returned when the user toggles the repeat mode to repeat the playlist.",
+      "isCommentAutoGenerated" : true
     },
     "Requests translated lyrics." : {
       "localizations" : {
@@ -42043,6 +42442,18 @@
         }
       }
     },
+    "See what is on Twinskaraoke Radio and listen live." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See what is on Twinskaraoke Radio and listen live."
+          }
+        }
+      }
+    },
     "Selected" : {
       "localizations" : {
         "de" : {
@@ -42860,6 +43271,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shimeji 角色和動畫獨立於 App 下載，以便之後加入新內容。"
+          }
+        }
+      }
+    },
+    "Show Current Song" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Current Song"
           }
         }
       }
@@ -43818,6 +44241,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隨機播放已下載歌曲"
+          }
+        }
+      }
+    },
+    "Shuffle Downloaded Songs" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Downloaded Songs"
+          }
+        }
+      }
+    },
+    "Shuffle Downloaded Songs in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Downloaded Songs in Twinskaraoke."
+          }
+        }
+      }
+    },
+    "Shuffle Downloads" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Downloads"
+          }
+        }
+      }
+    },
+    "Shuffle Favorites" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Favorites"
+          }
+        }
+      }
+    },
+    "Shuffle Favorites in Twinskaraoke." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Favorites in Twinskaraoke."
+          }
+        }
+      }
+    },
+    "Shuffle is off." : {
+      "comment" : "Text displayed when the shuffle mode is turned off.",
+      "isCommentAutoGenerated" : true
+    },
+    "Shuffle is on." : {
+      "comment" : "Text returned when shuffle mode is enabled.",
+      "isCommentAutoGenerated" : true
+    },
+    "Shuffle Library" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Library"
           }
         }
       }
@@ -44832,6 +45335,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登入 Twinskaraoke"
+          }
+        }
+      }
+    },
+    "Sign in to Twinskaraoke to use your favorites and personal playlists." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to Twinskaraoke to use your favorites and personal playlists."
           }
         }
       }
@@ -46104,6 +46619,9 @@
         }
       }
     },
+    "Sleep Timer Duration" : {
+
+    },
     "Sleep timer remaining" : {
       "localizations" : {
         "de" : {
@@ -46398,6 +46916,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "發生問題"
+          }
+        }
+      }
+    },
+    "Song" : {
+      "comment" : "Type of entity representing a song.",
+      "isCommentAutoGenerated" : true
+    },
+    "Song Count" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Song Count"
           }
         }
       }
@@ -47463,6 +47997,9 @@
         }
       }
     },
+    "Start a ${duration} sleep timer" : {
+
+    },
     "Start a playlist" : {
       "localizations" : {
         "de" : {
@@ -47597,6 +48134,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "從頭開始"
+          }
+        }
+      }
+    },
+    "Start Sleep Timer" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Sleep Timer"
           }
         }
       }
@@ -49440,6 +49989,18 @@
         }
       }
     },
+    "The live station is unavailable. Try again later." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The live station is unavailable. Try again later."
+          }
+        }
+      }
+    },
     "The live station isn't reachable right now." : {
       "localizations" : {
         "de" : {
@@ -49998,6 +50559,18 @@
         }
       }
     },
+    "The song could not be added to favorites. Please try again." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The song could not be added to favorites. Please try again."
+          }
+        }
+      }
+    },
     "The video gallery endpoint is unavailable." : {
       "localizations" : {
         "de" : {
@@ -50356,6 +50929,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟隨系統"
+          }
+        }
+      }
+    },
+    "There are no playable songs in this collection." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no playable songs in this collection."
+          }
+        }
+      }
+    },
+    "There is no next song in this queue." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no next song in this queue."
+          }
+        }
+      }
+    },
+    "There is no previous song in this queue." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no previous song in this queue."
+          }
+        }
+      }
+    },
+    "There is no song loaded. Open Twinskaraoke and choose a song first." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no song loaded. Open Twinskaraoke and choose a song first."
           }
         }
       }
@@ -51055,6 +51676,14 @@
           }
         }
       }
+    },
+    "Toggle Repeat" : {
+      "comment" : "Text and icon for a shortcut to toggle repeat mode.",
+      "isCommentAutoGenerated" : true
+    },
+    "Toggle Shuffle" : {
+      "comment" : "Text for a shortcut that toggles shuffle mode.",
+      "isCommentAutoGenerated" : true
     },
     "Toggles translated lyrics." : {
       "localizations" : {
@@ -53116,6 +53745,10 @@
           }
         }
       }
+    },
+    "Unable to Open" : {
+      "comment" : "A title for a view that indicates that a requested content cannot be opened.",
+      "isCommentAutoGenerated" : true
     },
     "Unable to play this queue. Check your connection and try again." : {
       "localizations" : {
@@ -56580,6 +57213,18 @@
         }
       }
     },
+    "Your current song, playback controls, and queue." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your current song, playback controls, and queue."
+          }
+        }
+      }
+    },
     "Your favourites and playlists follow your account." : {
       "localizations" : {
         "de" : {
@@ -56714,6 +57359,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的卡拉 OK 個人主頁，\n直接在 Apple TV 上。"
+          }
+        }
+      }
+    },
+    "Your Music" : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Music"
+          }
+        }
+      }
+    },
+    "Your recent, pinned, saved, or favorite playlists." : {
+      "comment" : "iOS widgets and App Intents.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your recent, pinned, saved, or favorite playlists."
           }
         }
       }

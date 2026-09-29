@@ -307,9 +307,9 @@ struct QueueView: View {
 
     private var repeatModeDescription: String {
         switch audioManager.repeatMode {
-        case .off: String(localized: "Off")
-        case .all: String(localized: "All")
-        case .one: String(localized: "One")
+        case .off: String(localized: "Don't Repeat")
+        case .all: String(localized: "Repeat")
+        case .one: String(localized: "Repeat Once")
         }
     }
 

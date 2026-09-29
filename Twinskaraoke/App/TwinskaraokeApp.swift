@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 @main
@@ -22,6 +23,8 @@ struct TwinskaraokeApp: App {
         // Mirrors the signed-in session to the paired watch, which has no way
         // to sign in on its own. No-op on devices that can't pair one.
         WatchSessionPublisher.shared.activate()
+        IOSAppShortcuts.updateAppShortcutParameters()
+        WidgetSnapshotPublisher.shared.start()
     }
 
     var body: some Scene {

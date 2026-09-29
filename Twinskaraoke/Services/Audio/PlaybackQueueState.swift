@@ -7,7 +7,7 @@ import Foundation
 /// observable facade used by views.
 nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     enum Advance: Equatable, Sendable {
-        case replayCurrent
+        case restartOnce(Song)
         case play(Song)
         case autoplay
         case stop
@@ -59,11 +59,9 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     func advance(
         after current: Song?,
         repeatMode: RepeatMode,
-        autoplayEnabled: Bool
+        autoplayEnabled: Bool,
+        repeatOnceRemaining: Bool = true
     ) -> Advance {
-        if repeatMode == .one, current != nil {
-            return .replayCurrent
-        }
         if let current,
            let index = items.firstIndex(where: { $0.id == current.id }),
            items.indices.contains(index + 1)
@@ -73,22 +71,26 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         if repeatMode == .all, let first = items.first {
             return .play(first)
         }
+        if repeatMode == .one {
+            if repeatOnceRemaining, let first = items.first { return .restartOnce(first) }
+            return .stop
+        }
         return autoplayEnabled ? .autoplay : .stop
     }
 
-    /// Where Next goes. Repeat One loops a song that ends on its own; a skip
-    /// is the listener asking to leave it, so it moves on as if repeat were
-    /// off. Routing the button through `advance` replayed the same song, so
-    /// Next could never leave it while Repeat One was on.
+    /// Next follows the same queue order and one-extra-pass limit as natural
+    /// advancement, including at the end of the playlist.
     func skip(
         after current: Song?,
         repeatMode: RepeatMode,
-        autoplayEnabled: Bool
+        autoplayEnabled: Bool,
+        repeatOnceRemaining: Bool = true
     ) -> Advance {
         advance(
             after: current,
-            repeatMode: repeatMode == .one ? .off : repeatMode,
-            autoplayEnabled: autoplayEnabled
+            repeatMode: repeatMode,
+            autoplayEnabled: autoplayEnabled,
+            repeatOnceRemaining: repeatOnceRemaining
         )
     }
 
@@ -217,6 +219,7 @@ nonisolated struct PlaybackSessionSnapshot: Codable {
     let position: TimeInterval
     let repeatMode: RepeatMode
     let wasPlaying: Bool
+    var repeatOnceRemaining: Bool? = nil
 
     var resumePosition: TimeInterval {
         guard position.isFinite else { return 0 }

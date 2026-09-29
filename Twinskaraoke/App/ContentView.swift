@@ -26,7 +26,7 @@ private struct PopupHostView: View {
     private let videoFullScreen = VideoFullScreenState.shared
 
     init() {
-        _selectedSection = State(initialValue: Self.initialSection)
+        _selectedSection = State(initialValue: AppRouter.shared.hasPendingRoute ? AppRouter.shared.section : Self.initialSection)
     }
 
     var body: some View {
@@ -49,8 +49,29 @@ private struct PopupHostView: View {
             }
         }
         #endif
+        .onChange(of: AppRouter.shared.requestID) { _, _ in
+            selectedSection = AppRouter.shared.section
+        }
+        .onOpenURL { url in
+            guard let route = AppRoute(url: url) else { return }
+            AppRouter.shared.open(route)
+            selectedSection = AppRouter.shared.section
+        }
+        .sheet(isPresented: Binding(
+            get: { AppRouter.shared.detail != nil },
+            set: { if !$0 { AppRouter.shared.detail = nil } }
+        )) {
+            NavigationStack {
+                if let route = AppRouter.shared.detail {
+                    RoutedDetailView(route: route)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.detail = nil } } }
+                }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                WidgetSnapshotPublisher.shared.publish()
+                WidgetSnapshotPublisher.shared.refreshLibrarySuggestions()
                 AudioPlayerManager.shared.sleepTimer.checkExpiry()
                 homeViewModel.retryIfLoadFailed()
                 DownloadManager.shared.retryRestoration()
@@ -242,7 +263,7 @@ private struct PopupHostView: View {
     }
 }
 
-private enum RootSection: String, CaseIterable, Identifiable {
+enum RootSection: String, CaseIterable, Identifiable {
     case home
     case new
     case radio
