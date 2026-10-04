@@ -1,7 +1,7 @@
 # Twinskaraoke client for Apple Devices
-![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20iPadOS%20%7C%20tvOS%20%7C%20watchOS-black?logo=apple) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Language](https://img.shields.io/badge/Language-Swift-FA7343?logo=swift&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20iPadOS%20%7C%20watchOS%20%7C%20tvOSOS%20%7C%20macOS-black?logo=apple) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) ![Language](https://img.shields.io/badge/Language-Swift-FA7343?logo=swift&logoColor=white)
 
-A karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad, Apple TV and Apple Watch
+A karaoke player for [twinskaraoke.com](https://neurokaraoke.com) — available for iPhone, iPad, Apple Watch, Apple TV and Mac.
 
 All credits go to the website creator "Soul". This is a companion app for the website with extra features.
 
@@ -11,21 +11,21 @@ All credits go to the website creator "Soul". This is a companion app for the we
 - [@ytsodacan](https://github.com/ytsodacan) (SillyProotSoda) 
 - [@NELC-Official](https://github.com/NELC-Official) (NELC-Official)
 - [@cosmii02](https://github.com/cosmii02) (cosmii02)
+- [@MagnetTileMan](https://github.com/MagnetTileMan) (MagnetTileMan)
 
 **Full credits are maintained by Soul on the website: [twinskaraoke.com/credits](https://twinskaraoke.com/about#credits)**
 
 > **Update : We are officially live on TestFlight, see installation info below! Stay tuned for the App Store!**
 >
 > Note: The watchOS app is still 100% in development please be patient with us, thank you!
->
-> New: There is now an **Apple TV app** — see [Apple TV](#apple-tv-app) below. It is brand new, so expect rough edges.
 
 
 ## Features
 
-*   **Native Experience:** Better than the website!
+*  **Native Experience:** Better than the website!
 
 *  **Background Playback:** Full integration with the iOS Lock Screen and Control Center.
+
 *  **Apple Watch Companion:** Control from your wrist (work in progress)
 
 *  **Apple TV App:** Sing in the living room — big-screen shelves, playlists and full-screen synced lyrics.
@@ -37,6 +37,14 @@ All credits go to the website creator "Soul". This is a companion app for the we
 *  **Vocal & Instrumental Slider:** to separate tracks in real-time.
 
 *  **Live Radio & Galleries:** Listen to live streaming radio episodes, and browse through thousands of fan artworks and videos.
+
+*  **CarPlay:** Browse your library, new songs and live radio from your car’s display, with Now Playing and Up Next controls.
+
+*  **iPhone Widgets:** See Now Playing, live radio and your recent, pinned or favorite playlists on your Home Screen.
+
+*  **Control Center Controls:** Play playlists, radio, favorites or downloads, and control tracks, shuffle, repeat and the sleep timer.
+
+*  **Pinned Playlists & Sleep Timer:** Keep favorite playlists at the top of your library and stop playback after a set time or when the current song ends.
 
 <details>
 <summary><b>Screenshots</b></summary>
