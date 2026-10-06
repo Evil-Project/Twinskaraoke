@@ -41386,6 +41386,7 @@
       }
     },
     "Saved and server playlists will appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -51513,6 +51514,7 @@
       }
     },
     "This playlist is empty." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -52939,6 +52941,7 @@
       }
     },
     "Try reloading this list." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -53730,6 +53733,7 @@
       }
     },
     "Unable to Load New Songs" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -53776,6 +53780,7 @@
       }
     },
     "Unable to Load Playlists" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -53822,6 +53827,7 @@
       }
     },
     "Unable to Load Random Songs" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -53868,6 +53874,7 @@
       }
     },
     "Unable to Load Songs" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {

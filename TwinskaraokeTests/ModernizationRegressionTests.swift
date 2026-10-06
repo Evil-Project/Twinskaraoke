@@ -117,43 +117,63 @@ struct ModernizationRegressionTests {
         #expect(auth.authToken != "fixture-token")
     }
 
-    @Test("Search prominence never changes system minimization or installs a pan")
-    func prominencePreservesSystemOwnership() async throws {
-        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        let controller = UITabBarController()
-        window.rootViewController = controller
-        controller.tabBarMinimizeBehavior = .never
-        let initialRecognizers = controller.view.gestureRecognizers?.count ?? 0
-        let first = TabSearchProminenceCoordinator()
-        let second = TabSearchProminenceCoordinator()
-        first.attach(to: window)
-        second.attach(to: window)
-        #expect(first.controller == nil) // No presentation mutation during attachment/layout.
-        try await waitUntil { first.controller === controller && second.controller === controller }
-        #expect(controller.tabBarMinimizeBehavior == .never)
-        #expect((controller.view.gestureRecognizers?.count ?? 0) == initialRecognizers)
-        first.detach()
-        second.detach()
-        #expect(controller.tabBarMinimizeBehavior == .never)
-    }
+    @Test("The app keeps Search activation enabled across tab and appearance updates")
+    func nativeSearchActivationSurvivesUpdates() async throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        @MainActor func findTabController(in root: UIViewController?) -> UITabBarController? {
+            guard let root else { return nil }
+            if let tabs = root as? UITabBarController { return tabs }
+            for child in root.children {
+                if let tabs = findTabController(in: child) { return tabs }
+            }
+            return nil
+        }
 
-    @Test("Search coordinator follows replacements and cancels stale retries")
-    func prominenceAttachmentLifetime() async throws {
-        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
-        let window = UIWindow(windowScene: scene)
-        let first = UITabBarController()
-        let replacement = UITabBarController()
-        window.rootViewController = first
-        let coordinator = TabSearchProminenceCoordinator()
-        coordinator.attach(to: window)
-        try await waitUntil { coordinator.controller === first }
-        window.rootViewController = replacement
-        coordinator.attach(to: window)
-        try await waitUntil { coordinator.controller === replacement }
-        coordinator.detach()
-        try await Task.sleep(for: .milliseconds(150))
-        #expect(coordinator.controller == nil)
+        var appWindow: UIWindow?
+        var tabController: UITabBarController?
+        try await waitUntil {
+            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                for window in scene.windows {
+                    if let tabs = findTabController(in: window.rootViewController),
+                       tabs.tabs.count == RootSection.allCases.count {
+                        appWindow = window
+                        tabController = tabs
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        let window = try #require(appWindow)
+        let controller = try #require(tabController)
+        let search = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
+        #expect(search.automaticallyActivatesSearch)
+        let router = AppRouter.shared
+        let originalSection = router.section
+        let originalPendingRoute = router.hasPendingRoute
+        defer {
+            router.section = originalSection
+            router.hasPendingRoute = originalPendingRoute
+            router.requestID = UUID()
+        }
+        for section in [RootSection.library, .home] {
+            router.section = section
+            router.requestID = UUID()
+            let index = try #require(RootSection.allCases.firstIndex(of: section))
+            try await waitUntil { controller.selectedTab === controller.tabs[index] }
+            let updatedSearch = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
+            #expect(updatedSearch.automaticallyActivatesSearch)
+        }
+        let originalStyle = window.overrideUserInterfaceStyle
+        defer { window.overrideUserInterfaceStyle = originalStyle }
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            window.overrideUserInterfaceStyle = style
+            window.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(100))
+            let updatedSearch = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
+            #expect(updatedSearch.automaticallyActivatesSearch)
+            #expect(controller.tabBarMinimizeBehavior == .onScrollDown)
+        }
     }
 
     private func waitUntil(_ condition: () -> Bool) async throws {

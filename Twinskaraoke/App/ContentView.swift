@@ -161,6 +161,9 @@ private struct PopupHostView: View {
             }
         }
         .tint(.appAccent)
+        // Declare activation in SwiftUI so tab rebuilds preserve the separate
+        // Search button instead of resetting an underlying UIKit assignment.
+        .tabViewSearchActivation(.searchTabSelection)
         // The mini player goes in the system's own accessory slot — the one
         // Apple Music uses. That is what gives it Liquid Glass, the merge into
         // the minimized tab bar, and a bottom content inset on every screen
@@ -175,7 +178,6 @@ private struct PopupHostView: View {
         // every comparable app restore at the scroll edge, which is what this
         // does now.
         .tabBarMinimizeBehavior(.onScrollDown)
-        .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {
