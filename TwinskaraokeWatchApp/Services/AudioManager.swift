@@ -6,12 +6,28 @@ import SwiftUI
 import Observation
 
 enum PlaybackMode {
-    case listLoop
-    case singleLoop
+    case off
+    case one
+    case all
     var iconName: String {
         switch self {
-        case .listLoop: "repeat"
-        case .singleLoop: "repeat.1"
+        case .off, .all: "repeat"
+        case .one: "repeat.1"
+        }
+    }
+    var isActive: Bool { self != .off }
+    var accessibilityValue: String {
+        switch self {
+        case .off: String(localized: "Off")
+        case .one: String(localized: "Repeat One")
+        case .all: String(localized: "Repeat All")
+        }
+    }
+    var next: PlaybackMode {
+        switch self {
+        case .off: .one
+        case .one: .all
+        case .all: .off
         }
     }
 }
@@ -21,27 +37,28 @@ enum PlaybackMode {
 class AudioManager {
     static let shared = AudioManager()
     var currentSong: Song? {
-        didSet { refreshUpNext() }
+        didSet { refreshUpNext(); WatchAuthManager.shared.localPlaybackDidChange() }
     }
-    var isPlaying = false
+    var isPlaying = false { didSet { if oldValue != isPlaying { WatchAuthManager.shared.localPlaybackDidChange() } } }
     var isLoading = false
-    var currentTime: Double = 0
+    var playbackError: String?
+    var currentTime: Double = 0 { didSet { WatchAuthManager.shared.localPlaybackDidChange(periodic: true) } }
     var duration: Double = 0
     var queue: [Song] = [] {
-        didSet { refreshUpNext() }
+        didSet { refreshUpNext(); WatchAuthManager.shared.localPlaybackDidChange() }
     }
     var currentIndex: Int = 0 {
-        didSet { refreshUpNext() }
+        didSet { refreshUpNext(); WatchAuthManager.shared.localPlaybackDidChange() }
     }
     /// Up-next slice of the queue plus its summary string, recomputed only when
     /// the queue or current track changes (views re-evaluate on every 0.5s tick).
     private(set) var upNextSongs: [Song] = []
     private(set) var queueSummaryText = String(localized: "End of queue")
-    var playbackMode: PlaybackMode = .listLoop
-    var isShuffleOn = false
+    var playbackMode: PlaybackMode = .off { didSet { WatchAuthManager.shared.localPlaybackDidChange() } }
+    private var originalQueue: [Song] = []
+    var isShuffleOn = false { didSet { WatchAuthManager.shared.localPlaybackDidChange() } }
     var volume: Double = AudioManager.storedVolume()
-    /// Live radio plays a stream straight from the network instead of going
-    /// through the download-then-play cache pipeline, and has no queue,
+    /// Live radio streams without a downloadable offline copy, and has no queue,
     /// duration, or seekable position. Everything that assumes those is gated
     /// on this.
     private(set) var isRadioMode = false
@@ -56,6 +73,9 @@ class AudioManager {
     /// Radio artwork comes from the station metadata, not from `Song`, which
     /// carries only a synthetic ID for the current track.
     private var radioArtworkURL: URL?
+    private var radioStreamURL: URL?
+    private var transferredPosition: Double?
+    @ObservationIgnored private var companionProgressTimer: Timer?
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
@@ -63,8 +83,8 @@ class AudioManager {
     // Player-item/player publishers live here so cleanupPlayer can drop them
     // without touching the audio-session handlers in `cancellables`.
     private var playerCancellables = Set<AnyCancellable>()
-    private var downloadTask: URLSessionDownloadTask?
-    private var downloadToken: UUID?
+    private var metadataToken: UUID?
+    private var startupTimeout: Task<Void, Never>?
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
     private var recoveringFromBrokenCache: Set<String> = []
     private var volumePersistWorkItem: DispatchWorkItem?
@@ -94,6 +114,25 @@ class AudioManager {
         setupInterruptionHandler()
     }
 
+    @ObservationIgnored private(set) lazy var sleepTimer = SleepTimer { [weak self] in
+        _ = self?.pausePlayback()
+        WatchAuthManager.shared.localPlaybackDidChange()
+    }
+
+    func setSleepTimer(minutes: Int? = nil, endOfSong: Bool = false) {
+        if WatchAuthManager.shared.output == .phone {
+            _ = WatchAuthManager.shared.sendPlaybackCommand(CompanionPlayback.Command(
+                sessionID: WatchAuthManager.shared.currentPlaybackSessionID,
+                action: .sleepTimer, sleepMinutes: minutes, sleepAtEndOfSong: endOfSong))
+            return
+        }
+        guard WatchAuthManager.shared.canPlayLocally else { return }
+        sleepTimer.cancel()
+        if endOfSong { sleepTimer.startEndOfSong() }
+        else if let minutes { sleepTimer.start(minutes: minutes) }
+        WatchAuthManager.shared.localPlaybackDidChange()
+    }
+
     var progress: Double {
         guard duration > 0 else { return 0 }
         return currentTime / duration
@@ -117,6 +156,165 @@ class AudioManager {
         queueSummaryText = "\(countText) - \(Self.queueDurationText(for: songs))"
     }
 
+    private func sendToPhone(
+        _ action: CompanionPlayback.Action,
+        song: Song? = nil,
+        queue: [Song]? = nil,
+        position: Double? = nil,
+        streamURL: URL? = nil,
+        artworkURL: URL? = nil,
+        shuffleEnabled: Bool? = nil
+    ) -> Bool {
+        if WatchAuthManager.shared.changingOutput {
+            playbackError = String(localized: "Changing audio output. Try again in a moment.")
+            return true
+        }
+        guard WatchAuthManager.shared.output == .phone else {
+            if !WatchAuthManager.shared.canPlayLocally {
+                playbackError = "Reconnect to iPhone to finish changing output, then select Apple Watch again."
+                return true
+            }
+            return false
+        }
+        let command = CompanionPlayback.Command(
+            sessionID: WatchAuthManager.shared.currentPlaybackSessionID,
+            action: action, song: song, queue: queue, position: position,
+            streamURL: streamURL, artworkURL: artworkURL, shuffleEnabled: shuffleEnabled
+        )
+        return WatchAuthManager.shared.sendPlaybackCommand(command)
+    }
+
+    func stopForOutputTransfer() {
+        sleepTimer.cancel()
+        playbackRequested = false
+        shouldResumeAfterInterruption = false
+        metadataToken = nil
+        cleanupPlayer()
+        companionProgressTimer?.invalidate()
+        companionProgressTimer = nil
+        isPlaying = false
+        isLoading = false
+        isSessionActive = false
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    func clearAccountPlayback() {
+        stopForOutputTransfer()
+        currentSong = nil
+        queue = []
+        currentIndex = 0
+        currentTime = 0
+        duration = 0
+        isRadioMode = false
+        radioStreamURL = nil
+        radioArtworkURL = nil
+        transferredPosition = nil
+    }
+
+    func localSnapshot(lease: CompanionPlayback.Lease, revision: Int) -> CompanionPlayback.Snapshot {
+        CompanionPlayback.Snapshot(sessionID: lease.sessionID, revision: revision, owner: .watch,
+            song: currentSong, queue: queue, isPlaying: isPlaying,
+            isRadio: isRadioMode, radioArtworkURL: radioArtworkURL,
+            position: currentTime.isFinite ? currentTime : 0, duration: duration.isFinite ? duration : 0,
+            isShuffled: isShuffleOn,
+            repeatSetting: playbackMode == .one ? .one : (playbackMode == .all ? .all : .off),
+            error: playbackError, updatedAt: Date(), ownershipEpoch: lease.epoch, radioStreamURL: radioStreamURL,
+            sleepDeadline: sleepTimer.deadline, sleepAtEndOfSong: sleepTimer.endsWithCurrentSong)
+    }
+
+    func applyRemoteCommand(_ command: CompanionPlayback.Command) {
+        guard WatchAuthManager.shared.canPlayLocally else { return }
+        switch command.action {
+        case .play:
+            if let shuffled = command.shuffleEnabled { isShuffleOn = shuffled }
+            if let song = command.song { play(song: song, context: command.queue ?? [song]) }
+        case .sleepTimer: setSleepTimer(minutes: command.sleepMinutes, endOfSong: command.sleepAtEndOfSong == true)
+        case .pause: _ = pausePlayback()
+        case .resume: _ = resumePlayback()
+        case .next: playNext()
+        case .previous: playPrevious()
+        case .seek: if let time = command.position, time.isFinite { seek(to: time) }
+        case .shuffle: toggleShuffle()
+        case .repeatMode: toggleMode()
+        case .radio:
+            if let song = command.song, let url = command.streamURL {
+                playRadio(streamURL: url, song: song, artworkURL: command.artworkURL)
+            }
+        case .stopRadio: stopRadio()
+        case .replaceQueue: queue = command.queue ?? []
+        case .playNext, .playLast:
+            if let song = command.song {
+                let index = command.action == .playNext ? min(currentIndex + 1, queue.count) : queue.count
+                queue.insert(song, at: index)
+            }
+        case .transferToPhone, .transferToWatch: break
+        }
+    }
+
+    func applyCompanionSnapshot(_ snapshot: CompanionPlayback.Snapshot) {
+        if snapshot.owner == .watch {
+            sleepTimer.cancel()
+            if let deadline = snapshot.sleepDeadline { sleepTimer.start(deadline: deadline) }
+            else if snapshot.sleepAtEndOfSong == true { sleepTimer.startEndOfSong() }
+        } else {
+            sleepTimer.mirror(deadline: snapshot.sleepDeadline, endsWithCurrentSong: snapshot.sleepAtEndOfSong == true)
+        }
+        // A companion snapshot only updates presentation. It must never open a
+        // player on the watch while the phone owns audio.
+        if player != nil { cleanupPlayer() }
+        metadataToken = nil
+        playbackRequested = false
+        // Position snapshots arrive frequently. Replacing the whole queue and
+        // song on each tick makes watchOS rebuild an active NavigationStack and
+        // page view while it is animating into Now Playing.
+        if currentSong?.id != snapshot.song?.id
+            || currentSong?.title != snapshot.song?.title
+            || currentSong?.artistName != snapshot.song?.artistName
+            || currentSong?.thumbnailURL != snapshot.song?.thumbnailURL {
+            currentSong = snapshot.song
+        }
+        if queue != snapshot.queue { queue = snapshot.queue }
+        let index = snapshot.song.flatMap { song in queue.firstIndex(of: song) } ?? 0
+        if currentIndex != index { currentIndex = index }
+        if isRadioMode != snapshot.isRadio { isRadioMode = snapshot.isRadio }
+        if radioArtworkURL != snapshot.radioArtworkURL { radioArtworkURL = snapshot.radioArtworkURL }
+        radioStreamURL = snapshot.radioStreamURL
+        if snapshot.owner == .watch {
+            companionProgressTimer?.invalidate()
+            companionProgressTimer = nil
+            transferredPosition = snapshot.position
+            isPlaying = false
+        } else if isPlaying != snapshot.isPlaying { isPlaying = snapshot.isPlaying }
+        if isLoading { isLoading = false }
+        currentTime = snapshot.position.isFinite ? max(0, snapshot.position) : 0
+        duration = snapshot.duration.isFinite ? max(0, snapshot.duration) : 0
+        if isShuffleOn != snapshot.isShuffled { isShuffleOn = snapshot.isShuffled }
+        switch snapshot.repeatSetting {
+        case .off: playbackMode = .off
+        case .one: playbackMode = .one
+        case .all: playbackMode = .all
+        }
+        playbackError = snapshot.error
+        if snapshot.owner == .phone, companionProgressTimer == nil {
+            companionProgressTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isPlaying, !self.isRadioMode else { return }
+                    self.currentTime = min(self.currentTime + 1, self.duration)
+                }
+            }
+        }
+    }
+
+    private func failPlayback(_ message: String) {
+        cleanupPlayer()
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        if isRadioMode { isRadioMode = false }
+        playbackError = message
+        updateNowPlayingInfo()
+    }
+
     private static func queueDurationText(for songs: [Song]) -> String {
         let totalSeconds = songs.reduce(0) { $0 + max(0, $1.duration) }
         guard totalSeconds > 0 else { return "0:00" }
@@ -132,7 +330,9 @@ class AudioManager {
         return "\(seconds)s"
     }
 
-    func play(song: Song, context: [Song] = []) {
+    func play(song: Song, context: [Song] = [], shuffled: Bool? = nil) {
+        if let shuffled { isShuffleOn = shuffled }
+        transferredPosition = nil
         var playbackQueue = context.isEmpty ? [song] : context
         if let index = playbackQueue.firstIndex(of: song) {
             currentIndex = index
@@ -142,6 +342,16 @@ class AudioManager {
         }
         queue = playbackQueue
         currentSong = song
+        playbackError = nil
+        if sendToPhone(.play, song: song, queue: playbackQueue, shuffleEnabled: shuffled ?? isShuffleOn) {
+            isLoading = playbackError == nil
+            return
+        }
+        if isShuffleOn {
+            originalQueue = playbackQueue
+            queue = [song] + playbackQueue.filter { $0.id != song.id }.shuffled()
+            currentIndex = 0
+        } else { originalQueue = [] }
         prepareAndPlay()
     }
 
@@ -149,10 +359,16 @@ class AudioManager {
     /// index rather than by song lookup so tapping a repeated song targets
     /// that occurrence instead of the first match in the context.
     func playSong(at index: Int, context: [Song]) {
+        transferredPosition = nil
         guard context.indices.contains(index) else { return }
         queue = context
         currentIndex = index
         currentSong = context[index]
+        playbackError = nil
+        if sendToPhone(.play, song: context[index], queue: context) {
+            isLoading = playbackError == nil
+            return
+        }
         prepareAndPlay()
     }
 
@@ -160,17 +376,33 @@ class AudioManager {
     /// offset rather than by song lookup so tapping a repeated song targets
     /// that occurrence instead of the first match in the queue.
     func playUpNext(at offset: Int) {
+        transferredPosition = nil
         guard let baseIndex = resolvedCurrentQueueIndex else { return }
         let index = baseIndex + 1 + offset
         guard queue.indices.contains(index) else { return }
         currentIndex = index
         currentSong = queue[index]
+        playbackError = nil
+        if sendToPhone(.play, song: queue[index], queue: queue) {
+            isLoading = playbackError == nil
+            return
+        }
         prepareAndPlay()
     }
 
     // MARK: - Live radio
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        playbackError = nil
+        if sendToPhone(.radio, song: song, streamURL: streamURL, artworkURL: artworkURL) {
+            if playbackError == nil {
+                currentSong = song
+                isRadioMode = true
+                isLoading = true
+            }
+            return
+        }
+        radioStreamURL = streamURL
         // Already tuned in: the track changed under us, not the station.
         if isRadioMode, player != nil, currentSong?.id == song.id {
             radioArtworkURL = artworkURL
@@ -179,9 +411,7 @@ class AudioManager {
             return
         }
         cleanupPlayer()
-        downloadTask?.cancel()
-        downloadToken = nil
-        downloadTask = nil
+        metadataToken = nil
         cancellables.removeAll()
         setupInterruptionHandler()
 
@@ -201,7 +431,7 @@ class AudioManager {
     /// Applies a metadata poll to the track already playing, without touching
     /// the stream itself.
     func updateRadioMetadata(song: Song, artworkURL: URL?) {
-        guard isRadioMode else { return }
+        guard WatchAuthManager.shared.canPlayLocally, isRadioMode else { return }
         radioArtworkURL = artworkURL
         currentSong = song
         updateNowPlayingInfo()
@@ -209,6 +439,7 @@ class AudioManager {
 
     func stopRadio() {
         guard isRadioMode else { return }
+        if sendToPhone(.stopRadio) { return }
         cleanupPlayer()
         isRadioMode = false
         radioArtworkURL = nil
@@ -236,31 +467,32 @@ class AudioManager {
             return
         }
         Task.detached(priority: .userInitiated) {
-            let activated = Self.bringUpPlaybackSession()
+            let activated = await Self.bringUpPlaybackSession()
             await MainActor.run { [weak self] in
                 self?.isSessionActive = activated
+                guard activated else {
+                    self?.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
+                    return
+                }
                 start()
             }
         }
     }
 
-    /// Starts a player away from the main actor.
-    ///
-    /// `play` is `NS_SWIFT_NONISOLATED` like the rest of AVPlayer's transport:
-    /// it is the call that actually opens the route, and the one worth keeping
-    /// off the actor that has to keep drawing while it happens.
-    private nonisolated static func startOffMainActor(_ player: AVPlayer) {
-        Task.detached(priority: .userInitiated) {
-            player.play()
-        }
+    /// Keep transport ordered with pause and cleanup on the main actor.
+    private static func startPlayer(_ player: AVPlayer) {
+        player.play()
     }
 
-    private nonisolated static func bringUpPlaybackSession() -> Bool {
+    private nonisolated static func bringUpPlaybackSession() async -> Bool {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
-            try session.setActive(true)
-            return true
+            return await withCheckedContinuation { continuation in
+                session.activate(options: []) { @Sendable success, _ in
+                    continuation.resume(returning: success)
+                }
+            }
         } catch {
             return false
         }
@@ -278,7 +510,7 @@ class AudioManager {
     private func startRadioStream(url: URL) {
         let token = UUID()
         radioStreamToken = token
-        let startingVolume = Float(volume)
+        let startingVolume: Float = 1
         Task.detached(priority: .userInitiated) {
             let playerItem = AVPlayerItem(url: url)
             let player = AVPlayer(playerItem: playerItem)
@@ -287,15 +519,17 @@ class AudioManager {
             // dropping back to the start of the buffer.
             player.automaticallyWaitsToMinimizeStalling = true
             player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-            let activated = Self.bringUpPlaybackSession()
-            let shouldStart = await MainActor.run { [weak self] () -> Bool in
-                guard let self, self.radioStreamToken == token else { return false }
+            let activated = await Self.bringUpPlaybackSession()
+            await MainActor.run { [weak self] in
+                guard let self, self.radioStreamToken == token, WatchAuthManager.shared.canPlayLocally else { return }
                 self.isSessionActive = activated
+                guard activated else {
+                    self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
+                    return
+                }
                 self.adoptRadioPlayer(player, item: playerItem)
-                return self.playbackRequested
+                if self.playbackRequested { Self.startPlayer(player) }
             }
-            guard shouldStart else { return }
-            player.playImmediately(atRate: 1.0)
         }
     }
 
@@ -310,14 +544,12 @@ class AudioManager {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
                     if playbackRequested, isSessionActive {
-                        Self.startOffMainActor(player)
+                        Self.startPlayer(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
                 } else if status == .failed {
-                    // No cache to fall back on and no next track to skip to:
-                    // surface it as stopped and let the listener retry.
-                    stopRadio()
+                    failPlayback(String(localized: "Radio couldn't start. Check your connection and try again."))
                 }
             }
             .store(in: &playerCancellables)
@@ -330,6 +562,9 @@ class AudioManager {
     }
 
     private func prepareAndPlay() {
+        guard WatchAuthManager.shared.canPlayLocally else { return }
+        companionProgressTimer?.invalidate()
+        companionProgressTimer = nil
         // Any ordinary song leaves the station behind; this is the single
         // funnel every play path goes through.
         isRadioMode = false
@@ -339,10 +574,10 @@ class AudioManager {
         duration = 0
         isPlaying = false
         playbackRequested = true
+        playbackError = nil
         cancellables.removeAll()
         setupInterruptionHandler()
-        downloadTask?.cancel()
-        downloadToken = nil
+        metadataToken = nil
         guard let song = currentSong else {
             playbackRequested = false
             isLoading = false
@@ -351,73 +586,65 @@ class AudioManager {
         // Every play path funnels through here, so recents are recorded once
         // rather than at each of the four call sites that set `currentSong`.
         RecentlyPlayedStore.shared.record(song)
-        let localURL = localCacheURL(for: song.id)
+        let localURL = WatchDownloads.shared.localURL(for: song.id) ?? localCacheURL(for: song.id)
         if FileManager.default.fileExists(atPath: localURL.path) {
             isLoading = true
             validateCacheAndPlay(song: song, cacheURL: localURL)
             return
         }
         guard let remoteURL = song.audioURL else {
-            playbackRequested = false
-            isLoading = false
+            isLoading = true
+            let token = UUID()
+            metadataToken = token
+            Task { [weak self] in
+                do {
+                    let canonical = try await KaraokeAPIClient.fetchSong(id: song.id)
+                    guard let self, self.metadataToken == token, self.currentSong?.id == song.id,
+                          WatchAuthManager.shared.canPlayLocally else { return }
+                    let resolved = song.fillingMissingMetadata(from: canonical)
+                    guard let url = resolved.audioURL else {
+                        self.failPlayback("This song has no playable audio. Choose another song.")
+                        return
+                    }
+                    self.currentSong = resolved
+                    self.metadataToken = nil
+                    self.setupPlayer(with: url)
+                } catch {
+                    guard let self, self.metadataToken == token else { return }
+                    self.failPlayback("Couldn't load this song's audio. Sync your iPhone account and try again.")
+                }
+            }
             return
         }
         isLoading = true
-        startDownload(song: song, remoteURL: remoteURL, destinationURL: localURL)
+        setupPlayer(with: remoteURL)
     }
 
-    /// Single download/validate/play pipeline: every path that fetches remote
-    /// audio (fresh play, cache re-download, broken-cache recovery) goes
-    /// through here so fixes apply in one place.
-    private func startDownload(song: Song, remoteURL: URL, destinationURL: URL) {
-        let token = UUID()
-        downloadToken = token
-        downloadTask = URLSession.shared.downloadTask(with: remoteURL) { [weak self] tempURL, response, error in
-            // URLSession deletes the downloaded file the moment this handler
-            // returns, so the header check and the move have to happen here
-            // rather than after a hop to the main queue. Doing them over there
-            // is what silenced every non-radio song on device: the file was
-            // already gone, so the header read failed and playback was dropped
-            // without a spinner, an error, or a sound.
-            let stored: Bool
-            if let tempURL, error == nil, Self.acceptsAudioResponse(response) {
-                stored = Self.storeDownloadedAudio(tempURL: tempURL, destinationURL: destinationURL)
-            } else {
-                if let tempURL {
-                    try? FileManager.default.removeItem(at: tempURL)
-                }
-                stored = false
-            }
-            DispatchQueue.main.async { [weak self] in
-                guard let self,
-                      self.downloadToken == token,
-                      self.currentSong?.id == song.id
-                else { return }
-                self.downloadToken = nil
-                self.downloadTask = nil
-                guard stored else {
-                    self.isLoading = false
-                    self.playbackRequested = false
-                    return
-                }
-                // `isLoading` stays set until the player takes over: validation
-                // is another async hop, and dropping the spinner here would
-                // flash the idle controls in between.
-                self.finishDownloadedPlayback(destinationURL: destinationURL, song: song)
-            }
-        }
-        downloadTask?.resume()
-    }
-
+    // Uncached songs stream through AVPlayer, whose media transport remains
+    // active with background audio. Explicit offline copies use the watch's
+    // background URLSession download service, rather than a foreground task
+    // that can stall or be suspended before an entire song is downloaded.
     private func setupPlayer(with localURL: URL) {
+        guard WatchAuthManager.shared.canPlayLocally, playbackRequested else { return }
         // Raced async cache validations can both reach here for one song;
         // tear down any existing player and its observers so two players
         // never run at once and no orphaned observer keeps firing.
         cleanupPlayer()
         let playerItem = AVPlayerItem(url: localURL)
         let player = AVPlayer(playerItem: playerItem)
-        player.volume = Float(volume)
+        player.volume = 1
+        player.automaticallyWaitsToMinimizeStalling = true
         self.player = player
+        startupTimeout = Task { [weak self, weak player] in
+            do { try await Task.sleep(for: .seconds(30)) } catch { return }
+            guard let self, let player, self.player === player, self.playbackRequested,
+                  !self.isPlaying else { return }
+            self.failPlayback("Audio didn't start. Check your watch connection and Bluetooth output, then tap Play to retry.")
+        }
+        if let position = transferredPosition, position.isFinite, position > 0 {
+            player.seek(to: CMTime(seconds: position, preferredTimescale: 600))
+        }
+        transferredPosition = nil
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         playerItem.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
@@ -436,7 +663,7 @@ class AudioManager {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
                     if playbackRequested, isSessionActive {
-                        Self.startOffMainActor(player)
+                        Self.startPlayer(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -444,8 +671,9 @@ class AudioManager {
                     isLoading = false
                     isPlaying = false
                     if !recoverFromBrokenCache(playbackURL: localURL) {
-                        playbackRequested = false
-                        playNext()
+                        failPlayback(localURL.isFileURL
+                            ? "This downloaded song couldn't play. Remove it and download it again."
+                            : "Couldn't stream this song. Check watch Wi-Fi or cellular and your audio output, then try again.")
                     }
                 }
             }
@@ -485,7 +713,7 @@ class AudioManager {
                   self.playbackRequested,
                   playerItem.status == .readyToPlay
             else { return }
-            Self.startOffMainActor(player)
+            Self.startPlayer(player)
             self.refreshPlaybackState()
             self.updateNowPlayingInfo()
         }
@@ -502,6 +730,8 @@ class AudioManager {
             return
         }
         if player.timeControlStatus == .playing {
+            startupTimeout?.cancel()
+            startupTimeout = nil
             isPlaying = true
             isLoading = false
         } else {
@@ -514,9 +744,7 @@ class AudioManager {
     private func pausePlayback(cancelDownload: Bool = true) -> Bool {
         let hasPendingDownload = player == nil && (playbackRequested || isLoading)
         if hasPendingDownload && cancelDownload {
-            downloadTask?.cancel()
-            downloadToken = nil
-            downloadTask = nil
+            metadataToken = nil
         }
         guard player != nil || playbackRequested || isLoading else { return false }
         playbackRequested = false
@@ -531,6 +759,7 @@ class AudioManager {
 
     @discardableResult
     private func resumePlayback() -> Bool {
+        guard WatchAuthManager.shared.canPlayLocally else { return false }
         guard let player else {
             if isLoading {
                 playbackRequested = true
@@ -541,13 +770,14 @@ class AudioManager {
             // downloadable URL behind it, and `prepareAndPlay` would file the
             // station's synthetic song into recently played.
             if isRadioMode {
-                isPlaying = false
-                playbackRequested = false
-                return false
+                guard let song = currentSong, let url = radioStreamURL else {
+                    failPlayback("Choose the radio station again to start playback.")
+                    return false
+                }
+                playRadio(streamURL: url, song: song, artworkURL: radioArtworkURL)
+                return true
             }
-            // Pausing during the initial download cancelled it with nothing
-            // in flight; restart the prepare/download pipeline instead of
-            // dead-ending.
+            // Restart a cancelled metadata lookup or a failed media startup.
             if currentSong != nil {
                 prepareAndPlay()
                 return true
@@ -560,7 +790,7 @@ class AudioManager {
         playbackRequested = true
         activatePlaybackSession { [weak self] in
             guard let self, self.player === player, self.playbackRequested else { return }
-            Self.startOffMainActor(player)
+            Self.startPlayer(player)
             self.refreshPlaybackState()
             self.updateNowPlayingInfo()
         }
@@ -571,6 +801,12 @@ class AudioManager {
 
     @discardableResult
     func togglePlayPause() -> Bool {
+        if let song = currentSong,
+           WatchAuthManager.shared.currentPlaybackSongID != song.id,
+           sendToPhone(.play, song: song, queue: queue) {
+            return playbackError == nil
+        }
+        if sendToPhone(isPlaying ? .pause : .resume) { return playbackError == nil }
         if playbackRequested || isPlaying {
             return pausePlayback()
         }
@@ -578,23 +814,19 @@ class AudioManager {
     }
 
     func playNext() {
+        transferredPosition = nil
+        if sendToPhone(.next) { return }
         guard !isRadioMode else { return }
         guard !queue.isEmpty else { return }
         currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
-        if isShuffleOn, queue.count > 1 {
-            var nextIndex = currentIndex
-            while nextIndex == currentIndex {
-                nextIndex = Int.random(in: 0 ..< queue.count)
-            }
-            currentIndex = nextIndex
-        } else {
-            currentIndex = (currentIndex + 1) % queue.count
-        }
+        currentIndex = (currentIndex + 1) % queue.count
         currentSong = queue[currentIndex]
         prepareAndPlay()
     }
 
     func playPrevious() {
+        transferredPosition = nil
+        if sendToPhone(.previous) { return }
         // Seeking a live stream would drop back into the buffer rather than
         // restart anything, and there is no queue behind it.
         guard !isRadioMode else { return }
@@ -619,11 +851,15 @@ class AudioManager {
     }
 
     func playEnded() {
-        if playbackMode == .singleLoop {
+        if sleepTimer.consumeEndOfSong() {
+            _ = pausePlayback()
+            return
+        }
+        if playbackMode == .one {
             // The seek completes asynchronously; only resume if this is still
             // the active player and the user has not paused/skipped meanwhile.
             let loopingPlayer = player
-            loopingPlayer?.seek(to: .zero) { [weak self] _ in
+            loopingPlayer?.seek(to: .zero) { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self,
                           self.player === loopingPlayer,
@@ -632,26 +868,45 @@ class AudioManager {
                     loopingPlayer?.play()
                 }
             }
+        } else if playbackMode == .off, currentIndex + 1 >= queue.count {
+            _ = pausePlayback()
         } else {
             playNext()
         }
     }
 
     func toggleMode() {
-        switch playbackMode {
-        case .listLoop: playbackMode = .singleLoop
-        case .singleLoop: playbackMode = .listLoop
-        }
+        let previous = playbackMode
+        playbackMode = playbackMode.next
+        if sendToPhone(.repeatMode), playbackError != nil { playbackMode = previous }
     }
 
     func toggleShuffle() {
+        let previous = isShuffleOn
         isShuffleOn.toggle()
+        if sendToPhone(.shuffle) {
+            if playbackError != nil { isShuffleOn = previous }
+            return
+        }
+        if isShuffleOn, let song = currentSong {
+            originalQueue = queue
+            queue = [song] + queue.filter { $0.id != song.id }.shuffled()
+            currentIndex = 0
+        } else if !originalQueue.isEmpty {
+            queue = originalQueue
+            originalQueue = []
+            currentIndex = currentSong.flatMap { queue.firstIndex(of: $0) } ?? 0
+        }
     }
 
     func seek(to time: Double) {
+        if sendToPhone(.seek, position: time) { return }
         // A live stream has no meaningful position to seek to.
         guard !isRadioMode else { return }
-        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600))
+        guard time.isFinite, duration.isFinite, duration > 0 else { return }
+        let target = min(max(time, 0), duration)
+        currentTime = target
+        player?.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         updateNowPlayingInfo()
     }
 
@@ -682,6 +937,8 @@ class AudioManager {
     }
 
     private func cleanupPlayer() {
+        startupTimeout?.cancel()
+        startupTimeout = nil
         // Drop the player's Combine sinks first: a raced second setupPlayer
         // would otherwise leave the old player's status callbacks firing
         // against the replacement.
@@ -696,36 +953,17 @@ class AudioManager {
             NotificationCenter.default.removeObserver(observer)
             endTimeObserver = nil
         }
-        // Retiring a player reaches the media daemon the same way starting one
-        // does, and it happens on the way *into* the next track — so it is off
-        // the main actor too, holding the last reference until it is done.
+        // Pause before dropping the player. A detached pause can run after the
+        // next player's play call and briefly leave both outputs active.
         if let retired = player {
             player = nil
-            Task.detached(priority: .userInitiated) {
-                retired.pause()
-            }
+            retired.pause()
         }
     }
 
     private func localCacheURL(for songID: String) -> URL {
         let storageKey = SongStorageKey.component(for: songID)
         return AudioManager.audioCacheDir.appendingPathComponent("\(storageKey).mp3")
-    }
-
-    private func finishDownloadedPlayback(destinationURL: URL, song: Song) {
-        validateCachedFile(at: destinationURL, expectedDuration: song.duration) { [weak self] valid in
-            guard let self, currentSong?.id == song.id else { return }
-            guard valid else {
-                try? FileManager.default.removeItem(at: destinationURL)
-                noteCacheChanged()
-                isLoading = false
-                playbackRequested = false
-                return
-            }
-            evictOldCacheFiles()
-            noteCacheChanged()
-            setupPlayer(with: destinationURL)
-        }
     }
 
     /// Validates and files a finished download. Runs on URLSession's queue,
@@ -750,7 +988,7 @@ class AudioManager {
         }
     }
 
-    private nonisolated static func acceptsAudioResponse(_ response: URLResponse?) -> Bool {
+    nonisolated static func acceptsAudioResponse(_ response: URLResponse?) -> Bool {
         guard let http = response as? HTTPURLResponse else { return true }
         guard (200 ... 299).contains(http.statusCode) else { return false }
         if http.expectedContentLength > 256 * 1024 * 1024 {
@@ -788,13 +1026,25 @@ class AudioManager {
         return false
     }
 
-    func clearCache() {
-        downloadTask?.cancel()
-        downloadToken = nil
-        downloadTask = nil
+    func clearAllDownloadedAudio(downloads: WatchDownloads = .shared, cacheDirectory: URL? = nil) {
+        if WatchAuthManager.shared.output == .watch {
+            _ = pausePlayback()
+            cleanupPlayer()
+            isLoading = false
+        }
+        downloads.clearStorage()
+        clearCache(in: cacheDirectory ?? Self.audioCacheDir)
+    }
+
+    static func downloadedAudioSizeBytes(downloads: WatchDownloads = .shared, cacheDirectory: URL? = nil) -> Int64 {
+        downloads.storageBytes + cacheSizeBytes(in: cacheDirectory ?? audioCacheDir)
+    }
+
+    func clearCache(in directory: URL = AudioManager.audioCacheDir) {
+        metadataToken = nil
         let fm = FileManager.default
         if let entries = try? fm.contentsOfDirectory(
-            at: AudioManager.audioCacheDir, includingPropertiesForKeys: nil
+            at: directory, includingPropertiesForKeys: nil
         ) {
             for url in entries {
                 try? fm.removeItem(at: url)
@@ -829,16 +1079,11 @@ class AudioManager {
     ) {
         Task {
             let asset = AVURLAsset(url: url)
-            let expected = Double(expectedDuration)
             do {
                 let loadedDuration = try await asset.load(.duration)
                 let isPlayable = try await asset.load(.isPlayable)
                 let actual = loadedDuration.seconds
-                let durationOK: Bool = if expected > 5 {
-                    actual.isFinite && actual >= expected * 0.9
-                } else {
-                    actual.isFinite && actual > 0
-                }
+                let durationOK = actual.isFinite && actual > 0
                 await MainActor.run {
                     completion(isPlayable && durationOK)
                 }
@@ -865,14 +1110,18 @@ class AudioManager {
                 setupPlayer(with: cacheURL)
                 return
             }
+            if cacheURL == WatchDownloads.shared.localURL(for: songID) {
+                WatchDownloads.shared.invalidate(songID)
+                failPlayback("The download is damaged. Connect to the internet and choose Retry Download.")
+                return
+            }
             try? FileManager.default.removeItem(at: cacheURL)
             noteCacheChanged()
             guard let remoteURL = song.audioURL else {
-                isLoading = false
-                playbackRequested = false
+                failPlayback(String(localized: "This song has no playable audio. Choose another song."))
                 return
             }
-            startDownload(song: song, remoteURL: remoteURL, destinationURL: cacheURL)
+            setupPlayer(with: remoteURL)
         }
     }
 
@@ -893,9 +1142,8 @@ class AudioManager {
         cancellables.removeAll()
         setupInterruptionHandler()
         isLoading = true
-        downloadTask?.cancel()
-        downloadToken = nil
-        startDownload(song: song, remoteURL: remoteURL, destinationURL: playbackURL)
+        metadataToken = nil
+        setupPlayer(with: remoteURL)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.recoveringFromBrokenCache.remove(songID)
         }
@@ -947,7 +1195,7 @@ class AudioManager {
 
     private func setupRemoteCommands() {
         let cc = MPRemoteCommandCenter.shared()
-        func performOnMain(
+        @Sendable nonisolated func performOnMain(
             _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus
         ) -> MPRemoteCommandHandlerStatus {
             if Thread.isMainThread {
@@ -960,7 +1208,7 @@ class AudioManager {
             return status
         }
 
-        let playTarget = cc.playCommand.addTarget { [weak self] _ in
+        let playTarget = cc.playCommand.addTarget { @Sendable [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 guard !self.playbackRequested else { return .commandFailed }
@@ -968,7 +1216,7 @@ class AudioManager {
             }
         }
         remoteCommandTargets.append((cc.playCommand, playTarget))
-        let pauseTarget = cc.pauseCommand.addTarget { [weak self] _ in
+        let pauseTarget = cc.pauseCommand.addTarget { @Sendable [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 guard self.playbackRequested else { return .commandFailed }
@@ -976,14 +1224,14 @@ class AudioManager {
             }
         }
         remoteCommandTargets.append((cc.pauseCommand, pauseTarget))
-        let toggleTarget = cc.togglePlayPauseCommand.addTarget { [weak self] _ in
+        let toggleTarget = cc.togglePlayPauseCommand.addTarget { @Sendable [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 self.togglePlayPause() ? .success : .commandFailed
             }
         }
         remoteCommandTargets.append((cc.togglePlayPauseCommand, toggleTarget))
-        let nextTarget = cc.nextTrackCommand.addTarget { [weak self] _ in
+        let nextTarget = cc.nextTrackCommand.addTarget { @Sendable [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 self.playNext()
@@ -991,7 +1239,7 @@ class AudioManager {
             }
         }
         remoteCommandTargets.append((cc.nextTrackCommand, nextTarget))
-        let previousTarget = cc.previousTrackCommand.addTarget { [weak self] _ in
+        let previousTarget = cc.previousTrackCommand.addTarget { @Sendable [weak self] _ in
             guard let self else { return .commandFailed }
             return performOnMain {
                 self.playPrevious()
@@ -1051,6 +1299,11 @@ class AudioManager {
     }
 
     private func updateNowPlayingInfo() {
+        WatchAuthManager.shared.localPlaybackDidChange()
+        guard WatchAuthManager.shared.canPlayLocally else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            return
+        }
         guard let song = currentSong else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
@@ -1074,7 +1327,7 @@ class AudioManager {
         // no artwork path of its own.
         guard let url = isRadioMode ? radioArtworkURL : song.thumbnailURL else { return nil }
         if let image = WatchImageCache.shared.cachedImage(for: url) {
-            return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            return Self.makeNowPlayingArtwork(image)
         }
         // Not cached yet: fetch, then re-apply so the artwork appears without
         // waiting for the next playback event.
@@ -1088,8 +1341,12 @@ class AudioManager {
         return nil
     }
 
+    nonisolated static func makeNowPlayingArtwork(_ image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
+    }
+
     isolated deinit {
-        downloadTask?.cancel()
+        companionProgressTimer?.invalidate()
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
         }

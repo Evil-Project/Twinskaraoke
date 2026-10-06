@@ -70,12 +70,18 @@ final class RadioController {
         guard let metadata = nowPlaying else {
             Task { [weak self] in
                 await self?.refresh()
-                guard self?.nowPlaying != nil else { return }
+                guard self?.nowPlaying != nil else {
+                    AudioManager.shared.playbackError = String(localized: "Radio is unavailable. Check your connection and try again.")
+                    return
+                }
                 self?.playLiveStream()
             }
             return
         }
-        guard let streamURL = URL(string: metadata.station.listenUrl) else { return }
+        guard let streamURL = URL(string: metadata.station.listenUrl) else {
+            AudioManager.shared.playbackError = String(localized: "Radio has no valid stream. Try again later.")
+            return
+        }
         let info = metadata.nowPlaying?.song
         let song = (info ?? fallbackSongInfo(for: metadata.station))
             .toSong(stationID: RadioStation.id)

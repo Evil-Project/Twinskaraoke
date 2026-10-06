@@ -2,12 +2,9 @@ import SwiftUI
 
 struct AccountView: View {
     private let auth = WatchAuthManager.shared
-    /// Watched only for `cacheRevision`: a song that finishes downloading while
-    /// this screen is open changes what "Downloaded Audio" should say, and
-    /// leaving it to `onAppear` meant the listener had to navigate away and
-    /// back before the figure — and whether "Clear Cache" is even enabled —
-    /// caught up.
+    /// Observe both temporary cache changes and persistent download changes.
     private let audioManager = AudioManager.shared
+    private let downloads = WatchDownloads.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
@@ -29,7 +26,7 @@ struct AccountView: View {
     }
 
     private func refreshCacheSize() {
-        cacheSizeBytes = AudioManager.cacheSizeBytes()
+        cacheSizeBytes = AudioManager.downloadedAudioSizeBytes(downloads: downloads)
     }
 
     private var reduceMotion: Bool {
@@ -58,43 +55,31 @@ struct AccountView: View {
                         tint: .blue,
                         title: auth.linkState == .awaitingPhone
                             ? String(localized: "Waiting for iPhone")
-                            : String(localized: "Sign in on iPhone"),
+                            : String(localized: "iPhone Account"),
                         value: auth.linkState == .awaitingPhone
-                            ? String(localized: "Your session is ready but your iPhone is out of reach. Keep it nearby.")
+                            ? String(localized: "Keep your iPhone nearby. Your account will sync automatically.")
                             : String(localized: "Sign in on your iPhone and this watch follows automatically.")
                     )
-
-                    if auth.linkState == .awaitingPhone {
-                        Button {
-                            auth.syncNow()
-                            WatchHaptic.play(.click)
-                        } label: {
-                            Label("Try Again", systemImage: "arrow.clockwise")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .buttonStyle(.watchPressable)
-                        .disabled(auth.isSyncing)
-                        .accessibilityLabel("Try Again")
-                        .accessibilityHint("Asks your iPhone for the session again.")
-                    }
                 }
             }
 
             Section("Session") {
-                Button {
-                    showsFullGuestID.toggle()
-                    WatchHaptic.play(showsFullGuestID ? .success : .click)
-                } label: {
-                    WatchAccountTokenRow(
-                        title: String(localized: "Guest ID"),
-                        value: guestIDText,
-                        showsFullValue: showsFullGuestID
-                    )
+                if auth.linkState == .signedOut {
+                    Button {
+                        showsFullGuestID.toggle()
+                        WatchHaptic.play(showsFullGuestID ? .success : .click)
+                    } label: {
+                        WatchAccountTokenRow(
+                            title: String(localized: "Guest ID"),
+                            value: guestIDText,
+                            showsFullValue: showsFullGuestID
+                        )
+                    }
+                    .buttonStyle(.watchPressable)
+                    .accessibilityLabel("Guest ID")
+                    .accessibilityValue(showsFullGuestID ? GuestIdentity.current : guestIDText)
+                    .accessibilityHint(showsFullGuestID ? "Hides the full guest ID." : "Reveals the full guest ID.")
                 }
-                .buttonStyle(.watchPressable)
-                .accessibilityLabel("Guest ID")
-                .accessibilityValue(showsFullGuestID ? GuestIdentity.current : guestIDText)
-                .accessibilityHint(showsFullGuestID ? "Hides the full guest ID." : "Reveals the full guest ID.")
 
                 WatchAccountStatusRow(
                     systemImage: "antenna.radiowaves.left.and.right",
@@ -105,12 +90,7 @@ struct AccountView: View {
             }
 
             Section("Playback") {
-                WatchAccountStatusRow(
-                    systemImage: "applewatch",
-                    tint: .blue,
-                    title: String(localized: "Plays On This Watch"),
-                    value: String(localized: "Playback is independent — starting a song here does not move it to your iPhone")
-                )
+                WatchOutputPicker()
                 WatchAccountStatusRow(
                     systemImage: "checkmark.seal.fill",
                     tint: .green,
@@ -135,10 +115,11 @@ struct AccountView: View {
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.watchPressable)
-                .disabled(cacheSizeBytes == 0)
+                .disabled(cacheSizeBytes == 0 && downloads.entries.isEmpty)
                 .accessibilityLabel("Clear Cache")
+                .accessibilityIdentifier("WatchAccount.clearAudio")
                 .accessibilityValue(cacheSizeText)
-                .accessibilityHint("Deletes songs saved on this watch. They download again when played.")
+                .accessibilityHint("Deletes saved downloads and cached audio on this watch and cancels pending downloads.")
             }
 
             Section("Language") {
@@ -166,19 +147,22 @@ struct AccountView: View {
         .onChange(of: audioManager.cacheRevision) { _, _ in
             refreshCacheSize()
         }
+        .onChange(of: downloads.storageRevision) { _, _ in
+            refreshCacheSize()
+        }
         .confirmationDialog(
-            "Clear cached audio?",
+            "Clear all downloaded audio?",
             isPresented: $showsClearCacheConfirmation,
             titleVisibility: .visible
         ) {
             Button("Clear", role: .destructive) {
-                AudioManager.shared.clearCache()
+                audioManager.clearAllDownloadedAudio()
                 refreshCacheSize()
                 WatchHaptic.play(.success)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Songs saved on this watch are deleted. They download again the next time you play them.")
+            Text("All saved downloads and cached audio on this watch will be deleted. Pending downloads will be cancelled. Download songs again to use them offline.")
         }
     }
 

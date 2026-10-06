@@ -32,6 +32,12 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         }
     }
 
+    mutating func mirror(_ songs: [Song], shuffled: Bool) {
+        items = songs
+        originalItems = []
+        isShuffled = shuffled
+    }
+
     mutating func clear() {
         items = []
         originalItems = []

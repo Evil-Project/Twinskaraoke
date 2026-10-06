@@ -945,7 +945,8 @@ nonisolated enum KaraokeAPIClient {
             let currentToken = CredentialStore.token,
             authorization == "Bearer \(currentToken)"
           {
-            NotificationCenter.default.post(name: .karaokeSessionExpired, object: nil)
+            NotificationCenter.default.post(name: .karaokeSessionExpired, object: nil,
+                                            userInfo: ["requestToken": currentToken])
           }
 
           if canRetry && shouldRetry(statusCode: httpResponse.statusCode) && attempt < maxRetries - 1 {

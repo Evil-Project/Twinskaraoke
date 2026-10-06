@@ -13,12 +13,17 @@ final class PlaylistDetailViewModel {
     /// Songs the caller already had — personal playlists arrive from
     /// `/api/user/playlists` with their contents inline. Shown immediately so
     /// the screen is never blank while the network answers, and kept if the
-    /// answer is an empty list, which is what the curated endpoint says about
-    /// a playlist ID it does not know.
+    /// answer is empty or unavailable. The same authenticated detail loader
+    /// as iPhone supplies full audio metadata once account sync completes.
     private let fallbackSongs: [Song]
+    private let loadSongs: @Sendable (String) async throws -> [Song]
     private var hasLoadedRemoteSongs = false
 
-    init(playlistID: String, fallbackSongs: [Song] = []) {
+    init(playlistID: String, fallbackSongs: [Song] = [],
+         loadSongs: @escaping @Sendable (String) async throws -> [Song] = {
+             try await KaraokeAPIClient.playlistSongs(id: $0)
+         }) {
+        self.loadSongs = loadSongs
         self.playlistID = playlistID
         self.fallbackSongs = fallbackSongs
         songs = fallbackSongs
@@ -32,7 +37,7 @@ final class PlaylistDetailViewModel {
             guard let self else { return }
             defer { isLoading = false }
             do {
-                let loaded = try await KaraokeAPIClient.playlistSongs(id: playlistID)
+                let loaded = try await loadSongs(playlistID)
                 hasLoadedRemoteSongs = true
                 if !loaded.isEmpty || fallbackSongs.isEmpty {
                     songs = loaded

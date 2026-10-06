@@ -60,6 +60,35 @@ struct WatchPersonalPlaylistRoutingTests {
         #expect(viewModel.songs.isEmpty)
     }
 
+    @MainActor
+    @Test("Authenticated detail lookup supplies audio URLs absent from inline summaries")
+    func detailHydratesPlayableMetadata() async {
+        let fallback = makeSong(id: "song-1")
+        let hydrated = Song(id: fallback.id, title: fallback.title, duration: 180,
+            absolutePath: "https://example.invalid/audio.mp3", cloudflareID: nil, coverArt: nil,
+            originalArtists: nil, coverArtists: nil, userUploaded: nil)
+        let model = PlaylistDetailViewModel(playlistID: "mine", fallbackSongs: [fallback], loadSongs: { _ in [hydrated] })
+        #expect(model.songs.first?.audioURL == nil)
+        model.fetchSongs()
+        for _ in 0..<100 where model.isLoading { await Task.yield() }
+        #expect(model.songs.first?.audioURL != nil)
+        #expect(!model.isLoading)
+    }
+
+    @MainActor
+    @Test("Inline account songs remain usable when detail networking fails")
+    func detailFailureKeepsInlineSongs() async {
+        let fallback = makeSong(id: "song-1")
+        let model = PlaylistDetailViewModel(playlistID: "mine", fallbackSongs: [fallback], loadSongs: { _ in
+            throw KaraokeAPIClient.APIError.httpStatus(503)
+        })
+        model.fetchSongs()
+        for _ in 0..<100 where model.isLoading { await Task.yield() }
+        #expect(model.songs == [fallback])
+        #expect(model.loadError == nil)
+        #expect(!model.isLoading)
+    }
+
     private func makePlaylist(isPersonal: Bool) -> Playlist {
         Playlist(
             id: "playlist-1",

@@ -40,6 +40,9 @@ nonisolated enum WatchSessionLink {
 
     enum MessageKind {
         static let fetchToken = "fetchToken"
+        static let fetchPlaylists = "fetchPlaylists"
+        static let fetchAccount = "fetchAccount"
+        static let favoritesChanged = "favoritesChanged"
     }
 
     enum TokenReply: Equatable, Sendable {
@@ -67,6 +70,22 @@ nonisolated enum WatchSessionLink {
         return .available(token)
     }
 
+    static func tokenRequestMatches(
+        generation: Int?, userID: String?,
+        descriptor: Descriptor, currentGeneration: Int
+    ) -> Bool {
+        descriptor.isSignedIn && generation == currentGeneration && userID == descriptor.userID
+    }
+
+    static func acceptsTokenReply(
+        requestID: UUID,
+        activeRequestID: UUID?,
+        requestGeneration: Int,
+        appliedGeneration: Int
+    ) -> Bool {
+        requestID == activeRequestID && requestGeneration == appliedGeneration
+    }
+
     /// The non-secret half of a session: enough for the watch to render an
     /// account screen and to decide whether it needs to pull a token.
     struct Descriptor: Equatable, Sendable {
@@ -81,6 +100,10 @@ nonisolated enum WatchSessionLink {
         var generation: Int
 
         static let signedOut = Descriptor(isSignedIn: false, generation: 0)
+
+        func mayReplace(appliedGeneration: Int) -> Bool {
+            generation >= appliedGeneration
+        }
     }
 
     static func encode(_ descriptor: Descriptor) -> [String: Any] {

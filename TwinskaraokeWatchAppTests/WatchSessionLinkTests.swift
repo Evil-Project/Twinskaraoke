@@ -4,6 +4,15 @@ import Testing
 
 @Suite("Watch session link")
 struct WatchSessionLinkTests {
+    @Test("A delayed token pull cannot obtain a different account's credentials")
+    func tokenPullIdentityBoundary() {
+        let account = WatchSessionLink.Descriptor(isSignedIn: true, userID: "second", username: "Second", generation: 8)
+        #expect(!WatchSessionLink.tokenRequestMatches(generation: 7, userID: "first", descriptor: account, currentGeneration: 8))
+        #expect(!WatchSessionLink.tokenRequestMatches(generation: 8, userID: "first", descriptor: account, currentGeneration: 8))
+        #expect(WatchSessionLink.tokenRequestMatches(generation: 8, userID: "second", descriptor: account, currentGeneration: 8))
+        #expect(!WatchSessionLink.tokenRequestMatches(generation: 8, userID: "second", descriptor: .signedOut, currentGeneration: 8))
+    }
+
     @Test("Descriptor survives the round trip through an application context")
     func descriptorRoundTrips() {
         let descriptor = WatchSessionLink.Descriptor(
@@ -64,5 +73,29 @@ struct WatchSessionLinkTests {
             WatchSessionLink.ContextKey.generation: 42,
         ]
         #expect(WatchSessionLink.decode(withGeneration)?.generation == 42)
+    }
+
+    @Test("Old account contexts and late token replies cannot restore access")
+    func accountTransitionOrdering() {
+        let old = WatchSessionLink.Descriptor(
+            isSignedIn: true, userID: "old", username: "Old", avatar: nil, generation: 4
+        )
+        let signedOut = WatchSessionLink.Descriptor(isSignedIn: false, generation: 5)
+        let switched = WatchSessionLink.Descriptor(
+            isSignedIn: true, userID: "new", username: "New", avatar: nil, generation: 6
+        )
+        #expect(!old.mayReplace(appliedGeneration: signedOut.generation))
+        #expect(switched.mayReplace(appliedGeneration: signedOut.generation))
+
+        let oldRequest = UUID()
+        let newRequest = UUID()
+        #expect(!WatchSessionLink.acceptsTokenReply(
+            requestID: oldRequest, activeRequestID: newRequest,
+            requestGeneration: 4, appliedGeneration: 6
+        ))
+        #expect(WatchSessionLink.acceptsTokenReply(
+            requestID: newRequest, activeRequestID: newRequest,
+            requestGeneration: 6, appliedGeneration: 6
+        ))
     }
 }

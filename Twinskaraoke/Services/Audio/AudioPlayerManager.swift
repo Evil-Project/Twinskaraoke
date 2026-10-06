@@ -60,6 +60,9 @@ final class PlaybackClock {
 @Observable
 final class AudioPlayerManager {
     static let shared = AudioPlayerManager()
+    private var watchMirror: CompanionPlayback.Snapshot?
+    private var transferredPlayback: CompanionPlayback.Snapshot?
+    private var phoneAudioAllowed: Bool { CompanionPlayback.readLease()?.owner != .watch }
     var currentSong: Song? { didSet { scheduleSessionSave() } }
     var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
@@ -111,6 +114,7 @@ final class AudioPlayerManager {
         }
     }
     var isRadioMode: Bool = false
+    var radioStreamURL: URL?
     var radioArtworkURL: URL?
     private var isStreamMode: Bool {
         streamPlayer != nil
@@ -510,6 +514,7 @@ final class AudioPlayerManager {
     }
 
     private var isPlaybackRequested: Bool {
+        if !phoneAudioAllowed { return watchMirror?.isPlaying ?? false }
         if audioSessionController.hasPendingPlayback { return true }
         if isRadioMode { return radioPlaybackRequested }
         if isRemotePlaybackCaching { return streamPlaybackRequested }
@@ -539,6 +544,7 @@ final class AudioPlayerManager {
         forceNowPlayingUpdate: Bool = false,
         reason: String = #function
     ) {
+        guard phoneAudioAllowed else { return }
         let changed = isPlaying != playing || isBuffering != buffering || reloadArtwork
         isPlaying = playing
         isBuffering = buffering
@@ -778,7 +784,76 @@ final class AudioPlayerManager {
         return engine
     }
 
+    func companionFailure(_ message: String) {
+        loadFailure = .companion(message)
+    }
+
+    func suspendForWatchTransfer() {
+        sleepTimer.cancel()
+        audioSessionController.cancelPendingPlayback()
+        cancelAutoplayRequest()
+        cancelPendingTransitionWork()
+        transitionCoordinator.reset()
+        sessionRestoreAllowed = false
+        separationGeneration &+= 1
+        instrumentalTask?.cancel()
+        instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
+        VocalSeparator.shared.cancel()
+        loadedEngine?.cancelCrossfade()
+        loadedEngine?.stop()
+        stopRadioPlayer()
+        stopStreamPlayer()
+        isPlaying = false
+        isBuffering = false
+    }
+
+    func applyWatchSnapshot(_ snapshot: CompanionPlayback.Snapshot) {
+        guard !phoneAudioAllowed else { return }
+        sleepTimer.mirror(deadline: snapshot.sleepDeadline, endsWithCurrentSong: snapshot.sleepAtEndOfSong == true)
+        watchMirror = snapshot
+        currentSong = snapshot.song
+        queueState.mirror(snapshot.queue, shuffled: snapshot.isShuffled)
+        isRadioMode = snapshot.isRadio
+        radioArtworkURL = snapshot.radioArtworkURL
+        radioStreamURL = snapshot.radioStreamURL
+        repeatMode = switch snapshot.repeatSetting { case .off: .off; case .one: .one; case .all: .all }
+        isPlaying = snapshot.isPlaying
+        isBuffering = false
+        progress = snapshot.duration > 0 ? snapshot.position / snapshot.duration : 0
+        routeName = "Apple Watch"
+        routeIcon = "applewatch"
+        loadFailure = snapshot.error.map { .companion($0) }
+        updateNowPlayingInfo(reloadArtwork: true)
+    }
+
+    func finishWatchTransfer(_ snapshot: CompanionPlayback.Snapshot) {
+        sleepTimer.cancel()
+        if let deadline = snapshot.sleepDeadline { sleepTimer.start(deadline: deadline) }
+        else if snapshot.sleepAtEndOfSong == true { sleepTimer.startEndOfSong() }
+        watchMirror = nil
+        currentSong = snapshot.song
+        queueState.mirror(snapshot.queue, shuffled: snapshot.isShuffled)
+        isPlaying = false
+        isBuffering = false
+        isRadioMode = snapshot.isRadio
+        radioStreamURL = snapshot.radioStreamURL
+        radioArtworkURL = snapshot.radioArtworkURL
+        repeatMode = switch snapshot.repeatSetting { case .off: .off; case .one: .one; case .all: .all }
+        transferredPlayback = snapshot
+        lastKnownPlaybackTime = snapshot.position
+        progress = snapshot.duration > 0 ? snapshot.position / snapshot.duration : 0
+        updateRouteIcon()
+        updateNowPlayingInfo(reloadArtwork: true)
+    }
+
+    func replaceCompanionQueue(_ songs: [Song]) {
+        queueState.mirror(songs, shuffled: isShuffled)
+    }
+
     private func scheduleSessionSave(periodic: Bool = false) {
+        WatchSessionPublisher.shared.playbackDidChange(periodic: periodic)
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if periodic && now - lastSessionSaveAt < 10 { return }
@@ -792,6 +867,7 @@ final class AudioPlayerManager {
     }
 
     private func persistPlaybackSession() {
+        guard phoneAudioAllowed else { return }
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
         PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
             position: preferredStreamResumeTime(for: song) ?? playbackTime,
@@ -800,6 +876,7 @@ final class AudioPlayerManager {
     }
 
     private func restorePlaybackSession() {
+        guard phoneAudioAllowed else { return }
         guard usesSessionPersistence, !sessionRestoring, sessionRestoreAllowed, currentSong == nil else { return }
         sessionRestoring = true
         Task { @MainActor [weak self] in
@@ -989,10 +1066,14 @@ final class AudioPlayerManager {
     }
 
     var playbackTime: TimeInterval {
-        activePlaybackTime()
+        if let transferredPlayback { return transferredPlayback.position }
+        if !phoneAudioAllowed, let watchMirror { return watchMirror.position }
+        return activePlaybackTime()
     }
 
     var playbackDuration: TimeInterval {
+        if let transferredPlayback { return transferredPlayback.duration }
+        if !phoneAudioAllowed, let watchMirror { return watchMirror.duration }
         if isStreamMode {
             let streamDuration = streamPlayer?.currentItem?.duration.seconds ?? .nan
             if streamDuration.isFinite, streamDuration > 0 {
@@ -1219,6 +1300,7 @@ final class AudioPlayerManager {
         for song: Song, stems: CachedStems, sourceURL: URL,
         onReady: (() -> Void)? = nil
     ) {
+        guard phoneAudioAllowed else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.switchActivePlaybackToStems(for: song, stems: stems, sourceURL: sourceURL, onReady: onReady)
         }, replacingPending: false) else { return }
@@ -1403,7 +1485,7 @@ final class AudioPlayerManager {
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                guard !self.isRadioMode else { return }
+                guard self.phoneAudioAllowed, !self.isRadioMode else { return }
                 guard !self.isEditingProgress else { return }
                 guard self.currentSong != nil else { return }
                 if self.suppressTransitionAfterSeek {
@@ -1494,6 +1576,8 @@ final class AudioPlayerManager {
         preserveCacheRecoveryState: Bool = false,
         reportsPlayCount: Bool = true
     ) {
+        if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context.isEmpty ? queue : context) { return }
+        transferredPlayback = nil
         sessionRestoreAllowed = false
         sessionPersistenceReady = true
         guard audioSessionController.performWhenReady({ [weak self] in
@@ -1619,6 +1703,7 @@ final class AudioPlayerManager {
     }
 
     func playNext(song: Song) {
+        if WatchSessionPublisher.shared.routeToWatch(.playNext, song: song) { return }
         guard !isRadioMode else {
             play(song: song)
             return
@@ -1633,6 +1718,7 @@ final class AudioPlayerManager {
     }
 
     func playLast(song: Song) {
+        if WatchSessionPublisher.shared.routeToWatch(.playLast, song: song) { return }
         guard !isRadioMode else {
             play(song: song)
             return
@@ -1672,6 +1758,7 @@ final class AudioPlayerManager {
         startAt: TimeInterval = 0,
         resetSeparation: Bool = true
     ) {
+        guard phoneAudioAllowed else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.startPlayingFile(url, startAt: startAt, resetSeparation: resetSeparation)
         }, replacingPending: false) else { return }
@@ -1796,6 +1883,7 @@ final class AudioPlayerManager {
     /// Returns true when a pause request matched an active or resumable playback path.
     @discardableResult
     private func pauseCurrentPlayback(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(.pause) { return true }
         audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
         if !handlingAudioSessionInterruption {
@@ -1891,9 +1979,28 @@ final class AudioPlayerManager {
     /// Returns true when a resume request could be applied to the current playback path.
     @discardableResult
     private func resumeCurrentPlayback(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(.resume) { return true }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.resumeCurrentPlayback(source: source)
         }, replacingPending: true) else { return true }
+
+        if let state = transferredPlayback, let song = state.song {
+            transferredPlayback = nil
+            if state.isRadio, let url = state.radioStreamURL {
+                isRadioMode = false
+                playRadio(streamURL: url, song: song, artworkURL: state.radioArtworkURL)
+            } else if let fileURL = localPlaybackFileURL(for: song) {
+                startPlayingFile(fileURL, startAt: max(0, state.position))
+            } else if let url = song.audioURL {
+                startStreamPlayback(url: url, songID: song.id,
+                    expectedDuration: song.duration > 0 ? Double(song.duration) : nil,
+                    startAt: max(0, state.position))
+            } else {
+                companionFailure("Choose the song or station again to start playback.")
+                return false
+            }
+            return true
+        }
 
         if isRadioMode {
             guard let player = radioPlayer else {
@@ -2006,6 +2113,7 @@ final class AudioPlayerManager {
 
     private func reportLoadFailure(_ failure: PlaybackLoadFailure) {
         loadFailure = failure
+        WatchSessionPublisher.shared.playbackDidChange()
         #if canImport(UIKit)
             // The message appears under the song, which a VoiceOver user is
             // unlikely to be focused on at that moment.
@@ -2015,6 +2123,7 @@ final class AudioPlayerManager {
 
     @discardableResult
     func togglePlayPause(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(isPlaying ? .pause : .resume) { return true }
         if isPlaybackRequested {
             return pauseCurrentPlayback(source: "toggle.\(source)")
         }
@@ -2022,6 +2131,7 @@ final class AudioPlayerManager {
     }
 
     func pauseIfPlaying() {
+        if WatchSessionPublisher.shared.routeToWatch(.pause) { return }
         guard isPlaybackRequested else { return }
         pauseCurrentPlayback(source: "pauseIfPlaying")
     }
@@ -2030,11 +2140,21 @@ final class AudioPlayerManager {
     /// prepared would carry playback into the next song first, so it is
     /// dropped, and none is prepared while the timer is armed.
     func startSleepTimerAtEndOfSong() {
+        if WatchSessionPublisher.shared.routeToWatch(.sleepTimer, sleepAtEndOfSong: true) { return }
         sleepTimer.startEndOfSong()
+        WatchSessionPublisher.shared.playbackDidChange()
         cancelPendingTransitionWork()
     }
 
+    func setSleepTimer(minutes: Int? = nil) {
+        if WatchSessionPublisher.shared.routeToWatch(.sleepTimer, sleepMinutes: minutes) { return }
+        sleepTimer.cancel()
+        if let minutes { sleepTimer.start(minutes: minutes) }
+        WatchSessionPublisher.shared.playbackDidChange()
+    }
+
     func seek(to fraction: Double) {
+        if WatchSessionPublisher.shared.routeToWatch(.seek, position: fraction * playbackDuration) { return }
         guard fraction.isFinite, (0.0 ... 1.0).contains(fraction) else { return }
         if isRadioMode { return }
         defer { scheduleSessionSave() }
@@ -2102,6 +2222,7 @@ final class AudioPlayerManager {
 
     /// Moves on when a song ends by itself.
     func playNextOrRandom() {
+        guard phoneAudioAllowed else { return }
         if isRadioMode { return }
         perform(queueState.advance(
             after: currentSong,
@@ -2113,6 +2234,7 @@ final class AudioPlayerManager {
 
     /// The Next button and lock-screen command follow the active queue order.
     func skipToNext() {
+        if WatchSessionPublisher.shared.routeToWatch(.next) { return }
         if isRadioMode { return }
         perform(queueState.skip(
             after: currentSong,
@@ -2149,6 +2271,7 @@ final class AudioPlayerManager {
     }
 
     func playPrevious() {
+        if WatchSessionPublisher.shared.routeToWatch(.previous) { return }
         if isRadioMode { return }
         guard let previous = queueState.previous(before: currentSong, elapsed: playbackTime) else {
             seek(to: 0)
@@ -2158,20 +2281,35 @@ final class AudioPlayerManager {
     }
 
     func toggleRepeat() {
+        if WatchSessionPublisher.shared.routeToWatch(.repeatMode) { return }
         repeatMode = repeatMode.next()
     }
 
     func toggleShuffle() {
+        if WatchSessionPublisher.shared.routeToWatch(.shuffle) { return }
         queueState.toggleShuffle(current: currentSong)
     }
 
     func playInOrder(song: Song, context: [Song]) {
+        if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
         repeatOnceRemaining = true
         queueState.beginInOrder(context: context)
         play(song: song, context: context)
     }
 
+    func playCompanion(song: Song, context: [Song], shuffled: Bool) {
+        if !shuffled { playInOrder(song: song, context: context); return }
+        repeatOnceRemaining = true
+        _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
+        play(song: song)
+    }
+
     func playShuffled(from songs: [Song]) {
+        if !phoneAudioAllowed {
+            let shuffled = songs.shuffled()
+            if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
+            return
+        }
         repeatOnceRemaining = true
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
         // The state already contains the shuffled queue and its original
@@ -2197,10 +2335,12 @@ final class AudioPlayerManager {
 
     func moveInUpNext(from source: IndexSet, to destination: Int) {
         queueState.moveUpNext(after: currentSong, from: source, to: destination)
+        WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
     }
 
     func removeFromUpNext(at offsets: IndexSet) {
         queueState.removeUpNext(after: currentSong, at: offsets)
+        WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
     }
 
     private func observeManagedPlayer(
@@ -2337,10 +2477,12 @@ final class AudioPlayerManager {
     }
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        if WatchSessionPublisher.shared.routeToWatch(.radio, song: song, streamURL: streamURL, artworkURL: artworkURL) { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.playRadio(streamURL: streamURL, song: song, artworkURL: artworkURL)
         }, replacingPending: true) else { return }
 
+        radioStreamURL = streamURL
         cancelAutoplayRequest()
         AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
@@ -2374,7 +2516,22 @@ final class AudioPlayerManager {
         startRadio(url: streamURL)
     }
 
+    /// A watch Stop command retires the stream and clears its mirrored card.
+    func stopRadioPlayback() {
+        if WatchSessionPublisher.shared.routeToWatch(.stopRadio) { return }
+        guard isRadioMode else { return }
+        stopRadioPlayer()
+        RadioController.shared.stop()
+        isRadioMode = false
+        radioArtworkURL = nil
+        currentSong = nil
+        progress = 0
+        setPlaybackState(playing: false, buffering: false, reason: "watch.stopRadio")
+        WatchSessionPublisher.shared.playbackDidChange()
+    }
+
     private func startRadio(url: URL) {
+        guard phoneAudioAllowed else { return }
         stopRadioPlayer()
         currentPlaybackURL = url
         let item = AVPlayerItem(url: url)
@@ -2416,6 +2573,7 @@ final class AudioPlayerManager {
         autoplay: Bool = true,
         resetSeparationOnCacheReady: Bool = true
     ) {
+        guard phoneAudioAllowed else { return }
         stopStreamPlayer()
         stopRadioPlayer()
         loadedEngine?.stop()
@@ -2670,7 +2828,7 @@ final class AudioPlayerManager {
     }
 
     func updateRadioMetadata(song: Song, artworkURL: URL?) {
-        guard isRadioMode else { return }
+        guard phoneAudioAllowed, isRadioMode else { return }
         currentSong = song
         radioArtworkURL = artworkURL
         updateNowPlayingInfo(reloadArtwork: true)
@@ -2782,6 +2940,7 @@ final class AudioPlayerManager {
     }
 
     private func applyMLSeparationIfNeeded() {
+        guard phoneAudioAllowed else { return }
         instrumentalTask?.cancel()
         instrumentalTask = nil
         preparedStemTask?.cancel()
@@ -2958,6 +3117,7 @@ final class AudioPlayerManager {
     }
 
     private func recoverFromEngineConfigChange() {
+        guard phoneAudioAllowed else { return }
         guard isPlaying, !isRadioMode, !isStreamMode else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.recoverFromEngineConfigChange()
@@ -2972,12 +3132,14 @@ final class AudioPlayerManager {
     }
 
     private func handleMediaServicesReset() {
+        guard phoneAudioAllowed else { return }
         DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
         audioSessionController.resetAfterMediaServicesLoss()
         resumeAfterMediaServicesReset()
     }
 
     private func resumeAfterMediaServicesReset() {
+        guard phoneAudioAllowed else { return }
         guard isPlaying else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.resumeAfterMediaServicesReset()
@@ -2990,6 +3152,7 @@ final class AudioPlayerManager {
     }
 
     private func handleInterruption(_ note: Notification) {
+        guard phoneAudioAllowed else { return }
         guard let info = note.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue)
@@ -3028,6 +3191,7 @@ final class AudioPlayerManager {
     }
 
     private func handleRouteChange(_ note: Notification) {
+        guard phoneAudioAllowed else { return }
         updateRouteIcon()
         guard let info = note.userInfo,
               let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -3039,6 +3203,7 @@ final class AudioPlayerManager {
     }
 
     func updateRouteIcon() {
+        if !phoneAudioAllowed { routeName = "Apple Watch"; routeIcon = "applewatch"; return }
         let route = audioSessionController.currentRoute
         routeName = route.name
         routeIcon = route.symbol
@@ -3582,6 +3747,7 @@ final class AudioPlayerManager {
     }
 
     private func handleTransitionBegin(plan: TransitionCoordinator.TransitionPlan) {
+        guard phoneAudioAllowed else { return }
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif

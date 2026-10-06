@@ -410,4 +410,3 @@ private extension RootSection {
 #Preview {
     ContentView()
 }
-

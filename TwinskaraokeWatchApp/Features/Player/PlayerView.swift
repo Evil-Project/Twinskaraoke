@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 private struct WatchPlayerLayoutMetrics {
     let containerSize: CGSize
@@ -11,7 +12,7 @@ private struct WatchPlayerLayoutMetrics {
     /// artwork onto its 36pt floor and stranded the transport mid-screen, so
     /// the page takes that room back and reserves only what is spoken for: the
     /// clock above, the paging dots below.
-    static let topBarAllowance: CGFloat = 30
+    static let topBarAllowance: CGFloat = 44
     static let pageIndicatorAllowance: CGFloat = 14
 
     private var compactWidth: Bool {
@@ -36,7 +37,7 @@ private struct WatchPlayerLayoutMetrics {
             + (showsSecondaryRow ? secondaryControlSize : 0)
             + contentSpacing * rowsBelowArtwork
         let leftover = containerSize.height - used
-        let ceiling = min(containerSize.width * (compactWidth ? 0.52 : 0.56), compactHeight ? 80 : 96)
+        let ceiling = min(containerSize.width * (compactWidth ? 0.60 : 0.65), compactHeight ? 92 : 110)
         return min(max(leftover, 36), ceiling)
     }
 
@@ -52,7 +53,7 @@ private struct WatchPlayerLayoutMetrics {
     }
 
     var contentSpacing: CGFloat {
-        compactHeight ? 4 : 6
+        compactHeight ? 3 : 4
     }
 
     var titleSize: CGFloat {
@@ -88,7 +89,7 @@ private struct WatchPlayerLayoutMetrics {
     }
 
     var secondaryControlSpacing: CGFloat {
-        compactWidth ? 12 : 18
+        compactWidth ? 8 : 12
     }
 
     var secondaryControlSize: CGFloat {
@@ -103,33 +104,8 @@ struct PlayerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
-    @State private var crownValue = 1.0
-    @State private var crownTarget: CrownTarget = .volume
-    @State private var lastCrownFeedbackStep: Int?
-    /// Set while the listener is turning the Crown to scrub, so the periodic
-    /// playback tick doesn't yank the handle back out from under them.
-    @State private var lastScrubAt: Date?
-    /// The value of the last *programmatic* `crownValue` assignment.
-    ///
-    /// `digitalCrownRotation` and our own re-seating both write the same state,
-    /// and `onChange` cannot tell them apart. Without this, following playback
-    /// in scrub mode would seek the player to its own position on every tick,
-    /// and switching targets would fire a spurious adjustment.
-    @State private var seatedCrownValue: Double?
+    @State private var scrubPosition: Double?
     @State private var page: Page = .nowPlaying
-    /// Whether the Crown's readout is on screen.
-    ///
-    /// It is worth a corner of the display while the listener is turning and
-    /// nothing at all when they are not.
-    @State private var showsCrownReadout = false
-    @State private var crownReadoutTimeout: Task<Void, Never>?
-
-    /// What the Digital Crown drives. A watch has one precise input and two
-    /// things worth pointing it at, so it is switched rather than split.
-    enum CrownTarget {
-        case volume
-        case position
-    }
 
     /// The player and its queue sit side by side rather than stacked in the
     /// navigation stack, so the queue is one swipe left instead of a push.
@@ -149,6 +125,9 @@ struct PlayerView: View {
         reduceMotion ? nil : .easeInOut(duration: 0.22)
     }
 
+    @State private var showOutputOptions = false
+    @State private var showSongOptions = false
+
     var body: some View {
         if let song = audioManager.currentSong {
             TabView(selection: $page) {
@@ -164,6 +143,37 @@ struct PlayerView: View {
                 }
             }
             .tabViewStyle(.page)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showOutputOptions = true } label: {
+                        Image(systemName: "airplay.audio")
+                    }
+                    .accessibilityLabel("Audio Output")
+                }
+            }
+            .sheet(isPresented: $showOutputOptions) {
+                NowPlayingView()
+            }
+            .sheet(isPresented: $showSongOptions) {
+                NavigationStack {
+                    List {
+                        if !audioManager.isRadioMode {
+                            WatchDownloadMenu(song: song)
+                            if auth.linkState == .signedIn {
+                                Button(favorites.isFavorite(song.id) ? "Remove from Favorites" : "Add to Favorites", systemImage: "star") {
+                                    favorites.toggle(songID: song.id)
+                                }
+                            }
+                        }
+                        NavigationLink {
+                            WatchSleepTimerView().environment(audioManager)
+                        } label: {
+                            Label("Sleep Timer", systemImage: "moon.zzz")
+                        }
+                    }
+                    .navigationTitle("Options")
+                }
+            }
             .background(
                 WatchPlayerBackground(song: audioManager.currentSong, base: backgroundBase)
             )
@@ -171,35 +181,10 @@ struct PlayerView: View {
             // rather than above it, so "Now Playing" landed on top of the
             // artwork — and the song's own title sits right under it anyway.
             .navigationTitle(page == .queue ? "Playing Next" : "")
-            .onAppear {
-                seatCrown(crownPosition(forVolume: audioManager.volume))
-                lastCrownFeedbackStep = feedbackStep(crownValue)
-                favorites.loadIfNeeded()
-            }
-            .onChange(of: crownValue) { _, newValue in
-                guard isListenerTurn(newValue) else { return }
-                applyCrown(newValue, feedback: true)
-            }
-            .onChange(of: audioManager.volume) { _, newValue in
-                guard crownTarget == .volume else { return }
-                let position = crownPosition(forVolume: newValue)
-                if abs(position - crownValue) > 0.01 {
-                    seatCrown(position)
-                    lastCrownFeedbackStep = feedbackStep(position)
-                }
-            }
-            .onChange(of: audioManager.currentTime) { _, _ in
-                syncCrownToPlayback()
-            }
+            .accessibilityAction(named: Text("Playing Next")) { page = .queue }
+            .onAppear { favorites.loadIfNeeded() }
             .onChange(of: audioManager.isRadioMode) { _, isRadio in
-                guard isRadio else { return }
-                // A live stream has no position for the Crown to point at, and
-                // the queue page it may be sitting on no longer exists.
-                if crownTarget == .position {
-                    crownTarget = .volume
-                    seatCrown(crownPosition(forVolume: audioManager.volume))
-                }
-                page = .nowPlaying
+                if isRadio { page = .nowPlaying }
             }
         } else {
             WatchEmptyState(
@@ -221,7 +206,7 @@ struct PlayerView: View {
             VStack(spacing: metrics.contentSpacing) {
                 ZStack {
                     WatchCachedImage(url: song.thumbnailURL) { image in
-                        image.resizable().scaledToFit()
+                        image.resizable().scaledToFill()
                     } placeholder: {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color.secondary.opacity(0.25))
@@ -277,47 +262,48 @@ struct PlayerView: View {
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Live radio")
                 } else {
-                    // Doubles as the Crown's target switch: the bar is
-                    // the thing being scrubbed, so it is also the thing
-                    // you tap to point the Crown at it.
-                    Button(action: switchCrownTarget) {
+                    GeometryReader { geometry in
+                        let position = scrubPosition ?? audioManager.currentTime
                         VStack(spacing: 1) {
-                            let total = max(audioManager.duration, 1)
-                            ProgressView(value: min(audioManager.currentTime, total), total: total)
-                                .tint(crownTarget == .position ? Color.appAccent : .secondary.opacity(0.8))
-                                .scaleEffect(y: crownTarget == .position ? 1.0 : 0.6)
+                            ProgressView(value: min(position, max(audioManager.duration, 1)), total: max(audioManager.duration, 1))
+                                .tint(.secondary.opacity(0.8))
+                                .scaleEffect(y: 0.6)
                             HStack {
-                                Text(formatTime(audioManager.currentTime))
+                                Text(formatTime(position))
                                 Spacer()
-                                Text("-" + formatTime(max(0, audioManager.duration - audioManager.currentTime)))
+                                Text("-" + formatTime(max(0, audioManager.duration - position)))
                             }
                             .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(crownTarget == .position ? Color.appAccent : .secondary)
+                            .foregroundStyle(.secondary)
                         }
+                        .frame(height: metrics.statusRowHeight)
                         .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                guard canScrub else { return }
+                                scrubPosition = WatchPlaybackPosition.time(at: value.location.x,
+                                    width: geometry.size.width, duration: audioManager.duration)
+                            }
+                            .onEnded { _ in
+                                if let scrubPosition { audioManager.seek(to: scrubPosition) }
+                                scrubPosition = nil
+                            })
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!canScrub)
+                    .frame(height: metrics.statusRowHeight)
                     .padding(.horizontal, metrics.progressHorizontalPadding)
-                    .animation(playbackAnimation, value: crownTarget)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Playback Position")
                     .accessibilityValue(progressAccessibilityValue)
-                    .accessibilityHint(
-                        canScrub
-                            ? "Double tap to point the Digital Crown here. Swipe up or down to seek by 15 seconds."
-                            : "Swipe up or down to seek by 15 seconds."
-                    )
+                    .accessibilityIdentifier("WatchPlayer.position")
+                    .accessibilityHint("Tap or drag to seek. Swipe up or down to seek by 15 seconds.")
                     .accessibilityAdjustableAction { direction in
                         switch direction {
-                        case .increment:
-                            seek(by: 15)
-                        case .decrement:
-                            seek(by: -15)
-                        @unknown default:
-                            break
+                        case .increment: seek(by: 15)
+                        case .decrement: seek(by: -15)
+                        @unknown default: break
                         }
                     }
+
                 }
 
                 // Anything the artwork's ceiling left over lands here, so the
@@ -429,12 +415,12 @@ struct PlayerView: View {
                             Image(systemName: audioManager.playbackMode.iconName)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(
-                                    audioManager.playbackMode == .singleLoop ? Color.appAccent : .secondary
+                                    audioManager.playbackMode.isActive ? Color.appAccent : .secondary
                                 )
                                 .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
                                 .background(
                                     Circle().fill(
-                                        audioManager.playbackMode == .singleLoop
+                                        audioManager.playbackMode.isActive
                                             ? Color.appAccent.opacity(0.14) : Color.clear
                                     )
                                 )
@@ -442,78 +428,51 @@ struct PlayerView: View {
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Repeat")
                         .accessibilityValue(
-                            audioManager.playbackMode == .singleLoop ? "Repeat One" : "Repeat All"
+                            audioManager.playbackMode.accessibilityValue
                         )
                         .accessibilityHint("Cycles repeat mode.")
-                        // The queue is a swipe away rather than a push,
-                        // but VoiceOver has no swipe to give it, so it
-                        // keeps a button of its own.
+                        // Queue navigation remains on the adjacent page.
                         Button {
-                            page = .queue
+                            showSongOptions = true
                             WatchHaptic.play(.click)
                         } label: {
-                            Image(systemName: "list.bullet")
+                            Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
                                 .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
                         }
                         .buttonStyle(.watchPressable)
-                        .accessibilityLabel("Playing Next")
-                        .accessibilityValue(queueAccessibilityValue)
-                        .accessibilityHint("Show the queue for \(song.title)")
-                        .accessibilityIdentifier("WatchPlayer.queue")
+                        .accessibilityLabel("Options")
+                        .accessibilityHint("Download, favorites, and sleep timer")
+                        .accessibilityIdentifier("WatchPlayer.options")
+
                     }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             .padding(.horizontal, 2)
         }
-        // Drawn here rather than handed to `digitalCrownAccessory`: the system
-        // accessory re-presents itself every time the page re-renders, and this
-        // page re-renders twice a second to move the progress bar, so the
-        // readout blinked its way through songs nobody was adjusting. It rides
-        // over the artwork, which is the one thing on the page that can be
-        // covered for a second without costing the listener anything.
-        .overlay(alignment: .top) {
-            WatchCrownReadout(target: crownTarget, valueText: crownValueText)
-                .padding(.top, 8)
-                .opacity(showsCrownReadout ? 1 : 0)
-                .animation(
-                    reduceMotion ? nil : .easeInOut(duration: 0.15),
-                    value: showsCrownReadout
-                )
+        // Preserve Crown routing without another visible playback control.
+        .background {
+            systemVolumeControl
+                .opacity(0.001)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .padding(.top, WatchPlayerLayoutMetrics.topBarAllowance)
         .padding(.bottom, WatchPlayerLayoutMetrics.pageIndicatorAllowance)
         .ignoresSafeArea(edges: [.top, .bottom])
-        .focusable(true)
-        // The overload that reports rotation as well as value: `onChange` fires
-        // on the turn itself, so it still speaks at either end of the range
-        // where the value has nowhere left to go.
-        // The bounded overload, deliberately. The unbounded one takes no
-        // `sensitivity` and no `by:` stride, and without a range to spread the
-        // travel over it slams between silence and full volume with nothing in
-        // between. It also does not get rid of the system indicator, which was
-        // the only reason to try it.
-        .digitalCrownRotation(
-            detent: $crownValue,
-            from: 0,
-            through: 1,
-            by: crownTarget == .volume ? 0.05 : 0.01,
-            sensitivity: .medium,
-            // Never wrap: rolling past the end of a track back
-            // to its start is not something anyone means to do.
-            isContinuous: false,
-            isHapticFeedbackEnabled: true,
-            onChange: { _ in showCrownReadout() },
-            onIdle: { hideCrownReadoutAfterGrace() }
-        )
-        .onDisappear {
-            crownReadoutTimeout?.cancel()
-            showsCrownReadout = false
-        }
     }
+
+    private var systemVolumeControl: some View {
+        WatchSystemVolumeControl(owner: WatchAuthManager.shared.output,
+            isFocused: page == .nowPlaying && !showOutputOptions && !showSongOptions)
+            .id(WatchAuthManager.shared.output)
+            .frame(width: 40, height: 40)
+            .scaleEffect(0.65)
+            .accessibilityLabel("Volume")
+    }
+
     private var backgroundBase: Color {
         colorScheme == .dark
             ? Color.black
@@ -574,153 +533,82 @@ struct PlayerView: View {
         WatchHaptic.play(seconds >= 0 ? .next : .previous)
     }
 
-    /// Scrubbing needs a known length to map the Crown onto, which rules out
-    /// live radio and a track whose duration hasn't resolved yet.
+    /// Touch seeking needs a known track length; live radio cannot seek.
     private var canScrub: Bool {
         !audioManager.isRadioMode && audioManager.duration > 0
     }
 
-    private var crownValueText: String {
-        switch crownTarget {
-        case .volume:
-            // The Crown's position, read back as the volume it stands for.
-            "\(Int((volume(forCrownPosition: crownValue) * 100).rounded()))%"
-        case .position:
-            formatTime(crownValue * audioManager.duration)
+}
+
+nonisolated enum WatchPlaybackPosition {
+    static func time(at x: Double, width: Double, duration: Double) -> Double {
+        guard x.isFinite, width.isFinite, width > 0, duration.isFinite, duration > 0 else { return 0 }
+        return min(max(x / width, 0), 1) * duration
+    }
+}
+
+private struct WatchSystemVolumeControl: WKInterfaceObjectRepresentable {
+    let owner: CompanionPlayback.Owner
+    let isFocused: Bool
+
+    func makeWKInterfaceObject(context: Context) -> WKInterfaceVolumeControl {
+        WKInterfaceVolumeControl(origin: owner == .watch ? .local : .companion)
+    }
+
+    final class Coordinator { var focused: Bool? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func updateWKInterfaceObject(_ control: WKInterfaceVolumeControl, context: Context) {
+        guard context.coordinator.focused != isFocused else { return }
+        context.coordinator.focused = isFocused
+        if isFocused { control.focus() } else { control.resignFocus() }
+    }
+
+    static func dismantleWKInterfaceObject(_ control: WKInterfaceVolumeControl, coordinator: Coordinator) {
+        control.resignFocus()
+    }
+}
+
+private struct WatchSleepTimerView: View {
+    @Environment(AudioManager.self) private var audio
+    @State private var selectionRevision = 0
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            List {
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    if let deadline = audio.sleepTimer.deadline {
+                        let remaining = max(0, Int(deadline.timeIntervalSince(timeline.date).rounded(.up)))
+                        Text("\(remaining / 60):\(String(format: "%02d", remaining % 60)) remaining")
+                            .monospacedDigit()
+                    } else if audio.sleepTimer.endsWithCurrentSong {
+                        Text("End of song")
+                    } else {
+                        Text("Sleep timer off").foregroundStyle(.secondary)
+                    }
+                }
+                .id("timerStatus")
+                .accessibilityIdentifier("WatchPlayer.sleepStatus")
+                ForEach([15, 30, 45, 60], id: \.self) { minutes in
+                    Button("\(minutes) minutes") { select { audio.setSleepTimer(minutes: minutes) } }
+                }
+                if !audio.isRadioMode {
+                    Button("When Current Song Ends") { select { audio.setSleepTimer(endOfSong: true) } }
+                }
+                if audio.sleepTimer.isActive {
+                    Button("Cancel Sleep Timer", role: .destructive) { select { audio.setSleepTimer() } }
+                }
+            }
+            .onChange(of: selectionRevision) { _, _ in proxy.scrollTo("timerStatus", anchor: .top) }
+            .onChange(of: audio.sleepTimer.deadline) { _, _ in proxy.scrollTo("timerStatus", anchor: .top) }
+            .onChange(of: audio.sleepTimer.endsWithCurrentSong) { _, _ in proxy.scrollTo("timerStatus", anchor: .top) }
         }
+        .navigationTitle("Sleep Timer")
     }
 
-    private func crownPosition(forVolume volume: Double) -> Double {
-        WatchCrownVolume.position(forVolume: volume)
-    }
-
-    private func volume(forCrownPosition position: Double) -> Double {
-        WatchCrownVolume.volume(forPosition: position)
-    }
-
-    /// One haptic tick per 5% of a turn, counted in Crown positions so both
-    /// targets share the same scale.
-    private func feedbackStep(_ crownPosition: Double) -> Int {
-        Int((crownPosition * 20).rounded())
-    }
-
-    /// Marks a programmatic write so `onChange` can ignore the echo.
-    private func seatCrown(_ value: Double) {
-        seatedCrownValue = value
-        crownValue = value
-    }
-
-    /// True when `crownValue` moved because the listener turned the Crown,
-    /// rather than because we re-seated it.
-    private func isListenerTurn(_ value: Double) -> Bool {
-        defer { seatedCrownValue = nil }
-        guard let seatedCrownValue else { return true }
-        return abs(value - seatedCrownValue) > 0.0005
-    }
-
-    private func switchCrownTarget() {
-        guard canScrub else {
-            WatchHaptic.play(.failure)
-            return
-        }
-        crownTarget = crownTarget == .volume ? .position : .volume
-        // Re-seat the handle on whatever it now controls. The feedback step is
-        // reset too: it is shared between both targets, and a stale value would
-        // swallow the first tick after the switch.
-        lastCrownFeedbackStep = nil
-        switch crownTarget {
-        case .volume:
-            seatCrown(crownPosition(forVolume: audioManager.volume))
-            lastCrownFeedbackStep = feedbackStep(crownValue)
-        case .position:
-            seatCrown(playbackFraction)
-            lastScrubAt = nil
-        }
-        // Switching targets is worth showing: the readout is what says which
-        // of the two the Crown is now pointed at.
-        showCrownReadout()
-        hideCrownReadoutAfterGrace()
-        WatchHaptic.play(.click)
-    }
-
-    private var playbackFraction: Double {
-        guard audioManager.duration > 0 else { return 0 }
-        return min(max(audioManager.currentTime / audioManager.duration, 0), 1)
-    }
-
-    /// How long the readout stays up after the Crown stops moving.
-    private static let crownReadoutGrace: Duration = .seconds(1.2)
-
-    /// Puts the readout up while the Crown is in use.
-    ///
-    /// Driven by the Crown's own rotation events rather than by the value
-    /// changing, because the value stops changing at either end of the range:
-    /// a readout keyed to the value went blank exactly when you rolled into
-    /// the top, which is what made a track already at 100% feel like the
-    /// Crown was dead in that direction.
-    private func showCrownReadout() {
-        crownReadoutTimeout?.cancel()
-        crownReadoutTimeout = nil
-        guard !showsCrownReadout else { return }
-        showsCrownReadout = true
-    }
-
-    private func hideCrownReadoutAfterGrace() {
-        crownReadoutTimeout?.cancel()
-        crownReadoutTimeout = Task { @MainActor in
-            try? await Task.sleep(for: Self.crownReadoutGrace)
-            guard !Task.isCancelled else { return }
-            showsCrownReadout = false
-        }
-    }
-
-    private func applyCrown(_ value: Double, feedback: Bool) {
-        showCrownReadout()
-        hideCrownReadoutAfterGrace()
-        switch crownTarget {
-        case .volume:
-            setVolume(fromCrown: value, feedback: feedback)
-        case .position:
-            scrub(to: value, feedback: feedback)
-        }
-    }
-
-    private func scrub(to fraction: Double, feedback: Bool) {
-        guard canScrub else { return }
-        let clamped = min(max(fraction, 0), 1)
-        lastScrubAt = Date()
-        audioManager.seek(to: clamped * audioManager.duration)
-        guard feedback else { return }
-        let step = feedbackStep(clamped)
-        guard step != lastCrownFeedbackStep else { return }
-        lastCrownFeedbackStep = step
-        WatchHaptic.play(.click)
-    }
-
-    /// Follows playback while the Crown is idle, so the handle keeps up with
-    /// the track without fighting an in-progress scrub.
-    private func syncCrownToPlayback() {
-        guard crownTarget == .position, canScrub else { return }
-        if let lastScrubAt, Date().timeIntervalSince(lastScrubAt) < 1.5 {
-            return
-        }
-        let fraction = playbackFraction
-        if abs(fraction - crownValue) > 0.01 {
-            seatCrown(fraction)
-        }
-    }
-
-    private func setVolume(fromCrown position: Double, feedback: Bool) {
-        let clamped = min(max(position, 0), 1)
-        audioManager.setVolume(volume(forCrownPosition: clamped))
-        if abs(clamped - crownValue) > 0.001 {
-            seatCrown(clamped)
-        }
-        guard feedback else { return }
-        let step = feedbackStep(clamped)
-        guard step != lastCrownFeedbackStep else { return }
-        lastCrownFeedbackStep = step
-        WatchHaptic.play(.click)
+    private func select(_ action: () -> Void) {
+        action()
+        selectionRevision += 1
     }
 }
 
@@ -780,27 +668,5 @@ private struct WatchPlayerIconButton: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue ?? "")
         .accessibilityHint(accessibilityHint ?? "")
-    }
-}
-
-/// What the Crown is pointed at, drawn over the player while it is being
-/// turned. It costs no room in the layout — it is only ever on screen for the
-/// moment it is being read, so it sits over the artwork rather than pushing it.
-private struct WatchCrownReadout: View {
-    let target: PlayerView.CrownTarget
-    let valueText: String
-
-    var body: some View {
-        Label(valueText, systemImage: target == .volume ? "speaker.wave.2.fill" : "timeline.selection")
-            .font(.system(size: 12, weight: .semibold, design: target == .volume ? .default : .monospaced))
-            .foregroundStyle(target == .position ? Color.appAccent : .primary)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(.black.opacity(0.78)))
-            .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.5))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(target == .volume ? "Volume" : "Playback Position")
-            .accessibilityValue(valueText)
-            .accessibilityIdentifier("WatchPlayer.crownReadout")
     }
 }

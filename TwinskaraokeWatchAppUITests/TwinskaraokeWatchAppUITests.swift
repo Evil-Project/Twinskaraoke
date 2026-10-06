@@ -76,6 +76,19 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
     )
   }
 
+  func testWatchAccountHasNoSignInAction() throws {
+    let app = launchApp()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+    scrollToVisibleItem("Account", identifier: "WatchHome.account", in: app)
+    openVisibleItem("Account", identifier: "WatchHome.account", in: app)
+    XCTAssertTrue(app.staticTexts["Guest Listener"].waitForExistence(timeout: 8))
+    XCTAssertFalse(app.buttons["WatchAccount.signInOnPhone"].exists)
+    XCTAssertFalse(app.buttons["Sign in on iPhone"].exists)
+    app.terminate()
+    app.launch()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+  }
+
   func testWatchTrendingSongOpensPlayerInUITestMode() throws {
     let app = launchApp()
 
@@ -86,6 +99,7 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
       in: app
     )
 
+    dismissPlaybackError(in: app)
     // Asserted on the song and its transport rather than on a "Now Playing"
     // title: the player page no longer carries one, because watchOS drew it
     // over the artwork instead of above it.
@@ -115,9 +129,10 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
       "Expected the watch player to open from a trending song."
     )
 
+    dismissPlaybackError(in: app)
     // The player is one fixed screenful now, so the queue button is on screen
     // without scrolling — and the queue is a page beside it rather than a push.
-    openVisibleItem("Playing Next", identifier: "WatchPlayer.queue", in: app)
+    app.swipeLeft()
 
     XCTAssertTrue(
       app.navigationBars["Playing Next"].waitForExistence(timeout: 8)
@@ -147,6 +162,137 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
   // arithmetic and is now pinned by `WatchCrownVolumeTests` in milliseconds;
   // which way a physical Crown turns is a question only a wrist can answer.
 
+  func testWatchDownloadsAndOutputOptionsOpen() throws {
+    let app = launchApp()
+    scrollToVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+    openVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+    XCTAssertTrue(app.staticTexts["Playback Device"].waitForExistence(timeout: 8) || app.buttons["WatchPlayback.output"].exists)
+    scrollToVisibleItem("No Downloads", identifier: "No Downloads", in: app)
+    XCTAssertTrue(app.staticTexts["No Downloads"].exists)
+    saveScreenshot(app, name: "Watch Downloads")
+    app.terminate()
+    app.launch()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
+  }
+
+  func testWatchPlayerOutputSheetOpens() throws {
+    let app = launchApp()
+    openVisibleItem("Wake Me Up Before You Go-Go", identifier: "WatchHome.trending.0", in: app)
+    dismissPlaybackError(in: app)
+    let output = app.buttons["WatchPlayer.options"].firstMatch
+    XCTAssertTrue(output.waitForExistence(timeout: 8))
+    output.tap()
+    XCTAssertTrue(app.staticTexts["Options"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.buttons["Sleep Timer"].exists)
+    XCTAssertTrue(app.buttons["Download to Watch"].exists, "Songs without inline audio metadata must allow a resolving download.")
+    saveScreenshot(app, name: "Watch Output Options")
+  }
+
+  func testWatchCachedSongPlaybackDoesNotCrash() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestLocalAudio"]
+    app.launch()
+    openVisibleItem("Wake Me Up Before You Go-Go", identifier: "WatchHome.trending.0", in: app)
+    let playing = app.buttons["Pause"].firstMatch.waitForExistence(timeout: 15)
+    if !playing {
+      XCTAssertTrue(app.staticTexts["Playback Unavailable"].firstMatch.exists,
+                    "A validated cached song must play or show an actionable audio-session error.")
+      dismissPlaybackError(in: app)
+    } else {
+      app.buttons["Pause"].firstMatch.tap()
+      XCTAssertTrue(app.buttons["Play"].firstMatch.waitForExistence(timeout: 5))
+      app.buttons["Play"].firstMatch.tap()
+      XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 5))
+      app.buttons["Next Track"].firstMatch.tap()
+      XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
+    }
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+    saveScreenshot(app, name: "Watch Cached Audio Playback")
+    app.terminate()
+    app.launch()
+    XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+    app.terminate()
+  }
+
+  func testWatchTouchSeekingAndSleepTimerStatus() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestLocalAudio"]
+    app.launch()
+    defer { app.terminate() }
+    openVisibleItem("Wake Me Up Before You Go-Go", identifier: "WatchHome.trending.0", in: app)
+    XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 15), "Standalone cached audio must actually start.")
+    app.buttons["Pause"].firstMatch.tap()
+    let position = app.otherElements["WatchPlayer.position"].firstMatch
+    XCTAssertTrue(position.waitForExistence(timeout: 5))
+    position.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value CONTAINS '0:15'"), object: position)], timeout: 5) == .completed)
+    XCUIDevice.shared.rotateDigitalCrown(delta: 0.3)
+    XCTAssertTrue((position.value as? String)?.contains("0:15") == true,
+                  "Volume Crown input must not change the paused playback position.")
+    app.buttons["WatchPlayer.options"].tap()
+    app.buttons["Sleep Timer"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["15 minutes"].waitForExistence(timeout: 5))
+    app.buttons["15 minutes"].tap()
+    let status = app.staticTexts["WatchPlayer.sleepStatus"].firstMatch
+    XCTAssertTrue(status.waitForExistence(timeout: 5))
+    XCTAssertTrue(status.isHittable)
+    XCTAssertTrue(status.label.contains("remaining"))
+    scrollToVisibleItem("When Current Song Ends", identifier: "", in: app)
+    app.buttons["When Current Song Ends"].tap()
+    XCTAssertTrue(app.staticTexts["End of song"].waitForExistence(timeout: 5))
+    saveScreenshot(app, name: "Watch Sleep Timer Status")
+  }
+
+  func testWatchSavedDownloadsPlayLocally() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestDownloadedAudio"]
+    app.launch()
+    defer { app.terminate() }
+    scrollToVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+    openVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+    XCTAssertTrue(app.buttons["Wake Me Up Before You Go-Go"].firstMatch.waitForExistence(timeout: 5))
+    app.buttons["Wake Me Up Before You Go-Go"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 15),
+                  "Persisted watch downloads must play without a phone or remote audio URL.")
+    app.buttons["Next Track"].firstMatch.tap()
+    XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
+    saveScreenshot(app, name: "Watch Offline Download Playback")
+  }
+
+  func testWatchAccountClearsPersistentDownloads() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestDownloadedAudio"]
+    app.launch()
+    defer { app.terminate() }
+    scrollToVisibleItem("Account", identifier: "WatchHome.account", in: app)
+    openVisibleItem("Account", identifier: "WatchHome.account", in: app)
+    scrollToVisibleItem("Clear Cache", identifier: "WatchAccount.clearAudio", in: app)
+    let clear = app.buttons["WatchAccount.clearAudio"]
+    XCTAssertTrue(clear.isEnabled, "Saved downloads must be counted even with an empty temporary cache.")
+    clear.tap()
+    XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5))
+    app.buttons["Clear"].tap()
+    XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == false"), object: clear)], timeout: 5) == .completed)
+    saveScreenshot(app, name: "Watch Account Audio Cleared")
+  }
+
+  private func dismissPlaybackError(in app: XCUIApplication) {
+    // This fixture watch has no connected phone. Its actionable playback
+    // error is expected; dismiss it before testing the controls underneath.
+    if app.staticTexts["Playback Unavailable"].firstMatch.waitForExistence(timeout: 3) {
+      app.buttons["OK"].firstMatch.tap()
+    }
+  }
+
+  private func saveScreenshot(_ app: XCUIApplication, name: String) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
   private func launchApp() -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments += ["-UITestMode", "1"]
@@ -156,7 +302,10 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
 
   private func openVisibleItem(_ title: String, identifier: String, in app: XCUIApplication) {
     if app.buttons[identifier].waitForExistence(timeout: 5) {
-      app.buttons[identifier].tap()
+      let button = app.buttons[identifier]
+      XCTAssertTrue(NSPredicate(format: "isHittable == true").evaluate(with: button) ||
+        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: button)], timeout: 5) == .completed)
+      button.tap()
       return
     }
 

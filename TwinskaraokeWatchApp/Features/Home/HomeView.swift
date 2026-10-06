@@ -20,6 +20,7 @@ struct HomeView: View {
         case playlists
         case favorites
         case songs
+        case downloads
         case radio
         case search
         case account
@@ -78,6 +79,7 @@ struct HomeView: View {
                                 WatchSongRow(song: song)
                             }
                             .buttonStyle(.watchPressable)
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                             .accessibilityIdentifier("WatchHome.recent.\(index)")
                             .accessibilityLabel(song.title)
                             .accessibilityValue("\(song.artistName), \(song.durationText)")
@@ -102,6 +104,7 @@ struct HomeView: View {
                                 )
                             }
                             .buttonStyle(.watchPressable)
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                             .accessibilityIdentifier("WatchHome.trending.\(index)")
                             .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Open \(song.title)" : song.title)
                             .accessibilityValue("\(song.artistName), \(song.durationText)")
@@ -118,6 +121,9 @@ struct HomeView: View {
                     }
                 }
                 Section("Browse") {
+                    browseLink(.downloads, title: "Downloads", subtitle: String(localized: "Saved on this watch"),
+                               systemImage: "arrow.down.circle", tint: .green,
+                               identifier: "WatchHome.downloads", hint: "Opens offline watch downloads.")
                     browseLink(
                         .playlists,
                         title: "Playlists",
@@ -178,14 +184,23 @@ struct HomeView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .animation(songStateAnimation, value: audioManager.currentSong?.id)
-            .animation(playbackAnimation, value: audioManager.isPlaying)
             .navigationDestination(for: Destination.self) { destination in
                 view(for: destination)
             }
             .onAppear {
                 homeViewModel.fetchTrending()
             }
+        }
+        .alert(
+            WatchDownloads.shared.error == nil ? "Playback Unavailable" : "Download Unavailable",
+            isPresented: Binding(
+                get: { audioManager.playbackError != nil || WatchDownloads.shared.error != nil },
+                set: { if !$0 { audioManager.playbackError = nil; WatchDownloads.shared.dismissError() } }
+            )
+        ) {
+            Button("OK") { audioManager.playbackError = nil; WatchDownloads.shared.dismissError() }
+        } message: {
+            Text(WatchDownloads.shared.error ?? audioManager.playbackError ?? "")
         }
     }
 
@@ -226,6 +241,8 @@ struct HomeView: View {
             PlaylistsGridView()
         case .favorites:
             FavoritesView().environment(audioManager)
+        case .downloads:
+            WatchDownloadsView().environment(audioManager)
         case .songs:
             SongsView().environment(audioManager)
         case .radio:

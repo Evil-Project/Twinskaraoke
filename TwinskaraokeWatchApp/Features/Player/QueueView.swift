@@ -108,7 +108,6 @@ struct QueueView: View {
         }
         // Embedded as a page beside the player, the title belongs to the pager.
         .navigationTitle(showsCurrentSong ? "Queue" : "")
-        .animation(queueAnimation, value: audioManager.currentSong?.id)
         .onAppear {
             prefetchArtwork()
         }
