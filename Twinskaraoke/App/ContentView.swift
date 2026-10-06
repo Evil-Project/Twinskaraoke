@@ -141,43 +141,11 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
-        // Driven off `allCases` and `content` so the enum stays the only place
-        // a section is described — the sidebar already builds itself the same
-        // way, and listing the screens here too let the two drift apart.
-        //
-        // `systemImage` is the unfilled symbol: the tab bar fills it for the
-        // selected tab itself. Passing the filled variant is what made Home and
-        // New render filled even while unselected.
-        TabView(selection: selectedTabBinding) {
-            ForEach(RootSection.allCases) { section in
-                Tab(
-                    section.title,
-                    systemImage: section.systemImage,
-                    value: section,
-                    role: section.tabRole
-                ) {
-                    section.content
-                }
-            }
-        }
-        .tint(.appAccent)
-        // Declare activation in SwiftUI so tab rebuilds preserve the separate
-        // Search button instead of resetting an underlying UIKit assignment.
-        .tabViewSearchActivation(.searchTabSelection)
-        // The mini player goes in the system's own accessory slot — the one
-        // Apple Music uses. That is what gives it Liquid Glass, the merge into
-        // the minimized tab bar, and a bottom content inset on every screen
-        // underneath, none of which we now maintain ourselves.
-        .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
+        RootTabShell(selection: selectedTabBinding, showsAccessory: showsMiniPlayer) { section in
+            section.content
+        } accessory: {
             MiniPlayerBar()
         }
-        // The system owns minimization entirely. A short-scroll-up reveal was
-        // built on top of this once, by flipping the policy to `.never` to
-        // force an expansion; iOS 27 applies that flip with no transition at
-        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
-        // every comparable app restore at the scroll edge, which is what this
-        // does now.
-        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var sidebarShell: some View {
@@ -262,6 +230,54 @@ private struct PopupHostView: View {
             return .home
         }
         return section
+    }
+}
+
+/// Shared root tab configuration, hosted independently by regression tests.
+struct RootTabShell<Content: View, Accessory: View>: View {
+    @Binding var selection: RootSection
+    var showsAccessory: Bool
+    @ViewBuilder var content: (RootSection) -> Content
+    @ViewBuilder var accessory: () -> Accessory
+
+    var body: some View {
+        // Driven off `allCases` and `content` so the enum stays the only place
+        // a section is described — the sidebar already builds itself the same
+        // way, and listing the screens here too let the two drift apart.
+        //
+        // `systemImage` is the unfilled symbol: the tab bar fills it for the
+        // selected tab itself. Passing the filled variant is what made Home and
+        // New render filled even while unselected.
+        TabView(selection: $selection) {
+            ForEach(RootSection.allCases) { section in
+                Tab(
+                    section.title,
+                    systemImage: section.systemImage,
+                    value: section,
+                    role: section.tabRole
+                ) {
+                    content(section)
+                }
+            }
+        }
+        .tint(.appAccent)
+        // Declare activation in SwiftUI so tab rebuilds preserve the separate
+        // Search button instead of resetting an underlying UIKit assignment.
+        .tabViewSearchActivation(.searchTabSelection)
+        // The mini player goes in the system's own accessory slot — the one
+        // Apple Music uses. That is what gives it Liquid Glass, the merge into
+        // the minimized tab bar, and a bottom content inset on every screen
+        // underneath, none of which we now maintain ourselves.
+        .tabViewBottomAccessory(isEnabled: showsAccessory) {
+            accessory()
+        }
+        // The system owns minimization entirely. A short-scroll-up reveal was
+        // built on top of this once, by flipping the policy to `.never` to
+        // force an expansion; iOS 27 applies that flip with no transition at
+        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
+        // every comparable app restore at the scroll edge, which is what this
+        // does now.
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 }
 

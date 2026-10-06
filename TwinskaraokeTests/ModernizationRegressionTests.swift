@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Testing
 import UIKit
+import SwiftUI
 @testable import Twinskaraoke
 
 @MainActor
@@ -117,11 +118,29 @@ struct ModernizationRegressionTests {
         #expect(auth.authToken != "fixture-token")
     }
 
+    @Observable
+    final class TabState {
+        var section = RootSection.home
+        var showsAccessory = false
+    }
+
+    private struct TabFixture: View {
+        @Bindable var state: TabState
+        var body: some View {
+            RootTabShell(selection: $state.section, showsAccessory: state.showsAccessory) { section in
+                Text(section.title)
+            } accessory: {
+                Text("Mini-player fixture")
+            }
+        }
+    }
+
+    /// Exercises the production tab shell without depending on the test host's
+    /// scene startup, saved playback, or shared AppRouter selection.
     @Test("The app keeps Search activation enabled across tab and appearance updates")
     func nativeSearchActivationSurvivesUpdates() async throws {
         guard UIDevice.current.userInterfaceIdiom == .phone else { return }
-        @MainActor func findTabController(in root: UIViewController?) -> UITabBarController? {
-            guard let root else { return nil }
+        @MainActor func findTabController(in root: UIViewController) -> UITabBarController? {
             if let tabs = root as? UITabBarController { return tabs }
             for child in root.children {
                 if let tabs = findTabController(in: child) { return tabs }
@@ -129,50 +148,56 @@ struct ModernizationRegressionTests {
             return nil
         }
 
-        var appWindow: UIWindow?
-        var tabController: UITabBarController?
-        try await waitUntil {
-            for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
-                for window in scene.windows {
-                    if let tabs = findTabController(in: window.rootViewController),
-                       tabs.tabs.count == RootSection.allCases.count {
-                        appWindow = window
-                        tabController = tabs
-                        return true
-                    }
-                }
-            }
-            return false
-        }
-        let window = try #require(appWindow)
-        let controller = try #require(tabController)
-        let search = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
-        #expect(search.automaticallyActivatesSearch)
-        let router = AppRouter.shared
-        let originalSection = router.section
-        let originalPendingRoute = router.hasPendingRoute
+        let state = TabState()
+        let host = UIHostingController(rootView: TabFixture(state: state))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.frame = window.bounds
+        window.layoutIfNeeded()
+        host.view.layoutIfNeeded()
         defer {
-            router.section = originalSection
-            router.hasPendingRoute = originalPendingRoute
-            router.requestID = UUID()
+            window.isHidden = true
+            window.rootViewController = nil
         }
+        try await waitUntil { findTabController(in: host) != nil }
+        let controller = try #require(findTabController(in: host))
+        // SwiftUI 26 uses viewControllers; SwiftUI 27 uses UITab/UISearchTab.
+        // Do not wait for a UIKit representation that the runtime never creates.
+        if #available(iOS 27, *) {
+            try await waitUntil { controller.tabs.count == RootSection.allCases.count }
+        } else {
+            try await waitUntil { controller.viewControllers?.count == RootSection.allCases.count }
+        }
+        func expectSearchActivation() throws {
+            if #available(iOS 27, *) {
+                let search = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
+                #expect(search.automaticallyActivatesSearch)
+            }
+            #expect(controller.tabBarMinimizeBehavior == .onScrollDown)
+        }
+        try expectSearchActivation()
         for section in [RootSection.library, .home] {
-            router.section = section
-            router.requestID = UUID()
+            state.section = section
             let index = try #require(RootSection.allCases.firstIndex(of: section))
-            try await waitUntil { controller.selectedTab === controller.tabs[index] }
-            let updatedSearch = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
-            #expect(updatedSearch.automaticallyActivatesSearch)
+            try await waitUntil {
+                if #available(iOS 27, *) {
+                    return controller.selectedTab === controller.tabs[index]
+                }
+                return controller.selectedIndex == index
+            }
+            try expectSearchActivation()
         }
-        let originalStyle = window.overrideUserInterfaceStyle
-        defer { window.overrideUserInterfaceStyle = originalStyle }
-        for style in [UIUserInterfaceStyle.light, .dark] {
+        for showsAccessory in [true, false] {
+            state.showsAccessory = showsAccessory
+            try await waitUntil { (controller.bottomAccessory != nil) == showsAccessory }
+            try expectSearchActivation()
+        }
+        for style in [UIUserInterfaceStyle.dark, .light] {
             window.overrideUserInterfaceStyle = style
             window.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(100))
-            let updatedSearch = try #require(controller.tabs.compactMap { $0 as? UISearchTab }.first)
-            #expect(updatedSearch.automaticallyActivatesSearch)
-            #expect(controller.tabBarMinimizeBehavior == .onScrollDown)
+            try expectSearchActivation()
         }
     }
 
