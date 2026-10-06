@@ -19,7 +19,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var radioTemplate: CPListTemplate?
     private var upNextTemplate: CPListTemplate?
     var queueTemplate: CPListTemplate?
-    private var randomTemplate: CPListTemplate?
+    var randomTemplate: CPListTemplate?
 
     private struct PlaybackControlsState: Equatable {
         let shuffled: Bool
@@ -31,8 +31,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var libraryPage = 0
     var serverPlaylists: [Playlist] = []
     private var favoritesSongCount = 0
-    private var latestSongs: [Song] = []
-    private var randomSongs: [Song] = []
+    var latestSongs: [Song] = []
+    var randomSongs: [Song] = []
 
     /// Keyed by loader so a repeated Reload replaces its own in-flight request
     /// instead of racing it — an appended array let a slow first response land
@@ -376,7 +376,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
 
         // Keep playlists one tap away and page in place on smaller head units.
-        let pageSize = max(1, min(maximumBrowseRows, CPListTemplate.maximumItemCount - 2))
+        let notices = refreshFailureSections(loadStates[ContentTask.playlists] ?? .loaded)
+        let noticeRows = notices.reduce(0) { $0 + $1.items.count }
+        let pageSize = max(1, min(maximumBrowseRows, CPListTemplate.maximumItemCount - 2 - noticeRows))
         libraryPage = min(libraryPage, (playlists.count - 1) / pageSize)
         let start = libraryPage * pageSize
         var items = playlists.dropFirst(start).prefix(pageSize).map(playlistListItem)
@@ -386,7 +388,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if start + pageSize < playlists.count {
             items.append(libraryPageItem(title: String(localized: "Next Page", table: "CarPlay"), offset: 1))
         }
-        playlistsTemplate.updateSections([CPListSection(items: items)])
+        playlistsTemplate.updateSections(notices + [CPListSection(items: items)])
     }
 
     private func libraryPageItem(title: String, offset: Int) -> CPListItem {
@@ -409,10 +411,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             return
         }
 
-        latestTemplate.updateSections([
-            songActionSection(title: String(localized: "New Songs"), songs: latestSongs),
-            CPListSection(items: songItems(latestSongs, context: latestSongs), header: String(localized: "Songs"), sectionIndexTitle: nil),
-        ])
+        latestTemplate.updateSections(retainedSongSections(title: String(localized: "New Songs"),
+            songs: latestSongs, state: loadStates[ContentTask.latest] ?? .loaded))
     }
 
     private func rebuildRadioTemplate() {
@@ -425,7 +425,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         radioTemplate.updateSections(radioSections())
     }
 
-    private func rebuildRandomTemplate() {
+    func rebuildRandomTemplate() {
         guard let randomTemplate else { return }
         configureNavigationButtons(for: randomTemplate, reloadAction: { [weak self] in self?.loadRandomSongs() })
 
@@ -434,10 +434,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             return
         }
 
-        randomTemplate.updateSections([
-            songActionSection(title: String(localized: "Random Songs"), songs: randomSongs, includeRefresh: true),
-            CPListSection(items: songItems(randomSongs, context: randomSongs), header: String(localized: "Songs"), sectionIndexTitle: nil),
-        ])
+        randomTemplate.updateSections(retainedSongSections(title: String(localized: "Random Songs"),
+            songs: randomSongs, state: loadStates[ContentTask.random] ?? .loaded, includeRefresh: true))
     }
 
     private func radioSections() -> [CPListSection] {
@@ -580,7 +578,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         loadStates[playlist.id] = .loading
         openPlaylists[playlist.id] = playlist
         openPlaylistTemplates[playlist.id] = template
-        if openPlaylistSongs[playlist.id]?.isEmpty ?? true,
+        if openPlaylistSongs[playlist.id] == nil,
            let fallback = playlist.songListDTOs, !fallback.isEmpty {
             openPlaylistSongs[playlist.id] = fallback
         }
@@ -612,9 +610,18 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             template.updateSections([loadStatusSection(state, emptyTitle: String(localized: "No Songs"))])
             return
         }
-        var sections: [CPListSection] = []
-        if state == .failed { sections.append(statusSection(String(localized: "Couldn't Refresh", table: "CarPlay"))) }
-        sections.append(songActionSection(title: playlist.name, songs: songs, playlist: playlist))
+        template.updateSections(retainedSongSections(title: playlist.name, songs: songs, state: state, playlist: playlist))
+    }
+
+    /// Failed refreshes retain usable rows while keeping the failure visible.
+    private func refreshFailureSections(_ state: CarPlayLoadState) -> [CPListSection] {
+        state == .failed ? [statusSection(String(localized: "Couldn't Refresh", table: "CarPlay"))] : []
+    }
+
+    private func retainedSongSections(title: String, songs: [Song], state: CarPlayLoadState,
+                                      playlist: Playlist? = nil, includeRefresh: Bool = false) -> [CPListSection] {
+        var sections = refreshFailureSections(state)
+        sections.append(songActionSection(title: title, songs: songs, playlist: playlist, includeRefresh: includeRefresh))
         let reserved = sections.reduce(0) { $0 + $1.items.count }
         let visible = Array(songs.prefix(max(0, min(maximumBrowseRows, CPListTemplate.maximumItemCount - reserved))))
         let header = visible.count < songs.count
@@ -622,7 +629,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             : String(localized: "Songs")
         sections.append(CPListSection(items: songItems(visible, context: songs, playlist: playlist),
                                       header: header, sectionIndexTitle: nil))
-        template.updateSections(sections)
+        return sections
     }
 
     private func loadStatusSection(_ state: CarPlayLoadState, emptyTitle: String) -> CPListSection {
