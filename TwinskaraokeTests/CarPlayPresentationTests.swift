@@ -6,6 +6,57 @@ import Testing
 @MainActor
 @Suite("CarPlay presentation", .serialized)
 struct CarPlayPresentationTests {
+    @Test("Failed root refreshes show a notice alongside retained rows")
+    func retainedRootFailureNotices() {
+        let delegate = CarPlaySceneDelegate()
+        let playlist = Playlist(id: "cached", name: "Cached playlist", songCount: 1, mosaicMedia: nil, songListDTOs: nil)
+        delegate.serverPlaylists = [playlist]
+        delegate.latestSongs = fixtures(30)
+        delegate.randomSongs = fixtures(30)
+        delegate.loadStates = ["playlists": .failed, "latest": .failed, "random": .failed]
+        let library = CPListTemplate(title: "Library", sections: [])
+        let latest = CPListTemplate(title: "New", sections: [])
+        let random = CPListTemplate(title: "Random", sections: [])
+        delegate.playlistsTemplate = library
+        delegate.latestTemplate = latest
+        delegate.randomTemplate = random
+        delegate.rebuildPlaylistsTemplate()
+        delegate.rebuildLatestTemplate()
+        delegate.rebuildRandomTemplate()
+        for template in [library, latest, random] {
+            #expect(texts(template).first == "Couldn't Refresh")
+            #expect(template.itemCount <= CPListTemplate.maximumItemCount)
+        }
+        #expect(texts(library).contains("Cached playlist"))
+        #expect(texts(latest).contains("Song 0"))
+        #expect(texts(random).contains("Song 0"))
+        delegate.serverPlaylists = []
+        delegate.rebuildPlaylistsTemplate()
+        #expect(texts(library).first == "Couldn't Refresh")
+        #expect(texts(library).contains("Favourite Songs"))
+    }
+
+    @Test("An empty server playlist cannot regain removed inline songs on a failed reload")
+    func authoritativeEmptyPlaylist() async throws {
+        let delegate = CarPlaySceneDelegate()
+        let playlist = Playlist(id: "emptied", name: "Emptied", songCount: 2, mosaicMedia: nil, songListDTOs: fixtures(2))
+        let template = CPListTemplate(title: "Emptied", sections: [])
+        delegate.fetchPlaylistSongs = { _ in [] }
+        delegate.loadPlaylistSongs(for: playlist, into: template)
+        let first = try #require(delegate.playlistLoadTasks[playlist.id])
+        await first.value
+        #expect(delegate.openPlaylistSongs[playlist.id]?.isEmpty == true)
+        delegate.fetchPlaylistSongs = { _ in throw URLError(.notConnectedToInternet) }
+        delegate.loadPlaylistSongs(for: playlist, into: template)
+        #expect(!texts(template).contains("Song 0"))
+        let retry = try #require(delegate.playlistLoadTasks[playlist.id])
+        await retry.value
+        #expect(delegate.loadStates[playlist.id] == .failed)
+        #expect(delegate.openPlaylistSongs[playlist.id]?.isEmpty == true)
+        #expect(!texts(template).contains("Play All"))
+        #expect(!texts(template).contains("Song 0"))
+    }
+
     @Test("Playback rebuilds preserve initial loading and failure states")
     func persistentStatus() {
         let delegate = CarPlaySceneDelegate()
@@ -85,11 +136,10 @@ struct CarPlayPresentationTests {
         delegate.serverPlaylists = (0..<count).map { Playlist(id: "p\($0)", name: "Playlist \($0)", songCount: 1, mosaicMedia: nil, songListDTOs: nil) }
         if let first = delegate.serverPlaylists.first { delegate.serverPlaylists.append(first) }
         delegate.loadStates["playlists"] = .loaded
-        delegate.category = .browse
         let template = CPListTemplate(title: "Browse", sections: [])
-        delegate.categoryTemplate = template
+        delegate.playlistsTemplate = template
         var titles = Set<String>()
-        delegate.rebuildCategoryTemplate()
+        delegate.rebuildPlaylistsTemplate()
         for _ in 0...count {
             titles.formUnion(texts(template).filter { $0.hasPrefix("Playlist ") })
             #expect(template.itemCount <= CPListTemplate.maximumItemCount)

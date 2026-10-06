@@ -62,3 +62,30 @@ nonisolated struct UserPlaylistMedia: Codable, Sendable {
     let mediaStorageType: Int?
     let absolutePath: String?
 }
+
+extension UserPlaylist {
+    nonisolated init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        description = try values.decodeIfPresent(String.self, forKey: .description)
+        createdBy = try values.decodeIfPresent(String.self, forKey: .createdBy)
+        updatedBy = try values.decodeIfPresent(String.self, forKey: .updatedBy)
+        media = try values.decodeIfPresent(UserPlaylistMedia.self, forKey: .media)
+        createdAt = try values.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try values.decodeIfPresent(String.self, forKey: .updatedAt)
+        totalDuration = try values.decodeIfPresent(Int.self, forKey: .totalDuration)
+        songCount = try values.decodeIfPresent(Int.self, forKey: .songCount) ?? 0
+        playCount = try values.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
+        favoriteCount = try values.decodeIfPresent(Int.self, forKey: .favoriteCount)
+        playlistType = try values.decodeIfPresent(Int.self, forKey: .playlistType)
+        songListDTOs = try values.decodeIfPresent([Song].self, forKey: .songListDTOs)
+        mosaicMedia = try values.decodeIfPresent([Media].self, forKey: .mosaicMedia)
+        genres = try values.decodeIfPresent([String].self, forKey: .genres)
+        editable = try values.decodeIfPresent(Bool.self, forKey: .editable) ?? false
+        deletable = try values.decodeIfPresent(Bool.self, forKey: .deletable) ?? false
+        isPublic = try values.decodeIfPresent(Bool.self, forKey: .isPublic) ?? false
+        isSetList = try values.decodeIfPresent(Bool.self, forKey: .isSetList) ?? false
+        setListDate = try values.decodeIfPresent(String.self, forKey: .setListDate)
+    }
+}

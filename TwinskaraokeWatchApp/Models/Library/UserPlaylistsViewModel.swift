@@ -24,15 +24,30 @@ final class UserPlaylistsViewModel {
     init(
         isAuthenticated: @escaping @Sendable () -> Bool = { CredentialStore.isAuthenticated },
         loadPlaylists: @escaping @Sendable () async throws -> [Playlist] = {
-            let request = try KaraokeAPIClient.request(path: "/api/user/playlists")
-            let data = try await KaraokeAPIClient.data(for: request)
-            return try JSONDecoder()
-                .decode([UserPlaylist].self, from: data)
-                .map { $0.asPlaylist() }
+            try await loadWithFallback(companion: { try await WatchAuthManager.shared.fetchPersonalPlaylists() }, direct: {
+                let request = try KaraokeAPIClient.request(path: "/api/user/playlists")
+                let data = try await KaraokeAPIClient.data(for: request)
+                return try JSONDecoder().decode([UserPlaylist].self, from: data).map { $0.asPlaylist() }
+            })
         }
     ) {
         self.isAuthenticated = isAuthenticated
         self.loadPlaylists = loadPlaylists
+    }
+
+    /// Account-transition cancellations terminate the request; only transport
+    /// failures or an unavailable companion use independent watch networking.
+    static func loadWithFallback(companion: @Sendable () async throws -> [Playlist]?,
+                                 direct: @Sendable () async throws -> [Playlist]) async throws -> [Playlist] {
+        do {
+            if let playlists = try await companion() { return playlists }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // A reachable phone can still fail to fetch the playlist service.
+        }
+        try Task.checkCancellation()
+        return try await direct()
     }
 
     isolated deinit {
@@ -65,7 +80,9 @@ final class UserPlaylistsViewModel {
                 self?.finishLoad(generation: generation)
             } catch {
                 guard let self, self.loadGeneration == generation else { return }
-                self.loadError = String(localized: "Check your connection and try again.")
+                self.loadError = error is DecodingError
+                    ? "Your playlists could not be read. Open iPhone, refresh Playlists, then retry."
+                    : "Could not load your playlists. Open iPhone to sync your account, then retry."
                 self.finishLoad(generation: generation)
             }
         }

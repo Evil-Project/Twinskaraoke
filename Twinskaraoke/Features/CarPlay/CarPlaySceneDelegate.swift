@@ -14,12 +14,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private let artworkLoader = CarPlayArtworkLoader()
     private let maximumBrowseRows = 24
 
-    private var playlistsTemplate: CPListTemplate?
-    private var latestTemplate: CPListTemplate?
+    var playlistsTemplate: CPListTemplate?
+    var latestTemplate: CPListTemplate?
     private var radioTemplate: CPListTemplate?
     private var upNextTemplate: CPListTemplate?
-    private var queueTemplate: CPListTemplate?
-    private var randomTemplate: CPListTemplate?
+    var queueTemplate: CPListTemplate?
+    var randomTemplate: CPListTemplate?
 
     private struct PlaybackControlsState: Equatable {
         let shuffled: Bool
@@ -29,10 +29,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var playbackControlsState: PlaybackControlsState?
 
     private var libraryPage = 0
-    private var serverPlaylists: [Playlist] = []
+    var serverPlaylists: [Playlist] = []
     private var favoritesSongCount = 0
-    private var latestSongs: [Song] = []
-    private var randomSongs: [Song] = []
+    var latestSongs: [Song] = []
+    var randomSongs: [Song] = []
 
     /// Keyed by loader so a repeated Reload replaces its own in-flight request
     /// instead of racing it — an appended array let a slow first response land
@@ -43,11 +43,18 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         static let random = "random"
     }
 
+    var loadStates: [String: CarPlayLoadState] = [:]
+    var fetchPlaylistSongs: (String) async throws -> [Song] = { try await KaraokeAPIClient.playlistSongs(id: $0) }
+    var queueSnapshot: () -> (String?, [Song]) = {
+        (AudioPlayerManager.shared.currentSong?.id, AudioPlayerManager.shared.queue)
+    }
+    var selectQueuedSong: (Song) -> Void = { AudioPlayerManager.shared.skipToQueuedSong($0) }
+
     private var contentTasks: [String: Task<Void, Never>] = [:]
-    private var playlistLoadTasks: [String: Task<Void, Never>] = [:]
-    private var openPlaylistTemplates: [String: CPListTemplate] = [:]
-    private var openPlaylistSongs: [String: [Song]] = [:]
-    private var openPlaylists: [String: Playlist] = [:]
+    var playlistLoadTasks: [String: Task<Void, Never>] = [:]
+    var openPlaylistTemplates: [String: CPListTemplate] = [:]
+    var openPlaylistSongs: [String: [Song]] = [:]
+    var openPlaylists: [String: Playlist] = [:]
     private var contentObservation: ObservationToken?
     private var favoritesObservation: ObservationToken?
     private var templateRefreshTask: Task<Void, Never>?
@@ -107,6 +114,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         openPlaylistTemplates.removeAll()
         openPlaylistSongs.removeAll()
         openPlaylists.removeAll()
+        loadStates.removeAll()
         contentObservation?.cancel()
         contentObservation = nil
         favoritesObservation?.cancel()
@@ -138,6 +146,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         openPlaylistTemplates.removeValue(forKey: playlistID)
         openPlaylistSongs.removeValue(forKey: playlistID)
         openPlaylists.removeValue(forKey: playlistID)
+        loadStates.removeValue(forKey: playlistID)
     }
 
     private func configureNowPlayingTemplate() {
@@ -273,6 +282,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func loadPlaylists() {
         contentTasks[ContentTask.playlists]?.cancel()
+        loadStates[ContentTask.playlists] = .loading
+        rebuildPlaylistsTemplate()
         contentTasks[ContentTask.playlists] = Task { [weak self] in
             guard let self else { return }
             do {
@@ -290,57 +301,57 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
                 serverPlaylists = loadedPlaylists
                 favoritesSongCount = max(FavoritesManager.shared.favoriteIDs.count, loadedFavorites.count)
+                loadStates[ContentTask.playlists] = .loaded
                 rebuildPlaylistsTemplate()
             } catch {
                 guard !Task.isCancelled else { return }
-                serverPlaylists = []
-                favoritesSongCount = FavoritesManager.shared.favoriteIDs.count
-                playlistsTemplate?.updateSections([
-                    statusSection(String(localized: "Unable to Load Playlists"), detail: String(localized: "Check the connection and try again."), enabled: false),
-                ])
+                loadStates[ContentTask.playlists] = .failed
+                rebuildPlaylistsTemplate()
             }
         }
     }
 
     private func loadLatestSongs() {
         contentTasks[ContentTask.latest]?.cancel()
+        loadStates[ContentTask.latest] = .loading
+        rebuildLatestTemplate()
         contentTasks[ContentTask.latest] = Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.latestReleases(take: maximumBrowseRows)
                 guard !Task.isCancelled else { return }
                 latestSongs = songs
+                loadStates[ContentTask.latest] = .loaded
                 rebuildLatestTemplate()
             } catch {
                 guard !Task.isCancelled else { return }
-                latestSongs = []
-                latestTemplate?.updateSections([
-                    statusSection(String(localized: "Unable to Load New Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
-                ])
+                loadStates[ContentTask.latest] = .failed
+                rebuildLatestTemplate()
             }
         }
     }
 
     private func loadRandomSongs() {
         contentTasks[ContentTask.random]?.cancel()
+        loadStates[ContentTask.random] = .loading
+        rebuildRandomTemplate()
         contentTasks[ContentTask.random] = Task { [weak self] in
             guard let self else { return }
             do {
                 let songs = try await KaraokeAPIClient.randomSongs()
                 guard !Task.isCancelled else { return }
                 randomSongs = Array(songs.prefix(maximumBrowseRows))
+                loadStates[ContentTask.random] = .loaded
                 rebuildRandomTemplate()
             } catch {
                 guard !Task.isCancelled else { return }
-                randomSongs = []
-                randomTemplate?.updateSections([
-                    statusSection(String(localized: "Unable to Load Random Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
-                ])
+                loadStates[ContentTask.random] = .failed
+                rebuildRandomTemplate()
             }
         }
     }
 
-    private func refreshVisibleTemplates() {
+    func refreshVisibleTemplates() {
         refreshNowPlayingControls()
         rebuildPlaylistsTemplate()
         rebuildLatestTemplate()
@@ -354,20 +365,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
     }
 
-    private func rebuildPlaylistsTemplate() {
+    func rebuildPlaylistsTemplate() {
         guard let playlistsTemplate else { return }
         configureNavigationButtons(for: playlistsTemplate, reloadAction: { [weak self] in self?.loadPlaylists() })
 
         let playlists = currentPlaylists()
         guard !playlists.isEmpty else {
-            playlistsTemplate.updateSections([
-                statusSection(String(localized: "No Playlists"), detail: String(localized: "Saved and server playlists will appear here."), enabled: false),
-            ])
+            playlistsTemplate.updateSections([loadStatusSection(loadStates["playlists"] ?? .loaded, emptyTitle: String(localized: "No Playlists"))])
             return
         }
 
         // Keep playlists one tap away and page in place on smaller head units.
-        let pageSize = max(1, min(maximumBrowseRows, CPListTemplate.maximumItemCount - 2))
+        let notices = refreshFailureSections(loadStates[ContentTask.playlists] ?? .loaded)
+        let noticeRows = notices.reduce(0) { $0 + $1.items.count }
+        let pageSize = max(1, min(maximumBrowseRows, CPListTemplate.maximumItemCount - 2 - noticeRows))
         libraryPage = min(libraryPage, (playlists.count - 1) / pageSize)
         let start = libraryPage * pageSize
         var items = playlists.dropFirst(start).prefix(pageSize).map(playlistListItem)
@@ -377,7 +388,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if start + pageSize < playlists.count {
             items.append(libraryPageItem(title: String(localized: "Next Page", table: "CarPlay"), offset: 1))
         }
-        playlistsTemplate.updateSections([CPListSection(items: items)])
+        playlistsTemplate.updateSections(notices + [CPListSection(items: items)])
     }
 
     private func libraryPageItem(title: String, offset: Int) -> CPListItem {
@@ -391,21 +402,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return item
     }
 
-    private func rebuildLatestTemplate() {
+    func rebuildLatestTemplate() {
         guard let latestTemplate else { return }
         configureNavigationButtons(for: latestTemplate, reloadAction: { [weak self] in self?.loadLatestSongs() })
 
         guard !latestSongs.isEmpty else {
-            latestTemplate.updateSections([
-                statusSection(String(localized: "No New Songs"), detail: String(localized: "Try reloading this list."), enabled: false),
-            ])
+            latestTemplate.updateSections([loadStatusSection(loadStates["latest"] ?? .loaded, emptyTitle: String(localized: "No New Songs"))])
             return
         }
 
-        latestTemplate.updateSections([
-            songActionSection(title: String(localized: "New Songs"), songs: latestSongs),
-            CPListSection(items: songItems(latestSongs, context: latestSongs), header: String(localized: "Songs"), sectionIndexTitle: nil),
-        ])
+        latestTemplate.updateSections(retainedSongSections(title: String(localized: "New Songs"),
+            songs: latestSongs, state: loadStates[ContentTask.latest] ?? .loaded))
     }
 
     private func rebuildRadioTemplate() {
@@ -418,21 +425,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         radioTemplate.updateSections(radioSections())
     }
 
-    private func rebuildRandomTemplate() {
+    func rebuildRandomTemplate() {
         guard let randomTemplate else { return }
         configureNavigationButtons(for: randomTemplate, reloadAction: { [weak self] in self?.loadRandomSongs() })
 
         guard !randomSongs.isEmpty else {
-            randomTemplate.updateSections([
-                statusSection(String(localized: "No Random Songs"), detail: String(localized: "Try reloading this list."), enabled: false),
-            ])
+            randomTemplate.updateSections([loadStatusSection(loadStates["random"] ?? .loaded, emptyTitle: String(localized: "No Random Songs"))])
             return
         }
 
-        randomTemplate.updateSections([
-            songActionSection(title: String(localized: "Random Songs"), songs: randomSongs, includeRefresh: true),
-            CPListSection(items: songItems(randomSongs, context: randomSongs), header: String(localized: "Songs"), sectionIndexTitle: nil),
-        ])
+        randomTemplate.updateSections(retainedSongSections(title: String(localized: "Random Songs"),
+            songs: randomSongs, state: loadStates[ContentTask.random] ?? .loaded, includeRefresh: true))
     }
 
     private func radioSections() -> [CPListSection] {
@@ -490,10 +493,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func rebuildUpNextTemplate() {
+        queueTemplate?.updateSections(upNextSections())
         guard let upNextTemplate else { return }
         configureNavigationButtons(for: upNextTemplate, reloadAction: nil)
         upNextTemplate.updateSections(upNextSections())
-        queueTemplate?.updateSections(upNextSections())
     }
 
     private func currentPlaylists() -> [Playlist] {
@@ -570,29 +573,28 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
     }
 
-    private func loadPlaylistSongs(for playlist: Playlist, into template: CPListTemplate) {
+    func loadPlaylistSongs(for playlist: Playlist, into template: CPListTemplate) {
         playlistLoadTasks[playlist.id]?.cancel()
-        template.updateSections([statusSection(String(localized: "Loading Songs"))])
-
-        if let fallbackSongs = playlist.songListDTOs, !fallbackSongs.isEmpty {
-            openPlaylistSongs[playlist.id] = fallbackSongs
-            updatePlaylistTemplate(template, playlist: playlist, songs: fallbackSongs)
+        loadStates[playlist.id] = .loading
+        openPlaylists[playlist.id] = playlist
+        openPlaylistTemplates[playlist.id] = template
+        if openPlaylistSongs[playlist.id] == nil,
+           let fallback = playlist.songListDTOs, !fallback.isEmpty {
+            openPlaylistSongs[playlist.id] = fallback
         }
-
+        updatePlaylistTemplate(template, playlist: playlist, songs: openPlaylistSongs[playlist.id] ?? [])
+        let loader = fetchPlaylistSongs
         let task = Task { [weak self, weak template] in
-            guard let self, let template else { return }
             do {
-                let songs = try await KaraokeAPIClient.playlistSongs(id: playlist.id)
-                guard !Task.isCancelled else { return }
+                let songs = try await loader(playlist.id)
+                guard !Task.isCancelled, let self, let template else { return }
                 openPlaylistSongs[playlist.id] = songs
+                loadStates[playlist.id] = .loaded
                 updatePlaylistTemplate(template, playlist: playlist, songs: songs)
             } catch {
-                guard !Task.isCancelled else { return }
-                if openPlaylistSongs[playlist.id]?.isEmpty ?? true {
-                    template.updateSections([
-                        statusSection(String(localized: "Unable to Load Songs"), detail: String(localized: "Check the connection and try again."), enabled: false),
-                    ])
-                }
+                guard !Task.isCancelled, let self, let template else { return }
+                loadStates[playlist.id] = .failed
+                updatePlaylistTemplate(template, playlist: playlist, songs: openPlaylistSongs[playlist.id] ?? [])
             }
         }
         playlistLoadTasks[playlist.id] = task
@@ -603,22 +605,40 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             guard let self, let template else { return }
             self.loadPlaylistSongs(for: playlist, into: template)
         })
-
+        let state = loadStates[playlist.id] ?? .loaded
         guard !songs.isEmpty else {
-            template.updateSections([
-                statusSection(String(localized: "No Songs"), detail: String(localized: "This playlist is empty."), enabled: false),
-            ])
+            template.updateSections([loadStatusSection(state, emptyTitle: String(localized: "No Songs"))])
             return
         }
+        template.updateSections(retainedSongSections(title: playlist.name, songs: songs, state: state, playlist: playlist))
+    }
 
-        template.updateSections([
-            songActionSection(title: playlist.name, songs: songs, playlist: playlist),
-            CPListSection(
-                items: songItems(songs, context: songs, playlist: playlist),
-                header: String(localized: "Songs"),
-                sectionIndexTitle: nil
-            ),
-        ])
+    /// Failed refreshes retain usable rows while keeping the failure visible.
+    private func refreshFailureSections(_ state: CarPlayLoadState) -> [CPListSection] {
+        state == .failed ? [statusSection(String(localized: "Couldn't Refresh", table: "CarPlay"))] : []
+    }
+
+    private func retainedSongSections(title: String, songs: [Song], state: CarPlayLoadState,
+                                      playlist: Playlist? = nil, includeRefresh: Bool = false) -> [CPListSection] {
+        var sections = refreshFailureSections(state)
+        sections.append(songActionSection(title: title, songs: songs, playlist: playlist, includeRefresh: includeRefresh))
+        let reserved = sections.reduce(0) { $0 + $1.items.count }
+        let visible = Array(songs.prefix(max(0, min(maximumBrowseRows, CPListTemplate.maximumItemCount - reserved))))
+        let header = visible.count < songs.count
+            ? String(localized: "First \(visible.count) of \(songs.count) songs", table: "CarPlay")
+            : String(localized: "Songs")
+        sections.append(CPListSection(items: songItems(visible, context: songs, playlist: playlist),
+                                      header: header, sectionIndexTitle: nil))
+        return sections
+    }
+
+    private func loadStatusSection(_ state: CarPlayLoadState, emptyTitle: String) -> CPListSection {
+        switch state {
+        case .loading: statusSection(String(localized: "Loading", table: "CarPlay"))
+        case .failed: statusSection(String(localized: "Unable to Load", table: "CarPlay"),
+                                   detail: String(localized: "Check the connection and try again."))
+        case .loaded: statusSection(emptyTitle)
+        }
     }
 
     private func showQueueTemplate() {
@@ -639,7 +659,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
     }
 
-    private func upNextSections() -> [CPListSection] {
+    func upNextSections() -> [CPListSection] {
         let snapshot = upNextSnapshot()
         var sections: [CPListSection] = []
 
@@ -660,7 +680,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     let item = songItem(song, context: snapshot.context)
                     item.handler = { [weak self] _, completion in
                         if let self, upNextSnapshot().songs.contains(where: { $0.id == song.id }) {
-                            player.skipToQueuedSong(song)
+                            selectQueuedSong(song)
                             refreshVisibleTemplates()
                             showNowPlaying()
                         }
@@ -676,9 +696,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func upNextSnapshot() -> (songs: [Song], context: [Song]) {
-        let context = player.queue
+        let (currentID, context) = queueSnapshot()
         guard !context.isEmpty else { return ([], []) }
-        guard let currentID = player.currentSong?.id,
+        guard let currentID,
               let currentIndex = context.firstIndex(where: { $0.id == currentID })
         else {
             return (context, context)

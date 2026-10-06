@@ -80,6 +80,7 @@ struct FavoritesView: View {
                         )
                     }
                     .buttonStyle(.watchPressable)
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                     .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
                     .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play this song.")
                     .swipeActions(edge: .trailing) {
@@ -93,8 +94,6 @@ struct FavoritesView: View {
             }
         }
         .navigationTitle("Favorites")
-        .animation(listAnimation, value: audioManager.currentSong?.id)
-        .animation(playbackAnimation, value: audioManager.isPlaying)
         .animation(listAnimation, value: viewModel.songs.count)
         .navigationDestination(isPresented: $showPlayer) {
             PlayerView()
@@ -105,6 +104,9 @@ struct FavoritesView: View {
             // Forced because starring happens on this device too, from the
             // player. `favoriteSongs()` is cached and `toggle` invalidates it,
             // so an unchanged list costs a cache hit rather than a request.
+            viewModel.fetch(force: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: FavoritesManager.didRefresh)) { _ in
             viewModel.fetch(force: true)
         }
         .onChange(of: auth.linkState) { _, state in

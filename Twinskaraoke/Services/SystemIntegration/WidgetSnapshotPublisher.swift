@@ -18,7 +18,14 @@ final class WidgetSnapshotPublisher {
     private var lastArtworkKeys: Set<String> = []
     private var currentPlaylist: Playlist?
     private var currentPlaylistSongIDs: Set<String> = []
-    private let store = WidgetSnapshotStore()
+    /// Tests can supply a temporary destination when the simulator host is unsigned.
+    var store = WidgetSnapshotStore() {
+        didSet {
+            previousPlayback = nil
+            previousLibrary = nil
+            playbackAnchor = nil
+        }
+    }
     private var catalogSuggestions: [WidgetPlaylist] = []
     private var catalogAccountID: String?
     private var suggestionsTask: Task<Void, Never>?

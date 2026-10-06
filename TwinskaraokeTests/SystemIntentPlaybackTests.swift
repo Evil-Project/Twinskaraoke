@@ -8,6 +8,15 @@ import Testing
 @MainActor
 struct SystemIntentPlaybackTests {
     @Test func intentsControlActualCachedAudioAndPublishSnapshots() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = WidgetSnapshotStore(directory: directory)
+        let publisher = WidgetSnapshotPublisher.shared
+        let previousStore = publisher.store
+        publisher.store = store
+        defer {
+            publisher.store = previousStore
+            try? FileManager.default.removeItem(at: directory)
+        }
         let player = AudioPlayerManager.shared
         let previousAI = player.aiEnabled
         player.aiEnabled = false
@@ -23,10 +32,10 @@ struct SystemIntentPlaybackTests {
         #expect(player.isPlaying)
         _ = try await IOSTogglePlaybackIntent().perform()
         #expect(!player.isPlaying)
-        #expect(!WidgetSnapshotStore().readPlayback().isPlaying)
+        #expect(!store.readPlayback().isPlaying)
         _ = try await IOSTogglePlaybackIntent().perform()
         #expect(player.isPlaying)
-        #expect(WidgetSnapshotStore().readPlayback().isPlaying)
+        #expect(store.readPlayback().isPlaying)
         _ = try await IOSNextTrackIntent().perform()
         #expect(player.currentSong?.id == songs[1].id)
         player.seek(to: 0)
@@ -34,7 +43,7 @@ struct SystemIntentPlaybackTests {
         #expect(player.currentSong?.id == songs[0].id)
         _ = try await IOSToggleShuffleIntent().perform()
         #expect(player.isShuffled)
-        #expect(WidgetSnapshotStore().readPlayback().isShuffled)
+        #expect(store.readPlayback().isShuffled)
         _ = try await IOSToggleShuffleIntent().perform()
         #expect(!player.isShuffled)
         #expect(player.queue.map(\.id) == songs.map(\.id))
@@ -42,7 +51,7 @@ struct SystemIntentPlaybackTests {
         for expected in ["one", "all", "off"] {
             _ = try await IOSToggleRepeatIntent().perform()
             #expect(String(describing: player.repeatMode) == expected)
-            #expect(WidgetSnapshotStore().readPlayback().repeatMode == expected)
+            #expect(store.readPlayback().repeatMode == expected)
         }
         let timer = IOSStartSleepTimerIntent()
         timer.duration = .thirty

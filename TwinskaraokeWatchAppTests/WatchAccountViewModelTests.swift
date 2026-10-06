@@ -1,9 +1,28 @@
+import Foundation
 import Testing
 @testable import Twinskaraoke_Watch_App
 
 @MainActor
 @Suite("Watch account view models")
 struct WatchAccountViewModelTests {
+    @Test("A playlist detail response cannot cross an account revision")
+    func detailAccountTransition() async throws {
+        let loader = SuspendedLoader<[Song]>()
+        var revision = 1
+        let model = PlaylistDetailViewModel(playlistID: "mine", accountRevision: { revision },
+                                            loadSongs: { _ in await loader.value() })
+        model.fetchSongs()
+        await loader.waitUntilStarted()
+        revision = 2
+        await loader.resume(returning: [makeSong(id: "previous-account")])
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while model.isLoading, clock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(!model.isLoading)
+        #expect(model.songs.isEmpty)
+        #expect(model.loadError == nil)
+    }
+
     @Test("A late favorites response cannot restore signed-out data")
     func favoritesResetRejectsLateResponse() async {
         let loader = SuspendedLoader<[Song]>()

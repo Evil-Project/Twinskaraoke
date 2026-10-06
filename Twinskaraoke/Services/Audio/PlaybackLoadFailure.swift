@@ -6,6 +6,7 @@ import Foundation
 nonisolated enum PlaybackLoadFailure: Equatable, Sendable {
     case offline
     case unavailable
+    case companion(String)
 
     init(_ error: any Error) {
         if let urlError = error as? URLError, Self.connectivityCodes.contains(urlError.code) {
@@ -30,6 +31,7 @@ nonisolated enum PlaybackLoadFailure: Equatable, Sendable {
 
     var message: String {
         switch self {
+        case .companion(let message): message
         case .offline: String(localized: "No Internet Connection")
         case .unavailable: String(localized: "Couldn't play this song.")
         }

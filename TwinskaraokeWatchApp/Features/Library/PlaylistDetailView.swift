@@ -6,7 +6,10 @@ struct PlaylistDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @State private var showPlayer = false
+    private let auth = WatchAuthManager.shared
+    @Environment(\.dismiss) private var dismiss
     let playlistName: String
+    let isPersonal: Bool
 
     private var reduceMotion: Bool {
         AppMotion.reduceMotion(
@@ -23,8 +26,9 @@ struct PlaylistDetailView: View {
         reduceMotion ? nil : .easeInOut(duration: 0.18)
     }
 
-    init(playlistID: String, playlistName: String, fallbackSongs: [Song] = []) {
+    init(playlistID: String, playlistName: String, fallbackSongs: [Song] = [], isPersonal: Bool = false) {
         self.playlistName = playlistName
+        self.isPersonal = isPersonal
         _viewModel = State(
             initialValue: PlaylistDetailViewModel(
                 playlistID: playlistID,
@@ -86,6 +90,7 @@ struct PlaylistDetailView: View {
                             )
                         }
                         .buttonStyle(.watchPressable)
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                         .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
                         .accessibilityValue(accessibilityValue(for: song, offset: offset, isCurrent: isCurrent))
                         .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play from \(playlistName).")
@@ -106,6 +111,18 @@ struct PlaylistDetailView: View {
         }
         .onAppear {
             viewModel.fetchSongs()
+        }
+        .onChange(of: auth.linkState) { _, state in
+            if isPersonal && state != .signedIn {
+                viewModel.reset()
+                dismiss()
+            }
+        }
+        .onChange(of: auth.accountRevision) { _, _ in
+            if isPersonal {
+                viewModel.reset()
+                dismiss()
+            }
         }
     }
 
@@ -161,10 +178,8 @@ struct PlaylistDetailView: View {
             WatchHaptic.play(.failure)
             return
         }
-        if audioManager.isShuffleOn {
-            audioManager.toggleShuffle()
-        }
-        play(firstSong)
+        audioManager.play(song: firstSong, context: viewModel.songs, shuffled: false)
+        showPlayer = true
     }
 
     private func shufflePlaylist() {
@@ -172,10 +187,7 @@ struct PlaylistDetailView: View {
             WatchHaptic.play(.failure)
             return
         }
-        if !audioManager.isShuffleOn {
-            audioManager.toggleShuffle()
-        }
-        audioManager.play(song: randomSong, context: viewModel.songs)
+        audioManager.play(song: randomSong, context: viewModel.songs, shuffled: true)
         WatchHaptic.play(.start)
         showPlayer = true
     }

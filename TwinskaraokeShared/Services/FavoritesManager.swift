@@ -6,6 +6,8 @@ import Observation
 @Observable
 final class FavoritesManager {
     static let shared = FavoritesManager()
+    static let didSave = Notification.Name("FavoritesDidSave")
+    static let didRefresh = Notification.Name("FavoritesDidRefresh")
     private(set) var favoriteIDs: Set<String> = []
 
     /// Favorites live in the account, so changing them needs a signed-in
@@ -15,7 +17,19 @@ final class FavoritesManager {
     ///
     /// Stored rather than read straight from the keychain so views update: the
     /// sign-in and sign-out paths already call `reload()` and `clear()`.
-    private(set) var isAvailable = CredentialStore.isAuthenticated
+    private(set) var isAvailable: Bool
+    @ObservationIgnored private let authenticated: @MainActor () -> Bool
+    @ObservationIgnored private let fetchSongs: @MainActor () async throws -> [Song]
+    @ObservationIgnored private let toggleSong: @MainActor (String) async -> Bool
+
+    init(authenticated: @escaping @MainActor () -> Bool = { CredentialStore.isAuthenticated },
+         fetchSongs: @escaping @MainActor () async throws -> [Song] = { try await KaraokeAPIClient.favoriteSongs() },
+         toggleSong: @escaping @MainActor (String) async -> Bool = { await FavoritesManager.sendToggle(songID: $0) }) {
+        self.authenticated = authenticated
+        self.fetchSongs = fetchSongs
+        self.toggleSong = toggleSong
+        isAvailable = authenticated()
+    }
     private var inFlight: Set<String> = []
     private var loaded = false
     private var isLoading = false
@@ -44,6 +58,22 @@ final class FavoritesManager {
         Task { @MainActor in await load() }
     }
 
+    /// Refresh from the server after the companion saves, without emitting a
+    /// second mutation notification. Existing loads cannot overwrite this one.
+    func refreshFromCompanion() async {
+        let generation = stateGeneration
+        mutationRevision &+= 1
+        await KaraokeAPIClient.invalidateFavoriteSongs()
+        guard generation == stateGeneration else { return }
+        if !isLoading, inFlight.isEmpty {
+            await load()
+        } else {
+            reloadAfterMutations = true
+        }
+        guard generation == stateGeneration else { return }
+        NotificationCenter.default.post(name: Self.didRefresh, object: self)
+    }
+
     func clear() {
         refreshAvailability()
         stateGeneration += 1
@@ -57,14 +87,15 @@ final class FavoritesManager {
     }
 
     private func refreshAvailability() {
-        let available = CredentialStore.isAuthenticated
+        let available = authenticated()
         if isAvailable != available { isAvailable = available }
     }
 
-    func toggle(songID: String) {
+    @discardableResult
+    func toggle(songID: String) -> Task<Void, Never>? {
         refreshAvailability()
-        guard isAvailable else { return }
-        guard !inFlight.contains(songID) else { return }
+        guard isAvailable else { return nil }
+        guard !inFlight.contains(songID) else { return nil }
         let wasFavorite = favoriteIDs.contains(songID)
         if wasFavorite {
             favoriteIDs.remove(songID)
@@ -77,8 +108,8 @@ final class FavoritesManager {
             reloadAfterMutations = true
         }
         let generation = stateGeneration
-        Task {
-            let ok = await send(songID: songID)
+        return Task {
+            let ok = await toggleSong(songID)
             if ok {
                 // Serialize invalidation ahead of the reload below: a racing
                 // load()/reload() must not read the pre-toggle list from the
@@ -95,13 +126,14 @@ final class FavoritesManager {
                         favoriteIDs.remove(songID)
                     }
                 }
+                if ok { NotificationCenter.default.post(name: Self.didSave, object: self) }
                 scheduleReloadAfterMutationsIfNeeded()
             }
         }
     }
 
     private func load() async {
-        guard CredentialStore.isAuthenticated, !isLoading else { return }
+        guard authenticated(), !isLoading else { return }
         let generation = stateGeneration
         let revision = mutationRevision
         isLoading = true
@@ -118,7 +150,7 @@ final class FavoritesManager {
         // FavoriteSongsCache with the playlist.
         let songs: [Song]
         do {
-            songs = try await KaraokeAPIClient.favoriteSongs()
+            songs = try await fetchSongs()
         } catch {
             DebugLogger.log(
                 "Favorites load failed: \(error.localizedDescription)",
@@ -158,20 +190,23 @@ final class FavoritesManager {
     /// literal last segment, not a song ID. One move per call, carrying both
     /// ends of it, for the same reason the playlist route does; see `moveSong`.
     func moveFavorite(songID: String, from oldOrder: Int, to newOrder: Int) async -> Bool {
-        guard CredentialStore.isAuthenticated else { return false }
+        guard authenticated() else { return false }
+        let generation = stateGeneration
         guard let req = try? KaraokeAPIClient.jsonArrayRequest(
             pathSegments: ["api", "user", "favorites", "save-order"],
             body: KaraokeAPIClient.songMovePayload(songID: songID, from: oldOrder, to: newOrder)
         ) else { return false }
         guard (try? await KaraokeAPIClient.data(for: req)) != nil else { return false }
         await KaraokeAPIClient.invalidateFavoriteSongs()
+        guard stateGeneration == generation else { return false }
+        NotificationCenter.default.post(name: Self.didSave, object: self)
         return true
     }
 
     /// Adds without flipping. Safe to call on a song already favourited, which
     /// `toggle` is not — see the note on `remove`.
     func add(songID: String) async -> Bool {
-        guard CredentialStore.isAuthenticated else { return false }
+        guard authenticated() else { return false }
         // Refuses to overlap another mutation for the same song, exactly as
         // `toggle` does. Both halves of the check below are unsafe while one is
         // in flight: a removal leaves the ID in `favoriteIDs` until it lands, so
@@ -185,13 +220,14 @@ final class FavoritesManager {
         let generation = beginMutation(songID)
         defer { endMutation(songID, generation: generation) }
 
-        guard await send(songID: songID) else { return false }
+        guard await toggleSong(songID) else { return false }
         // Invalidated before the generation check, matching `toggle`: if
         // `clear()` lands mid-request the cache still holds the pre-mutation
         // list, and a later load would read it as current.
         await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
         favoriteIDs.insert(songID)
+        NotificationCenter.default.post(name: Self.didSave, object: self)
         return true
     }
 
@@ -203,7 +239,7 @@ final class FavoritesManager {
     /// gone would come back rather than stay removed. DELETE on the same path
     /// is unambiguous, and a 404 means the caller already got what it asked for.
     func remove(songID: String) async -> Bool {
-        guard CredentialStore.isAuthenticated else { return false }
+        guard authenticated() else { return false }
         // Same non-overlap rule as `add` and `toggle`; see `add`.
         guard !inFlight.contains(songID) else { return false }
         guard var req = try? KaraokeAPIClient.request(
@@ -228,6 +264,7 @@ final class FavoritesManager {
         await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
         favoriteIDs.remove(songID)
+        NotificationCenter.default.post(name: Self.didSave, object: self)
         return true
     }
 
@@ -254,7 +291,7 @@ final class FavoritesManager {
         scheduleReloadAfterMutationsIfNeeded()
     }
 
-    private func send(songID: String) async -> Bool {
+    private static func sendToggle(songID: String) async -> Bool {
         guard var req = try? KaraokeAPIClient.request(
             pathSegments: ["api", "user", "favorites", songID]
         )

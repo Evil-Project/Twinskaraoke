@@ -90,8 +90,10 @@ final class AuthManager: NSObject {
             forName: .karaokeSessionExpired,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { @Sendable [weak self] note in
+            let expiredToken = note.userInfo?["requestToken"] as? String
             Task { @MainActor [weak self] in
+                guard let expiredToken, CredentialStore.token == expiredToken else { return }
                 self?.handleExpiredSession()
             }
         }

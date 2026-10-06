@@ -114,6 +114,6 @@ enum IntentPlaybackController {
         if duration == .endOfSong {
             guard !player.isRadioMode else { throw SystemIntentError.liveTimer }
             player.startSleepTimerAtEndOfSong()
-        } else { player.sleepTimer.start(minutes: duration.minutes) }
+        } else { player.setSleepTimer(minutes: duration.minutes) }
     }
 }
