@@ -8,6 +8,8 @@ nonisolated enum CompanionPlayback {
     static let messageDataKey = "nk.playback.command"
     static let replyDataKey = "nk.playback.reply"
     static let errorKey = "nk.playback.error"
+    static let takeoverRequestKey = "nk.playback.takeover"
+    static let takeoverAckKey = "nk.playback.stopped"
 
     enum Owner: String, Codable, Sendable { case phone, watch }
     enum RepeatSetting: String, Codable, Sendable { case off, one, all }
@@ -34,8 +36,14 @@ nonisolated enum CompanionPlayback {
         var ownershipEpoch: Int = 0
         var radioStreamURL: URL?
         var accountGeneration: Int?
+        var phoneInstanceID: String?
         var sleepDeadline: Date?
         var sleepAtEndOfSong: Bool?
+
+        /// Persisted presentation data must belong to the current account scope.
+        func belongsToAccount(generation: Int, phoneInstanceID: String?) -> Bool {
+            accountGeneration == generation && self.phoneInstanceID == phoneInstanceID
+        }
 
         func supersedes(_ other: Snapshot?) -> Bool {
             guard let other else { return true }
@@ -63,6 +71,7 @@ nonisolated enum CompanionPlayback {
         var artworkURL: URL?
         var ownershipEpoch: Int?
         var accountGeneration: Int?
+        var phoneInstanceID: String?
         var shuffleEnabled: Bool?
         var sleepMinutes: Int?
         var sleepAtEndOfSong: Bool?
@@ -80,6 +89,13 @@ nonisolated enum CompanionPlayback {
         mutating func transfer(to owner: Owner) {
             self.owner = owner
             epoch += 1
+        }
+
+        /// A delayed or duplicate stop acknowledgment cannot revoke a newer grant.
+        mutating func reclaimAfterStop(_ stopped: Lease, requested: Lease?) -> Bool {
+            guard owner == .watch, stopped == self, requested == self else { return false }
+            transfer(to: .phone)
+            return true
         }
 
         func allowsAudio(on device: Owner, relinquished: Lease? = nil) -> Bool {

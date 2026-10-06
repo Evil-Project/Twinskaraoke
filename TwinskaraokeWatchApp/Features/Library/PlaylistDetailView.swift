@@ -113,7 +113,16 @@ struct PlaylistDetailView: View {
             viewModel.fetchSongs()
         }
         .onChange(of: auth.linkState) { _, state in
-            if isPersonal && state != .signedIn { dismiss() }
+            if isPersonal && state != .signedIn {
+                viewModel.reset()
+                dismiss()
+            }
+        }
+        .onChange(of: auth.accountRevision) { _, _ in
+            if isPersonal {
+                viewModel.reset()
+                dismiss()
+            }
         }
     }
 

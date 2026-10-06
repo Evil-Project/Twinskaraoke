@@ -93,14 +93,22 @@ final class WatchDownloads: NSObject {
         Task {
             let tasks = await session.allTasks
             let running = Set(tasks.compactMap { $0.taskDescription }.compactMap(UUID.init(uuidString:)))
-            for index in entries.indices where pending.contains(entries[index].transferID)
-                && !running.contains(entries[index].transferID) {
-                entries[index].status = .failed
-                entries[index].error = "Download was interrupted. Tap Retry."
-            }
+            reconcileInterruptedTransfers(pending: pending, running: running)
             let known = Set(entries.map { $0.transferID.uuidString })
             for task in tasks where !known.contains(task.taskDescription ?? "") { task.cancel() }
             persist()
+        }
+    }
+
+    /// Re-check live status after task inventory suspends: delegate callbacks
+    /// may have completed or started validation since `pending` was captured.
+    func reconcileInterruptedTransfers(pending: Set<UUID>, running: Set<UUID>) {
+        for index in entries.indices where pending.contains(entries[index].transferID)
+            && !running.contains(entries[index].transferID)
+            && (entries[index].status == .waiting || entries[index].status == .downloading)
+            && !pendingCompletions.contains(entries[index].transferID.uuidString) {
+            entries[index].status = .failed
+            entries[index].error = "Download was interrupted. Tap Retry."
         }
     }
 

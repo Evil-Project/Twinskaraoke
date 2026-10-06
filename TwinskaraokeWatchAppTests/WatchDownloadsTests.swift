@@ -6,6 +6,24 @@ import Testing
 @Suite("Durable watch downloads")
 @MainActor
 struct WatchDownloadsTests {
+    @Test("A completion during relaunch inventory remains ready while an interrupted transfer fails")
+    func completionDuringInventory() async throws {
+        let root = try directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let completed = WatchDownloads.Entry(song: UITestFixtures.song(id: "completed", title: "Completed", artist: "Artist", duration: 1))
+        let interrupted = WatchDownloads.Entry(song: UITestFixtures.song(id: "interrupted", title: "Interrupted", artist: "Artist"))
+        try JSONEncoder().encode([completed, interrupted]).write(to: root.appendingPathComponent("manifest.json"))
+        let downloads = WatchDownloads(directory: root, sessionConfiguration: .ephemeral)
+        let pending = Set(downloads.entries.map(\.transferID))
+        let staged = root.appendingPathComponent("audio.wav")
+        try wav().write(to: staged)
+        await downloads.complete(transferID: completed.transferID.uuidString, stagedURL: staged)
+        downloads.reconcileInterruptedTransfers(pending: pending, running: [])
+        #expect(downloads.entry(for: completed.id)?.status == .ready)
+        #expect(downloads.localURL(for: completed.id) != nil)
+        #expect(downloads.entry(for: interrupted.id)?.status == .failed)
+    }
+
     @Test("Validated audio and metadata survive relaunch and remain outside cache eviction")
     func offlineRelaunch() async throws {
         let root = try directory()

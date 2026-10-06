@@ -8,6 +8,30 @@ import Testing
 @Suite("Watch playback regressions")
 struct WatchPlaybackRegressionTests {
     @MainActor
+    @Test("Stale-account cancellation never falls back to a direct playlist fetch")
+    func playlistCancellation() async {
+        do {
+            _ = try await UserPlaylistsViewModel.loadWithFallback(companion: { throw CancellationError() }, direct: {
+                Issue.record("A stale account started an independent playlist request")
+                return []
+            })
+            Issue.record("Expected cancellation to propagate")
+        } catch is CancellationError {
+            // The canceled account request must remain canceled.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @MainActor
+    @Test("Companion network failures retain the independent playlist fallback")
+    func playlistNetworkFallback() async throws {
+        let expected = Playlist(id: "mine", name: "Mine", songCount: 0, mosaicMedia: nil, songListDTOs: nil)
+        let loaded = try await UserPlaylistsViewModel.loadWithFallback(companion: { throw URLError(.notConnectedToInternet) }, direct: { [expected] })
+        #expect(loaded.map(\.id) == [expected.id])
+    }
+
+    @MainActor
     @Test("MediaPlayer can request cached artwork on a background thread")
     func backgroundArtworkRequest() async throws {
         let imageData = try #require(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0fQAAAAASUVORK5CYII="))

@@ -90,3 +90,20 @@ Physical device checks remain pending by user request. Simulator tests cannot es
 - The 41mm Series 9 simulator passed both focused player UI tests. Its screenshot confirms artwork below the clock and no bottom volume indicator. Result: `Test-TwinskaraokeWatchApp-2026.10.06_03-05-17-+0300.xcresult`.
 - The 45mm Series 9 simulator passed **79 unit tests and 3 UI tests**, 82 total, with no failures or skips. Result: `Test-TwinskaraokeWatchApp-2026.10.06_03-10-00-+0300.xcresult`. The new unit test verifies byte totals across both stores, orphan cleanup, deletion of saved files and rejection of late completions. The Account UI test starts with three saved WAV downloads and an empty temporary cache, confirms clearing, and verifies the control becomes disabled; its screenshot shows 0 bytes. Player screenshots for both Series 9 sizes were inspected.
 - `git diff --check` passed. All simulators were explicitly shut down; `simctl list devices booted` returned no booted devices. Physical Crown volume, audible output and background behavior remain pending by user request.
+
+## PR 160 review corrections (6 October 2026)
+
+- Account generations now belong to a persisted phone installation. Reinstalling the phone app can restart the counter; contexts from retired installations and delayed legacy contexts are rejected once the watch has adopted an installation ID. Token requests, playlist requests, commands, and live or saved playback use the same scope.
+- Account transitions invalidate cached playback presentation and personal playlist detail responses. The audio ownership lease is retained until a stop is acknowledged.
+- A phone control attempted while its watch-owned output is unreachable persists a request to stop that exact grant. The watch records relinquishment and stops before acknowledging, using durable WatchConnectivity user-info delivery as well as a reachable message. The phone changes ownership only after a matching acknowledgment. The rejected play command is not replayed; the user explicitly retries after recovery. Old or duplicate acknowledgments cannot revoke a newer grant.
+- Relaunch download reconciliation rechecks current entry status and pending validation after awaiting the background task inventory. A completion during that wait remains available offline.
+- Playlist cancellation propagates instead of falling back to an independent request for an obsolete account. Playlist detail tests wait for bounded completion rather than a fixed number of scheduler yields.
+- The iPhone and widget App Group identifiers, including the store's fallback identifier, agree. Unsigned CI runs exercise widget publication with a temporary store; signed runs additionally verify entitled container access. Simulator App Intents signing respects `CODE_SIGNING_ALLOWED=NO`.
+
+Additional paired-device checks:
+
+1. With watch-owned playback running offline, attempt playback on iPhone. Verify the phone remains silent while waiting for the watch to stop. Reconnect; verify the watch stops, ownership returns to iPhone, and playback starts only after explicitly retrying. Repeat with either app relaunched while recovery is pending.
+2. Switch accounts with saved playback and a personal playlist detail request pending. Relaunch both apps and verify that the previous account's song, queue, and playlist rows do not return.
+3. Reinstall or restore the iPhone app while retaining watch app data. Verify that the new installation's lower account generation is accepted, and sign-out, token refresh, and playback synchronization recover.
+
+Review-fix simulator validation: **347 iOS tests in 45 suites and 87 watchOS tests in 17 suites passed**, 434 total. Both suites used Xcode 27 with unsigned simulator hosts and serial test execution. New tests cover installation ordering, retired descriptors, token installation fencing, saved playback scope, exact-grant stop acknowledgments, completion during download reconciliation, playlist cancellation fallback, and stale playlist detail responses. Hardware WatchConnectivity delivery and audible output still require the paired-device checks above.

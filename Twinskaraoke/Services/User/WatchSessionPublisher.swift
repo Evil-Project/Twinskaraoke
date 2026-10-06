@@ -18,6 +18,15 @@ final class WatchSessionPublisher: NSObject {
     static let shared = WatchSessionPublisher()
 
     private static let generationKey = "nk.watchSessionGeneration"
+    private static let instanceKey = "nk.watchSessionInstance"
+    private static let takeoverKey = "nk.phone.pendingTakeover"
+
+    private var phoneInstanceID: String {
+        if let saved = defaults.string(forKey: Self.instanceKey) { return saved }
+        let id = UUID().uuidString
+        defaults.set(id, forKey: Self.instanceKey)
+        return id
+    }
 
     private let defaults = UserDefaults.standard
     private var restorationObservers: [NSObjectProtocol] = []
@@ -25,6 +34,7 @@ final class WatchSessionPublisher: NSObject {
     private var sessionChangedObserver: NSObjectProtocol?
     private var lease = CompanionPlayback.readLease() ?? CompanionPlayback.Lease()
     private var watchSnapshot: CompanionPlayback.Snapshot?
+    private var pendingTakeover: CompanionPlayback.Lease?
     private let commandClientID = UUID()
     private var commandSequence = 0
     var watchOwnsAudio: Bool { lease.owner == .watch }
@@ -43,6 +53,12 @@ final class WatchSessionPublisher: NSObject {
         playbackRevision = defaults.integer(forKey: "nk.phone.playbackRevision")
         watchSnapshot = CompanionPlayback.decode(CompanionPlayback.Snapshot.self,
                                                  from: defaults.data(forKey: "nk.phone.watchPlayback"))
+        pendingTakeover = CompanionPlayback.decode(CompanionPlayback.Lease.self,
+            from: defaults.data(forKey: Self.takeoverKey))
+        if watchSnapshot?.belongsToAccount(generation: currentGeneration, phoneInstanceID: phoneInstanceID) != true {
+            watchSnapshot = nil
+            defaults.removeObject(forKey: "nk.phone.watchPlayback")
+        }
     }
 
     /// Safe to call more than once; only the first call takes effect.
@@ -106,14 +122,17 @@ final class WatchSessionPublisher: NSObject {
 
     private func playbackSnapshot() -> CompanionPlayback.Snapshot {
         if watchOwnsAudio {
-            if let watchSnapshot, lease.accepts(watchSnapshot) { return watchSnapshot }
+            if let watchSnapshot, lease.accepts(watchSnapshot),
+               watchSnapshot.belongsToAccount(generation: currentGeneration, phoneInstanceID: phoneInstanceID) {
+                return watchSnapshot
+            }
             // Missing local presentation data does not revoke the watch's
             // persisted grant or create a second audio owner.
             return CompanionPlayback.Snapshot(sessionID: lease.sessionID, revision: 0, owner: .watch,
                 song: nil, queue: [], isPlaying: false, isRadio: false, radioArtworkURL: nil,
                 position: 0, duration: 0, isShuffled: false, repeatSetting: .off,
                 error: nil, updatedAt: .distantPast, ownershipEpoch: lease.epoch,
-                accountGeneration: currentGeneration)
+                accountGeneration: currentGeneration, phoneInstanceID: phoneInstanceID)
         }
         let player = AudioPlayerManager.shared
         let song = player.currentSong
@@ -139,7 +158,7 @@ final class WatchSessionPublisher: NSObject {
             duration: player.playbackDuration, isShuffled: player.isShuffled,
             repeatSetting: repeatSetting(player.repeatMode), error: player.loadFailure?.message,
             updatedAt: Date(), ownershipEpoch: lease.epoch, radioStreamURL: player.radioStreamURL,
-            accountGeneration: currentGeneration, sleepDeadline: player.sleepTimer.deadline,
+            accountGeneration: currentGeneration, phoneInstanceID: phoneInstanceID, sleepDeadline: player.sleepTimer.deadline,
             sleepAtEndOfSong: player.sleepTimer.endsWithCurrentSong
         )
         return snapshot
@@ -176,6 +195,7 @@ final class WatchSessionPublisher: NSObject {
         }
         var context = session.applicationContext
         context[CompanionPlayback.contextKey] = data
+        context[CompanionPlayback.takeoverRequestKey] = pendingTakeover.flatMap { CompanionPlayback.encode($0) }
         try? session.updateApplicationContext(context)
     }
 
@@ -187,15 +207,17 @@ final class WatchSessionPublisher: NSObject {
         guard watchOwnsAudio else { return false }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else {
-            AudioPlayerManager.shared.companionFailure("Apple Watch is out of reach. Playback continues on the watch.")
+            requestPhoneTakeover()
+            AudioPlayerManager.shared.companionFailure("Waiting for Apple Watch to stop. Bring it nearby, then try playback again on iPhone.")
             return true
         }
         commandSequence += 1
+        let sentLease = lease
         let command = CompanionPlayback.Command(sessionID: lease.sessionID,
             clientID: commandClientID, sequence: commandSequence,
             baseRevision: watchSnapshot?.revision, action: action, song: song, queue: queue, position: position,
             streamURL: streamURL, artworkURL: artworkURL, ownershipEpoch: lease.epoch,
-            accountGeneration: currentGeneration, shuffleEnabled: shuffleEnabled,
+            accountGeneration: currentGeneration, phoneInstanceID: phoneInstanceID, shuffleEnabled: shuffleEnabled,
             sleepMinutes: sleepMinutes, sleepAtEndOfSong: sleepAtEndOfSong)
         guard let data = CompanionPlayback.encode(command) else { return true }
         session.sendMessage([CompanionPlayback.messageDataKey: data], replyHandler: { @Sendable [weak self] reply in
@@ -206,14 +228,18 @@ final class WatchSessionPublisher: NSObject {
                 if let snapshot { self?.acceptWatchSnapshot(snapshot) }
                 if let error { AudioPlayerManager.shared.companionFailure(error) }
             }
-        }, errorHandler: { @Sendable _ in
-            Task { @MainActor in AudioPlayerManager.shared.companionFailure("Couldn't reach Apple Watch. Try again.") }
+        }, errorHandler: { @Sendable [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.lease == sentLease else { return }
+                self.requestPhoneTakeover()
+                AudioPlayerManager.shared.companionFailure("Waiting for Apple Watch to stop. Bring it nearby, then try playback again on iPhone.")
+            }
         })
         return true
     }
 
     private func acceptWatchSnapshot(_ snapshot: CompanionPlayback.Snapshot) {
-        guard snapshot.accountGeneration == currentGeneration,
+        guard snapshot.belongsToAccount(generation: currentGeneration, phoneInstanceID: phoneInstanceID),
               lease.owner == .watch, lease.accepts(snapshot), snapshot.supersedes(watchSnapshot) else { return }
         watchSnapshot = snapshot
         defaults.set(CompanionPlayback.encode(snapshot), forKey: "nk.phone.watchPlayback")
@@ -222,7 +248,7 @@ final class WatchSessionPublisher: NSObject {
 
     private func handle(_ command: CompanionPlayback.Command) -> [String: Any] {
         let player = AudioPlayerManager.shared
-        guard command.accountGeneration == currentGeneration else {
+        guard command.accountGeneration == currentGeneration, command.phoneInstanceID == phoneInstanceID else {
             return reply(error: "Account changed. Wait for account sync and try again.")
         }
         guard command.ownershipEpoch == nil || command.ownershipEpoch == lease.epoch else {
@@ -261,11 +287,10 @@ final class WatchSessionPublisher: NSObject {
         case .transferToPhone:
             // The watch stops before sending this command. Returning ownership
             // leaves both paused until an explicit Play on the chosen output.
+            let state = playbackSnapshot()
             lease.transfer(to: .phone)
             CompanionPlayback.saveLease(lease)
-            if let state = watchSnapshot { player.finishWatchTransfer(state) }
-            watchSnapshot = nil
-            lastPlaybackFingerprint = nil
+            finishPhoneTransfer(state)
         case .replaceQueue:
             player.replaceCompanionQueue(command.queue ?? [])
         case .playNext:
@@ -318,6 +343,32 @@ final class WatchSessionPublisher: NSObject {
 
     // MARK: - Publishing
 
+    /// Persist only a request to stop. Offline watch grants remain valid until
+    /// that exact grant is acknowledged, even across either app's relaunch.
+    private func requestPhoneTakeover() {
+        guard lease.owner == .watch else { return }
+        pendingTakeover = lease
+        defaults.set(CompanionPlayback.encode(lease), forKey: Self.takeoverKey)
+        publishPlayback()
+    }
+
+    private func acceptTakeoverAck(_ stopped: CompanionPlayback.Lease) {
+        let state = playbackSnapshot()
+        guard lease.reclaimAfterStop(stopped, requested: pendingTakeover) else { return }
+        CompanionPlayback.saveLease(lease)
+        finishPhoneTransfer(state)
+        publishPlayback()
+    }
+
+    private func finishPhoneTransfer(_ state: CompanionPlayback.Snapshot) {
+        AudioPlayerManager.shared.finishWatchTransfer(state)
+        watchSnapshot = nil
+        pendingTakeover = nil
+        defaults.removeObject(forKey: "nk.phone.watchPlayback")
+        defaults.removeObject(forKey: Self.takeoverKey)
+        lastPlaybackFingerprint = nil
+    }
+
     /// - Parameter bumpingGeneration: `true` for a genuine session change, so
     ///   the watch knows to re-pull the token. `false` when merely resending
     ///   the state we already published (activation, watch app installed).
@@ -330,6 +381,9 @@ final class WatchSessionPublisher: NSObject {
         // the number it had already applied and kept the old session's token.
         if bumpingGeneration {
             defaults.set(currentGeneration + 1, forKey: Self.generationKey)
+            watchSnapshot = nil
+            defaults.removeObject(forKey: "nk.phone.watchPlayback")
+            if watchOwnsAudio { AudioPlayerManager.shared.applyWatchSnapshot(playbackSnapshot()) }
         }
 
         let session = WCSession.default
@@ -345,6 +399,7 @@ final class WatchSessionPublisher: NSObject {
             return
         }
         descriptor.generation = currentGeneration
+        descriptor.phoneInstanceID = phoneInstanceID
 
         do {
             var context = session.applicationContext
@@ -414,17 +469,20 @@ extension WatchSessionPublisher: WCSessionDelegate {
         if kind == WatchSessionLink.MessageKind.fetchToken {
             let reply = WatchReplyBox(replyHandler)
             let generation = message["generation"] as? Int
+            let messageInstanceID = message[WatchSessionLink.ContextKey.phoneInstanceID] as? String
             let userID = (message["userID"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             Task { @MainActor [weak self] in
                 guard let self, var descriptor = AuthManager.persistedDescriptor() else {
                     reply.send([WatchSessionLink.MessageKey.credentialUnavailable: true]); return
                 }
                 descriptor.generation = self.currentGeneration
+                descriptor.phoneInstanceID = self.phoneInstanceID
                 var response = WatchSessionLink.encode(descriptor)
                 if !descriptor.isSignedIn {
                     response[WatchSessionLink.MessageKey.isSignedIn] = false
                 } else if WatchSessionLink.tokenRequestMatches(generation: generation, userID: userID,
-                    descriptor: descriptor, currentGeneration: self.currentGeneration) {
+                    descriptor: descriptor, currentGeneration: self.currentGeneration,
+                    phoneInstanceID: messageInstanceID) {
                     response.merge(WatchSessionLink.tokenReply(for: CredentialStore.readToken())) { _, new in new }
                 } else {
                     response[WatchSessionLink.MessageKey.credentialUnavailable] = true
@@ -434,16 +492,17 @@ extension WatchSessionPublisher: WCSessionDelegate {
         } else if kind == WatchSessionLink.MessageKind.fetchPlaylists {
             let reply = WatchReplyBox(replyHandler)
             let generation = message["generation"] as? Int
+            let messageInstanceID = message[WatchSessionLink.ContextKey.phoneInstanceID] as? String
             let userID = message["userID"] as? String
             Task { @MainActor [weak self] in
-                guard let self, generation == self.currentGeneration,
+                guard let self, generation == self.currentGeneration, messageInstanceID == self.phoneInstanceID,
                       let account = AuthManager.persistedDescriptor(), account.isSignedIn,
                       account.userID == userID else { reply.send([:]); return }
                 do {
                     let request = try KaraokeAPIClient.request(path: "/api/user/playlists")
                     let data = try await KaraokeAPIClient.data(for: request)
                     let playlists = try JSONDecoder().decode([UserPlaylist].self, from: data)
-                    guard generation == self.currentGeneration,
+                    guard generation == self.currentGeneration, messageInstanceID == self.phoneInstanceID,
                           AuthManager.persistedDescriptor()?.userID == userID,
                           let encoded = CompanionPlayback.encode(playlists), encoded.count < 60_000 else {
                         reply.send([:]); return
@@ -453,12 +512,14 @@ extension WatchSessionPublisher: WCSessionDelegate {
             }
         } else if kind == WatchSessionLink.MessageKind.fetchAccount {
             let reply = WatchReplyBox(replyHandler)
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self else { reply.send([:]); return }
                 guard var descriptor = AuthManager.persistedDescriptor() else {
                     reply.send([WatchSessionLink.MessageKey.credentialUnavailable: true])
                     return
                 }
                 descriptor.generation = UserDefaults.standard.integer(forKey: Self.generationKey)
+                descriptor.phoneInstanceID = self.phoneInstanceID
                 reply.send(WatchSessionLink.encode(descriptor))
             }
         } else if kind == CompanionPlayback.messageKind,
@@ -476,6 +537,11 @@ extension WatchSessionPublisher: WCSessionDelegate {
     }
 
     nonisolated func session(_: WCSession, didReceiveMessage message: [String: Any]) {
+        if let stopped = CompanionPlayback.decode(CompanionPlayback.Lease.self,
+            from: message[CompanionPlayback.takeoverAckKey] as? Data) {
+            Task { @MainActor [weak self] in self?.acceptTakeoverAck(stopped) }
+            return
+        }
         if message[WatchSessionLink.MessageKey.kind] as? String == WatchSessionLink.MessageKind.favoritesChanged {
             let userID = message[WatchSessionLink.ContextKey.userID] as? String
             Task { @MainActor in
@@ -497,6 +563,12 @@ extension WatchSessionPublisher: WCSessionDelegate {
         Task { @MainActor [weak self] in
             if let snapshot { self?.acceptWatchSnapshot(snapshot) }
         }
+    }
+
+    nonisolated func session(_: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let stopped = CompanionPlayback.decode(CompanionPlayback.Lease.self,
+            from: userInfo[CompanionPlayback.takeoverAckKey] as? Data) else { return }
+        Task { @MainActor [weak self] in self?.acceptTakeoverAck(stopped) }
     }
 
 }

@@ -85,11 +85,10 @@ struct CarPlayPresentationTests {
         delegate.serverPlaylists = (0..<count).map { Playlist(id: "p\($0)", name: "Playlist \($0)", songCount: 1, mosaicMedia: nil, songListDTOs: nil) }
         if let first = delegate.serverPlaylists.first { delegate.serverPlaylists.append(first) }
         delegate.loadStates["playlists"] = .loaded
-        delegate.category = .browse
         let template = CPListTemplate(title: "Browse", sections: [])
-        delegate.categoryTemplate = template
+        delegate.playlistsTemplate = template
         var titles = Set<String>()
-        delegate.rebuildCategoryTemplate()
+        delegate.rebuildPlaylistsTemplate()
         for _ in 0...count {
             titles.formUnion(texts(template).filter { $0.hasPrefix("Playlist ") })
             #expect(template.itemCount <= CPListTemplate.maximumItemCount)

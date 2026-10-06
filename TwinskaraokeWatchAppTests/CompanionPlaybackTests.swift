@@ -176,6 +176,37 @@ struct CompanionPlaybackTests {
         #expect(gate.decide(delayed, sessionID: session, revision: 1, lastPhoneChangeAt: .distantPast) == .stale)
     }
 
+    @Test("Stop acknowledgments reclaim only the requested grant and survive serialization")
+    func durableTakeover() throws {
+        var lease = CompanionPlayback.Lease(sessionID: session)
+        lease.transfer(to: .watch)
+        let requested = try #require(CompanionPlayback.decode(CompanionPlayback.Lease.self, from: CompanionPlayback.encode(lease)))
+        let unsolicited = lease.reclaimAfterStop(requested, requested: nil)
+        #expect(!unsolicited)
+        #expect(!lease.allowsAudio(on: .phone))
+        let acknowledged = lease.reclaimAfterStop(requested, requested: requested)
+        #expect(acknowledged)
+        #expect(lease.allowsAudio(on: .phone))
+        let duplicate = lease.reclaimAfterStop(requested, requested: requested)
+        #expect(!duplicate)
+        lease.transfer(to: .watch)
+        let delayed = lease.reclaimAfterStop(requested, requested: lease)
+        #expect(!delayed)
+        #expect(!lease.allowsAudio(on: .phone))
+    }
+
+    @Test("Saved playback belongs to both an account generation and a phone installation")
+    func savedAccountBoundary() throws {
+        var saved = snapshot(revision: 1, position: 12, at: .now)
+        saved.accountGeneration = 4
+        saved.phoneInstanceID = "install"
+        let restored = try #require(CompanionPlayback.decode(CompanionPlayback.Snapshot.self, from: CompanionPlayback.encode(saved)))
+        #expect(restored.belongsToAccount(generation: 4, phoneInstanceID: "install"))
+        #expect(!restored.belongsToAccount(generation: 5, phoneInstanceID: "install"))
+        #expect(!restored.belongsToAccount(generation: 4, phoneInstanceID: "replacement"))
+        #expect(!restored.belongsToAccount(generation: 4, phoneInstanceID: nil))
+    }
+
     private func snapshot(revision: Int, position: Double, at date: Date) -> CompanionPlayback.Snapshot {
         CompanionPlayback.Snapshot(
             sessionID: session, revision: revision, owner: .phone,

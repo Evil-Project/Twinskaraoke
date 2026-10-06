@@ -4,6 +4,29 @@ import Testing
 
 @Suite("Watch session link")
 struct WatchSessionLinkTests {
+    @Test("A new phone installation resets generation ordering without accepting retired contexts")
+    func phoneReinstallation() {
+        let current = WatchSessionLink.Descriptor(isSignedIn: true, userID: "new", generation: 1, phoneInstanceID: "new-install")
+        let old = WatchSessionLink.Descriptor(isSignedIn: true, userID: "old", generation: 20, phoneInstanceID: "old-install")
+        #expect(current.mayReplace(appliedGeneration: 20, appliedInstanceID: "old-install"))
+        #expect(!old.mayReplace(appliedGeneration: 1, appliedInstanceID: "new-install", retiredInstanceIDs: ["old-install"]))
+        #expect(!WatchSessionLink.Descriptor.signedOut.mayReplace(appliedGeneration: 1, appliedInstanceID: "new-install"))
+        #expect(WatchSessionLink.decode(WatchSessionLink.encode(current)) == current)
+        let stale = WatchSessionLink.Descriptor(isSignedIn: true, generation: 0, phoneInstanceID: "new-install")
+        #expect(!stale.mayReplace(appliedGeneration: 1, appliedInstanceID: "new-install"))
+        let signedOut = WatchSessionLink.Descriptor(isSignedIn: false, generation: 0, phoneInstanceID: "third-install")
+        #expect(signedOut.mayReplace(appliedGeneration: 20, appliedInstanceID: "old-install"))
+    }
+
+    @Test("Matching account counters on different phone installations cannot expose a token")
+    func tokenInstallBoundary() {
+        let descriptor = WatchSessionLink.Descriptor(isSignedIn: true, userID: "same", generation: 1, phoneInstanceID: "new-install")
+        #expect(!WatchSessionLink.tokenRequestMatches(generation: 1, userID: "same", descriptor: descriptor,
+                                                     currentGeneration: 1, phoneInstanceID: "old-install"))
+        #expect(WatchSessionLink.tokenRequestMatches(generation: 1, userID: "same", descriptor: descriptor,
+                                                    currentGeneration: 1, phoneInstanceID: "new-install"))
+    }
+
     @Test("A delayed token pull cannot obtain a different account's credentials")
     func tokenPullIdentityBoundary() {
         let account = WatchSessionLink.Descriptor(isSignedIn: true, userID: "second", username: "Second", generation: 8)

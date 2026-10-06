@@ -24,6 +24,7 @@ nonisolated enum WatchSessionLink {
     /// Keys for the application context (phone → watch, latest-state-wins).
     enum ContextKey {
         static let generation = "nk.generation"
+        static let phoneInstanceID = "nk.phoneInstanceID"
         static let isSignedIn = "nk.isSignedIn"
         static let userID = "nk.userId"
         static let username = "nk.username"
@@ -72,9 +73,10 @@ nonisolated enum WatchSessionLink {
 
     static func tokenRequestMatches(
         generation: Int?, userID: String?,
-        descriptor: Descriptor, currentGeneration: Int
+        descriptor: Descriptor, currentGeneration: Int, phoneInstanceID: String? = nil
     ) -> Bool {
         descriptor.isSignedIn && generation == currentGeneration && userID == descriptor.userID
+            && phoneInstanceID == descriptor.phoneInstanceID
     }
 
     static func acceptsTokenReply(
@@ -98,11 +100,20 @@ nonisolated enum WatchSessionLink {
         /// launch doesn't trigger a redundant token pull, while a sign-out and
         /// sign-in as the same user still does.
         var generation: Int
+        /// Ordering is scoped to one phone installation, whose counter survives
+        /// relaunch but can reset after reinstalling or restoring app data.
+        var phoneInstanceID: String? = nil
 
         static let signedOut = Descriptor(isSignedIn: false, generation: 0)
 
-        func mayReplace(appliedGeneration: Int) -> Bool {
-            generation >= appliedGeneration
+        func mayReplace(appliedGeneration: Int, appliedInstanceID: String? = nil,
+                        retiredInstanceIDs: Set<String> = []) -> Bool {
+            if let phoneInstanceID, phoneInstanceID != appliedInstanceID {
+                return !retiredInstanceIDs.contains(phoneInstanceID)
+            }
+            // Once upgraded, a delayed legacy context cannot reset ordering.
+            guard phoneInstanceID == appliedInstanceID else { return false }
+            return generation >= appliedGeneration
         }
     }
 
@@ -116,6 +127,7 @@ nonisolated enum WatchSessionLink {
         if let userID = descriptor.userID { payload[ContextKey.userID] = userID }
         if let username = descriptor.username { payload[ContextKey.username] = username }
         if let avatar = descriptor.avatar { payload[ContextKey.avatar] = avatar }
+        if let id = descriptor.phoneInstanceID { payload[ContextKey.phoneInstanceID] = id }
         return payload
     }
 
@@ -128,7 +140,8 @@ nonisolated enum WatchSessionLink {
             userID: payload[ContextKey.userID] as? String,
             username: payload[ContextKey.username] as? String,
             avatar: payload[ContextKey.avatar] as? String,
-            generation: payload[ContextKey.generation] as? Int ?? 0
+            generation: payload[ContextKey.generation] as? Int ?? 0,
+            phoneInstanceID: payload[ContextKey.phoneInstanceID] as? String
         )
     }
 }

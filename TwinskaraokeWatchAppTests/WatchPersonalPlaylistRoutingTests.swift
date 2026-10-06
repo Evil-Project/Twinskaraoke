@@ -62,7 +62,7 @@ struct WatchPersonalPlaylistRoutingTests {
 
     @MainActor
     @Test("Authenticated detail lookup supplies audio URLs absent from inline summaries")
-    func detailHydratesPlayableMetadata() async {
+    func detailHydratesPlayableMetadata() async throws {
         let fallback = makeSong(id: "song-1")
         let hydrated = Song(id: fallback.id, title: fallback.title, duration: 180,
             absolutePath: "https://example.invalid/audio.mp3", cloudflareID: nil, coverArt: nil,
@@ -70,23 +70,33 @@ struct WatchPersonalPlaylistRoutingTests {
         let model = PlaylistDetailViewModel(playlistID: "mine", fallbackSongs: [fallback], loadSongs: { _ in [hydrated] })
         #expect(model.songs.first?.audioURL == nil)
         model.fetchSongs()
-        for _ in 0..<100 where model.isLoading { await Task.yield() }
+        try await waitForLoad(model)
         #expect(model.songs.first?.audioURL != nil)
         #expect(!model.isLoading)
     }
 
     @MainActor
     @Test("Inline account songs remain usable when detail networking fails")
-    func detailFailureKeepsInlineSongs() async {
+    func detailFailureKeepsInlineSongs() async throws {
         let fallback = makeSong(id: "song-1")
         let model = PlaylistDetailViewModel(playlistID: "mine", fallbackSongs: [fallback], loadSongs: { _ in
             throw KaraokeAPIClient.APIError.httpStatus(503)
         })
         model.fetchSongs()
-        for _ in 0..<100 where model.isLoading { await Task.yield() }
+        try await waitForLoad(model)
         #expect(model.songs == [fallback])
         #expect(model.loadError == nil)
         #expect(!model.isLoading)
+    }
+
+    @MainActor
+    private func waitForLoad(_ model: PlaylistDetailViewModel) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while model.isLoading, clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(!model.isLoading, "Playlist load timed out")
     }
 
     private func makePlaylist(isPersonal: Bool) -> Playlist {
