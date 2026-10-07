@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 extension Color {
+    /// Creates a SwiftUI color from the validated six-digit splash color value.
     init(splashHex: String) {
         let value = UInt32(splashHex.dropFirst(), radix: 16) ?? 0
         self.init(.sRGB, red: Double((value >> 16) & 255) / 255,

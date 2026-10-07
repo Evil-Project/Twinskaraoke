@@ -7,6 +7,7 @@ private struct SplashNoticeModifier: ViewModifier {
     @Binding var message: String?
     var revision: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Builds the decorated content using the current splash presentation state.
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
             if let message {
@@ -34,12 +35,14 @@ private struct SplashNoticeModifier: ViewModifier {
             message = nil
         }
     }
+    /// Identifies save/export success messages for the floating notice style.
     private func isSuccess(_ value: String) -> Bool {
         ["Draft saved locally.", "Imported into the draft.", "Image resized and embedded.", "Test image exported.", "Bundled asset embedded."].contains(value)
         || value.hasPrefix("Export succeeded.")
     }
 }
 extension View {
+    /// Presents a temporary accessible notice, restarting its lifetime for repeated messages.
     func splashNotice(_ message: Binding<String?>, revision: Int = 0) -> some View {
         modifier(SplashNoticeModifier(message: message, revision: revision))
     }
@@ -95,6 +98,7 @@ struct SplashHexColorControls: View {
 
 enum SplashImageCompressor {
     static let maxSourceBytes = 30 * 1024 * 1024
+    /// Downsamples imported artwork and enforces the embedded image size limit.
     static func compress(_ data: Data, dimension: Int, quality: Double) throws -> Data {
         guard data.count <= maxSourceBytes else { throw SplashError(message: "Select an image under 30 MB.") }
         guard (256...2048).contains(dimension), quality.isFinite, (0.2...0.95).contains(quality) else {
@@ -180,6 +184,7 @@ struct SplashImageControls: View {
             }
         }
     }
+    /// Downsamples imported artwork and enforces the embedded image size limit.
     private func compress() {
         do {
             guard let bytes = source ?? data else { return }

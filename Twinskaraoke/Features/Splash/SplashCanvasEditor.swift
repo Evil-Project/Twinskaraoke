@@ -181,15 +181,18 @@ struct SplashCanvasEditor: View {
             }
         })
     }
+    /// Returns the inspector title for the selected canvas element.
     private func label(_ item: SplashCanvasItem) -> String {
         if case .feature(let id) = item { return slide.features?.first { $0.id == id }?.kind.label ?? item.label }
         return item.label
     }
+    /// Binds an optional slide design field through its resolved default design.
     private func design<T>(_ key: WritableKeyPath<SplashSlideDesign, T>) -> Binding<T> {
         Binding(get: { slide.resolvedDesign[keyPath: key] }, set: { value in
             var design = slide.resolvedDesign; design[keyPath: key] = value; slide.design = design
         })
     }
+    /// Binds optional slide text as an editable string, storing empty values as nil.
     private func text(_ key: WritableKeyPath<SplashSlide, String?>) -> Binding<String> {
         Binding(get: { slide[keyPath: key] ?? "" }, set: { slide[keyPath: key] = $0.isEmpty ? nil : $0 })
     }

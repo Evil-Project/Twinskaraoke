@@ -8,6 +8,7 @@ nonisolated struct SplashBundledAsset: Codable, Identifiable {
     let description: String
 }
 enum SplashBundledAssets {
+    /// Finds a bundled resource in either flattened or preserved splash resource folders.
     static func url(_ name: String, bundle: Bundle = .main) -> URL? {
         let path = name as NSString
         let basename = path.deletingPathExtension
@@ -18,16 +19,19 @@ enum SplashBundledAssets {
             ?? bundle.url(forResource: basename, withExtension: ext, subdirectory: "SplashScreens")
             ?? bundle.url(forResource: basename, withExtension: ext, subdirectory: "Resources/SplashScreens")
     }
+    /// Decodes the bundled gallery catalog used by foreground and background image pickers.
     static func catalog(bundle: Bundle = .main) throws -> [SplashBundledAsset] {
         guard let url = url("splash-assets.json", bundle: bundle) else { throw SplashError(message: "Bundled asset catalog is missing.") }
         return try JSONDecoder().decode([SplashBundledAsset].self, from: Data(contentsOf: url))
     }
+    /// Loads and validates a gallery image before embedding it in the walkthrough JSON.
     static func data(_ asset: SplashBundledAsset, bundle: Bundle = .main) throws -> Data {
         guard let url = url(asset.filename, bundle: bundle) else { throw SplashError(message: "Missing bundled asset: \(asset.title).") }
         let data = try Data(contentsOf: url)
         try SplashContent.validateImage(data, description: asset.description, prefix: "\(asset.title): ")
         return data
     }
+    /// Loads the proposed install draft without replacing the active bundled install content.
     static func proposedInstall(bundle: Bundle = .main) throws -> SplashContent {
         guard let url = url("install-proposed.json", bundle: bundle) else { throw SplashError(message: "Proposed install walkthrough is missing.") }
         return try SplashContent.decode(Data(contentsOf: url), expectedKind: .install)

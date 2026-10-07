@@ -7,12 +7,16 @@ import Observation
 struct SplashJSONDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
     var data: Data
+    /// Wraps already encoded JSON bytes for export.
     init(data: Data) { self.data = data }
+    /// Validates and encodes a self-contained walkthrough for export.
     init(content: SplashContent) throws { data = try content.encoded() }
+    /// Reads and validates imported JSON before creating the document.
     init(configuration: ReadConfiguration) throws {
         let bytes = configuration.file.regularFileContents ?? Data()
         data = try SplashContent.decode(bytes).encoded()
     }
+    /// Packages embedded document bytes for the system file exporter.
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
@@ -21,17 +25,21 @@ struct SplashJSONDocument: FileDocument {
     var message: String? { didSet { noticeRevision += 1 } }
     var noticeRevision = 0
     private let directory: URL
+    /// Loads the selected bundled walkthrough and any saved draft from the supplied directory.
     init(kind: SplashKind = .install, directory: URL = SplashStateStore.defaultDirectory.appendingPathComponent("Drafts")) {
         self.directory = directory
         draft = (try? SplashBundleLoader.load(kind)) ?? .placeholder(kind)
         loadDraft(kind)
     }
+    /// Returns the local draft path for one walkthrough kind.
     private func file(_ kind: SplashKind) -> URL { directory.appendingPathComponent("\(kind.rawValue).json") }
+    /// Loads the saved draft, reporting corrupt content while retaining bundled defaults.
     func loadDraft(_ kind: SplashKind) {
         do { draft = try SplashContent.decode(Data(contentsOf: file(kind)), expectedKind: kind) }
         catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError { }
         catch { message = "Could not load local draft: \(error.localizedDescription)" }
     }
+    /// Validates and atomically saves the draft, optionally announcing success in the notice bubble.
     @discardableResult func saveDraft(announce: Bool = true) -> Bool {
         do {
             let data = try draft.encoded()
@@ -43,17 +51,21 @@ struct SplashJSONDocument: FileDocument {
             if announce { message = "Draft saved locally." }; return true
         } catch { message = error.localizedDescription; return false }
     }
+    /// Saves the outgoing draft before loading the other walkthrough kind.
     func switchMode(_ kind: SplashKind) {
         guard kind != draft.kind, saveDraft(announce: false) else { return }
         draft = (try? SplashBundleLoader.load(kind)) ?? .placeholder(kind)
         message = nil; loadDraft(kind)
     }
+    /// Replaces the draft only after the imported JSON validates for the selected kind.
     func importData(_ data: Data) throws { draft = try SplashContent.decode(data, expectedKind: draft.kind) }
+    /// Inserts a copy with a new slide ID without exceeding the thirty-slide limit.
     func duplicate(_ index: Int) {
         guard draft.slides.count < 30 else { return }
         var copy = draft.slides[index]; copy.id = UUID().uuidString
         draft.slides.insert(copy, at: index + 1)
     }
+    /// Assigns a fresh update identity so a future release can be announced once.
     func newAnnouncement() { guard draft.kind == .update else { return }; draft.id = UUID().uuidString }
 }
 
@@ -66,6 +78,7 @@ struct SplashStudioView: View {
     @State private var confirmReload = false
     @State private var confirmProposal = false
     @Environment(\.scenePhase) private var phase
+    /// Uses the supplied Studio model or creates one backed by local draft storage.
     init(model: SplashStudioModel? = nil) {
         _model = State(initialValue: model ?? SplashStudioModel())
     }
@@ -76,7 +89,7 @@ struct SplashStudioView: View {
             if DeveloperMode.isEnabled {
                 List {
                     Section("Content") {
-                        Picker("Walkthrough", selection: Binding(get: { model.draft.kind }, set: model.switchMode)) {
+                        Picker("Walkthrough", selection: Binding(get: { model.draft.kind }, set: { kind in model.switchMode(kind) })) {
                             ForEach(SplashKind.allCases) { Text($0.rawValue.capitalized).tag($0) }
                         }
                         TextField("Content ID", text: $model.draft.id)
@@ -189,6 +202,7 @@ struct SplashStudioView: View {
         .onChange(of: phase) { _, phase in if phase == .background { model.saveDraft(announce: false) } }
         .onDisappear { model.saveDraft(announce: false) }
     }
+    /// Maps empty editor text to a nil optional content field.
     private func optional(_ binding: Binding<String?>) -> Binding<String> {
         Binding(get: { binding.wrappedValue ?? "" }, set: { binding.wrappedValue = $0.isEmpty ? nil : $0 })
     }
@@ -315,14 +329,17 @@ struct SplashSlideEditor: View {
         }
         .fullScreenCover(isPresented: $arranging) { SplashCanvasEditor(slide: $slide) }
     }
+    /// Binds an optional slide design field through its resolved default design.
     private func design<T>(_ key: WritableKeyPath<SplashSlideDesign, T>) -> Binding<T> {
         Binding(get: { slide.resolvedDesign[keyPath: key] }, set: { value in
             var design = slide.resolvedDesign; design[keyPath: key] = value; slide.design = design
         })
     }
+    /// Maps empty editor text to a nil optional content field.
     private func optional(_ binding: Binding<String?>) -> Binding<String> {
         Binding(get: { binding.wrappedValue ?? "" }, set: { binding.wrappedValue = $0.isEmpty ? nil : $0 })
     }
+    /// Converts between stored hexadecimal colors and the native color picker binding.
     private func color(_ binding: Binding<String>) -> Binding<Color> {
         Binding(get: { Color(splashHex: binding.wrappedValue) }, set: { value in
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

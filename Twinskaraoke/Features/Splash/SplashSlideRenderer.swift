@@ -6,6 +6,7 @@ struct SplashStyledText: View {
     let style: SplashTextStyle
     var header = false
     @ScaledMetric(relativeTo: .body) private var scale = 1.0
+    /// Configures the rendered element and its local editing or interaction callbacks.
     init(text: String, style: SplashTextStyle, header: Bool = false) {
         self.text = text; self.style = style; self.header = header
         _scale = ScaledMetric(wrappedValue: 1, relativeTo: header ? .largeTitle : .body)
@@ -50,6 +51,7 @@ extension SplashSlide {
         if demonstration != nil { items.append(.demonstration) }
         return items
     }
+    /// Resolves a canvas element’s stored placement or its responsive default.
     func placement(for item: SplashCanvasItem) -> SplashPlacement {
         switch item {
         case .title: resolvedDesign.titlePlacement
@@ -59,6 +61,7 @@ extension SplashSlide {
         case .feature(let id): features?.first { $0.id == id }?.placement ?? SplashPlacement()
         }
     }
+    /// Stores the edited placement for the selected text, image, feature, or demonstration.
     mutating func setPlacement(_ placement: SplashPlacement, for item: SplashCanvasItem) {
         if design == nil { design = resolvedDesign }
         switch item {
@@ -74,6 +77,7 @@ extension SplashSlide {
 
 private struct SplashMeasurements: PreferenceKey {
     static var defaultValue: [String: CGFloat] { [:] }
+    /// Merges measured canvas heights so the renderer can accommodate overflowing content.
     static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
@@ -88,6 +92,7 @@ private struct SplashCanvasEditing: ViewModifier {
     let finish: (() -> Void)?
     let grid: Bool
     @Environment(\.layoutDirection) private var direction
+    /// Builds the decorated content using the current splash presentation state.
     @ViewBuilder func body(content: Content) -> some View {
         if let select, let move {
             content.overlay {
@@ -110,6 +115,7 @@ private struct SplashCanvasEditing: ViewModifier {
 private struct SplashCanvasContainerAccessibility: ViewModifier {
     let editing: Bool
     let identifier: String
+    /// Builds the decorated content using the current splash presentation state.
     @ViewBuilder func body(content: Content) -> some View {
         if editing { content.accessibilityElement(children: .contain).accessibilityIdentifier(identifier) }
         else { content.accessibilityIdentifier(identifier) }
@@ -123,6 +129,7 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
     let resize: (Double, Double, Double) -> Void
     let selected: Bool
     let finish: () -> Void
+    /// Creates the gesture coordinator with the current canvas editing callbacks.
     func makeCoordinator() -> Coordinator { Coordinator(select: select, move: move, resize: resize, selected: selected, finish: finish) }
     func makeUIView(context: Context) -> Surface {
         let view = Surface()
@@ -135,6 +142,7 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
         view.pan = pan; view.pinch = pinch
         return view
     }
+    /// Refreshes editing callbacks and selection state on the existing touch surface.
     func updateUIView(_ view: Surface, context: Context) {
         context.coordinator.select = select; context.coordinator.move = move
         context.coordinator.resize = resize; context.coordinator.selected = selected
@@ -145,6 +153,7 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
         var pan: UIPanGestureRecognizer?
         var pinch: UIPinchGestureRecognizer?
         private weak var protectedScroll: UIScrollView?
+        /// Installs scroll gesture dependencies after the canvas surface joins its hierarchy.
         override func didMoveToWindow() { super.didMoveToWindow(); protectItemDrag() }
         func protectItemDrag() {
             guard let pan else { return }
@@ -160,6 +169,7 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
                 ancestor = view.superview
             }
         }
+        /// Restricts gesture hit testing to the canvas element’s own bounds.
         override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { bounds.contains(point) }
     }
     final class Coordinator: NSObject {
@@ -171,9 +181,11 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
         private var previous = CGPoint.zero
         private var previousScale: CGFloat = 1
         private var pulling = false
+        /// Configures the rendered element and its local editing or interaction callbacks.
         init(select: @escaping () -> Void, move: @escaping (Double, Double) -> Void, resize: @escaping (Double, Double, Double) -> Void, selected: Bool, finish: @escaping () -> Void) {
             self.select = select; self.move = move; self.resize = resize; self.selected = selected; self.finish = finish
         }
+        /// Converts incremental pinch changes into resize deltas and finishes with grid alignment.
         @objc func pinch(_ pinch: UIPinchGestureRecognizer) {
             if pinch.state == .began { previousScale = 1; select() }
             if pinch.state == .changed || pinch.state == .ended, let view = pinch.view {
@@ -183,6 +195,7 @@ private struct SplashCanvasTouchSurface: UIViewRepresentable {
             }
             if pinch.state == .ended || pinch.state == .cancelled { finish() }
         }
+        /// Selects the canvas element touched by the user.
         @objc func tap() { select() }
         @objc func drag(_ pan: UIPanGestureRecognizer) {
             if pan.state == .began {
@@ -298,10 +311,12 @@ struct SplashSlideRenderer: View {
         .foregroundStyle(Color(splashHex: slide.textColor))
         .frame(maxWidth: .infinity).padding(24)
     }
+    /// Resolves the horizontal canvas center while honoring right-to-left layout.
     private func centerX(_ placement: SplashPlacement, itemWidth: CGFloat) -> CGFloat {
         let logical = direction == .rightToLeft ? 1 - placement.x : placement.x
         return min(width - itemWidth / 2, max(itemWidth / 2, width * logical))
     }
+    /// Renders the selected canvas item with its stored text, image, or mock-control design.
     @ViewBuilder private func element(_ item: SplashCanvasItem, width: CGFloat) -> some View {
         switch item {
         case .title: SplashStyledText(text: slide.title ?? "", style: style.title, header: true)
@@ -344,6 +359,7 @@ struct SplashMockFeatureView: View {
     @State private var selectedTab: SplashDemoTab
     @State private var trackNumber = 1
     @ScaledMetric(relativeTo: .body) private var scale = 1.0
+    /// Configures the rendered element and its local editing or interaction callbacks.
     init(feature: SplashDemoFeature, editing: Bool = false, boxWidth: CGFloat? = nil, minimumHeight: CGFloat? = nil, interaction: @escaping () -> Void = {}) {
         self.feature = feature; self.editing = editing; self.interaction = interaction
         self.boxWidth = boxWidth; self.minimumHeight = minimumHeight
@@ -442,6 +458,7 @@ struct SplashMockFeatureView: View {
             Text(feature.subtitle).font(.caption).opacity(0.65)
         }
     }
+    /// Renders mock-control artwork at the requested size.
     private func artwork(size: CGFloat) -> some View {
         Group {
             if let data = feature.imageData, let image = UIImage(data: data) {

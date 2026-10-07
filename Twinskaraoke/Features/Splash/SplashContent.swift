@@ -47,6 +47,7 @@ nonisolated struct SplashContent: Codable, Equatable {
 
     static let maxFileBytes = 12 * 1024 * 1024
     static let maxImageBytes = 2 * 1024 * 1024
+    /// Creates the safe fallback walkthrough for the requested install or update kind.
     static func placeholder(_ kind: SplashKind) -> Self {
         Self(kind: kind, id: kind == .install ? "install-placeholder" : "update-placeholder",
              enabled: kind == .install, targetVersion: kind == .update ? "1.0.14" : nil,
@@ -55,6 +56,7 @@ nonisolated struct SplashContent: Codable, Equatable {
              })
     }
 
+    /// Rejects unsupported or out-of-range content before it can be presented or exported.
     func validate(expectedKind: SplashKind? = nil) throws {
         func require(_ condition: Bool, _ message: String) throws {
             if !condition { throw SplashError(message: message) }
@@ -96,6 +98,7 @@ nonisolated struct SplashContent: Codable, Equatable {
             }
         }
     }
+    /// Checks image bytes, dimensions, and the required accessible description.
     static func validateImage(_ data: Data, description: String, prefix: String) throws {
         guard !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, description.count <= 1000 else {
             throw SplashError(message: prefix + "an image needs an accessibility description of 1–1000 characters.")
@@ -111,6 +114,7 @@ nonisolated struct SplashContent: Codable, Equatable {
         else { throw SplashError(message: prefix + "use a valid still image up to 4096 × 4096 pixels.") }
     }
 
+    /// Validates the walkthrough before producing bounded, self-contained JSON.
     func encoded() throws -> Data {
         try validate()
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -118,6 +122,7 @@ nonisolated struct SplashContent: Codable, Equatable {
         guard data.count <= Self.maxFileBytes else { throw SplashError(message: "JSON exceeds 12 MB; reduce image sizes.") }
         return data
     }
+    /// Decodes bounded JSON and validates its schema, kind, and slide content.
     static func decode(_ data: Data, expectedKind: SplashKind? = nil) throws -> Self {
         guard data.count <= maxFileBytes else { throw SplashError(message: "JSON exceeds 12 MB.") }
         do {
@@ -139,11 +144,14 @@ nonisolated struct SplashContent: Codable, Equatable {
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         return SHA256.hash(data: (try? encoder.encode(self)) ?? Data()).map { String(format: "%02x", $0) }.joined()
     }
+    /// Matches an enabled update against the current marketing version and optional build.
     func eligible(version: String, build: String) -> Bool {
         kind == .update && enabled && targetVersion == version && (targetBuild == nil || targetBuild == build)
     }
+    /// Checks the bounded identifier format used for walkthrough and slide identities.
     static func validID(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9._-]{1,128}$", options: .regularExpression) != nil }
     static func validColor(_ value: String) -> Bool { value.range(of: "^#[A-Fa-f0-9]{6}$", options: .regularExpression) != nil }
+    /// Checks that a target marketing version contains only numeric components.
     static func validVersion(_ value: String?) -> Bool {
         guard let value, value.count <= 50 else { return false }
         return value.range(of: "^[0-9]+(\\.[0-9]+)*$", options: .regularExpression) != nil
@@ -153,16 +161,19 @@ nonisolated struct SplashContent: Codable, Equatable {
 nonisolated struct SplashError: LocalizedError { let message: String; var errorDescription: String? { message } }
 
 enum SplashBundleLoader {
+    /// Finds a bundled resource in either flattened or preserved splash resource folders.
     static func url(for kind: SplashKind, bundle: Bundle = .main) -> URL? {
         // Synchronized Xcode groups currently flatten JSON resources. Also support preserved folders.
         bundle.url(forResource: kind.rawValue, withExtension: "json", subdirectory: "SplashScreens")
         ?? bundle.url(forResource: kind.rawValue, withExtension: "json", subdirectory: "Resources/SplashScreens")
         ?? bundle.url(forResource: kind.rawValue, withExtension: "json")
     }
+    /// Loads and validates bundled content for the requested walkthrough kind.
     static func load(_ kind: SplashKind, bundle: Bundle = .main) throws -> SplashContent {
         guard let url = url(for: kind, bundle: bundle) else { throw SplashError(message: "Missing bundled \(kind.rawValue).json") }
         return try SplashContent.decode(Data(contentsOf: url), expectedKind: kind)
     }
+    /// Returns validated bundled content, using an install fallback and skipping invalid updates.
     static func runtimeContent(_ kind: SplashKind) -> SplashContent? {
         do { return try load(kind) }
         catch {

@@ -8,10 +8,12 @@ import UIKit
     var failRead = false
     var failWrite = false
     var saves = 0
+    /// Returns fixture history or simulates a protected-data read failure.
     func read() throws -> SplashState {
         if failRead { throw SplashError(message: "Protected data unavailable") }
         return value
     }
+    /// Records fixture history and write counts, or simulates an atomic write failure.
     func save(_ state: SplashState) throws {
         if failWrite { throw SplashError(message: "Disk full") }
         value = state; saves += 1
@@ -19,20 +21,24 @@ import UIKit
 }
 
 @MainActor @Suite("Splash experience") struct SplashExperienceTests {
+    /// Creates an isolated coordinator with fixed release metadata for deterministic tests.
     private func coordinator(_ store: MemorySplashStore, install: SplashContent = .placeholder(.install), update: SplashContent? = nil) -> SplashCoordinator {
         SplashCoordinator(store: store, install: install, update: update, version: "2.0", build: "42")
     }
+    /// Visits and completes every required slide in the test coordinator.
     private func finish(_ coordinator: SplashCoordinator) {
         guard let active = coordinator.active else { return }
         for _ in 1..<active.slides.count { coordinator.next() }
         coordinator.complete()
     }
+    /// Builds an enabled update fixture targeting the test release.
     private func announcement(_ id: String = "release-two") -> SplashContent {
         var content = SplashContent.placeholder(.update)
         content.enabled = true; content.targetVersion = "2.0"; content.id = id
         return content
     }
 
+    /// Verifies that missing state covers fresh install and existing rollout.
     @Test func missingStateCoversFreshInstallAndExistingRollout() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -44,6 +50,7 @@ import UIKit
         #expect(c.index == 0 && c.isBlocking)
         #expect(try store.read().pending?.index == 0)
     }
+    /// Verifies that install completion does not replay across restarts or content changes.
     @Test func installCompletionDoesNotReplayAcrossRestartsOrContentChanges() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground(); finish(c)
         #expect(store.value.installCompleted && !c.isBlocking)
@@ -51,6 +58,7 @@ import UIKit
         let restarted = coordinator(store, install: changed); restarted.foreground()
         #expect(!restarted.isBlocking && restarted.active == nil)
     }
+    /// Verifies that interrupted progress recovers and back does not forget sequence.
     @Test func interruptedProgressRecoversAndBackDoesNotForgetSequence() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground(); c.next(); c.next(); c.back()
         #expect(!store.value.installCompleted)
@@ -59,6 +67,7 @@ import UIKit
         resumed.complete(); #expect(!store.value.installCompleted)
         resumed.next(); resumed.complete(); #expect(store.value.installCompleted)
     }
+    /// Verifies that premature completion and boundary navigation are rejected.
     @Test func prematureCompletionAndBoundaryNavigationAreRejected() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground()
         c.back(); c.complete()
@@ -68,11 +77,13 @@ import UIKit
         c.complete(); let count = store.saves; c.complete(); c.foreground()
         #expect(store.saves == count && !c.isBlocking)
     }
+    /// Verifies that single slide requires only final button.
     @Test func singleSlideRequiresOnlyFinalButton() {
         var content = SplashContent.placeholder(.install); content.slides = [content.slides[0]]
         let store = MemorySplashStore(); let c = coordinator(store, install: content); c.foreground()
         #expect(c.isBlocking); c.next(); #expect(c.index == 0); c.complete(); #expect(!c.isBlocking)
     }
+    /// Verifies that changed unfinished content restarts safely.
     @Test func changedUnfinishedContentRestartsSafely() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground(); c.next(); c.next()
         var content = SplashContent.placeholder(.install); content.slides.insert(SplashSlide(), at: 0)
@@ -80,12 +91,14 @@ import UIKit
         #expect(changed.index == 0 && store.value.pending?.highestVisited == 0)
         changed.complete(); #expect(!store.value.installCompleted)
     }
+    /// Verifies that malformed saved slide index cannot bypass slides.
     @Test func malformedSavedSlideIndexCannotBypassSlides() {
         let store = MemorySplashStore(); let content = SplashContent.placeholder(.install)
         store.value.pending = SplashProgress(kind: .install, id: content.id, fingerprint: content.fingerprint, index: 20, highestVisited: 20)
         let c = coordinator(store); c.foreground()
         #expect(c.index == 0 && store.value.pending?.highestVisited == 0)
     }
+    /// Verifies that release eligibility matches exact version and optional build.
     @Test func releaseEligibilityMatchesExactVersionAndOptionalBuild() {
         var content = announcement()
         #expect(content.eligible(version: "2.0", build: "1"))
@@ -96,6 +109,7 @@ import UIKit
         content.enabled = false
         #expect(!content.eligible(version: "2.0", build: "42"))
     }
+    /// Verifies that absent disabled and mismatched announcements show nothing.
     @Test func absentDisabledAndMismatchedAnnouncementsShowNothing() {
         for content in [nil, SplashContent.placeholder(.update), { var c = announcement(); c.targetVersion = "1.9"; return c }(), { var c = announcement(); c.targetBuild = "43"; return c }()] {
             let store = MemorySplashStore(); store.value.installCompleted = true
@@ -103,6 +117,7 @@ import UIKit
             #expect(!c.isBlocking && store.value.completedUpdateIDs.isEmpty)
         }
     }
+    /// Verifies that install precedes update and no interface unlocks between them.
     @Test func installPrecedesUpdateAndNoInterfaceUnlocksBetweenThem() {
         let store = MemorySplashStore(); let c = coordinator(store, update: announcement()); c.foreground()
         #expect(c.active?.kind == .install)
@@ -111,6 +126,7 @@ import UIKit
         finish(c)
         #expect(!c.isBlocking && store.value.completedUpdateIDs == ["release-two"])
     }
+    /// Verifies that announcement identity survives content edits and builds and downgrades.
     @Test func announcementIdentitySurvivesContentEditsAndBuildsAndDowngrades() {
         let store = MemorySplashStore(); store.value.installCompleted = true
         let c = coordinator(store, update: announcement()); c.foreground(); finish(c)
@@ -120,6 +136,7 @@ import UIKit
         downgraded.foreground(); #expect(store.value.completedUpdateIDs.contains(edited.id))
         let new = coordinator(store, update: announcement("new-id")); new.foreground(); #expect(new.active?.id == "new-id")
     }
+    /// Verifies that read failure blocks and retry restores original state.
     @Test func readFailureBlocksAndRetryRestoresOriginalState() {
         let store = MemorySplashStore(); store.value.installCompleted = true; store.failRead = true
         let c = coordinator(store); c.foreground()
@@ -127,6 +144,7 @@ import UIKit
         store.failRead = false; c.foreground()
         #expect(!c.isBlocking && store.value.installCompleted)
     }
+    /// Verifies that progression write failure does not advance and retry persists.
     @Test func progressionWriteFailureDoesNotAdvanceAndRetryPersists() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground()
         store.failWrite = true; c.next()
@@ -135,6 +153,7 @@ import UIKit
         store.failWrite = false; c.retry()
         #expect(c.index == 1 && store.value.pending?.index == 1)
     }
+    /// Verifies that completion write failure never unlocks.
     @Test func completionWriteFailureNeverUnlocks() {
         let store = MemorySplashStore(); let c = coordinator(store); c.foreground(); c.next(); c.next()
         store.failWrite = true; c.complete()
@@ -142,6 +161,7 @@ import UIKit
         store.failWrite = false; c.retry()
         #expect(!c.isBlocking && store.value.installCompleted)
     }
+    /// Verifies that real store atomic round trip and backup exclusion.
     @Test func realStoreAtomicRoundTripAndBackupExclusion() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -154,6 +174,7 @@ import UIKit
         #expect(try store.read() == state)
         #expect(try store.file.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
     }
+    /// Verifies that corrupt future and unavailable state are not fresh install.
     @Test func corruptFutureAndUnavailableStateAreNotFreshInstall() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -169,6 +190,7 @@ import UIKit
         #expect(throws: (any Error).self) { try store.read() }
         #expect(throws: (any Error).self) { try store.save(SplashState()) }
     }
+    /// Verifies that malformed mandatory content falls back and optional content skips.
     @Test func malformedMandatoryContentFallsBackAndOptionalContentSkips() {
         var install = SplashContent.placeholder(.install); install.slides = []
         var update = announcement(); update.schemaVersion = 999
@@ -176,6 +198,7 @@ import UIKit
         #expect(c.active?.slides.count == 3); finish(c)
         #expect(!c.isBlocking && store.value.completedUpdateIDs.isEmpty)
     }
+    /// Verifies that validation rejects invalid design and size.
     @Test func validationRejectsInvalidDesignAndSize() throws {
         var c = SplashContent.placeholder(.install); c.slides[1].id = c.slides[0].id
         #expect(throws: SplashError.self) { try c.encoded() }
@@ -193,6 +216,7 @@ import UIKit
         #expect(throws: SplashError.self) { try SplashContent.decode(Data(unknownLayout.utf8)) }
         #expect(throws: SplashError.self) { try SplashContent.decode(data, expectedKind: .update) }
     }
+    /// Verifies that export import round trip includes embedded image.
     @Test func exportImportRoundTripIncludesEmbeddedImage() throws {
         var c = announcement()
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 16))
@@ -203,6 +227,7 @@ import UIKit
         #expect(decoded == c && decoded.slides[0].imageData == c.slides[0].imageData)
         #expect(decoded.fingerprint == c.fingerprint)
     }
+    /// Verifies that studio preview draft and export never touch completion state.
     @Test func studioPreviewDraftAndExportNeverTouchCompletionState() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -210,8 +235,9 @@ import UIKit
         var state = SplashState(); state.installCompleted = true; state.completedUpdateIDs = ["old"]
         try store.save(state)
         let studio = SplashStudioModel(directory: directory.appendingPathComponent("Drafts"))
-        let oldID = studio.draft.id; studio.draft.slides[0].title = "Edited"; studio.duplicate(0)
-        #expect(studio.draft.id == oldID && studio.draft.slides.count == 4)
+        let oldID = studio.draft.id; let oldCount = studio.draft.slides.count
+        studio.draft.slides[0].title = "Edited"; studio.duplicate(0)
+        #expect(studio.draft.id == oldID && studio.draft.slides.count == oldCount + 1)
         #expect(studio.saveDraft())
         let document = try SplashJSONDocument(content: studio.draft)
         try studio.importData(document.data)
@@ -220,6 +246,7 @@ import UIKit
         studio.switchMode(.update); let id = studio.draft.id; studio.draft.slides[0].body = "Edit"
         #expect(studio.draft.id == id); studio.newAnnouncement(); #expect(studio.draft.id != id)
     }
+    /// Verifies that stale scene actions cannot advance or complete the next experience.
     @Test func staleSceneActionsCannotAdvanceOrCompleteTheNextExperience() {
         let store = MemorySplashStore()
         var update = announcement(); update.slides = [update.slides[0]]
@@ -234,6 +261,7 @@ import UIKit
         #expect(c.isBlocking && store.value.completedUpdateIDs.isEmpty)
         c.complete(); #expect(!c.isBlocking)
     }
+    /// Verifies that incoming routes are deferred and details are preserved in order.
     @Test func incomingRoutesAreDeferredAndDetailsArePreservedInOrder() throws {
         var blocked = true
         let router = AppRouter(isSplashBlocking: { blocked })
@@ -247,6 +275,7 @@ import UIKit
         router.dismissDetail(); router.resumeAfterSplash()
         #expect(router.section == .radio && router.detail == nil)
     }
+    /// Verifies that forced developer runs repeat without changing real history.
     @Test func forcedDeveloperRunsRepeatWithoutChangingRealHistory() {
         let real = MemorySplashStore(); real.value.installCompleted = true; real.value.completedUpdateIDs = ["retained"]
         let developer = MemorySplashStore()
@@ -262,10 +291,12 @@ import UIKit
         let writes = developer.saves; c.foreground()
         #expect(developer.saves == writes)
     }
+    /// Verifies that forced interrupted run resumes and switching kind restarts.
     @Test func forcedInterruptedRunResumesAndSwitchingKindRestarts() {
         let real = MemorySplashStore(); real.value.installCompleted = true
         let developer = MemorySplashStore()
         var choice: SplashKind? = .install
+        /// Recreates the fixture coordinator to verify persistence across launches.
         func make() -> SplashCoordinator {
             SplashCoordinator(store: real, install: .placeholder(.install), update: .placeholder(.update),
                               developerSelection: { choice }, developerStore: developer)
@@ -277,6 +308,7 @@ import UIKit
         choice = nil
         let off = make(); off.foreground(); #expect(!off.isBlocking && real.value.installCompleted)
     }
+    /// Verifies that real install still precedes forced developer update.
     @Test func realInstallStillPrecedesForcedDeveloperUpdate() {
         let real = MemorySplashStore(); let developer = MemorySplashStore()
         let c = SplashCoordinator(store: real, install: .placeholder(.install), update: .placeholder(.update),
@@ -285,6 +317,7 @@ import UIKit
         finish(c); #expect(c.active?.kind == .update && c.isDeveloperTesting && real.value.installCompleted)
         finish(c); #expect(!c.isBlocking && real.value.completedUpdateIDs.isEmpty)
     }
+    /// Verifies that developer write failures block without changing real completion.
     @Test func developerWriteFailuresBlockWithoutChangingRealCompletion() {
         let real = MemorySplashStore(); real.value.installCompleted = true
         let developer = MemorySplashStore()
@@ -295,16 +328,19 @@ import UIKit
         #expect(real.value.installCompleted && real.value.completedUpdateIDs.isEmpty && real.saves == 0)
         developer.failWrite = false; c.retry(); #expect(!c.isBlocking)
     }
+    /// Verifies that built bundle contains both validated resources.
     @Test func builtBundleContainsBothValidatedResources() throws {
         for kind in SplashKind.allCases {
             #expect(SplashBundleLoader.url(for: kind) != nil)
             let c = try SplashBundleLoader.load(kind)
-            #expect(c.kind == kind && c.slides.count == (kind == .install ? 3 : 2))
-            #expect(c.enabled == (kind == .install))
+            #expect(c.kind == kind && !c.slides.isEmpty)
+            #expect(try SplashContent.decode(c.encoded(), expectedKind: kind) == c)
+            if kind == .install { #expect(c.enabled) }
         }
     }
+    /// Verifies that original exports remain compatible with optional design extensions.
     @Test func originalExportsRemainCompatibleWithOptionalDesignExtensions() throws {
-        let old = try SplashBundleLoader.load(.install)
+        let old = SplashContent.placeholder(.install)
         #expect(old.slides.allSatisfy { $0.design == nil && $0.features == nil && $0.demonstration == nil })
         let decoded = try SplashContent.decode(old.encoded())
         #expect(decoded == old)
@@ -312,6 +348,7 @@ import UIKit
         var compact = old.slides[0]; compact.typography = .compact
         #expect(compact.resolvedDesign.title.size == 22)
     }
+    /// Verifies that designed slides and interactive steps round trip with embedded artwork.
     @Test func designedSlidesAndInteractiveStepsRoundTripWithEmbeddedArtwork() throws {
         var content = SplashStudioTestingFixtures.content
         var design = SplashSlideDesign(); design.title.size = 48; design.title.family = .serif
@@ -327,6 +364,7 @@ import UIKit
         #expect(decoded.slides[0].demonstration?.steps.count == 2)
         #expect(decoded.slides[0].features?[0].imageData == SplashStudioTestingFixtures.image)
     }
+    /// Verifies that canvas edits persist without changing installation history.
     @Test func canvasEditsPersistWithoutChangingInstallationHistory() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -347,6 +385,7 @@ import UIKit
         placement.move(dx: 100, dy: -100)
         #expect(placement.x == 0.95 && placement.y == 0.05)
     }
+    /// Verifies that design changes invalidate unfinished progress but never completed install.
     @Test func designChangesInvalidateUnfinishedProgressButNeverCompletedInstall() {
         let store = MemorySplashStore(); let first = coordinator(store); first.foreground(); first.next()
         var edited = SplashContent.placeholder(.install)
@@ -358,6 +397,7 @@ import UIKit
         let completed = coordinator(store, install: edited); completed.foreground()
         #expect(!completed.isBlocking)
     }
+    /// Verifies that invalid design and demo definitions cannot be exported.
     @Test func invalidDesignAndDemoDefinitionsCannotBeExported() throws {
         var content = SplashStudioTestingFixtures.content
         content.slides[0].design?.title.size = 100
@@ -375,6 +415,7 @@ import UIKit
         let unsupported = String(decoding: bytes, as: UTF8.self).replacingOccurrences(of: "miniPlayer", with: "remoteScript")
         #expect(throws: SplashError.self) { try SplashContent.decode(Data(unsupported.utf8)) }
     }
+    /// Verifies that imported images are downsampled and invalid sources are rejected.
     @Test func importedImagesAreDownsampledAndInvalidSourcesAreRejected() throws {
         let bytes = UIGraphicsImageRenderer(size: CGSize(width: 1600, height: 1200)).pngData { context in
             UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 1600, height: 1200))
@@ -388,6 +429,7 @@ import UIKit
         #expect(throws: SplashError.self) { try SplashImageCompressor.compress(bytes, dimension: 128, quality: 0.8) }
         #expect(throws: SplashError.self) { try SplashImageCompressor.compress(bytes, dimension: 256, quality: .nan) }
     }
+    /// Verifies that canvas grid and box resizing remain bounded.
     @Test func canvasGridAndBoxResizingRemainBounded() throws {
         var placement = SplashPlacement(x: 0.531, y: 0.487, width: 0.83, height: 0.312)
         placement.snapToGrid()
@@ -405,6 +447,7 @@ import UIKit
         placement.height = .infinity
         #expect(throws: SplashError.self) { try placement.validate(prefix: "") }
     }
+    /// Verifies that background image round trip and validation.
     @Test func backgroundImageRoundTripAndValidation() throws {
         var content = SplashContent.placeholder(.install)
         let bytes = UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).pngData { context in
@@ -425,6 +468,7 @@ import UIKit
         content.slides[0].backgroundImageDescription = nil
         #expect(throws: SplashError.self) { try content.encoded() }
     }
+    /// Verifies that bundled branding and proposed install are self contained.
     @Test func bundledBrandingAndProposedInstallAreSelfContained() throws {
         let catalog = try SplashBundledAssets.catalog()
         #expect(Set(catalog.map(\.id)) == ["twins", "wide-banner", "icon-background"])
@@ -438,10 +482,11 @@ import UIKit
         }
         #expect(credits.contains("watchOS") && credits.contains("development"))
         let live = try SplashBundleLoader.load(.install)
-        #expect(live.slides.count == 3 && live.id == "install-placeholder")
-        #expect(live.slides.allSatisfy { $0.backgroundImageData == nil && $0.design?.gridSnapping == nil })
+        #expect(live.kind == .install && live.enabled && !live.slides.isEmpty)
+        #expect(try SplashContent.decode(live.encoded(), expectedKind: .install) == live)
     }
 
+    /// Verifies that developer resets only chosen history and preserves other data.
     @Test func developerResetsOnlyChosenHistoryAndPreservesOtherData() throws {
         let store = MemorySplashStore()
         store.value.installCompleted = true
@@ -467,6 +512,7 @@ import UIKit
         diskCoordinator.foreground(); try diskCoordinator.resetHistory(.install)
         #expect(try Data(contentsOf: marker) == bytes)
     }
+    /// Verifies that developer reset does not close or erase history on store failures.
     @Test func developerResetDoesNotCloseOrEraseHistoryOnStoreFailures() throws {
         let store = MemorySplashStore(); store.value.installCompleted = true
         store.value.completedUpdateIDs = ["release-two"]

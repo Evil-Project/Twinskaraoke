@@ -21,7 +21,8 @@ import Observation
             if arguments.contains("-UITestSplashUpdate") {
                 update = .placeholder(.update); update?.enabled = true; update?.targetVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             }
-            var install = SplashBundleLoader.runtimeContent(.install)!
+            // Navigation fixtures must remain stable when release content is edited.
+            var install = SplashContent.placeholder(.install)
             if arguments.contains("-UITestSplashLongContent") {
                 install.slides[0].body = String(repeating: "Description placeholder. ", count: 300)
                 install.slides[0].alignment = .leading
@@ -58,6 +59,7 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var isSaving = false
 
+    /// Configures validated content, release metadata, and separate real and developer history stores.
     init(store: any SplashStateStoring, install: SplashContent, update: SplashContent?,
          version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
          build: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
@@ -71,6 +73,7 @@ import Observation
         self.version = version; self.build = build
     }
 
+    /// Loads or resumes the required walkthrough, retrying failed persistence when needed.
     func foreground() {
         guard !isSaving else { return }
         if !isBlocking {
@@ -96,9 +99,11 @@ import Observation
         try store.save(candidate)
         state = candidate
     }
+    /// Replays the stored failed operation without advancing past unsaved progress.
     func retry() {
         let action = retryOperation; retryOperation = nil; errorMessage = nil; action?()
     }
+    /// Selects install before eligible updates, then releases the gate after persisted cleanup.
     private func selectPending() {
         guard let state else { return }
         if let developerKind {
@@ -115,6 +120,7 @@ import Observation
             } else { unlock() }
         }
     }
+    /// Resumes matching unfinished content or persists a fresh first-slide position.
     private func prepare(_ content: SplashContent) {
         guard var candidate = state else { return }
         let old = candidate.pending
@@ -125,11 +131,14 @@ import Observation
         candidate.pending = progress
         persist(candidate) { [weak self] in self?.active = content; self?.index = progress.index }
     }
+    /// Persists one backward step if the action still matches the rendered walkthrough.
     func back(expectedFingerprint: String? = nil, expectedIndex: Int? = nil) { move(by: -1, fingerprint: expectedFingerprint, from: expectedIndex) }
     func next(expectedFingerprint: String? = nil, expectedIndex: Int? = nil) { move(by: 1, fingerprint: expectedFingerprint, from: expectedIndex) }
+    /// Rejects actions from stale scenes by comparing content fingerprints and slide indices.
     private func matchesPresentation(_ fingerprint: String?, _ renderedIndex: Int?) -> Bool {
         (fingerprint == nil || active?.fingerprint == fingerprint) && (renderedIndex == nil || index == renderedIndex)
     }
+    /// Persists one valid adjacent slide move after rejecting stale or blocked actions.
     private func move(by delta: Int, fingerprint: String?, from renderedIndex: Int?) {
         guard matchesPresentation(fingerprint, renderedIndex), errorMessage == nil, !isSaving, let active, var candidate = state, var pending = candidate.pending,
               abs(delta) == 1, pending.index == index,
@@ -139,6 +148,7 @@ import Observation
         candidate.pending = pending
         persist(candidate) { [weak self] in self?.index = pending.index }
     }
+    /// Records completion only at the final visited slide, then selects the next required experience.
     func complete(expectedFingerprint: String? = nil, expectedIndex: Int? = nil) {
         guard matchesPresentation(expectedFingerprint, expectedIndex), errorMessage == nil, !isSaving, let active, var candidate = state, let pending = candidate.pending,
               pending.fingerprint == active.fingerprint, pending.id == active.id, pending.kind == active.kind,
@@ -157,6 +167,7 @@ import Observation
         candidate.pending = nil
         persist(candidate) { [weak self] in self?.active = nil; self?.selectPending() }
     }
+    /// Writes candidate state before publishing UI changes, retaining a retry on failure.
     private func persist(_ candidate: SplashState, success: @escaping () -> Void) {
         guard !isSaving else { return }
         isSaving = true
@@ -168,14 +179,17 @@ import Observation
             fail(error) { [weak self] in self?.persist(candidate, success: success) }
         }
     }
+    /// Keeps the gate blocked and stores the operation that can recover from the error.
     private func fail(_ error: Error, retry: @escaping () -> Void) {
         errorMessage = "Walkthrough data could not be saved or loaded. \(error.localizedDescription)"
         retryOperation = retry
     }
+    /// Switches to isolated test history while retaining the real runtime completion state.
     private func beginDeveloperTesting(_ kind: SplashKind) {
         runtimeState = state; state = nil; active = nil
         developerKind = kind; requestedDeveloperKind = nil; isBlocking = true
     }
+    /// Performs the version-tap sequence to enable the hidden Developer menu.
     private func unlock() {
         if let kind = requestedDeveloperKind {
             beginDeveloperTesting(kind); foreground(); return

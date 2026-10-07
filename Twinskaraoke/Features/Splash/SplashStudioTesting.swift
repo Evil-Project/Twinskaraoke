@@ -39,8 +39,10 @@ enum SplashStudioTestingFixtures {
 private struct SplashTestingImageDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.png] }
     var data: Data
+    /// Wraps image fixture bytes for the system file importer/exporter tests.
     init(data: Data) { self.data = data }
     init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    /// Packages embedded document bytes for the system file exporter.
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 struct SplashStudioTestingHost: View {

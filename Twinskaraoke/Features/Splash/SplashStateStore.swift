@@ -15,6 +15,7 @@ nonisolated struct SplashState: Codable, Equatable {
 }
 
 @MainActor protocol SplashStateStoring {
+    /// Loads validated completion history; only a missing file represents a fresh installation.
     func read() throws -> SplashState
     func save(_ state: SplashState) throws
 }
@@ -23,11 +24,13 @@ nonisolated struct SplashState: Codable, Equatable {
 @MainActor final class SplashStateStore: SplashStateStoring {
     let directory: URL
     var file: URL { directory.appendingPathComponent("state.json") }
+    /// Uses the supplied dedicated directory for walkthrough completion history.
     init(directory: URL = SplashStateStore.defaultDirectory) { self.directory = directory }
     static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SplashExperience", isDirectory: true)
     }
+    /// Loads validated completion history; only a missing file represents a fresh installation.
     func read() throws -> SplashState {
         let data: Data
         do { data = try Data(contentsOf: file) }
@@ -43,6 +46,7 @@ nonisolated struct SplashState: Codable, Equatable {
         try excludeFromBackup(directory); try excludeFromBackup(file)
         return state
     }
+    /// Persists completion history atomically without including it in device backups.
     func save(_ state: SplashState) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try excludeFromBackup(directory)
@@ -50,6 +54,7 @@ nonisolated struct SplashState: Codable, Equatable {
         try data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         try excludeFromBackup(file)
     }
+    /// Marks the dedicated walkthrough resource as excluded from device backups.
     private func excludeFromBackup(_ url: URL) throws {
         var url = url; var values = URLResourceValues(); values.isExcludedFromBackup = true
         try url.setResourceValues(values)

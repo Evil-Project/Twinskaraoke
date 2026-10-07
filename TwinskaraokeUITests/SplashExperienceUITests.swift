@@ -1,6 +1,7 @@
 import XCTest
 
 @MainActor final class SplashExperienceUITests: XCTestCase {
+    /// Stops the UI test at its first assertion failure.
     override func setUpWithError() throws { continueAfterFailure = false }
     private func launch(reset: Bool = true, update: Bool = false, large: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
@@ -12,6 +13,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Splash.Progress"].waitForExistence(timeout: 15))
         return app
     }
+    /// Verifies that mandatory gate rejects swipes and resumes after termination.
     func testMandatoryGateRejectsSwipesAndResumesAfterTermination() {
         let app = launch()
         XCTAssertEqual(app.staticTexts["Splash.Progress"].label, "Welcome, slide 1 of 3")
@@ -37,6 +39,7 @@ import XCTest
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
     }
+    /// Verifies that install then update and large text controls remain usable.
     func testInstallThenUpdateAndLargeTextControlsRemainUsable() {
         let app = launch(update: true, large: true)
         app.buttons["Splash.Next"].tap(); app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
@@ -45,6 +48,7 @@ import XCTest
         app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
+    /// Verifies that long light content scrolls and RTL navigation stays sequential.
     func testLongLightContentScrollsAndRTLNavigationStaysSequential() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset", "-UITestSplashLongContent", "-UITestSplashRTL", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -61,6 +65,7 @@ import XCTest
         XCTAssertFalse(app.buttons["Close"].exists)
         XCTAssertFalse(app.buttons["Splash.Complete"].exists)
     }
+    /// Verifies that developer unlock studio preview and export cancellation.
     func testDeveloperUnlockStudioPreviewAndExportCancellation() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1"]
@@ -136,11 +141,13 @@ import XCTest
         XCTAssertTrue(picker.exists)
         picker.tap(); app.buttons["Off"].firstMatch.tap()
     }
+    /// Performs the version-tap sequence to enable the hidden Developer menu.
     private func unlock(_ version: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<10 { version.tap() }
         if app.buttons["Close"].waitForExistence(timeout: 5) { app.buttons["Close"].tap() }
         for _ in 0..<10 { version.tap() }
     }
+    /// Launches the isolated Studio fixture without changing real walkthrough history.
     private func launchStudio() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplashStudio", "-UITestSplashStudioReset"]
@@ -148,6 +155,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Splash Screen Studio"].waitForExistence(timeout: 15))
         return app
     }
+    /// Verifies that studio save bubble canvas and single slide preview.
     func testStudioSaveBubbleCanvasAndSingleSlidePreview() {
         let app = launchStudio()
         tap("Save Local Draft", app: app)
@@ -185,6 +193,7 @@ import XCTest
         app.buttons["Exit Preview"].tap()
         app.buttons["Done"].tap()
     }
+    /// Verifies that files image import and rounded preview.
     func testFilesImageImportAndRoundedPreview() {
         let app = launchStudio()
         app.buttons["Export Test Image"].tap()
@@ -208,6 +217,7 @@ import XCTest
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
         app.buttons["Exit Preview"].tap()
     }
+    /// Verifies that mock interactions advance only the demonstration.
     func testMockInteractionsAdvanceOnlyTheDemonstration() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset", "-UITestSplashDesign"]
@@ -226,6 +236,7 @@ import XCTest
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
 
+    /// Verifies that canvas grid pinch and corner resizing.
     func testCanvasGridPinchAndCornerResizing() {
         let app = launchStudio()
         tap("1. Slide title", app: app); tap("Arrange on Canvas", app: app)
@@ -263,6 +274,7 @@ import XCTest
         app.descendants(matching: .any)["SplashStudio.Grid"].firstMatch.tap()
         app.buttons["Done"].tap()
     }
+    /// Verifies that bundled image and background assets preview.
     func testBundledImageAndBackgroundAssetsPreview() {
         let app = launchStudio()
         tap("1. Slide title", app: app)
@@ -284,6 +296,7 @@ import XCTest
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
         app.buttons["Exit Preview"].tap()
     }
+    /// Verifies that proposed install loads and previews all eight slides.
     func testProposedInstallLoadsAndPreviewsAllEightSlides() {
         let app = launchStudio()
         tap("Load Proposed Install Walkthrough", app: app)
@@ -302,6 +315,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Splash Screen Studio"].waitForExistence(timeout: 5))
     }
 
+    /// Verifies that developer resets each walkthrough and closes app.
     func testDeveloperResetsEachWalkthroughAndClosesApp() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset", "-UITestSplashUpdate", "-UITestSplashResetControls"]
@@ -329,6 +343,7 @@ import XCTest
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
     }
+    /// Completes each visible fixture walkthrough using its sequential navigation buttons.
     private func finishVisibleWalkthroughs(_ app: XCUIApplication) {
         for _ in 0..<8 {
             if app.buttons["AccountToolbarButton"].firstMatch.exists { break }
@@ -337,6 +352,7 @@ import XCTest
         }
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
+    /// Navigates from Account settings to the Developer menu.
     private func openDeveloper(_ app: XCUIApplication) {
         app.buttons["AccountToolbarButton"].firstMatch.tap()
         tap("Settings", app: app); tap("Developer", app: app)
@@ -358,6 +374,7 @@ import XCTest
             start.press(forDuration: 0.05, thenDragTo: end)
         }
     }
+    /// Scrolls the visible canvas inspector or slide form in the requested direction.
     private func scrollForm(_ app: XCUIApplication, up: Bool) {
         let canvas = app.descendants(matching: .any)["SplashStudio.CanvasInspector"].firstMatch
         let slide = app.descendants(matching: .any)["SplashStudio.SlideForm"].firstMatch
@@ -365,6 +382,7 @@ import XCTest
         guard form.exists else { if up { app.swipeUp() } else { app.swipeDown() }; return }
         if up { form.swipeUp(velocity: .slow) } else { form.swipeDown(velocity: .slow) }
     }
+    /// Finds and taps the named control in the active inspector or slide form.
     private func tap(_ label: String, app: XCUIApplication) {
         for _ in 0..<10 {
             let inspector = app.descendants(matching: .any)["SplashStudio.CanvasInspector"].firstMatch
