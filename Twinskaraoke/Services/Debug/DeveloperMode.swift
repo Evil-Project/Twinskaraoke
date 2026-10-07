@@ -9,6 +9,12 @@ enum DeveloperMode {
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 
+    static let splashTestingKey = "nk.developerSplashTesting"
+    static var splashTestingKind: SplashKind? {
+        guard isEnabled else { return nil }
+        return UserDefaults.standard.string(forKey: splashTestingKey).flatMap(SplashKind.init(rawValue:))
+    }
+
     static var easterEggAlwaysTrigger: Bool {
         get { UserDefaults.standard.bool(forKey: easterEggKey) }
         set { UserDefaults.standard.set(newValue, forKey: easterEggKey) }

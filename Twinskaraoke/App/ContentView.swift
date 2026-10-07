@@ -59,12 +59,12 @@ private struct PopupHostView: View {
         }
         .sheet(isPresented: Binding(
             get: { AppRouter.shared.detail != nil },
-            set: { if !$0 { AppRouter.shared.detail = nil } }
-        )) {
+            set: { if !$0 { AppRouter.shared.dismissDetail() } }
+        ), onDismiss: { AppRouter.shared.resumeAfterSplash() }) {
             NavigationStack {
                 if let route = AppRouter.shared.detail {
                     RoutedDetailView(route: route)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.detail = nil } } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.dismissDetail() } } }
                 }
             }
         }
@@ -94,7 +94,7 @@ private struct PopupHostView: View {
             // load landing mid-press cannot correct the label afterwards.
             FavoritesManager.shared.loadIfNeeded()
             UserPlaylistsManager.shared.loadIfNeeded()
-            if DeveloperMode.shouldTriggerEasterEgg() {
+            if !AppRuntime.isUITestMode && DeveloperMode.shouldTriggerEasterEgg() {
                 showCaptcha = true
             }
         }

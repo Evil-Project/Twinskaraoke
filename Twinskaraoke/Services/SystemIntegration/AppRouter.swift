@@ -10,7 +10,29 @@ final class AppRouter {
     var lyricsRequest = 0
     var requestID = UUID()
     var hasPendingRoute = false
+    private var splashRoutes: [AppRoute] = []
+    private let isSplashBlocking: () -> Bool
+    init(isSplashBlocking: @escaping () -> Bool = { SplashCoordinator.shared.isBlocking }) {
+        self.isSplashBlocking = isSplashBlocking
+    }
+    func resumeAfterSplash() {
+        guard !isSplashBlocking() else { return }
+        while !splashRoutes.isEmpty && detail == nil {
+            apply(splashRoutes.removeFirst())
+        }
+    }
+    func dismissDetail() {
+        detail = nil
+    }
     func open(_ route: AppRoute) {
+        if isSplashBlocking() || !splashRoutes.isEmpty {
+            splashRoutes.append(route)
+            resumeAfterSplash()
+            return
+        }
+        apply(route)
+    }
+    private func apply(_ route: AppRoute) {
         hasPendingRoute = true
         detail = nil
         switch route {

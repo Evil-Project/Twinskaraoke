@@ -71,7 +71,7 @@ struct SystemIntegrationTests {
         #expect(!FileManager.default.fileExists(atPath: store.directory!.path))
     }
     @MainActor @Test func routerSelectsDestination() {
-        let router = AppRouter()
+        let router = AppRouter(isSplashBlocking: { false })
         router.open(.search)
         #expect(router.section == .search)
         router.open(.playlist("one"))
