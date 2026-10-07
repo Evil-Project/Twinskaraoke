@@ -31,8 +31,13 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.staticTexts["Splash.Progress"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.staticTexts["Splash.Progress"].label, "Welcome, slide 2 of 3")
-        app.buttons["Splash.Back"].tap(); app.buttons["Splash.Next"].tap(); app.buttons["Splash.Next"].tap()
-        XCTAssertTrue(app.buttons["Splash.Complete"].exists)
+        app.buttons["Splash.Back"].tap()
+        waitForProgress("Welcome, slide 1 of 3", in: app)
+        app.buttons["Splash.Next"].tap()
+        waitForProgress("Welcome, slide 2 of 3", in: app)
+        app.buttons["Splash.Next"].tap()
+        waitForProgress("Welcome, slide 3 of 3", in: app)
+        XCTAssertTrue(app.buttons["Splash.Complete"].waitForExistence(timeout: 5))
         app.buttons["Splash.Complete"].tap()
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
         app.terminate(); app.launch()
@@ -140,6 +145,11 @@ import XCTest
         app.buttons["Update"].firstMatch.tap()
         XCTAssertTrue(picker.exists)
         picker.tap(); app.buttons["Off"].firstMatch.tap()
+    }
+    /// Waits for persisted slide navigation to appear before sending another action.
+    private func waitForProgress(_ label: String, in app: XCUIApplication) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: app.staticTexts["Splash.Progress"])
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 5), .completed)
     }
     /// Performs the version-tap sequence to enable the hidden Developer menu.
     private func unlock(_ version: XCUIElement, in app: XCUIApplication) {
