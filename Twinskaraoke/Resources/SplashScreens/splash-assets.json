@@ -1,0 +1,23 @@
+[
+  {
+    "id": "twins",
+    "title": "Twins Branding",
+    "category": "Branding",
+    "filename": "splash-asset-twins.png",
+    "description": "Twinskaraoke app branding"
+  },
+  {
+    "id": "wide-banner",
+    "title": "Wide Branding Banner",
+    "category": "Branding",
+    "filename": "splash-asset-wide-banner.png",
+    "description": "Wide Branding Banner from the Twinskaraoke branding files"
+  },
+  {
+    "id": "icon-background",
+    "title": "Branding Background",
+    "category": "Branding",
+    "filename": "splash-asset-icon-background.png",
+    "description": "Branding Background from the Twinskaraoke branding files"
+  }
+]

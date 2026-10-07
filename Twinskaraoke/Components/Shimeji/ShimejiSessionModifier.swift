@@ -12,7 +12,7 @@ import SwiftUI
         private let resources = ShimejiResourceManager.shared
 
         private var isActive: Bool {
-            experimentsEnabled && shimejiEnabled && resources.state == .ready && scenePhase == .active
+            experimentsEnabled && shimejiEnabled && resources.state == .ready && scenePhase == .active && !SplashCoordinator.shared.isBlocking
         }
 
         func body(content: Content) -> some View {
