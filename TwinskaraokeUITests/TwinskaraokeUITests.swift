@@ -746,7 +746,15 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
     let next = app.buttons["Next track"].firstMatch
     XCTAssertTrue(waitUntil(timeout: 8) { next.isHittable })
+    // The bar stays in the tree under the open player, and its value names
+    // the current song, so it shows that Next really changed the song before
+    // the close below is measured.
+    let songBeforeNext = mini.value as? String
     next.tap()
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { (mini.value as? String) != songBeforeNext },
+      "Next must change the song, or this measures an ordinary close."
+    )
     let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     start.press(forDuration: 0.2, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 180)),
                 withVelocity: 700, thenHoldForDuration: 0)

@@ -112,40 +112,74 @@ final class NowPlayingPresentation {
         isSettlingArtwork = true
     }
 
-    /// Who reported the current frame, so a view that is going away clears
-    /// only a frame it reported itself.
+    /// Frames reported by views that can be replaced in place.
     ///
-    /// Both reporting views are replaced in place: the player's artwork is
-    /// re-identified by song, and the accessory slot rehosts the bar. The
-    /// replacement reports its frame before the outgoing view's `onDisappear`
-    /// runs (measured on the simulator: new artwork frame, then `nil`), and
-    /// since `onGeometryChange` only reports again on a change, that late
-    /// `nil` stuck. After any song change the player had no artwork frame, so
-    /// opening lost its morph and closing its landing, both falling back to a
-    /// plain slide until something happened to move the artwork.
-    @ObservationIgnored private var barFrameOwner: String?
-    @ObservationIgnored private var playerArtworkFrameOwner: String?
+    /// The player's artwork is re-identified per song and the accessory slot
+    /// rehosts the bar. A replacement reports its frame before the outgoing
+    /// view's `onDisappear` runs (measured on the simulator: new artwork
+    /// frame, then `nil`), and `onGeometryChange` only reports again on a
+    /// change, so a plain "clear on disappear" wiped the new frame for good:
+    /// after any song change the player had no artwork frame, and opening and
+    /// closing fell back to a plain slide.
+    ///
+    /// So each reporting view instance has its own owner, the most recently
+    /// registered reporter that has a frame is the one used, and a view that
+    /// goes away removes only its own entry. A stale report from an outgoing
+    /// view, nil or not, cannot displace a newer one.
+    struct FrameReports {
+        private var owners: [String] = []
+        private var frames: [String: CGRect] = [:]
 
-    /// - Parameter owner: Identifies the reporting view. A `nil` frame from
-    ///   an owner that no longer holds the report is ignored; without an
-    ///   owner, a `nil` always clears.
-    func reportBarFrame(_ frame: CGRect?, owner: String? = nil) {
-        let frame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
-        guard frame != nil || owner == nil || owner == barFrameOwner else { return }
-        barFrame = frame
-        barFrameOwner = frame == nil ? nil : owner
+        /// Bound on views that registered and never disappeared.
+        private static let capacity = 8
+
+        var current: CGRect? {
+            owners.last(where: { frames[$0] != nil }).flatMap { frames[$0] }
+        }
+
+        mutating func report(_ frame: CGRect?, from owner: String) {
+            if !owners.contains(owner) {
+                owners.append(owner)
+                if owners.count > Self.capacity {
+                    frames[owners.removeFirst()] = nil
+                }
+            }
+            frames[owner] = frame
+        }
+
+        mutating func remove(_ owner: String) {
+            owners.removeAll { $0 == owner }
+            frames[owner] = nil
+        }
+    }
+
+    @ObservationIgnored private var barFrames = FrameReports()
+    @ObservationIgnored private var playerArtworkFrames = FrameReports()
+
+    /// Reports without an owner share one entry (`""`), for callers that are
+    /// never replaced in place.
+    func reportBarFrame(_ frame: CGRect?, owner: String = "") {
+        barFrames.report(frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }, from: owner)
+        barFrame = barFrames.current
+    }
+
+    func removeBarFrame(owner: String) {
+        barFrames.remove(owner)
+        barFrame = barFrames.current
     }
 
     func reportBarArtworkFrame(_ frame: CGRect?) {
         barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    /// See `reportBarFrame(_:owner:)`.
-    func reportPlayerArtworkFrame(_ frame: CGRect?, owner: String? = nil) {
-        let frame = frame.flatMap { $0.width > 0 ? $0 : nil }
-        guard frame != nil || owner == nil || owner == playerArtworkFrameOwner else { return }
-        playerArtworkFrame = frame
-        playerArtworkFrameOwner = frame == nil ? nil : owner
+    func reportPlayerArtworkFrame(_ frame: CGRect?, owner: String = "") {
+        playerArtworkFrames.report(frame.flatMap { $0.width > 0 ? $0 : nil }, from: owner)
+        playerArtworkFrame = playerArtworkFrames.current
+    }
+
+    func removePlayerArtworkFrame(owner: String) {
+        playerArtworkFrames.remove(owner)
+        playerArtworkFrame = playerArtworkFrames.current
     }
 
     init() {}
