@@ -129,7 +129,14 @@ struct SplashRootView: View {
             // ContentView handles links once mounted; this root owns links while gated.
             if coordinator.isBlocking, let route = AppRoute(url: url) { AppRouter.shared.open(route) }
         }
-        .onAppear { if scenePhase == .active { coordinator.foreground() } }
+        .onAppear {
+            // `.inactive`, not `.active`, is the phase a cold launch first
+            // appears in. Waiting for `.active` drew this view's loading
+            // branch for the first frames of every launch and held the whole
+            // app back until activation, even with every walkthrough already
+            // complete. Only a background launch waits for the scene.
+            if scenePhase != .background { coordinator.foreground() }
+        }
         .onChange(of: scenePhase) { _, phase in if phase == .active { coordinator.foreground() } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
             coordinator.foreground()
