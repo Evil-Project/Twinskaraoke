@@ -307,7 +307,8 @@ private extension LyricsView {
             VStack(spacing: 14) {
                 MusicEmptyState(
                     title: String(localized: "Couldn't load lyrics"),
-                    message: String(localized: "Check your connection and try again.")
+                    message: String(localized: "Check your connection and try again."),
+                    systemImage: "exclamationmark.bubble"
                 )
                 if let onRetry {
                     Button {
@@ -330,7 +331,8 @@ private extension LyricsView {
         } else if hasNoLyrics {
             MusicEmptyState(
                 title: String(localized: "No lyrics for this song"),
-                message: String(localized: "Lyrics will appear here when they are available.")
+                message: String(localized: "Lyrics will appear here when they are available."),
+                systemImage: "quote.bubble"
             )
         } else {
             LyricsLoadingSkeleton()
