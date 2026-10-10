@@ -1287,8 +1287,9 @@ final class TwinskaraokeUITests: XCTestCase {
 
     openVisibleItem("Settings", in: app)
     XCTAssertTrue(
-      app.navigationBars["Music"].waitForExistence(timeout: 8)
-        || app.staticTexts["Music"].waitForExistence(timeout: 8),
+      app.navigationBars["Settings"].waitForExistence(timeout: 8)
+        // "Settings" alone would also match the Account row that opened it.
+        || app.staticTexts["Audio"].waitForExistence(timeout: 8),
       "Expected Settings to open from Account."
     )
 

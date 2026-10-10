@@ -31,7 +31,7 @@ struct SettingsView: View {
 
     var body: some View {
         settingsContent
-            .navigationTitle("Music")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .alert("Could Not Clear Storage", isPresented: $showStorageError) {
                 Button("OK", role: .cancel) {}
