@@ -439,6 +439,7 @@ final class AudioPlayerManager {
     private var artworkURL: URL?
     private var artworkTask: (any SDWebImageOperation)?
     @ObservationIgnored private var artworkProcessingTask: Task<Void, Never>?
+    @ObservationIgnored private var artworkGraceTask: Task<Void, Never>?
     private var playerArtworkWarmupTasks: [String: any SDWebImageOperation] = [:]
     private var warmedPlayerArtworkAt: [String: Date] = [:]
     private var currentPlaybackURL: URL?
@@ -918,6 +919,7 @@ final class AudioPlayerManager {
         }
         artworkTask?.cancel()
         artworkProcessingTask?.cancel()
+        artworkGraceTask?.cancel()
         playerArtworkWarmupTasks.values.forEach { $0.cancel() }
         playerArtworkWarmupTasks.removeAll()
         cacheCompressionTask?.cancel()
@@ -3366,7 +3368,7 @@ final class AudioPlayerManager {
                 // to the placeholder while the identical picture was fetched
                 // back from the cache. The fetch below still runs and swaps
                 // in whatever it returns.
-                if reloadArtwork, artworkChanged { nowPlayingArtwork = nil }
+                if artworkChanged { retireNowPlayingArtwork(replacement: targetArt) }
             #endif
             warmPlayerArtwork(for: song)
             if let targetArt {
@@ -3441,6 +3443,32 @@ final class AudioPlayerManager {
                 : nil
         )
     }
+
+    #if canImport(UIKit)
+        /// How long the outgoing cover may stand in for one still loading.
+        private static let artworkHandoffGrace: Duration = .milliseconds(600)
+
+        /// Lets the mini player go straight from the outgoing cover to the new
+        /// one, which it crossfades, instead of fading out to the placeholder
+        /// and back in. The replacement is usually in the image cache and
+        /// lands well inside the grace period. If it has not arrived by then,
+        /// or there is no artwork to load, the placeholder takes over, so an
+        /// old cover never stays on a new song.
+        private func retireNowPlayingArtwork(replacement: URL?) {
+            artworkGraceTask?.cancel()
+            artworkGraceTask = nil
+            guard let replacement, let outgoing = nowPlayingArtwork else {
+                nowPlayingArtwork = nil
+                return
+            }
+            artworkGraceTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: Self.artworkHandoffGrace)
+                guard !Task.isCancelled, let self, self.artworkURL == replacement,
+                      self.nowPlayingArtwork === outgoing else { return }
+                self.nowPlayingArtwork = nil
+            }
+        }
+    #endif
 
     private func loadArtworkAsync(from url: URL) {
         let songID = currentSong?.id
