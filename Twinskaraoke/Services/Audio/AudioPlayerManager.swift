@@ -62,7 +62,12 @@ final class AudioPlayerManager {
     static let shared = AudioPlayerManager()
     private var watchMirror: CompanionPlayback.Snapshot?
     private var transferredPlayback: CompanionPlayback.Snapshot?
-    private var phoneAudioAllowed: Bool { CompanionPlayback.readLease()?.owner != .watch }
+    /// Read from the publisher's in-memory lease, which is the only writer of
+    /// the persisted one. This is checked several times per playback tick —
+    /// the poll timer, `playbackTime`, `playbackDuration`, the Now Playing
+    /// rate — and decoding the lease out of UserDefaults each time cost a
+    /// JSON decode per check, dozens of times a second while playing.
+    private var phoneAudioAllowed: Bool { !WatchSessionPublisher.shared.watchOwnsAudio }
     var currentSong: Song? { didSet { scheduleSessionSave() } }
     var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
