@@ -14,6 +14,7 @@ struct ZoomableImageViewer: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
     @State private var showOverlay = true
+    @State private var viewportSize: CGSize = .zero
 
     var body: some View {
         ZStack {
@@ -31,7 +32,8 @@ struct ZoomableImageViewer: View {
                         lastScale: $lastScale,
                         offset: $offset,
                         lastOffset: $lastOffset,
-                        reduceMotion: reduceMotion
+                        reduceMotion: reduceMotion,
+                        clampOffset: clampedOffset
                     )
                 )
                 .simultaneousGesture(
@@ -43,7 +45,7 @@ struct ZoomableImageViewer: View {
                                 height: lastOffset.height + value.translation.height
                             )
                         }
-                        .onEnded { _ in lastOffset = offset }
+                        .onEnded { _ in settlePan() }
                 )
                 .simultaneousGesture(imageTapGesture)
             }
@@ -109,6 +111,35 @@ struct ZoomableImageViewer: View {
             }
         }
         .statusBarHidden(true)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { viewportSize = $0 }
+    }
+
+    /// The furthest a zoomed image may sit from centre: half of what the
+    /// zoom added to the viewport, on each axis. A drag can go past it while
+    /// the finger is down, and springs back on release. Unbounded, a pan
+    /// could leave the image entirely off screen, with nothing to grab to
+    /// bring it back short of zooming out.
+    private func clampedOffset(_ proposed: CGSize, scale: CGFloat) -> CGSize {
+        let limitX = max(0, viewportSize.width * (scale - 1) / 2)
+        let limitY = max(0, viewportSize.height * (scale - 1) / 2)
+        return CGSize(
+            width: min(limitX, max(-limitX, proposed.width)),
+            height: min(limitY, max(-limitY, proposed.height))
+        )
+    }
+
+    private func settlePan() {
+        let clamped = clampedOffset(offset, scale: scale)
+        guard clamped != offset else {
+            lastOffset = offset
+            return
+        }
+        if reduceMotion {
+            offset = clamped
+        } else {
+            withAnimation(.spring()) { offset = clamped }
+        }
+        lastOffset = clamped
     }
 
     private var imageTapGesture: some Gesture {
