@@ -112,16 +112,40 @@ final class NowPlayingPresentation {
         isSettlingArtwork = true
     }
 
-    func reportBarFrame(_ frame: CGRect?) {
-        barFrame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+    /// Who reported the current frame, so a view that is going away clears
+    /// only a frame it reported itself.
+    ///
+    /// Both reporting views are replaced in place: the player's artwork is
+    /// re-identified by song, and the accessory slot rehosts the bar. The
+    /// replacement reports its frame before the outgoing view's `onDisappear`
+    /// runs (measured on the simulator: new artwork frame, then `nil`), and
+    /// since `onGeometryChange` only reports again on a change, that late
+    /// `nil` stuck. After any song change the player had no artwork frame, so
+    /// opening lost its morph and closing its landing, both falling back to a
+    /// plain slide until something happened to move the artwork.
+    @ObservationIgnored private var barFrameOwner: String?
+    @ObservationIgnored private var playerArtworkFrameOwner: String?
+
+    /// - Parameter owner: Identifies the reporting view. A `nil` frame from
+    ///   an owner that no longer holds the report is ignored; without an
+    ///   owner, a `nil` always clears.
+    func reportBarFrame(_ frame: CGRect?, owner: String? = nil) {
+        let frame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+        guard frame != nil || owner == nil || owner == barFrameOwner else { return }
+        barFrame = frame
+        barFrameOwner = frame == nil ? nil : owner
     }
 
     func reportBarArtworkFrame(_ frame: CGRect?) {
         barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    func reportPlayerArtworkFrame(_ frame: CGRect?) {
-        playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
+    /// See `reportBarFrame(_:owner:)`.
+    func reportPlayerArtworkFrame(_ frame: CGRect?, owner: String? = nil) {
+        let frame = frame.flatMap { $0.width > 0 ? $0 : nil }
+        guard frame != nil || owner == nil || owner == playerArtworkFrameOwner else { return }
+        playerArtworkFrame = frame
+        playerArtworkFrameOwner = frame == nil ? nil : owner
     }
 
     init() {}

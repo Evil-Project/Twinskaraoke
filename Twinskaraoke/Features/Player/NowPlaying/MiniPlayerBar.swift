@@ -24,6 +24,10 @@ struct MiniPlayerBar: View {
 
     private let snapshot = NowPlayingSnapshotState.shared
     private let presentation = NowPlayingPresentation.shared
+    /// This instance's claim on the reported bar frame. The accessory slot
+    /// rehosts the bar, and the new instance can report before the old one's
+    /// `onDisappear`; see `NowPlayingPresentation.reportBarFrame(_:owner:)`.
+    @State private var frameOwner = UUID().uuidString
 
     /// Matches the artwork the old bar drew: LNPopupBar sized its image as
     /// `barHeight - 18`, so 40pt at the full 58pt height and 30pt at the
@@ -88,11 +92,11 @@ struct MiniPlayerBar: View {
             proxy.frame(in: .global)
         } action: { frame in
             shimejiEngine.miniPlayerY = frame.height > 0 ? frame.minY : nil
-            presentation.reportBarFrame(frame)
+            presentation.reportBarFrame(frame, owner: frameOwner)
         }
         .onDisappear {
             shimejiEngine.miniPlayerY = nil
-            presentation.reportBarFrame(nil)
+            presentation.reportBarFrame(nil, owner: frameOwner)
         }
     }
 

@@ -83,13 +83,16 @@ struct PlayerArtworkView: View {
                 // player moves. A global frame includes its animated offset.
                 proxy.frame(in: .named("FullPlayerSurface"))
             } action: { frame in
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame, owner: song.id)
             }
             // The artwork is not always on screen — the lyrics surface replaces
             // it — and a frame left behind after it goes would aim the morph at
             // somewhere the artwork no longer is.
+            //
+            // Owned by the song: this subtree is re-identified per song below,
+            // and the next song's artwork reports before this one disappears.
             .onDisappear {
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil)
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil, owner: song.id)
             }
             .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)

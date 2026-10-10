@@ -58,6 +58,30 @@ struct NowPlayingPresentationTests {
         #expect(state.dragSource == .miniPlayer)
     }
 
+    /// The player's artwork is re-identified per song and the bar is rehosted
+    /// by the accessory slot, and in both cases the replacement reports its
+    /// frame before the outgoing view's `onDisappear` clears it. That late
+    /// clear used to stick, leaving no morph after any song change.
+    @Test func lateDisappearanceKeepsTheReplacementsFrame() {
+        let state = stateWithArtwork()
+        let artwork = CGRect(x: 40, y: 150, width: 300, height: 300)
+        let bar = CGRect(x: 13, y: 691, width: 350, height: 58)
+        state.reportPlayerArtworkFrame(artwork, owner: "song-b")
+        state.reportPlayerArtworkFrame(nil, owner: "song-a")
+        state.reportBarFrame(bar, owner: "bar-2")
+        state.reportBarFrame(nil, owner: "bar-1")
+        #expect(state.playerArtworkFrame == artwork)
+        #expect(state.barFrame == bar)
+        state.expand()
+        #expect(state.isMorphingArtwork)
+
+        // The view that holds the report still clears it when it goes.
+        state.reportPlayerArtworkFrame(nil, owner: "song-b")
+        state.reportBarFrame(nil, owner: "bar-2")
+        #expect(state.playerArtworkFrame == nil)
+        #expect(state.barFrame == nil)
+    }
+
     @Test func missingDestinationSkipsClosingSettlement() {
         let state = stateWithArtwork()
         state.reportBarFrame(nil)
