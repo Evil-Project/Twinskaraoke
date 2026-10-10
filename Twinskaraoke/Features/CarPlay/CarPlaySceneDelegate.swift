@@ -162,11 +162,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func refreshNowPlayingControls() {
         let commands = MPRemoteCommandCenter.shared()
         commands.changeShuffleModeCommand.currentShuffleType = player.isShuffled ? .items : .off
-        switch player.repeatMode {
-        case .off: commands.changeRepeatModeCommand.currentRepeatType = .off
-        case .all: commands.changeRepeatModeCommand.currentRepeatType = .all
-        case .one: commands.changeRepeatModeCommand.currentRepeatType = .all
-        }
+        // Both repeat modes repeat the current song.
+        commands.changeRepeatModeCommand.currentRepeatType = player.repeatMode.isActive ? .one : .off
         let template = CPNowPlayingTemplate.shared
         template.isUpNextButtonEnabled = !player.isRadioMode
         let state = PlaybackControlsState(

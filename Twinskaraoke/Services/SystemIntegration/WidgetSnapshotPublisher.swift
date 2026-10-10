@@ -128,10 +128,7 @@ final class WidgetSnapshotPublisher {
         playback.isBuffering = player.isBuffering
         playback.hasPrevious = player.currentSong != nil && !player.isRadioMode && !player.queue.isEmpty
         let index = player.queue.firstIndex { $0.id == player.currentSong?.id }
-        playback.hasNext = !player.isRadioMode && index.map {
-            $0 + 1 < player.queue.count || player.repeatMode == .all ||
-                (player.repeatMode == .one && player.repeatOnceRemaining)
-        } == true
+        playback.hasNext = !player.isRadioMode && index.map { $0 + 1 < player.queue.count } == true
         playback.isFavorite = player.currentSong.map { favorites.isFavorite($0.id) } ?? false
         playback.playbackMode = player.karaokeMode ? "Instrumental" : "Original"
         playback.repeatMode = String(describing: player.repeatMode)

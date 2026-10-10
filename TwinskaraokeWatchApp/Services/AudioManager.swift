@@ -5,6 +5,8 @@ import MediaPlayer
 import SwiftUI
 import Observation
 
+/// Matches the phone: both modes repeat the current song, `.all` until it
+/// is turned off and `.one` once more before switching itself off.
 enum PlaybackMode {
     case off
     case one
@@ -19,8 +21,8 @@ enum PlaybackMode {
     var accessibilityValue: String {
         switch self {
         case .off: String(localized: "Off")
-        case .one: String(localized: "Repeat One")
-        case .all: String(localized: "Repeat All")
+        case .one: String(localized: "Repeat Once")
+        case .all: String(localized: "Repeat")
         }
     }
     var next: PlaybackMode {
@@ -813,13 +815,19 @@ class AudioManager {
         return resumePlayback()
     }
 
+    /// Next on the last song stops, as the song ending there does. Like the
+    /// phone, Next never wraps to the start of the queue.
     func playNext() {
         transferredPosition = nil
         if sendToPhone(.next) { return }
         guard !isRadioMode else { return }
         guard !queue.isEmpty else { return }
         currentIndex = resolvedCurrentQueueIndex ?? queue.startIndex
-        currentIndex = (currentIndex + 1) % queue.count
+        guard currentIndex + 1 < queue.count else {
+            _ = pausePlayback()
+            return
+        }
+        currentIndex += 1
         currentSong = queue[currentIndex]
         prepareAndPlay()
     }
@@ -855,7 +863,9 @@ class AudioManager {
             _ = pausePlayback()
             return
         }
-        if playbackMode == .one {
+        if playbackMode.isActive {
+            // The replay spends Repeat Once.
+            if playbackMode == .one { playbackMode = .off }
             // The seek completes asynchronously; only resume if this is still
             // the active player and the user has not paused/skipped meanwhile.
             let loopingPlayer = player
@@ -866,9 +876,13 @@ class AudioManager {
                           self.playbackRequested
                     else { return }
                     loopingPlayer?.play()
+                    // Now Playing extrapolates from the elapsed time it was
+                    // last given, which is still the end of the song.
+                    self.currentTime = 0
+                    self.updateNowPlayingInfo()
                 }
             }
-        } else if playbackMode == .off, currentIndex + 1 >= queue.count {
+        } else if currentIndex + 1 >= queue.count {
             _ = pausePlayback()
         } else {
             playNext()

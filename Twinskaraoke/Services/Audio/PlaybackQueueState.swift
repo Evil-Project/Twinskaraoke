@@ -7,7 +7,7 @@ import Foundation
 /// observable facade used by views.
 nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     enum Advance: Equatable, Sendable {
-        case restartOnce(Song)
+        case replayCurrent(Song)
         case play(Song)
         case autoplay
         case stop
@@ -62,42 +62,30 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         }
     }
 
+    /// Where playback goes when a song ends by itself. Both repeat modes
+    /// replay the song; neither loops the queue.
     func advance(
         after current: Song?,
         repeatMode: RepeatMode,
-        autoplayEnabled: Bool,
-        repeatOnceRemaining: Bool = true
+        autoplayEnabled: Bool
     ) -> Advance {
+        if repeatMode.isActive, let current {
+            return .replayCurrent(current)
+        }
         if let current,
            let index = items.firstIndex(where: { $0.id == current.id }),
            items.indices.contains(index + 1)
         {
             return .play(items[index + 1])
         }
-        if repeatMode == .all, let first = items.first {
-            return .play(first)
-        }
-        if repeatMode == .one {
-            if repeatOnceRemaining, let first = items.first { return .restartOnce(first) }
-            return .stop
-        }
         return autoplayEnabled ? .autoplay : .stop
     }
 
-    /// Next follows the same queue order and one-extra-pass limit as natural
-    /// advancement, including at the end of the playlist.
-    func skip(
-        after current: Song?,
-        repeatMode: RepeatMode,
-        autoplayEnabled: Bool,
-        repeatOnceRemaining: Bool = true
-    ) -> Advance {
-        advance(
-            after: current,
-            repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled,
-            repeatOnceRemaining: repeatOnceRemaining
-        )
+    /// Where Next goes. Repeat replays a song that ends on its own; a skip is
+    /// the listener asking to leave it, so it moves on as if repeat were off.
+    /// The repeat mode stays on for the song Next lands on.
+    func skip(after current: Song?, autoplayEnabled: Bool) -> Advance {
+        advance(after: current, repeatMode: .off, autoplayEnabled: autoplayEnabled)
     }
 
     /// Past this many seconds into a song, Previous starts it over instead of
@@ -225,7 +213,6 @@ nonisolated struct PlaybackSessionSnapshot: Codable {
     let position: TimeInterval
     let repeatMode: RepeatMode
     let wasPlaying: Bool
-    var repeatOnceRemaining: Bool? = nil
 
     var resumePosition: TimeInterval {
         guard position.isFinite else { return 0 }
