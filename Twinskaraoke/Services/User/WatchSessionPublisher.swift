@@ -40,7 +40,7 @@ final class WatchSessionPublisher: NSObject {
     var watchOwnsAudio: Bool { lease.owner == .watch }
     private var playbackSessionID: UUID { lease.sessionID }
     private var playbackRevision = 0
-    private var lastPlaybackFingerprint: Data?
+    private var lastPlaybackFingerprint: PlaybackFingerprint?
     private var commandGate = CompanionPlayback.CommandGate()
     private var lastPhoneStructuralChangeAt = Date.distantPast
     private var isApplyingWatchCommand = false
@@ -137,13 +137,19 @@ final class WatchSessionPublisher: NSObject {
         let player = AudioPlayerManager.shared
         let song = player.currentSong
         // Elapsed time does not create a new revision on every poll tick.
-        let fingerprint = CompanionPlayback.encode(PlaybackFingerprint(
+        //
+        // Compared as a value rather than as encoded JSON. This runs on every
+        // periodic publish while something plays, and encoding the whole
+        // queue just to compare it was a full encode of the queue on the main
+        // thread every two seconds; an unchanged queue compares in constant
+        // time, since it still shares the player's storage.
+        let fingerprint = PlaybackFingerprint(
             song: song, queue: player.queue,
             isPlaying: player.isPlaying, isRadio: player.isRadioMode,
             isShuffled: player.isShuffled, repeatSetting: repeatSetting(player.repeatMode),
             error: player.loadFailure?.message, sleepDeadline: player.sleepTimer.deadline,
             sleepAtEndOfSong: player.sleepTimer.endsWithCurrentSong
-        ))
+        )
         if fingerprint != lastPlaybackFingerprint {
             playbackRevision &+= 1
             defaults.set(playbackRevision, forKey: "nk.phone.playbackRevision")
@@ -164,7 +170,7 @@ final class WatchSessionPublisher: NSObject {
         return snapshot
     }
 
-    private struct PlaybackFingerprint: Encodable {
+    private struct PlaybackFingerprint: Equatable {
         let song: Song?
         let queue: [Song]
         let isPlaying: Bool
@@ -184,18 +190,41 @@ final class WatchSessionPublisher: NSObject {
         }
     }
 
+    /// Everything sent to the watch goes through this one serial queue, in the
+    /// order it was asked for. The snapshot carries the whole queue, and it is
+    /// sent every two seconds while something plays; encoding, compressing and
+    /// handing it to WatchConnectivity on the main thread showed up as a
+    /// stutter every two seconds in whatever was scrolling. Being one queue
+    /// also keeps the two read-merge-write updates of the application context
+    /// (`publish(bumpingGeneration:)` and this) from overwriting each other.
+    private nonisolated static let sendQueue = DispatchQueue(
+        label: "WatchSessionPublisher.Send",
+        qos: .utility
+    )
+
     private func publishPlayback() {
         let session = WCSession.default
         guard session.activationState == .activated,
               session.isPaired, session.isWatchAppInstalled else { return }
         let snapshot = playbackSnapshot()
+        let takeover = pendingTakeover
+        Self.sendQueue.async {
+            Self.send(snapshot, takeover: takeover)
+        }
+    }
+
+    private nonisolated static func send(
+        _ snapshot: CompanionPlayback.Snapshot,
+        takeover: CompanionPlayback.Lease?
+    ) {
         guard let data = CompanionPlayback.encode(snapshot) else { return }
+        let session = WCSession.default
         if session.isReachable {
             session.sendMessage([CompanionPlayback.contextKey: data], replyHandler: nil)
         }
         var context = session.applicationContext
         context[CompanionPlayback.contextKey] = data
-        context[CompanionPlayback.takeoverRequestKey] = pendingTakeover.flatMap { CompanionPlayback.encode($0) }
+        context[CompanionPlayback.takeoverRequestKey] = takeover.flatMap { CompanionPlayback.encode($0) }
         try? session.updateApplicationContext(context)
     }
 
@@ -400,23 +429,29 @@ final class WatchSessionPublisher: NSObject {
         }
         descriptor.generation = currentGeneration
         descriptor.phoneInstanceID = phoneInstanceID
+        let snapshot = playbackSnapshot()
+        let takeover = pendingTakeover
+        let account = descriptor
 
-        do {
-            var context = session.applicationContext
-            context.removeValue(forKey: WatchSessionLink.ContextKey.userID)
-            context.removeValue(forKey: WatchSessionLink.ContextKey.username)
-            context.removeValue(forKey: WatchSessionLink.ContextKey.avatar)
-            context.merge(WatchSessionLink.encode(descriptor)) { _, new in new }
-            if let data = CompanionPlayback.encode(playbackSnapshot()) {
-                context[CompanionPlayback.contextKey] = data
+        Self.sendQueue.async {
+            let session = WCSession.default
+            do {
+                var context = session.applicationContext
+                context.removeValue(forKey: WatchSessionLink.ContextKey.userID)
+                context.removeValue(forKey: WatchSessionLink.ContextKey.username)
+                context.removeValue(forKey: WatchSessionLink.ContextKey.avatar)
+                context.merge(WatchSessionLink.encode(account)) { _, new in new }
+                if let data = CompanionPlayback.encode(snapshot) {
+                    context[CompanionPlayback.contextKey] = data
+                }
+                try session.updateApplicationContext(context)
+                Self.send(snapshot, takeover: takeover)
+            } catch {
+                DebugLogger.log(
+                    "Watch session context failed: \(error.localizedDescription)",
+                    category: .network
+                )
             }
-            try session.updateApplicationContext(context)
-            publishPlayback()
-        } catch {
-            DebugLogger.log(
-                "Watch session context failed: \(error.localizedDescription)",
-                category: .network
-            )
         }
     }
 
