@@ -358,8 +358,6 @@ struct MusicGridCard: View {
 struct SongActionsMenuItems: View {
     let song: Song
     let onAddToPlaylist: () -> Void
-    private let isDownloaded: Bool
-    private let isDownloading: Bool
     private let favorites = FavoritesManager.shared
     // Non-nil only inside an editable playlist the user owns; see
     // PlaylistSongRemoval.swift.
@@ -368,13 +366,17 @@ struct SongActionsMenuItems: View {
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {
         self.song = song
         self.onAddToPlaylist = onAddToPlaylist
-
-        let downloads = DownloadManager.shared
-        isDownloaded = downloads.isDownloaded(song.id)
-        isDownloading = downloads.isDownloading(song.id)
     }
 
+    // Download state is read here, in `body`, and not in `init`. Every row's
+    // menu and context menu builds one of these while the *row's* body runs,
+    // so a read in `init` subscribed the whole row to `downloadedIDs` and
+    // `inProgress`: each download that started or finished redrew every
+    // visible song row, which `SongDownloadRowState` exists to prevent.
     var body: some View {
+        let downloads = DownloadManager.shared
+        let isDownloaded = downloads.isDownloaded(song.id)
+        let isDownloading = downloads.isDownloading(song.id)
         Button {
             AppHaptic.selection.play()
             AudioPlayerManager.shared.playNext(song: song)
