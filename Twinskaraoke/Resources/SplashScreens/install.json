@@ -37,7 +37,7 @@
     {
       "alignment" : "center",
       "backgroundColor" : "#131C30",
-      "body" : "Save favorite songs, organize playlists in Library, and pin the playlists you return to most. Download songs in the app to listen offline. Tap the demo heart to try saving a favorite.",
+      "body" : "Save favorite songs, organize playlists in Library, and pin the playlists you return to most. Download songs in the app to listen offline. Tap the demo star to try saving a favorite.",
       "features" : [
         {
           "accentColor" : "#FA3155",

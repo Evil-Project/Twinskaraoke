@@ -394,7 +394,8 @@ struct SplashMockFeatureView: View {
                 VStack(spacing: 8) { playButton; Text(feature.title).font(.caption) }
             case .favorite:
                 VStack(spacing: 8) {
-                    Button { on.toggle(); interaction() } label: { Image(systemName: on ? "heart.fill" : "heart").font(.title) }
+                    // A star, as everywhere else in the app the demo is standing in for.
+                    Button { on.toggle(); interaction() } label: { Image(systemName: on ? "star.fill" : "star").font(.title) }
                         .foregroundStyle(accent).accessibilityLabel(on ? "Remove demo favorite" : "Add demo favorite")
                     Text(feature.title).font(.caption)
                 }
