@@ -55,7 +55,10 @@ struct AboutView: View {
                     // a narrower width breaks between names instead: two lines,
                     // as tall as the wrapped text was, then three.
                     ViewThatFits(in: .horizontal) {
+                        // ViewThatFits already measures this at its one-line
+                        // ideal width; the limit makes that explicit.
                         Text("NEUROKARAOKE.COM • EVILKARAOKE.COM • TWINSKARAOKE.COM")
+                            .lineLimit(1)
                         VStack(spacing: 0) {
                             Text(verbatim: "NEUROKARAOKE.COM • EVILKARAOKE.COM")
                             Text(verbatim: "TWINSKARAOKE.COM")
