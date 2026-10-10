@@ -5,6 +5,8 @@ import MediaPlayer
 import SwiftUI
 import Observation
 
+/// Matches the phone: both modes repeat the current song, `.all` until it
+/// is turned off and `.one` once more before switching itself off.
 enum PlaybackMode {
     case off
     case one
@@ -19,8 +21,8 @@ enum PlaybackMode {
     var accessibilityValue: String {
         switch self {
         case .off: String(localized: "Off")
-        case .one: String(localized: "Repeat One")
-        case .all: String(localized: "Repeat All")
+        case .one: String(localized: "Repeat Once")
+        case .all: String(localized: "Repeat")
         }
     }
     var next: PlaybackMode {
@@ -855,7 +857,9 @@ class AudioManager {
             _ = pausePlayback()
             return
         }
-        if playbackMode == .one {
+        if playbackMode.isActive {
+            // The replay spends Repeat Once.
+            if playbackMode == .one { playbackMode = .off }
             // The seek completes asynchronously; only resume if this is still
             // the active player and the user has not paused/skipped meanwhile.
             let loopingPlayer = player
@@ -868,7 +872,7 @@ class AudioManager {
                     loopingPlayer?.play()
                 }
             }
-        } else if playbackMode == .off, currentIndex + 1 >= queue.count {
+        } else if currentIndex + 1 >= queue.count {
             _ = pausePlayback()
         } else {
             playNext()

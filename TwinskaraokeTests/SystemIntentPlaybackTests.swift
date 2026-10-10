@@ -70,6 +70,44 @@ struct SystemIntentPlaybackTests {
         } catch SystemIntentError.noNext { }
     }
 
+    @Test func repeatReplaysTheSongThatEnded() async throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        player.aiEnabled = false
+        let songs = try (0..<3).map { try cachedSong(index: $0) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.playInOrder(song: songs[0], context: songs)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(player.currentSong?.id == songs[0].id)
+
+        // Repeat plays the song again every time it ends.
+        player.repeatMode = .all
+        player.playNextOrRandom()
+        player.playNextOrRandom()
+        #expect(player.currentSong?.id == songs[0].id)
+        #expect(player.repeatMode == .all)
+
+        // Repeat Once plays it one more time, then switches itself off.
+        player.repeatMode = .one
+        player.playNextOrRandom()
+        #expect(player.currentSong?.id == songs[0].id)
+        #expect(player.repeatMode == .off)
+        player.playNextOrRandom()
+        #expect(player.currentSong?.id == songs[1].id)
+
+        // Next leaves the song and keeps the mode for the one it lands on.
+        player.repeatMode = .all
+        player.skipToNext()
+        #expect(player.currentSong?.id == songs[2].id)
+        #expect(player.repeatMode == .all)
+        #expect(player.queue.map(\.id) == songs.map(\.id))
+    }
+
     private func cachedSong(index: Int) throws -> Song {
         let id = "system-intent-test-\(UUID().uuidString)-\(index)"
         _ = AudioCacheStore.ensureSongDirectory(for: id)

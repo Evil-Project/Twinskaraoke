@@ -16,6 +16,9 @@ private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
 
+/// Both modes repeat the current song: `.all` until it is turned off, `.one`
+/// once more before switching itself off. The case names predate that and are
+/// kept because saved sessions, widget snapshots and the watch sync use them.
 nonisolated enum RepeatMode: Equatable, Sendable, Codable {
     case off, all, one
     var symbol: String {
@@ -97,13 +100,7 @@ final class AudioPlayerManager {
     private var deferredAIEffect: AudioEffect?
     var routeIcon: String = "airplayaudio"
     var routeName: String = ""
-    var repeatMode: RepeatMode = .off {
-        didSet {
-            if repeatMode == .one && oldValue != .one { repeatOnceRemaining = true }
-            scheduleSessionSave()
-        }
-    }
-    private(set) var repeatOnceRemaining = true
+    var repeatMode: RepeatMode = .off { didSet { scheduleSessionSave() } }
     var isShuffled: Bool { queueState.isShuffled }
     var autoplayEnabled: Bool = UserDefaults.standard.object(forKey: "nk.autoplayEnabled") as? Bool ?? true {
         didSet {
@@ -415,8 +412,8 @@ final class AudioPlayerManager {
     @ObservationIgnored private var autoplayTask: Task<Void, Never>?
     private var cacheRecoverySongID: String?
     // Song IDs already sent through enrichSongMetadataIfNeeded this session;
-    // repeat-one loops would otherwise re-issue the search + trending
-    // fallback requests on every replay.
+    // a song replaying with repeat on would otherwise re-issue the search +
+    // trending fallback requests every time it starts over.
     private var enrichmentAttemptedSongIDs = Set<String>()
     private var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
@@ -871,8 +868,7 @@ final class AudioPlayerManager {
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
         PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
             position: preferredStreamResumeTime(for: song) ?? playbackTime,
-            repeatMode: repeatMode, wasPlaying: isPlaying,
-            repeatOnceRemaining: repeatOnceRemaining))
+            repeatMode: repeatMode, wasPlaying: isPlaying))
     }
 
     private func restorePlaybackSession() {
@@ -887,7 +883,6 @@ final class AudioPlayerManager {
             currentSong = saved.song
             queueState = saved.queue
             repeatMode = saved.repeatMode
-            repeatOnceRemaining = saved.repeatOnceRemaining ?? true
             lastKnownPlaybackTime = saved.resumePosition
             progress = saved.song.duration > 0 ? saved.resumePosition / Double(saved.song.duration) : 0
             // Restore context without starting playback on launch.
@@ -1514,13 +1509,12 @@ final class AudioPlayerManager {
                     }
                     self.updateNowPlayingElapsed(t)
 
-                    if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                    if self.repeatMode == .off, !self.sleepTimer.endsWithCurrentSong {
                         self.transitionCoordinator.poll(
                             currentTime: t,
                             totalDuration: dur,
                             currentSong: self.currentSong,
                             queue: self.queue,
-                            repeatMode: self.repeatMode,
                             autoMixEnabled: self.autoMixEnabled,
                             crossfadeEnabled: self.crossfadeEnabled,
                             crossfadeSeconds: self.crossfadeSeconds,
@@ -1546,13 +1540,14 @@ final class AudioPlayerManager {
 
                 // A crossfade would start the next song before this one ends,
                 // which is exactly when the end-of-song sleep timer stops.
-                if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                // With repeat on this song replays when it ends, so there is no
+                // next song to blend into either.
+                if self.repeatMode == .off, !self.sleepTimer.endsWithCurrentSong {
                     self.transitionCoordinator.poll(
                         currentTime: t,
                         totalDuration: totalDur,
                         currentSong: self.currentSong,
                         queue: self.queue,
-                        repeatMode: self.repeatMode,
                         autoMixEnabled: self.autoMixEnabled,
                         crossfadeEnabled: self.crossfadeEnabled,
                         crossfadeSeconds: self.crossfadeSeconds,
@@ -1636,7 +1631,6 @@ final class AudioPlayerManager {
             DownloadManager.shared.download(song: song)
         }
         warmPlayerArtwork(for: song)
-        if !context.isEmpty { repeatOnceRemaining = true }
         queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
         // Songs with a remote source use the non-decompressing lookup; a
@@ -1728,12 +1722,12 @@ final class AudioPlayerManager {
             return
         }
 
-        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining)
+        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         queueState.insertLast(song, after: current)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
         // the last song, and only then is the prepared work stale.
-        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining) != nextBefore {
+        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore {
             nextSongChanged()
         }
     }
@@ -2227,21 +2221,16 @@ final class AudioPlayerManager {
         perform(queueState.advance(
             after: currentSong,
             repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled,
-            repeatOnceRemaining: repeatOnceRemaining
+            autoplayEnabled: autoplayEnabled
         ))
     }
 
-    /// The Next button and lock-screen command follow the active queue order.
+    /// The Next button and lock-screen command. Unlike a song ending, a skip
+    /// leaves the song even with repeat on.
     func skipToNext() {
         if WatchSessionPublisher.shared.routeToWatch(.next) { return }
         if isRadioMode { return }
-        perform(queueState.skip(
-            after: currentSong,
-            repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled,
-            repeatOnceRemaining: repeatOnceRemaining
-        ))
+        perform(queueState.skip(after: currentSong, autoplayEnabled: autoplayEnabled))
     }
 
     private func perform(_ advance: PlaybackQueueState.Advance) {
@@ -2250,9 +2239,11 @@ final class AudioPlayerManager {
             beginTrackTransitionBackgroundTask()
         #endif
         switch advance {
-        case .restartOnce(let first):
-            repeatOnceRemaining = false
-            play(song: first)
+        case .replayCurrent(let song):
+            // The replay spends Repeat Once, so this play-through ends into
+            // the next song as usual. A replay is not a new listen either.
+            if repeatMode == .one { repeatMode = .off }
+            play(song: song, context: [], resetTransitionVolume: true, reportsPlayCount: false)
         case .play(let song):
             play(song: song)
         case .autoplay:
@@ -2282,7 +2273,17 @@ final class AudioPlayerManager {
 
     func toggleRepeat() {
         if WatchSessionPublisher.shared.routeToWatch(.repeatMode) { return }
+        let nextBefore = queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         repeatMode = repeatMode.next()
+        // Turning repeat on makes "the next song" this song again, and turning
+        // it off brings the next song back. A crossfade prepared for the old
+        // answer would otherwise still start on schedule. One already under
+        // way is left to finish.
+        if !transitionCoordinator.state.isCrossfading,
+           queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore
+        {
+            nextSongChanged()
+        }
     }
 
     func toggleShuffle() {
@@ -2292,14 +2293,12 @@ final class AudioPlayerManager {
 
     func playInOrder(song: Song, context: [Song]) {
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
-        repeatOnceRemaining = true
         queueState.beginInOrder(context: context)
         play(song: song, context: context)
     }
 
     func playCompanion(song: Song, context: [Song], shuffled: Bool) {
         if !shuffled { playInOrder(song: song, context: context); return }
-        repeatOnceRemaining = true
         _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
         play(song: song)
     }
@@ -2310,7 +2309,6 @@ final class AudioPlayerManager {
             if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
             return
         }
-        repeatOnceRemaining = true
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
         // The state already contains the shuffled queue and its original
         // ordering. Passing that queue back as a context would shuffle it a

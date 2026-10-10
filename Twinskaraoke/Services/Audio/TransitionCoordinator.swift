@@ -88,7 +88,6 @@ final class TransitionCoordinator {
         totalDuration: TimeInterval,
         currentSong: Song?,
         queue: [Song],
-        repeatMode: RepeatMode,
         autoMixEnabled: Bool,
         crossfadeEnabled: Bool,
         crossfadeSeconds: Double,
@@ -110,7 +109,7 @@ final class TransitionCoordinator {
         switch state {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
-            if let nextSong = nextSongInQueue(current: currentSong, queue: queue, repeatMode: repeatMode) {
+            if let nextSong = nextSongInQueue(current: currentSong, queue: queue) {
                 guard failedPreparationNextSongID != nextSong.id else { return }
                 beginPreparing(
                     nextSong: nextSong, currentSong: currentSong,
@@ -298,11 +297,11 @@ final class TransitionCoordinator {
         return AudioCacheStore.playableMainURL(for: song.id, expectedRemoteURL: song.audioURL, expectedDuration: expectedDuration)
     }
 
-    private func nextSongInQueue(current: Song, queue: [Song], repeatMode: RepeatMode) -> Song? {
-        guard !queue.isEmpty, let idx = queue.firstIndex(where: { $0.id == current.id }) else { return nil }
-        if idx + 1 < queue.count { return queue[idx + 1] }
-        if repeatMode == .all { return queue.first }
-        return nil
+    /// The manager polls only with repeat off, so the next song is simply the
+    /// one after this in the queue.
+    private func nextSongInQueue(current: Song, queue: [Song]) -> Song? {
+        guard let idx = queue.firstIndex(where: { $0.id == current.id }), idx + 1 < queue.count else { return nil }
+        return queue[idx + 1]
     }
 
     private func predownload(song: Song, from remoteURL: URL) async {
