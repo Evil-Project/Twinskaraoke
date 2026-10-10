@@ -224,20 +224,34 @@ final class DownloadManager {
         qos: .utility
     )
 
+    /// The list most recently handed to the manifest queue. This process is
+    /// the only writer, so once it has written, this is what the file holds
+    /// or is about to hold, and a restore can use it without touching disk.
+    private var lastPersistedManifest: [Song]?
+
     private func restoreManifest() {
-        let url = manifestURL
-        // Behind any write still queued: reading around one would bring back
-        // the downloads it had just recorded as removed.
-        let result = Self.manifestQueue.sync {
-            Result { try JSONDecoder().decode([Song].self, from: Data(contentsOf: url)) }
+        let songs: [Song]
+        if let lastPersistedManifest {
+            // Reading the file here would have to wait for queued writes on
+            // the main actor, and then decode what is already in memory.
+            songs = lastPersistedManifest
+        } else {
+            // Nothing written yet this run, so nothing can be queued ahead of
+            // this read: the queue is empty and the wait is only the decode,
+            // which always ran here.
+            let url = manifestURL
+            let result = Self.manifestQueue.sync {
+                Result { try JSONDecoder().decode([Song].self, from: Data(contentsOf: url)) }
+            }
+            do {
+                songs = try result.get()
+            } catch {
+                DebugLogger.log("Download manifest read: \(error)", category: .cache)
+                return
+            }
         }
-        do {
-            let songs = try result.get()
-            downloadedMetadata = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-            publishedState.downloadedIDs = Set(songs.map(\.id))
-        } catch {
-            DebugLogger.log("Download manifest read: \(error)", category: .cache)
-        }
+        downloadedMetadata = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        publishedState.downloadedIDs = Set(songs.map(\.id))
     }
 
     /// Encodes and writes off the main actor. The manifest holds every
@@ -246,6 +260,7 @@ final class DownloadManager {
     /// on the main thread once per song while the list was scrolling.
     private func persistManifest() {
         let songs = downloadedIDs.compactMap { downloadedMetadata[$0] }
+        lastPersistedManifest = songs
         let url = manifestURL
         Self.manifestQueue.async {
             do {
@@ -253,6 +268,16 @@ final class DownloadManager {
             } catch {
                 DebugLogger.log("Download manifest write: \(error)", category: .cache)
             }
+        }
+    }
+
+    /// Returns once every manifest write queued so far is on disk, without
+    /// blocking the caller's thread. A background URLSession wake must not
+    /// report its events handled before then: once it does, iOS may suspend
+    /// the app with the write still queued.
+    nonisolated static func manifestWritesFinished() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            manifestQueue.async { continuation.resume() }
         }
     }
 
