@@ -1041,6 +1041,7 @@ struct FullScreenPlayerView: View {
         let metrics: PlayerLayoutMetrics
         @Environment(AudioPlayerManager.self) private var audioManager
         private let clock = PlaybackClock.shared
+        private let presentation = NowPlayingPresentation.shared
         @Environment(\.appReduceMotion) private var reduceMotion
 
         private func formattedTime(_ seconds: Double) -> String {
@@ -1053,16 +1054,25 @@ struct FullScreenPlayerView: View {
             @Bindable var audioManager = audioManager
             let duration = max(audioManager.playbackDuration, 0)
             let elapsed = min(max(audioManager.playbackTime, 0), duration)
+            // The player stays mounted while it is closed, so this would
+            // otherwise redraw the scrubber and both timecodes on every
+            // playback tick behind the rest of the app. Off screen it shows a
+            // still taken from the player itself — `playbackTime` is not
+            // observed — and only an open player follows the clock.
+            let isLive = presentation.isPresenting
+            let progress: Binding<Double> = isLive
+                ? $clock.progress
+                : .constant(duration > 0 ? elapsed / duration : 0)
             return VStack(spacing: 0) {
                 AppleMusicProgressBar(
-                    progress: $clock.progress,
+                    progress: progress,
                     isScrubbing: $audioManager.isEditingProgress,
                     onSeekEnd: { fraction in audioManager.seek(to: fraction) },
                     accessibilityLabel: String(localized: "Playback position"),
                     accessibilityValueText:
                     String(localized: "\(formattedTime(elapsed)) elapsed, \(formattedTime(max(0, duration - elapsed))) remaining"),
                     accessibilityHint: String(localized: "Drag or swipe up and down to seek."),
-                    scrubValueText: formattedTime(duration * clock.progress)
+                    scrubValueText: isLive ? formattedTime(duration * clock.progress) : nil
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.progressTopPadding)
@@ -1103,6 +1113,7 @@ struct FullScreenPlayerView: View {
         let onSeek: (TimeInterval) -> Void
         var onRetry: (() -> Void)?
         private let clock = PlaybackClock.shared
+        private let presentation = NowPlayingPresentation.shared
         @Environment(AudioPlayerManager.self) private var audioManager
 
         var body: some View {
@@ -1112,7 +1123,14 @@ struct FullScreenPlayerView: View {
             // is what re-evaluates this view and advances the highlighted line.
             // Under @ObservedObject merely holding `clock` subscribed the view;
             // @Observable only tracks properties that are actually read.
-            let _ = clock.progress
+            //
+            // Only while the player is on screen, though: it stays mounted
+            // when closed, and following the clock there re-rendered the
+            // lyrics, and animated them to each new line, behind the rest of
+            // the app. `isPresenting` flips once per open or close, not per
+            // frame of a drag.
+            let isLive = presentation.isPresenting
+            let _ = isLive ? clock.progress : 0
             LyricsView(
                 lyrics: lyrics,
                 currentTime: audioManager.playbackTime,
@@ -1121,7 +1139,8 @@ struct FullScreenPlayerView: View {
                 didFail: didFail,
                 hasNoLyrics: hasNoLyrics,
                 onSeek: onSeek,
-                onRetry: onRetry
+                onRetry: onRetry,
+                isLive: isLive
             )
         }
     }

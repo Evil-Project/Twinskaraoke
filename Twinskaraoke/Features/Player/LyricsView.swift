@@ -9,10 +9,28 @@ struct LyricsView: View {
     var hasNoLyrics: Bool = false
     let onSeek: (TimeInterval) -> Void
     var onRetry: (() -> Void)?
+    /// False while the player is closed, when `currentTime` is a still rather
+    /// than live. The first update after it turns true jumps to the current
+    /// line instead of animating there: the lyrics have been standing still
+    /// off screen, and a scroll and highlight change running from that stale
+    /// line would play out under the opening transition.
+    var isLive = true
     @Environment(\.appReduceMotion) private var reduceMotion
+    /// `isLive` as of the previous update, so the update that turns it on can
+    /// be told apart from the ones after it.
+    @State private var wasLive = true
 
     private var scrollAnimation: Animation? {
         reduceMotion ? nil : AppMotion.gentle
+    }
+
+    private var animatesLineChanges: Bool {
+        isLive && wasLive
+    }
+
+    private struct ScrollTarget: Equatable {
+        let index: Int
+        let isLive: Bool
     }
 
     private var currentIndex: Int {
@@ -69,6 +87,7 @@ struct LyricsView: View {
                                 currentTime: line.isInstrumental && index == currentIndex
                                     ? currentTime
                                     : nil,
+                                animatesLineChanges: animatesLineChanges,
                                 showTranslation: showTranslations,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
@@ -92,12 +111,20 @@ struct LyricsView: View {
                             .frame(height: 60)
                     }
                 )
-                .onChange(of: currentIndex) { _, idx in
-                    if idx < 0 {
-                        scrollTo("intro-dots", proxy: proxy)
-                    } else if idx < lyrics.count {
-                        scrollTo(lyrics[idx].id, proxy: proxy)
+                .onChange(of: ScrollTarget(index: currentIndex, isLive: isLive)) { old, new in
+                    guard new.isLive else { return }
+                    let animated = old.isLive
+                    guard new.index != old.index || !animated else { return }
+                    if new.index < 0 {
+                        scrollTo("intro-dots", proxy: proxy, animated: animated)
+                    } else if new.index < lyrics.count {
+                        scrollTo(lyrics[new.index].id, proxy: proxy, animated: animated)
                     }
+                }
+                // `initial`, so a view first mounted while the player is
+                // closed starts out not live rather than on the default.
+                .onChange(of: isLive, initial: true) { _, live in
+                    wasLive = live
                 }
             }
         }
@@ -140,6 +167,7 @@ private struct LyricLineRow: View, Equatable {
     let index: Int
     let currentIndex: Int
     let currentTime: TimeInterval?
+    let animatesLineChanges: Bool
     let showTranslation: Bool
     let nextLineTime: TimeInterval?
     let onSeek: (TimeInterval) -> Void
@@ -172,6 +200,7 @@ private struct LyricLineRow: View, Equatable {
             && lhs.index == rhs.index
             && lhs.currentIndex == rhs.currentIndex
             && lhs.currentTime == rhs.currentTime
+            && lhs.animatesLineChanges == rhs.animatesLineChanges
             && lhs.showTranslation == rhs.showTranslation
             && lhs.nextLineTime == rhs.nextLineTime
     }
@@ -255,7 +284,7 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.gentle
+        reduceMotion || !animatesLineChanges ? nil : AppMotion.gentle
     }
 
     private var translationAnimation: Animation? {

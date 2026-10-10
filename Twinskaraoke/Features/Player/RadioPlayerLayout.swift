@@ -46,7 +46,10 @@ struct RadioPlayerLayout: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    RadioLiveDot(isPlaying: audioManager.isPlaying)
+                    RadioLiveDot(
+                        isPlaying: audioManager.isPlaying,
+                        isPaused: !presentation.isExpanded
+                    )
                     Text("LIVE RADIO")
                         .font(.caption.bold())
                         .foregroundStyle(Color.appAccent)
@@ -198,6 +201,11 @@ struct RadioPlayerLayout: View {
 /// layout is parked below the screen, and resumes it in phase.
 private struct RadioLiveDot: View {
     let isPlaying: Bool
+    /// Set while the player is closed. The layout stays mounted below the
+    /// screen then, so `onDisappear` never fires and visibility alone would
+    /// keep the pulse redrawing where nobody can see it; the marquees and the
+    /// ambient backdrop pause on the same signal.
+    var isPaused = false
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.appReduceEffects) private var reduceEffects
     @Environment(\.scenePhase) private var scenePhase
@@ -208,7 +216,7 @@ private struct RadioLiveDot: View {
     private static let period: TimeInterval = 1.1
 
     private var shouldAnimate: Bool {
-        isPlaying && isVisible && !reduceEffects && scenePhase == .active
+        isPlaying && isVisible && !isPaused && !reduceEffects && scenePhase == .active
     }
 
     var body: some View {
