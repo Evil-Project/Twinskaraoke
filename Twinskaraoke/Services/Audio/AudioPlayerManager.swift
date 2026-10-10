@@ -3356,9 +3356,17 @@ final class AudioPlayerManager {
             includeExistingArtwork: !shouldReloadArtwork
         )
         if shouldReloadArtwork {
+            let artworkChanged = artworkURL != targetArt
             artworkURL = targetArt
             #if canImport(UIKit)
-                if reloadArtwork { nowPlayingArtwork = nil }
+                // Only a different image is stale. Every (re)start of the
+                // same song — a stem switch, a fallback to the main mix, a
+                // stream that finished caching — asks for a reload, and
+                // dropping the image there blinked the mini player's artwork
+                // to the placeholder while the identical picture was fetched
+                // back from the cache. The fetch below still runs and swaps
+                // in whatever it returns.
+                if reloadArtwork, artworkChanged { nowPlayingArtwork = nil }
             #endif
             warmPlayerArtwork(for: song)
             if let targetArt {
