@@ -68,13 +68,34 @@ struct RoutedDetailView: View {
             else if let playlist { PlaylistDetailView(playlist: playlist) }
             else if let song {
                 VStack(spacing: 20) {
-                    Text(song.title).font(.title).multilineTextAlignment(.center)
-                    Text(song.displayArtist).foregroundStyle(.secondary)
+                    RemoteArtworkImage(
+                        url: song.imageURL,
+                        cornerRadius: AM.Radius.hero,
+                        lowResURL: song.thumbnailURL,
+                        fixedDisplaySize: CGSize(width: 240, height: 240)
+                    )
+                    .frame(width: 240, height: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
+                    .amShadow(AM.Shadow.heroIdle)
+                    .accessibilityHidden(true)
+                    VStack(spacing: 6) {
+                        Text(song.title)
+                            .font(.title2.bold())
+                            .multilineTextAlignment(.center)
+                        Text(song.displayArtist)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                     Button("Play", systemImage: "play.fill") {
                         AudioPlayerManager.shared.playInOrder(song: song, context: [song])
+                        // The player opens underneath this sheet, so close
+                        // the sheet rather than leave it covering the player.
+                        AppRouter.shared.dismissDetail()
                         NowPlayingPresentation.shared.expand()
                     }.buttonStyle(.borderedProminent)
-                }.padding()
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if failed {
                 ContentUnavailableView("Unable to Open", systemImage: "wifi.exclamationmark", description: Text("Check your connection and account, then try again."))
             } else { ProgressView() }

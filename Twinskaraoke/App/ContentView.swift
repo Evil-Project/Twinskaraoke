@@ -64,6 +64,11 @@ private struct PopupHostView: View {
             NavigationStack {
                 if let route = AppRouter.shared.detail {
                     RoutedDetailView(route: route)
+                        // A second link while the sheet is up replaces the
+                        // route in place; a fresh identity drops the previous
+                        // route's loaded song or playlist instead of showing
+                        // it until the new one arrives.
+                        .id(route.url)
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.dismissDetail() } } }
                 }
             }
