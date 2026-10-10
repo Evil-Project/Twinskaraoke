@@ -61,10 +61,12 @@ struct PlaylistArtworkContent: View {
         Group {
             if playlist.isFavorites {
                 FavoritesArtworkTile()
-            } else if let url = coverURLs.first, coverURLs.count == 1 {
-                RemoteArtworkImage(url: url, cornerRadius: cornerRadius)
-            } else if coverURLs.count > 1 {
+            } else if coverURLs.count >= PlaylistMosaicArtwork.tileCount {
                 PlaylistMosaicArtwork(urls: coverURLs, cornerRadius: cornerRadius)
+            } else if let url = coverURLs.first {
+                // Two or three covers would have to repeat to fill the grid,
+                // which reads as a glitch; one cover reads as a cover.
+                RemoteArtworkImage(url: url, cornerRadius: cornerRadius)
             } else {
                 PlaylistPlaceholderArtwork(seed: playlist.id)
             }
@@ -92,7 +94,12 @@ private struct PlaylistCoverWithLoader: View {
     }
 }
 
+/// A 2×2 grid of covers. Callers show a single cover instead when there are
+/// fewer than `tileCount` distinct ones, as Apple Music does; given fewer
+/// anyway, the grid repeats them.
 struct PlaylistMosaicArtwork: View {
+    static let tileCount = 4
+
     let urls: [URL]
     var cornerRadius: CGFloat = 10
 

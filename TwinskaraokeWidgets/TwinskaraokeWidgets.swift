@@ -78,7 +78,9 @@ struct PlaylistWidgetArtwork: View {
                         .font(.system(size: side * 0.46, weight: .semibold))
                         .foregroundStyle(Color(red: 0.98, green: 0.12, blue: 0.22))
                 }.frame(width: side, height: side)
-            } else if let filenames = playlist.artworkFilenames, filenames.count > 1 {
+            } else if let filenames = playlist.artworkFilenames, filenames.count >= 4 {
+                // A full grid only, matching the app: two or three covers
+                // fall through to the single cover below instead of repeating.
                 VStack(spacing: 0) {
                     ForEach(0..<2, id: \.self) { row in
                         HStack(spacing: 0) {

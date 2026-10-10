@@ -41,7 +41,9 @@ final class PlaylistsViewModel {
         let favoriteCount = max(favoriteSongs.count, FavoritesManager.shared.favoriteIDs.count)
         return Playlist(
             id: Playlist.favoritesID,
-            name: "Favourite Songs",
+            // Localized here: the name is drawn verbatim wherever the
+            // playlist is, from the Library grid to the detail screen's title.
+            name: String(localized: "Favourite Songs"),
             songCount: favoriteCount,
             mosaicMedia: nil,
             songListDTOs: favoriteSongs
