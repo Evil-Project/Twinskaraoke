@@ -38,7 +38,7 @@ struct SplashWalkthroughView: View {
                 .accessibilityLabel("\(content.kind == .install ? "Welcome" : "Update"), slide \(index + 1) of \(content.slides.count)")
                 .accessibilityIdentifier("Splash.Progress")
             GeometryReader { geometry in
-                ScrollView {
+                SplashSlideScrollView {
                     SplashSlideRenderer(slide: slide, viewport: geometry.size)
                         .accessibilityFocused($titleFocused)
                 }
@@ -78,6 +78,41 @@ struct SplashWalkthroughView: View {
         .buttonStyle(.borderedProminent)
         .foregroundStyle(Color(splashHex: slide.backgroundColor))
         .accessibilityIdentifier(index == content.slides.count - 1 ? "Splash.Complete" : "Splash.Next")
+    }
+}
+
+/// A slide's scroll view, which says when there is more of the slide below.
+///
+/// A long slide used to run straight into the buttons and stop mid-line, with
+/// nothing to say it could be scrolled. The bottom edge now fades while there
+/// is more below it, and the indicator flashes once when the slide opens.
+/// Short slides, which fit, keep a hard edge so nothing at their foot fades.
+private struct SplashSlideScrollView<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var hasMoreBelow = false
+
+    var body: some View {
+        ScrollView {
+            content
+        }
+        .scrollIndicatorsFlash(onAppear: true)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.visibleRect.maxY < geometry.contentSize.height - 1
+        } action: { _, moreBelow in
+            hasMoreBelow = moreBelow
+        }
+        .mask {
+            VStack(spacing: 0) {
+                Color.black
+                LinearGradient(
+                    colors: [.black, hasMoreBelow ? .clear : .black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 36)
+            }
+            .animation(.easeInOut(duration: 0.2), value: hasMoreBelow)
+        }
     }
 }
 
