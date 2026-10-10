@@ -15,6 +15,7 @@ final class WidgetSnapshotPublisher {
     private var previousLibrary: LibraryWidgetSnapshot?
     private var artworkTask: Task<Void, Never>?
     private var artworkGeneration = 0
+    private let artworkWriter = WidgetArtworkWriter()
     private var lastArtworkKeys: Set<String> = []
     private var currentPlaylist: Playlist?
     private var currentPlaylistSongIDs: Set<String> = []
@@ -158,11 +159,18 @@ final class WidgetSnapshotPublisher {
         if (previousLibrary?.accountAvailable ?? store.readLibrary().accountAvailable) && !library.accountAvailable {
             currentPlaylist = nil
             artworkGeneration += 1
+            // The clear runs on the writer after any write already in flight
+            // has finished, so a cover from the signed-out account cannot land
+            // after it. The next caching pass waits for this task in turn.
             artworkTask?.cancel()
-            artworkTask = nil
+            let superseded = artworkTask
+            let writer = artworkWriter
+            artworkTask = Task {
+                await superseded?.value
+                await writer.clear()
+            }
             lastArtworkKeys = []
             resolvedPlaylistCovers = [:]
-            try? WidgetArtworkStore().clear()
         }
         do {
             if forcePlayback || playback != previousPlayback {
@@ -202,45 +210,71 @@ final class WidgetSnapshotPublisher {
         guard keys != lastArtworkKeys else { return }
         lastArtworkKeys = keys
         artworkTask?.cancel()
+        let superseded = artworkTask
         artworkGeneration += 1
         let generation = artworkGeneration
-        artworkTask = Task {
-            let artwork = WidgetArtworkStore()
+        let writer = artworkWriter
+        // Reading the app's image cache, re-encoding a square thumbnail and
+        // pruning the shared folder all happen on the writer, off the main
+        // actor. This runs at launch and on every song change — the moment
+        // the player and its artwork are animating — and used to do all of
+        // that, for up to forty covers, on the main thread.
+        artworkTask = Task { [weak self] in
+            await superseded?.value
             var changed = false
             for url in urls {
-                guard !Task.isCancelled, generation == artworkGeneration else { return }
-                let filename = WidgetArtworkStore.filename(for: url.absoluteString)
-                if let file = artwork.url(for: filename), FileManager.default.fileExists(atPath: file.path) { continue }
-                // The app normally displays the card variant while the widget
-                // snapshot names the thumbnail variant. Reuse whichever of the
-                // app's existing variants is cached; constructing a URL here
-                // never sends a new Cloudflare transformation request.
-                let cachedURLs = [url] + [ArtworkImageVariant.card, .row, .hero]
-                    .compactMap { ArtworkURLBuilder.variantURL(from: url, variant: $0) }
-                let cached = cachedURLs.lazy.compactMap { candidate in
-                    SDImageCache.shared.diskImageData(forKey: candidate.absoluteString)
-                        ?? SDImageCache.shared.imageFromMemoryCache(forKey: candidate.absoluteString)?.jpegData(compressionQuality: 0.9)
-                }.first
-                if let cached,
-                   (try? artwork.store(cached, key: url.absoluteString)) != nil {
-                    changed = true
-                    continue
-                }
-                // Fetch only the original delivery URL. Do not create a new
-                // Cloudflare resize/format request for a widget.
-                guard let original = WidgetArtworkStore.originalURL(for: url) else { continue }
-                var request = URLRequest(url: original)
-                request.timeoutInterval = 10
-                guard let (data, response) = try? await URLSession.shared.data(for: request),
-                      (response as? HTTPURLResponse)?.statusCode == 200,
-                      data.count <= 8_000_000, !Task.isCancelled, generation == artworkGeneration else { continue }
-                if (try? artwork.store(data, key: url.absoluteString)) != nil { changed = true }
+                guard !Task.isCancelled else { return }
+                if await writer.cache(url) { changed = true }
             }
-            if changed {
-                for kind in [WidgetKinds.recent, WidgetKinds.nowPlaying] {
-                    WidgetCenter.shared.reloadTimelines(ofKind: kind)
-                }
+            guard changed, !Task.isCancelled, generation == self?.artworkGeneration else { return }
+            for kind in [WidgetKinds.recent, WidgetKinds.nowPlaying] {
+                WidgetCenter.shared.reloadTimelines(ofKind: kind)
             }
         }
+    }
+}
+
+/// Serialises every write to the shared widget artwork folder off the main
+/// actor. Being one actor is what orders a sign-out's clear after a write that
+/// was already under way.
+private actor WidgetArtworkWriter {
+    /// Stores the widget copy of `url`, returning whether a new file landed.
+    func cache(_ url: URL) async -> Bool {
+        let artwork = WidgetArtworkStore()
+        let filename = WidgetArtworkStore.filename(for: url.absoluteString)
+        if let file = artwork.url(for: filename), FileManager.default.fileExists(atPath: file.path) {
+            return false
+        }
+        // The app normally displays the card variant while the widget
+        // snapshot names the thumbnail variant. Reuse whichever of the app's
+        // existing variants is cached; constructing a URL here never sends a
+        // new Cloudflare transformation request.
+        let cachedURLs = [url] + [ArtworkImageVariant.card, .row, .hero]
+            .compactMap { ArtworkURLBuilder.variantURL(from: url, variant: $0) }
+        let cached = cachedURLs.lazy.compactMap { candidate in
+            SDImageCache.shared.diskImageData(forKey: candidate.absoluteString)
+                ?? SDImageCache.shared.imageFromMemoryCache(forKey: candidate.absoluteString)?
+                .jpegData(compressionQuality: 0.9)
+        }.first
+        if let cached, (try? artwork.store(cached, key: url.absoluteString)) != nil {
+            return true
+        }
+        // Fetch only the original delivery URL. Do not create a new
+        // Cloudflare resize/format request for a widget.
+        guard let original = WidgetArtworkStore.originalURL(for: url) else { return false }
+        var request = URLRequest(url: original)
+        request.timeoutInterval = 10
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              data.count <= 8_000_000,
+              // Checked after the request: a sign-out cancels this pass and
+              // queues a clear, which may have run while this was suspended.
+              !Task.isCancelled
+        else { return false }
+        return (try? artwork.store(data, key: url.absoluteString)) != nil
+    }
+
+    func clear() {
+        try? WidgetArtworkStore().clear()
     }
 }
