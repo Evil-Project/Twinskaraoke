@@ -87,9 +87,7 @@ final class DownloadNotifications {
         let locale = Locale(identifier: language.localeIdentifier)
         // String's locale formats interpolated values; the bundle determines
         // which translation is loaded outside SwiftUI's locale environment.
-        let bundle = language == .system ? Bundle.main : Bundle.main
-            .path(forResource: language.rawValue, ofType: "lproj")
-            .flatMap(Bundle.init(path:)) ?? .main
+        let bundle = language.localizationBundle
         content.title = String(localized: "Downloads", bundle: bundle, locale: locale)
         content.body = failed == 0
             ? String(localized: "Your songs are ready for offline listening.", bundle: bundle, locale: locale)

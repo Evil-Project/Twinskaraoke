@@ -58,10 +58,11 @@ nonisolated enum VideoCountFormatter {
     /// "1 view", "12 views", "1.2K views". The single view is its own string
     /// because the count reaches the catalogue already formatted, as text,
     /// which plural rules cannot be applied to.
-    static func viewsLabel(_ count: Int) -> String {
-        count == 1
-            ? String(localized: "1 view")
-            : String(localized: "\(string(from: count)) views")
+    ///
+    /// A `Text` built from keys, not a resolved `String`, so the lookup
+    /// happens in the locale environment the app's language setting controls.
+    static func viewsText(_ count: Int) -> Text {
+        count == 1 ? Text("1 view") : Text("\(string(from: count)) views")
     }
 }
 
@@ -437,7 +438,7 @@ private struct SimilarVideoRow: View {
                         .lineLimit(1)
                 }
                 if let views = video.views, views > 0 {
-                    Text(VideoCountFormatter.viewsLabel(views))
+                    VideoCountFormatter.viewsText(views)
                         .scaledSystemFont(size: 12)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

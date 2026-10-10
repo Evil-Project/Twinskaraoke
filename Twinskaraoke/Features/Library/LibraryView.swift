@@ -58,6 +58,7 @@ struct LibraryView: View {
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
     @State private var favoritesRefreshTask: Task<Void, Never>?
+    @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     private var usesCompactToolbar: Bool {
         horizontalSizeClass == .compact
@@ -141,6 +142,11 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showCreateSheet) {
                 CreatePlaylistSheet()
+            }
+            // The model names Favourite Songs in the selected language, which
+            // it cannot observe; Library is always mounted, so it relays it.
+            .onChange(of: languageMode) { _, _ in
+                viewModel.languageDidChange()
             }
         }
     }

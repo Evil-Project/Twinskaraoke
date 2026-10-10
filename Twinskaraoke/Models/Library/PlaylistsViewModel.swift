@@ -43,7 +43,9 @@ final class PlaylistsViewModel {
             id: Playlist.favoritesID,
             // Localized here: the name is drawn verbatim wherever the
             // playlist is, from the Library grid to the detail screen's title.
-            name: String(localized: "Favourite Songs"),
+            // In the app's selected language, which `String(localized:)` alone
+            // would not follow; `languageDidChange()` rebuilds it.
+            name: String(localized: "Favourite Songs", bundle: AppLanguage.selected.localizationBundle),
             songCount: favoriteCount,
             mosaicMedia: nil,
             songListDTOs: favoriteSongs
@@ -57,12 +59,7 @@ final class PlaylistsViewModel {
     }
 
     private func recomputeCombinedPlaylists() {
-        let all = allPlaylists(saved: SavedPlaylistsStore.shared.playlists)
-        let existingIDs = Set(all.map(\.id))
-        let uniqueUser = UserPlaylistsManager.shared.playlists
-            .map { $0.asPlaylist() }
-            .filter { !existingIDs.contains($0.id) }
-        let next = uniqueUser + all
+        let next = buildCombinedPlaylists()
         // Guarded because @Observable publishes on every write, including one
         // that stores an identical value, and `favoritesPlaylist` builds a fresh
         // struct on each call — so an unguarded assignment re-renders the whole
@@ -70,6 +67,22 @@ final class PlaylistsViewModel {
         // used to absorb this.
         guard next != combinedPlaylists else { return }
         combinedPlaylists = next
+    }
+
+    private func buildCombinedPlaylists() -> [Playlist] {
+        let all = allPlaylists(saved: SavedPlaylistsStore.shared.playlists)
+        let existingIDs = Set(all.map(\.id))
+        let uniqueUser = UserPlaylistsManager.shared.playlists
+            .map { $0.asPlaylist() }
+            .filter { !existingIDs.contains($0.id) }
+        return uniqueUser + all
+    }
+
+    /// Rebuilds the list for a new app language. Unguarded on purpose:
+    /// `Playlist.==` compares ids, so a renamed Favourite Songs compares
+    /// equal to the old one and the guard above would keep it.
+    func languageDidChange() {
+        combinedPlaylists = buildCombinedPlaylists()
     }
 
     func recentlyAddedPlaylists(saved: [Playlist]) -> [Playlist] {
