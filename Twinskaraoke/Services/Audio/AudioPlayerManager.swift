@@ -1514,7 +1514,7 @@ final class AudioPlayerManager {
                     }
                     self.updateNowPlayingElapsed(t)
 
-                    if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                    if !self.sleepTimer.endsWithCurrentSong {
                         self.transitionCoordinator.poll(
                             currentTime: t,
                             totalDuration: dur,
@@ -1546,7 +1546,15 @@ final class AudioPlayerManager {
 
                 // A crossfade would start the next song before this one ends,
                 // which is exactly when the end-of-song sleep timer stops.
-                if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                //
+                // Repeat Once is not excluded. It used to mean "loop this
+                // song", where a crossfade into the next one was wrong; it now
+                // replays the queue once from the top, so songs inside the
+                // queue blend as usual. The coordinator finds no next song at
+                // the end of the queue in this mode, so the restart itself is
+                // a plain cut through `playNextOrRandom`, which is what spends
+                // the one extra pass.
+                if !self.sleepTimer.endsWithCurrentSong {
                     self.transitionCoordinator.poll(
                         currentTime: t,
                         totalDuration: totalDur,
