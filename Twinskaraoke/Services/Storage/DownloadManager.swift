@@ -218,9 +218,21 @@ final class DownloadManager {
 
     private var manifestURL: URL { cacheDir.appendingPathComponent(".download-manifest.json") }
 
+    /// Serial, so manifest writes land in the order they were made.
+    private nonisolated static let manifestQueue = DispatchQueue(
+        label: "DownloadManager.Manifest",
+        qos: .utility
+    )
+
     private func restoreManifest() {
+        let url = manifestURL
+        // Behind any write still queued: reading around one would bring back
+        // the downloads it had just recorded as removed.
+        let result = Self.manifestQueue.sync {
+            Result { try JSONDecoder().decode([Song].self, from: Data(contentsOf: url)) }
+        }
         do {
-            let songs = try JSONDecoder().decode([Song].self, from: Data(contentsOf: manifestURL))
+            let songs = try result.get()
             downloadedMetadata = Dictionary(songs.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             publishedState.downloadedIDs = Set(songs.map(\.id))
         } catch {
@@ -228,12 +240,19 @@ final class DownloadManager {
         }
     }
 
+    /// Encodes and writes off the main actor. The manifest holds every
+    /// downloaded song, and it is rewritten each time one finishes, so a
+    /// "download all" on a long playlist used to re-encode the whole library
+    /// on the main thread once per song while the list was scrolling.
     private func persistManifest() {
-        do {
-            let songs = downloadedIDs.compactMap { downloadedMetadata[$0] }
-            try JSONEncoder().encode(songs).write(to: manifestURL, options: .atomic)
-        } catch {
-            DebugLogger.log("Download manifest write: \(error)", category: .cache)
+        let songs = downloadedIDs.compactMap { downloadedMetadata[$0] }
+        let url = manifestURL
+        Self.manifestQueue.async {
+            do {
+                try JSONEncoder().encode(songs).write(to: url, options: .atomic)
+            } catch {
+                DebugLogger.log("Download manifest write: \(error)", category: .cache)
+            }
         }
     }
 
