@@ -85,19 +85,29 @@ struct SystemIntentPlaybackTests {
         try await Task.sleep(for: .milliseconds(300))
         #expect(player.currentSong?.id == songs[0].id)
 
-        // Repeat plays the song again every time it ends.
+        // Each end starts near the end of the song, so a replay that did not
+        // actually start the song over would leave the progress there.
+        func endSong() {
+            player.progress = 0.95
+            player.playNextOrRandom()
+        }
+
+        // Repeat plays the song again from the start every time it ends.
         player.repeatMode = .all
-        player.playNextOrRandom()
-        player.playNextOrRandom()
-        #expect(player.currentSong?.id == songs[0].id)
+        for _ in 0..<2 {
+            endSong()
+            #expect(player.currentSong?.id == songs[0].id)
+            #expect(player.progress == 0)
+        }
         #expect(player.repeatMode == .all)
 
         // Repeat Once plays it one more time, then switches itself off.
         player.repeatMode = .one
-        player.playNextOrRandom()
+        endSong()
         #expect(player.currentSong?.id == songs[0].id)
+        #expect(player.progress == 0)
         #expect(player.repeatMode == .off)
-        player.playNextOrRandom()
+        endSong()
         #expect(player.currentSong?.id == songs[1].id)
 
         // Next leaves the song and keeps the mode for the one it lands on.
