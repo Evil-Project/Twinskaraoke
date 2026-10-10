@@ -78,19 +78,10 @@ struct PlayerArtworkView: View {
             // snapping down to the real one when the morph ended. Reported from
             // here it covers all five call sites (compact, both iPad layouts,
             // radio), and only one is ever on screen.
-            .onGeometryChange(for: CGRect.self) { proxy in
-                // The expanded destination must stay fixed while the entire
-                // player moves. A global frame includes its animated offset.
-                proxy.frame(in: .named("FullPlayerSurface"))
-            } action: { frame in
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
-            }
-            // The artwork is not always on screen — the lyrics surface replaces
-            // it — and a frame left behind after it goes would aim the morph at
-            // somewhere the artwork no longer is.
-            .onDisappear {
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil)
-            }
+            //
+            // Inside the `.id(song.id)` below, so every song's artwork, and
+            // every instance, reports under its own owner.
+            .modifier(PlayerArtworkFrameReporter())
             .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)
             .scaleEffect(artworkScale)
@@ -133,6 +124,29 @@ struct PlayerArtworkView: View {
 
     private var bufferingTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
+    }
+}
+
+/// Reports the artwork's frame as the morph target under an owner unique to
+/// this view instance; see `NowPlayingPresentation.FrameReports`.
+private struct PlayerArtworkFrameReporter: ViewModifier {
+    @State private var owner = UUID().uuidString
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { proxy in
+                // The expanded destination must stay fixed while the entire
+                // player moves. A global frame includes its animated offset.
+                proxy.frame(in: .named("FullPlayerSurface"))
+            } action: { frame in
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame, owner: owner)
+            }
+            // The artwork is not always on screen — the lyrics surface
+            // replaces it — and a frame left behind after it goes would aim
+            // the morph at somewhere the artwork no longer is.
+            .onDisappear {
+                NowPlayingPresentation.shared.removePlayerArtworkFrame(owner: owner)
+            }
     }
 }
 

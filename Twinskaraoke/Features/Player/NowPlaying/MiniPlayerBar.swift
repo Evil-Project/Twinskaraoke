@@ -20,9 +20,14 @@ struct MiniPlayerBar: View {
     /// the iPad sidebar, where the bar sits in a `safeAreaBar` instead and
     /// should look like the full-size one.
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    @Environment(\.appReduceMotion) private var reduceMotion
 
     private let snapshot = NowPlayingSnapshotState.shared
     private let presentation = NowPlayingPresentation.shared
+    /// This instance's claim on the reported bar frame. The accessory slot
+    /// rehosts the bar, and the new instance can report before the old one's
+    /// `onDisappear`; see `NowPlayingPresentation.FrameReports`.
+    @State private var frameOwner = UUID().uuidString
 
     /// Matches the artwork the old bar drew: LNPopupBar sized its image as
     /// `barHeight - 18`, so 40pt at the full 58pt height and 30pt at the
@@ -87,11 +92,11 @@ struct MiniPlayerBar: View {
             proxy.frame(in: .global)
         } action: { frame in
             shimejiEngine.miniPlayerY = frame.height > 0 ? frame.minY : nil
-            presentation.reportBarFrame(frame)
+            presentation.reportBarFrame(frame, owner: frameOwner)
         }
         .onDisappear {
             shimejiEngine.miniPlayerY = nil
-            presentation.reportBarFrame(nil)
+            presentation.removeBarFrame(owner: frameOwner)
         }
     }
 
@@ -99,17 +104,33 @@ struct MiniPlayerBar: View {
 
     @ViewBuilder
     private var artwork: some View {
-        Group {
+        // A ZStack, not a Group, so the outgoing and incoming images can
+        // overlap for the crossfade: under a Group the HStack would lay the
+        // pair out side by side for the length of the transition.
+        ZStack {
             if let image = snapshot.artwork {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    // A new image is a new view, so a track change fades
+                    // between covers the way Apple Music's bar does instead
+                    // of swapping them in a single frame.
+                    .id(ObjectIdentifier(image))
+                    .transition(.opacity)
             } else {
                 MusicArtworkPlaceholder(cornerRadius: AM.Radius.thumb)
+                    .transition(.opacity)
             }
         }
         .frame(width: artworkSize, height: artworkSize)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
+        // Keyed on the image alone and applied before the settling opacity
+        // below, which must still snap: the landing hands over at an exact
+        // endpoint and a fade there would show two covers at once.
+        .animation(
+            reduceMotion ? nil : AppMotion.easeInOut(duration: 0.25),
+            value: snapshot.artwork.map(ObjectIdentifier.init)
+        )
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .global)
         } action: { frame in

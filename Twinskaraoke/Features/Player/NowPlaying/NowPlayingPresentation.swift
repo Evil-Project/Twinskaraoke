@@ -125,16 +125,74 @@ final class NowPlayingPresentation {
         isSettlingArtwork = true
     }
 
-    func reportBarFrame(_ frame: CGRect?) {
-        barFrame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+    /// Frames reported by views that can be replaced in place.
+    ///
+    /// The player's artwork is re-identified per song and the accessory slot
+    /// rehosts the bar. A replacement reports its frame before the outgoing
+    /// view's `onDisappear` runs (measured on the simulator: new artwork
+    /// frame, then `nil`), and `onGeometryChange` only reports again on a
+    /// change, so a plain "clear on disappear" wiped the new frame for good:
+    /// after any song change the player had no artwork frame, and opening and
+    /// closing fell back to a plain slide.
+    ///
+    /// So each reporting view instance has its own owner, the most recently
+    /// registered reporter that has a frame is the one used, and a view that
+    /// goes away removes only its own entry. A stale report from an outgoing
+    /// view, nil or not, cannot displace a newer one.
+    struct FrameReports {
+        private var owners: [String] = []
+        private var frames: [String: CGRect] = [:]
+
+        /// Bound on views that registered and never disappeared.
+        private static let capacity = 8
+
+        var current: CGRect? {
+            owners.last(where: { frames[$0] != nil }).flatMap { frames[$0] }
+        }
+
+        mutating func report(_ frame: CGRect?, from owner: String) {
+            if !owners.contains(owner) {
+                owners.append(owner)
+                if owners.count > Self.capacity {
+                    frames[owners.removeFirst()] = nil
+                }
+            }
+            frames[owner] = frame
+        }
+
+        mutating func remove(_ owner: String) {
+            owners.removeAll { $0 == owner }
+            frames[owner] = nil
+        }
+    }
+
+    @ObservationIgnored private var barFrames = FrameReports()
+    @ObservationIgnored private var playerArtworkFrames = FrameReports()
+
+    /// Reports without an owner share one entry (`""`), for callers that are
+    /// never replaced in place.
+    func reportBarFrame(_ frame: CGRect?, owner: String = "") {
+        barFrames.report(frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }, from: owner)
+        barFrame = barFrames.current
+    }
+
+    func removeBarFrame(owner: String) {
+        barFrames.remove(owner)
+        barFrame = barFrames.current
     }
 
     func reportBarArtworkFrame(_ frame: CGRect?) {
         barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    func reportPlayerArtworkFrame(_ frame: CGRect?) {
-        playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
+    func reportPlayerArtworkFrame(_ frame: CGRect?, owner: String = "") {
+        playerArtworkFrames.report(frame.flatMap { $0.width > 0 ? $0 : nil }, from: owner)
+        playerArtworkFrame = playerArtworkFrames.current
+    }
+
+    func removePlayerArtworkFrame(owner: String) {
+        playerArtworkFrames.remove(owner)
+        playerArtworkFrame = playerArtworkFrames.current
     }
 
     init() {}
