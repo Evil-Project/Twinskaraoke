@@ -40,7 +40,7 @@ final class WatchSessionPublisher: NSObject {
     var watchOwnsAudio: Bool { lease.owner == .watch }
     private var playbackSessionID: UUID { lease.sessionID }
     private var playbackRevision = 0
-    private var lastPlaybackFingerprint: PlaybackFingerprint?
+    private var playbackChanges = PlaybackChangeDetector()
     private var commandGate = CompanionPlayback.CommandGate()
     private var lastPhoneStructuralChangeAt = Date.distantPast
     private var isApplyingWatchCommand = false
@@ -137,23 +137,16 @@ final class WatchSessionPublisher: NSObject {
         let player = AudioPlayerManager.shared
         let song = player.currentSong
         // Elapsed time does not create a new revision on every poll tick.
-        //
-        // Compared as a value rather than as encoded JSON. This runs on every
-        // periodic publish while something plays, and encoding the whole
-        // queue just to compare it was a full encode of the queue on the main
-        // thread every two seconds; an unchanged queue compares in constant
-        // time, since it still shares the player's storage.
-        let fingerprint = PlaybackFingerprint(
+        let fingerprint = PlaybackChangeDetector.State(
             song: song, queue: player.queue,
             isPlaying: player.isPlaying, isRadio: player.isRadioMode,
             isShuffled: player.isShuffled, repeatSetting: repeatSetting(player.repeatMode),
             error: player.loadFailure?.message, sleepDeadline: player.sleepTimer.deadline,
             sleepAtEndOfSong: player.sleepTimer.endsWithCurrentSong
         )
-        if fingerprint != lastPlaybackFingerprint {
+        if playbackChanges.changed(to: fingerprint) {
             playbackRevision &+= 1
             defaults.set(playbackRevision, forKey: "nk.phone.playbackRevision")
-            lastPlaybackFingerprint = fingerprint
             if !isApplyingWatchCommand { lastPhoneStructuralChangeAt = Date() }
         }
         let snapshot = CompanionPlayback.Snapshot(
@@ -168,18 +161,6 @@ final class WatchSessionPublisher: NSObject {
             sleepAtEndOfSong: player.sleepTimer.endsWithCurrentSong
         )
         return snapshot
-    }
-
-    private struct PlaybackFingerprint: Equatable {
-        let song: Song?
-        let queue: [Song]
-        let isPlaying: Bool
-        let isRadio: Bool
-        let isShuffled: Bool
-        let repeatSetting: CompanionPlayback.RepeatSetting
-        let error: String?
-        let sleepDeadline: Date?
-        let sleepAtEndOfSong: Bool
     }
 
     private func repeatSetting(_ mode: RepeatMode) -> CompanionPlayback.RepeatSetting {
@@ -395,7 +376,7 @@ final class WatchSessionPublisher: NSObject {
         pendingTakeover = nil
         defaults.removeObject(forKey: "nk.phone.watchPlayback")
         defaults.removeObject(forKey: Self.takeoverKey)
-        lastPlaybackFingerprint = nil
+        playbackChanges.reset()
     }
 
     /// - Parameter bumpingGeneration: `true` for a genuine session change, so
@@ -606,4 +587,81 @@ extension WatchSessionPublisher: WCSessionDelegate {
         Task { @MainActor [weak self] in self?.acceptTakeoverAck(stopped) }
     }
 
+}
+
+/// Decides when the playback state the watch is shown has changed, which is
+/// what advances the snapshot's revision. A command built against an older
+/// revision is rejected as stale, so a change the watch can see must count,
+/// including new metadata for a song that kept its id (enrichment, a
+/// re-signed audio URL).
+///
+/// `Song.==` compares ids only, so songs are compared by their full encoding.
+/// The queue is encoded only when its storage changed: an untouched queue
+/// still shares the player's buffer, and a shared buffer means equal contents,
+/// so the periodic publish every two seconds while something plays encodes one
+/// song rather than the whole queue.
+struct PlaybackChangeDetector {
+    struct State {
+        var song: Song?
+        var queue: [Song]
+        var isPlaying: Bool
+        var isRadio: Bool
+        var isShuffled: Bool
+        var repeatSetting: CompanionPlayback.RepeatSetting
+        var error: String?
+        var sleepDeadline: Date?
+        var sleepAtEndOfSong: Bool
+
+        /// Everything except the songs.
+        fileprivate func hasSameFlags(as other: Self) -> Bool {
+            isPlaying == other.isPlaying && isRadio == other.isRadio
+                && isShuffled == other.isShuffled && repeatSetting == other.repeatSetting
+                && error == other.error && sleepDeadline == other.sleepDeadline
+                && sleepAtEndOfSong == other.sleepAtEndOfSong
+        }
+    }
+
+    private var last: State?
+    private var lastSongEncoding: Data?
+    private var lastQueueEncoding: Data?
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    /// Records `next` and reports whether it differs from the previous state.
+    mutating func changed(to next: State) -> Bool {
+        let songEncoding = next.song.flatMap { try? Self.encoder.encode($0) }
+        let queueEncoding: Data?
+        if let last, Self.sharesStorage(last.queue, next.queue) {
+            queueEncoding = lastQueueEncoding
+        } else {
+            queueEncoding = try? Self.encoder.encode(next.queue)
+        }
+        defer {
+            last = next
+            lastSongEncoding = songEncoding
+            lastQueueEncoding = queueEncoding
+        }
+        guard let last else { return true }
+        return !next.hasSameFlags(as: last)
+            || songEncoding != lastSongEncoding
+            || queueEncoding != lastQueueEncoding
+    }
+
+    /// The next state counts as a change whatever it holds.
+    mutating func reset() {
+        last = nil
+        lastSongEncoding = nil
+        lastQueueEncoding = nil
+    }
+
+    private static func sharesStorage(_ lhs: [Song], _ rhs: [Song]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        return lhs.withUnsafeBufferPointer { left in
+            rhs.withUnsafeBufferPointer { right in left.baseAddress == right.baseAddress }
+        }
+    }
 }
