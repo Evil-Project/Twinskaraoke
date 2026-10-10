@@ -58,6 +58,7 @@ struct LibraryView: View {
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
     @State private var favoritesRefreshTask: Task<Void, Never>?
+    @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     private var usesCompactToolbar: Bool {
         horizontalSizeClass == .compact
@@ -141,6 +142,11 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showCreateSheet) {
                 CreatePlaylistSheet()
+            }
+            // The model names Favourite Songs in the selected language, which
+            // it cannot observe; Library is always mounted, so it relays it.
+            .onChange(of: languageMode) { _, _ in
+                viewModel.languageDidChange()
             }
         }
     }
@@ -236,7 +242,9 @@ struct LibraryView: View {
     }
 
     private var featuredWidePlaylist: Playlist? {
+        // Without an account, Favourite Songs is empty and cannot open.
         let all = viewModel.allPlaylists(saved: savedStore.playlists)
+            .filter { !$0.isFavorites || favorites.isAvailable }
         if let favoritesPlaylist = all.first(where: { $0.isFavorites }) {
             return favoritesPlaylist
         }
@@ -710,7 +718,10 @@ struct PlaylistsGridScreen: View {
     }
 
     var body: some View {
-        let all = viewModel.combinedPlaylists
+        // Favourite Songs lives in the account. Signed out it can only show
+        // "0 songs" and open onto a list that cannot load, so it is left out
+        // here as it already is from the pinned shelf.
+        let all = viewModel.combinedPlaylists.filter { !$0.isFavorites || favorites.isAvailable }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayed = query.isEmpty ? all : all.filter { playlist in
             playlist.name.localizedCaseInsensitiveContains(query)
@@ -719,6 +730,16 @@ struct PlaylistsGridScreen: View {
             Group {
                 if (viewModel.isLoading || userManager.isLoading), all.isEmpty {
                     PlaylistsSkeletonView()
+                } else if all.isEmpty, !favorites.isAvailable {
+                    // Signed out, "playlists you add will appear here" promises
+                    // something this screen cannot do: creating one needs an
+                    // account. Same wording as Add to Playlist.
+                    MusicEmptyState(
+                        title: String(localized: "Sign In to Use Playlists"),
+                        message: String(localized: "Sign in from Account to create playlists and add songs to them.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.top, 48)
                 } else if displayed.isEmpty {
                     MusicEmptyState(
                         title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),

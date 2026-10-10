@@ -459,12 +459,23 @@ struct MusicSkeletonLine: View {
 struct MusicEmptyState: View {
     let title: String
     let message: String
+    /// Drawn in place of the placeholder mark. For surfaces that are not
+    /// library screens — the player, over its artwork-tinted background — where
+    /// the mark's solid grey blocks read as content that is still loading.
+    var systemImage: String?
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 15) {
-            MusicEmptyStateMark()
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 44, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            } else {
+                MusicEmptyStateMark()
+            }
 
             VStack(spacing: 6) {
                 Text(title)

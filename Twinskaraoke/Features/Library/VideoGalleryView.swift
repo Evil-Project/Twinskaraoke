@@ -281,7 +281,7 @@ private struct VideoGalleryCell: View {
                         .lineLimit(1)
                 }
                 if let views = video.views, views > 0 {
-                    Text("\(VideoCountFormatter.string(from: views)) views")
+                    VideoCountFormatter.viewsText(views)
                         .scaledSystemFont(size: 11)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

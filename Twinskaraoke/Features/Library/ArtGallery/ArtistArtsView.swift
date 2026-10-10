@@ -194,8 +194,8 @@ private struct ArtistArtsStatsRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            ArtistArtsStatPill(value: "\(artworkCount)", label: artworkCount == 1 ? String(localized: "Artwork") : String(localized: "Artworks"))
-            ArtistArtsStatPill(value: "\(totalUpvotes)", label: totalUpvotes == 1 ? String(localized: "Like") : String(localized: "Likes"))
+            ArtistArtsStatPill(value: artworkCount.formatted(), label: artworkCount == 1 ? String(localized: "Artwork") : String(localized: "Artworks"))
+            ArtistArtsStatPill(value: totalUpvotes.formatted(), label: totalUpvotes == 1 ? String(localized: "Like") : String(localized: "Likes"))
         }
     }
 }

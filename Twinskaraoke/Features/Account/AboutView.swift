@@ -50,10 +50,29 @@ struct AboutView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Version \(appVersion)")
-                    Text("NEUROKARAOKE.COM • EVILKARAOKE.COM • TWINSKARAOKE.COM")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    // One line where it fits. Wrapped, it broke after a bullet
+                    // and left the separator hanging at the end of the line, so
+                    // a narrower width breaks between names instead: two lines,
+                    // as tall as the wrapped text was, then three.
+                    ViewThatFits(in: .horizontal) {
+                        // ViewThatFits already measures this at its one-line
+                        // ideal width; the limit makes that explicit.
+                        Text("NEUROKARAOKE.COM • EVILKARAOKE.COM • TWINSKARAOKE.COM")
+                            .lineLimit(1)
+                        VStack(spacing: 0) {
+                            Text(verbatim: "NEUROKARAOKE.COM • EVILKARAOKE.COM")
+                            Text(verbatim: "TWINSKARAOKE.COM")
+                        }
+                        VStack(spacing: 0) {
+                            Text(verbatim: "NEUROKARAOKE.COM")
+                            Text(verbatim: "EVILKARAOKE.COM")
+                            Text(verbatim: "TWINSKARAOKE.COM")
+                        }
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, AM.Spacing.screenMargin)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

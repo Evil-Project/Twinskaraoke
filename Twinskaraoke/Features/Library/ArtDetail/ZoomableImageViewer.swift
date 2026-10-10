@@ -1,3 +1,4 @@
+import SDWebImage
 import SwiftUI
 
 struct ZoomableImageViewer: View {
@@ -14,6 +15,9 @@ struct ZoomableImageViewer: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
     @State private var showOverlay = true
+    @State private var viewportSize: CGSize = .zero
+    /// Width over height of the loaded image, once known.
+    @State private var imageAspectRatio: CGFloat?
 
     var body: some View {
         ZStack {
@@ -31,7 +35,8 @@ struct ZoomableImageViewer: View {
                         lastScale: $lastScale,
                         offset: $offset,
                         lastOffset: $lastOffset,
-                        reduceMotion: reduceMotion
+                        reduceMotion: reduceMotion,
+                        clampOffset: clampedOffset
                     )
                 )
                 .simultaneousGesture(
@@ -43,7 +48,7 @@ struct ZoomableImageViewer: View {
                                 height: lastOffset.height + value.translation.height
                             )
                         }
-                        .onEnded { _ in lastOffset = offset }
+                        .onEnded { _ in settlePan() }
                 )
                 .simultaneousGesture(imageTapGesture)
             }
@@ -109,6 +114,74 @@ struct ZoomableImageViewer: View {
             }
         }
         .statusBarHidden(true)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { viewportSize = $0 }
+        .task(id: url) { imageAspectRatio = await Self.aspectRatio(of: url) }
+    }
+
+    /// The image as `.fit` lays it out in the viewport, before zooming.
+    /// Artwork is square until the real proportions are known.
+    private var fittedImageSize: CGSize {
+        guard viewportSize.width > 0, viewportSize.height > 0 else { return .zero }
+        let aspect = imageAspectRatio ?? 1
+        return aspect >= viewportSize.width / viewportSize.height
+            ? CGSize(width: viewportSize.width, height: viewportSize.width / aspect)
+            : CGSize(width: viewportSize.height * aspect, height: viewportSize.height)
+    }
+
+    /// The furthest a zoomed image may sit from centre: on each axis, as far
+    /// as keeps its edge at the edge of the screen, and nowhere along an axis
+    /// where the zoomed image still fits. A drag can go past it while the
+    /// finger is down, and springs back on release. Unbounded, a pan could
+    /// leave the image entirely off screen, with nothing to grab to bring it
+    /// back short of zooming out.
+    ///
+    /// Measured against the fitted image, not the viewport: square cover art
+    /// fills a portrait screen's width but not its height, so a viewport-sized
+    /// bound let a deep zoom pan the image clean off the top or bottom.
+    private func clampedOffset(_ proposed: CGSize, scale: CGFloat) -> CGSize {
+        let fitted = fittedImageSize
+        let limitX = max(0, (fitted.width * scale - viewportSize.width) / 2)
+        let limitY = max(0, (fitted.height * scale - viewportSize.height) / 2)
+        return CGSize(
+            width: min(limitX, max(-limitX, proposed.width)),
+            height: min(limitY, max(-limitY, proposed.height))
+        )
+    }
+
+    /// Reads the proportions from the same cache entry the viewer draws from,
+    /// so it costs no second download.
+    private static func aspectRatio(of url: URL?) async -> CGFloat? {
+        guard let url else { return nil }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            SDWebImageManager.shared.loadImage(
+                with: url,
+                options: [],
+                context: ImageCacheConfig.memoryAndDiskCacheContext,
+                progress: nil
+            ) { image, _, _, _, finished, _ in
+                guard finished, !resumed else { return }
+                resumed = true
+                let size = image?.size ?? .zero
+                continuation.resume(
+                    returning: size.width > 0 && size.height > 0 ? size.width / size.height : nil
+                )
+            }
+        }
+    }
+
+    private func settlePan() {
+        let clamped = clampedOffset(offset, scale: scale)
+        guard clamped != offset else {
+            lastOffset = offset
+            return
+        }
+        if reduceMotion {
+            offset = clamped
+        } else {
+            withAnimation(.spring()) { offset = clamped }
+        }
+        lastOffset = clamped
     }
 
     private var imageTapGesture: some Gesture {
