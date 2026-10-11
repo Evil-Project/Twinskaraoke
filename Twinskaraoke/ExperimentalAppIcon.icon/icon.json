@@ -4,29 +4,6 @@
     {
       "layers": [
         {
-          "image-name": "label.svg",
-          "name": "Label",
-          "position": {
-            "scale": 1,
-            "translation-in-points": [
-              0,
-              0
-            ]
-          }
-        }
-      ],
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.3
-      },
-      "translucency": {
-        "enabled": false,
-        "value": 0
-      }
-    },
-    {
-      "layers": [
-        {
           "blend-mode-specializations": [
             {
               "appearance": "dark",
