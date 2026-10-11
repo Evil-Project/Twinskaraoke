@@ -216,7 +216,7 @@ struct QueueView: View {
                         .font(AM.Font.rowCompactTitle.weight(.semibold))
                         .padding(.horizontal, 12)
                         .frame(minHeight: 44)
-                        .background(Color.appControlInactiveFill, in: Capsule())
+                        .appGlassBackground(in: Capsule())
                 }
                 .buttonStyle(PressableButtonStyle())
                 .accessibilityIdentifier("Queue.Reorder")
@@ -231,10 +231,10 @@ struct QueueView: View {
                 } label: {
                     Text("Clear")
                         .font(AM.Font.rowCompactTitle.weight(.semibold))
-                        .foregroundStyle(Color.appAccent)
+                        .foregroundStyle(Color.appDestructive)
                         .padding(.horizontal, 12)
                         .frame(minWidth: 44, minHeight: 44)
-                        .background(Color.appControlInactiveFill, in: Capsule())
+                        .appGlassBackground(in: Capsule())
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.93, dim: 0.72))
                 .accessibilityLabel("Clear queue")
