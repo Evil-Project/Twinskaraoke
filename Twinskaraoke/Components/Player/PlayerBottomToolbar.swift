@@ -82,7 +82,7 @@ struct PlayerBottomToolbar: View {
                 } label: {
                     Image(systemName: "quote.bubble")
                         .font(.title3)
-                        .foregroundStyle(showLyrics ? .primary : .secondary)
+                        .foregroundStyle(showLyrics ? lyricsActiveColor : .secondary)
                         .frame(width: 44, height: 44)
                         .frame(maxWidth: .infinity)
                 }
@@ -129,6 +129,12 @@ struct PlayerBottomToolbar: View {
         .padding(.horizontal, audioManager.isRadioMode ? 0 : horizontalPadding)
         .padding(.top, 16)
         .frame(maxWidth: .infinity)
+    }
+
+    /// Open lyrics light in a website theme's primary, as its active lyric
+    /// line does; every other theme keeps the white glyph.
+    private var lyricsActiveColor: Color {
+        AppThemeStore.shared.palette?.primary ?? .primary
     }
 
     @ViewBuilder

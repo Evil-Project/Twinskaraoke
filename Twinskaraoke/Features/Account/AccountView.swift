@@ -62,14 +62,11 @@ struct AccountView: View {
     }
 
     private var accountList: some View {
-        List {
+        InsetGroupedList {
             profileSection
             generalSection
             if auth.isLoggedIn { signOutSection }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
         .refreshable {
             if auth.isLoggedIn {
                 AppHaptic.selection.play()
@@ -163,7 +160,7 @@ struct AccountView: View {
                 HStack {
                     Spacer()
                     Text("Sign Out")
-                        .foregroundStyle(Color.appAccent)
+                        .foregroundStyle(Color.appDestructive)
                     Spacer()
                 }
             }

@@ -224,6 +224,7 @@ private struct LyricLineRow: View, Equatable {
                         Text(line.text)
                             .scaledSystemFont(size: isCurrent ? 30 : 23, weight: isCurrent ? .bold : .semibold)
                             .foregroundStyle(lineColor)
+                            .modifier(LyricGlow(color: glowColor))
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -301,6 +302,23 @@ private struct LyricLineRow: View, Equatable {
         return .primary.opacity(0.55)
     }
 
+    /// A website theme haloes the current line in its primary, after the
+    /// site's two-layer `text-shadow` on `.fullscreen-lyric-line.active` —
+    /// though the text itself stays white, and the glow is a fraction of the
+    /// site's full-strength one, which drowned the words at this size. Every
+    /// other theme keeps the plain Apple Music line.
+    private var themeHighlight: Color? {
+        AppThemeStore.shared.palette?.primary
+    }
+
+    /// `nil` without a website theme, so those lines carry no shadow at all;
+    /// `.clear` on a themed line that is not current, so the glow can fade
+    /// between lines without the text changing identity.
+    private var glowColor: Color? {
+        guard let themeHighlight else { return nil }
+        return isCurrent ? themeHighlight : .clear
+    }
+
     private var lineBlur: CGFloat {
         // Depth-of-field: the active line stays crisp while lines soften with
         // distance, like Apple Music. Skipped under reduce motion, where the
@@ -315,6 +333,22 @@ private struct LyricLineRow: View, Equatable {
         return max(0.5, 1.0 - Double(distance - 2) * 0.1)
     }
 
+}
+
+private struct LyricGlow: ViewModifier {
+    let color: Color?
+
+    func body(content: Content) -> some View {
+        if let color {
+            // A tight rim and a soft bloom, the site's two layers at a
+            // fraction of their strength.
+            content
+                .shadow(color: color.opacity(0.4), radius: 4)
+                .shadow(color: color.opacity(0.25), radius: 14)
+        } else {
+            content
+        }
+    }
 }
 
 private func formattedLyricTime(_ seconds: TimeInterval) -> String {

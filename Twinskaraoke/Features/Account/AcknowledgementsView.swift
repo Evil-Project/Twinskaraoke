@@ -49,23 +49,22 @@ struct AcknowledgementsView: View {
     }
 
     private var acknowledgementsList: some View {
-        List(credits) { credit in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(credit.name)
-                    .font(.body.bold())
-                Text(credit.detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                if let url = credit.url {
-                    Link(url.absoluteString, destination: url)
-                        .font(.caption)
-                        .lineLimit(1)
+        InsetGroupedList {
+            ForEach(credits) { credit in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(credit.name)
+                        .font(.body.bold())
+                    Text(credit.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let url = credit.url {
+                        Link(url.absoluteString, destination: url)
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
                 }
+                .padding(.vertical, 2)
             }
-            .padding(.vertical, 2)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 }

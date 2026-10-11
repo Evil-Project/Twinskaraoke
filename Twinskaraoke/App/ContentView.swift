@@ -414,8 +414,12 @@ private extension RootSection {
         }
     }
 
+    /// A website theme tints every section in its primary, as the site's own
+    /// sidebar does; next to it the fixed purple, orange, blue and green
+    /// below would clash. Every other theme keeps one colour per section.
     var sidebarTint: Color {
-        switch self {
+        if let primary = AppThemeStore.shared.palette?.primary { return primary }
+        return switch self {
         case .home:
             .appAccent
         case .new:

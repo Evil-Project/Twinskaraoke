@@ -86,6 +86,7 @@ struct PlayerArtworkView: View {
             .id(song.id)
             .scaleEffect(artworkScale)
             .amShadow(audioManager.isPlaying ? AM.Shadow.heroPlaying : AM.Shadow.heroIdle)
+            .modifier(ThemedArtworkGlow(isPlaying: audioManager.isPlaying))
             .animation(artworkPlaybackAnimation, value: audioManager.isPlaying)
             if audioManager.isBuffering {
                 bufferingOverlay
@@ -129,6 +130,22 @@ struct PlayerArtworkView: View {
 
 /// Reports the artwork's frame as the morph target under an owner unique to
 /// this view instance; see `NowPlayingPresentation.FrameReports`.
+/// A website theme rings the artwork in its primary, as the site does its
+/// covers (`.song-cover-placeholder`: `0 0 40px primary/0.3`, and `/0.2` on
+/// `.playlist-main-cover`): brighter while playing, softer while paused.
+/// Without a theme it adds nothing, not even an empty shadow pass.
+private struct ThemedArtworkGlow: ViewModifier {
+    let isPlaying: Bool
+
+    func body(content: Content) -> some View {
+        if let primary = AppThemeStore.shared.palette?.primary {
+            content.shadow(color: primary.opacity(isPlaying ? 0.3 : 0.2), radius: 20)
+        } else {
+            content
+        }
+    }
+}
+
 private struct PlayerArtworkFrameReporter: ViewModifier {
     @State private var owner = UUID().uuidString
 

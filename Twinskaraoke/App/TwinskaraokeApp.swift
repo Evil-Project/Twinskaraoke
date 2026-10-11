@@ -36,6 +36,9 @@ struct TwinskaraokeApp: App {
                 .injectReduceMotion()
                 .injectHaptics()
                 .tint(.appAccent)
+                .onChange(of: appearanceMode) { _, mode in
+                    AppThemeStore.shared.apply(AppearanceMode(rawValue: mode) ?? .system)
+                }
                 .shimejiSession()
                 .onAppear {
                     DebugLogger.log(
