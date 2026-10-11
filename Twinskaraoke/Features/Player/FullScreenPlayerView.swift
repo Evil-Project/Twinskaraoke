@@ -238,10 +238,18 @@ private struct PlayerLayoutMetrics {
 /// for favorite, more and the queue-mode badge on Playing Next. It is a theme
 /// token rather than a literal grey here so the three title surfaces and the
 /// badge in ``PlayerBottomToolbar`` cannot drift apart.
-private let playerTitleButtonBackground = Color.appPlayerActionFill
+///
+/// Computed, not a `let`: a global `let` is initialised once, on first use,
+/// and would keep whichever theme was active then.
+private var playerTitleButtonBackground: Color {
+    Color.appPlayerActionFill
+}
 
-private func playerTitleIconColor(isActive _: Bool = false) -> Color {
-    Color.primary
+/// A website theme lights an active action — a saved favourite — in its
+/// primary. Every other theme keeps the glyph white either way.
+private func playerTitleIconColor(isActive: Bool = false) -> Color {
+    guard isActive, let primary = AppThemeStore.shared.palette?.primary else { return .primary }
+    return primary
 }
 
 /// How far the filled circle sits inside the button's hit target. The tap area
@@ -1173,8 +1181,7 @@ struct FullScreenPlayerView: View {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                     }
                 }
-                .font(.system(size: primarySize, weight: .bold))
-                .foregroundStyle(.primary)
+                .modifier(ThemedPlayButtonFace(glyphSize: primarySize, diameter: rowHeight))
                 .frame(maxWidth: .infinity)
                 .frame(height: rowHeight)
             }
@@ -1193,6 +1200,34 @@ struct FullScreenPlayerView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Next track")
             .accessibilityHint("Skips to the next song.")
+        }
+    }
+
+    /// The play/pause glyph. A website theme sets it on the site's gradient
+    /// circle (`.fullscreen-play-btn`: primary into accent, 135°) with the
+    /// glow the site gives its play buttons (`.play-button`:
+    /// `0 8px 24px primary/0.5`). The circle is as tall as the transport row,
+    /// so the row keeps its height and the side buttons stay put.
+    private struct ThemedPlayButtonFace: ViewModifier {
+        let glyphSize: CGFloat
+        let diameter: CGFloat
+
+        func body(content: Content) -> some View {
+            if let palette = AppThemeStore.shared.palette {
+                content
+                    .font(.system(size: diameter * 0.46, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: diameter, height: diameter)
+                    .background {
+                        Circle()
+                            .fill(palette.gradient)
+                            .shadow(color: palette.primary.opacity(0.5), radius: 12, y: 8)
+                    }
+            } else {
+                content
+                    .font(.system(size: glyphSize, weight: .bold))
+                    .foregroundStyle(.primary)
+            }
         }
     }
 

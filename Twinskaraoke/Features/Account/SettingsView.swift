@@ -104,7 +104,7 @@ struct SettingsView: View {
     }
 
     private var settingsList: some View {
-        List {
+        InsetGroupedList {
             audioSection
             downloadsSection
             if DeviceCapability.supportsKaraoke {
@@ -121,9 +121,6 @@ struct SettingsView: View {
             developerSection
             experimentsSection
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 
     private var audioSection: some View {
@@ -653,12 +650,12 @@ private struct SettingsStorageActionRow: View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.appAccent)
+                .foregroundStyle(isDestructive ? Color.appDestructive : Color.appAccent)
                 .frame(width: 36, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body)
-                    .foregroundStyle(isDestructive ? Color.appAccent : .primary)
+                    .foregroundStyle(isDestructive ? Color.appDestructive : .primary)
                 Text(detail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -885,7 +882,7 @@ struct NotificationsView: View {
     }
 
     private var notificationsList: some View {
-        List {
+        InsetGroupedList {
             Section {
                 Toggle("Download Notifications", isOn: Binding(
                     get: { notifications.isEnabled },
@@ -907,8 +904,5 @@ struct NotificationsView: View {
                     : "Notify when downloads finish while the app is in the background."))
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 }

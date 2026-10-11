@@ -45,7 +45,11 @@ struct AppleMusicProgressBar: View {
         )
         .onDisappear { _ = scrubHaptics.end(cancelled: true) }
         .sliderThumbVisibility(.hidden)
-        .tint(.primary)
+        // A website theme fills progress with its primary, as the site's
+        // player bar does (`.progress-fill`). Not the full-screen player's
+        // primary-to-accent gradient: `Slider` resolves a gradient tint to
+        // its first colour.
+        .tint(AppThemeStore.shared.palette?.primary ?? .primary)
         .frame(minHeight: 44)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValueText ?? String(localized: "\(Int(progress * 100)) percent"))

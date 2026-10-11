@@ -10,7 +10,7 @@ struct DeveloperMenuView: View {
     @State private var splashResetError: String?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        List {
+        InsetGroupedList {
             if DeveloperMode.isEnabled {
                 Section("Walkthroughs") {
                     NavigationLink("Splash Screen Studio") { SplashStudioView() }
@@ -53,9 +53,6 @@ struct DeveloperMenuView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
         .navigationTitle("Developer")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Reset \(splashReset?.rawValue.capitalized ?? "") Splash & Close App?", isPresented: Binding(get: { splashReset != nil }, set: { if !$0 { splashReset = nil } }), titleVisibility: .visible) {

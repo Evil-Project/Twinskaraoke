@@ -52,12 +52,9 @@ struct AboutDetailList<Content: View>: View {
     }
 
     private var detailList: some View {
-        List {
+        InsetGroupedList {
             content()
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 }
 

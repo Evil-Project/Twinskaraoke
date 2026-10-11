@@ -36,7 +36,7 @@ struct AboutView: View {
     }
 
     private var aboutList: some View {
-        List {
+        InsetGroupedList {
             Section {
                 VStack(spacing: 14) {
                     appIconView
@@ -204,9 +204,6 @@ struct AboutView: View {
                     .listRowBackground(Color.clear)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 
     @ViewBuilder

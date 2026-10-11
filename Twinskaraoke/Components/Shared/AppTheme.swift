@@ -6,12 +6,18 @@ import SwiftUI
 #endif
 
 enum AppearanceMode: String, CaseIterable {
-    case system, light, dark, nwero
+    case system, light, dark, neuro, smocus, evil, nwero
+
+    static let storageKey = "nk.appearance"
+
     var label: String {
         switch self {
         case .system: "System"
         case .light: "Light"
         case .dark: "Dark"
+        case .neuro: "Neuro"
+        case .smocus: "SMOCUS"
+        case .evil: "Evil"
         case .nwero: "Nwero"
         }
     }
@@ -21,9 +27,21 @@ enum AppearanceMode: String, CaseIterable {
         case .system: nil
         case .light: .light
         case .dark: .dark
+        // The website themes only exist in dark.
+        case .neuro, .smocus, .evil: .dark
         // Nwero keeps Dark's exact palette; it only swaps opaque screen
         // fills for the animated Aurora backdrop underneath every page.
         case .nwero: .dark
+        }
+    }
+
+    /// The twinskaraoke.com theme this mode copies, if it is one of them.
+    var palette: AppThemePalette? {
+        switch self {
+        case .neuro: .neuro
+        case .smocus: .smocus
+        case .evil: .evil
+        case .system, .light, .dark, .nwero: nil
         }
     }
 
@@ -88,23 +106,23 @@ nonisolated extension Color {
     #endif
 
     #if canImport(UIKit)
-        static let appBackground = adaptive(
+        static let standardBackground = adaptive(
             light: UIColor.systemBackground,
             dark: UIColor.black
         )
-        static let appSecondaryBackground = adaptive(
+        static let standardSecondaryBackground = adaptive(
             light: UIColor.secondarySystemBackground,
             dark: UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1)
         )
-        static let appGroupedBackground = adaptive(
+        static let standardGroupedBackground = adaptive(
             light: UIColor.systemGroupedBackground,
             dark: UIColor.black
         )
-        static let appSheetGradientTop = adaptive(
+        static let standardSheetGradientTop = adaptive(
             light: UIColor.systemBackground,
             dark: UIColor(red: 0.04, green: 0.04, blue: 0.05, alpha: 1)
         )
-        static let appSheetGradientBottom = adaptive(
+        static let standardSheetGradientBottom = adaptive(
             light: UIColor.secondarySystemBackground,
             dark: .black
         )
@@ -137,7 +155,7 @@ nonisolated extension Color {
         /// `appControlInactiveFill`, which washed out against the artwork
         /// ambience; Apple Music's reads as a darker grey than the surface it
         /// sits on rather than a light film over it.
-        static let appPlayerActionFill = adaptive(
+        static let standardPlayerActionFill = adaptive(
             light: UIColor.black.withAlphaComponent(0.12),
             dark: UIColor.white.withAlphaComponent(0.10)
         )
@@ -441,6 +459,30 @@ extension View {
     /// because searching is the whole point of that screen.
     func secondarySearchBehavior() -> some View {
         searchToolbarBehavior(.minimize)
+    }
+}
+
+/// The inset-grouped `List` the settings-style screens share: Settings,
+/// Account, About and the screens under them.
+///
+/// Its rows would otherwise draw on the system's grey, which sits wrong on a
+/// website theme's tinted page, so those themes give rows their own
+/// `--*-bg-secondary`. Every other theme passes `nil`, which keeps the system
+/// row fill. The `Group` is what carries it: `listRowBackground` on the `List`
+/// itself never reaches the rows, while a `Group` hands it to every section.
+struct InsetGroupedList<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        List {
+            Group {
+                content
+            }
+            .listRowBackground(AppThemeStore.shared.palette?.secondaryBackground)
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .groupedScreenBackground()
     }
 }
 

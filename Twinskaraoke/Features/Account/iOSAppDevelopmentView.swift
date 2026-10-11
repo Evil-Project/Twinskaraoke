@@ -26,7 +26,7 @@ struct iOSAppDevelopmentView: View {
     }
 
     private var developmentList: some View {
-        List {
+        InsetGroupedList {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Twinskaraoke iOS")
@@ -79,9 +79,6 @@ struct iOSAppDevelopmentView: View {
                 .padding(.vertical, 2)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 
     private func techRow(_ name: String, detail: String) -> some View {
