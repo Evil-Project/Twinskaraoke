@@ -116,11 +116,11 @@ struct PlaybackQueueStateTests {
         state.beginInOrder(context: songs)
 
         #expect(state.advance(after: songs[0], repeatMode: .off, autoplayEnabled: false) == .play(songs[1]))
-        // Both repeat modes replay the song that ended, mid-queue or last.
+        // Repeat Once replays; continuous repeat advances and wraps the collection.
         #expect(state.advance(after: songs[0], repeatMode: .one, autoplayEnabled: false) == .replayCurrent(songs[0]))
         #expect(state.advance(after: songs[1], repeatMode: .one, autoplayEnabled: true) == .replayCurrent(songs[1]))
-        #expect(state.advance(after: songs[0], repeatMode: .all, autoplayEnabled: false) == .replayCurrent(songs[0]))
-        #expect(state.advance(after: songs[1], repeatMode: .all, autoplayEnabled: true) == .replayCurrent(songs[1]))
+        #expect(state.advance(after: songs[0], repeatMode: .all, autoplayEnabled: false) == .play(songs[1]))
+        #expect(state.advance(after: songs[1], repeatMode: .all, autoplayEnabled: true) == .play(songs[0]))
         #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: true) == .autoplay)
         #expect(state.advance(after: songs[1], repeatMode: .off, autoplayEnabled: false) == .stop)
     }
@@ -219,6 +219,49 @@ struct PlaybackQueueStateTests {
 
         state.toggleShuffle(current: songs[3])
         #expect(state.items == songs)
+    }
+
+    @Test("Direct song repeat never advances into context or requests autoplay")
+    func continuousSingleSongRepeat() throws {
+        let songs = fixtures(3)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: songs)
+        state.selectSingleSong()
+        let original = state.items
+        for song in songs {
+            #expect(state.advance(after: song, repeatMode: .all, autoplayEnabled: true) == .replayCurrent(song))
+        }
+        #expect(state.items == original)
+        let restored = try JSONDecoder().decode(PlaybackQueueState.self, from: JSONEncoder().encode(state))
+        #expect(!restored.hasRepeatCollection)
+        #expect(restored.advance(after: songs[1], repeatMode: .all, autoplayEnabled: true) == .replayCurrent(songs[1]))
+    }
+
+    @Test("Shuffled collections wrap in their existing order without generating songs")
+    func repeatShuffledCollection() throws {
+        let songs = fixtures(4)
+        var state = PlaybackQueueState()
+        _ = state.beginShuffled(songs: songs, selecting: { $0[2] }, shuffling: { Array($0.reversed()) })
+        let original = state.items
+        for (current, next) in zip(original, original.dropFirst() + [original[0]]) {
+            #expect(state.advance(after: current, repeatMode: .all, autoplayEnabled: true) == .play(next))
+        }
+        #expect(state.items == original)
+        state.toggleShuffle(current: original[0])
+        #expect(state.advance(after: songs.last, repeatMode: .all, autoplayEnabled: false) == .play(songs[0]))
+    }
+
+    @Test("Old saved queues retain collection repeat and single-song queues replay")
+    func repeatMigration() throws {
+        let songs = fixtures(2)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: songs)
+        var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(state)) as? [String: Any])
+        json.removeValue(forKey: "repeatsCollection")
+        let old = try JSONDecoder().decode(PlaybackQueueState.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(old.advance(after: songs[1], repeatMode: .all, autoplayEnabled: true) == .play(songs[0]))
+        state.beginInOrder(context: [songs[0]])
+        #expect(state.advance(after: songs[0], repeatMode: .all, autoplayEnabled: true) == .replayCurrent(songs[0]))
     }
 
     private func fixtures(_ count: Int) -> [Song] {

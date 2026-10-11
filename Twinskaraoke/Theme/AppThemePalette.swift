@@ -1,12 +1,9 @@
 import Observation
 import SwiftUI
+import WidgetKit
 
-/// The three themes from the twinskaraoke.com theme switcher, copied value for
-/// value from the site's `css/neuro-theme.css` (`--neuro-*`, `--twins-*` and
-/// `--evil-*`). The site's switcher labels the twins theme "SMOCUS".
-///
-/// The site only has dark variants, so every one of these forces the dark
-/// color scheme, and anything a palette does not cover keeps Dark's look.
+/// SwiftUI adapter for the website palette in the shared, serializable theme.
+/// Named values and appearance rules live in SharedThemeDefinition.
 struct AppThemePalette: Equatable {
     /// `--*-primary`. Replaces `Color.appAccent`, so it tints every control,
     /// and lights the current lyric and the playback progress.
@@ -33,29 +30,17 @@ struct AppThemePalette: Equatable {
         )
     }
 
-    static let neuro = AppThemePalette(
-        primary: Color(hex: "00D9FF"),
-        accent: Color(hex: "FF6B9D"),
-        background: Color(hex: "0A0E1A"),
-        secondaryBackground: Color(hex: "141B2D"),
-        elevatedBackground: Color(hex: "1E2A42")
-    )
-
-    static let smocus = AppThemePalette(
-        primary: Color(hex: "9D5CFF"),
-        accent: Color(hex: "FF6B9D"),
-        background: Color(hex: "0A0814"),
-        secondaryBackground: Color(hex: "150F23"),
-        elevatedBackground: Color(hex: "221A35")
-    )
-
-    static let evil = AppThemePalette(
-        primary: Color(hex: "FF0066"),
-        accent: Color(hex: "9D00FF"),
-        background: Color(hex: "0D0208"),
-        secondaryBackground: Color(hex: "1A0B14"),
-        elevatedBackground: Color(hex: "2A1220")
-    )
+    init(definition: SharedThemeDefinition) {
+        let values = definition.variant(for: .dark)
+        primary = values[.primary].color
+        accent = values[.accent].color
+        background = values[.background].color
+        secondaryBackground = values[.secondaryBackground].color
+        elevatedBackground = values[.elevatedBackground].color
+    }
+    static let neuro = Self(definition: .builtIn(.neuro))
+    static let smocus = Self(definition: .builtIn(.smocus))
+    static let evil = Self(definition: .builtIn(.evil))
 }
 
 /// The active website palette, or `nil` on every other theme.
@@ -68,20 +53,49 @@ struct AppThemePalette: Equatable {
 final class AppThemeStore {
     static let shared = AppThemeStore()
 
-    private(set) var palette: AppThemePalette?
+    private(set) var definition: SharedThemeDefinition
+    var palette: AppThemePalette? { definition.usesPalette ? AppThemePalette(definition: definition) : nil }
 
     private init() {
         let stored = UserDefaults.standard.string(forKey: AppearanceMode.storageKey)
-        palette = stored.flatMap(AppearanceMode.init(rawValue:))?.palette
+        let persisted = WidgetSnapshotStore().readTheme().definition
+        if stored == persisted.id {
+            definition = persisted
+        } else {
+            definition = .builtIn(stored.flatMap(AppearanceMode.init(rawValue:)) ?? .dark)
+        }
     }
 
-    func apply(_ mode: AppearanceMode) {
-        let next = mode.palette
-        // Observation notifies on every set, equal or not, and each one would
-        // redraw every view that touched a colour token.
-        guard next != palette else { return }
-        palette = next
+    func apply(_ mode: AppearanceMode) { apply(.builtIn(mode)) }
+
+    func applySelection(_ id: String) {
+        if let mode = AppearanceMode(rawValue: id) { apply(mode); return }
+        let persisted = WidgetSnapshotStore().readTheme().definition
+        apply(persisted.id == id ? persisted : .builtIn(.dark))
     }
+
+    /// A future creator can use the same complete-definition path without
+    /// teaching the widgets a new theme name.
+    func apply(_ next: SharedThemeDefinition) {
+        guard next.isValid else { return }
+        if next != definition { definition = next }
+        let store = WidgetSnapshotStore()
+        let state = SharedThemeState(definition: next)
+        let needsWrite = store.readTheme() != state || !store.hasCurrentThemeState
+        do {
+            if needsWrite { try store.write(state) }
+            // Keep custom IDs across relaunches using the same selection key.
+            UserDefaults.standard.set(next.id, forKey: AppearanceMode.storageKey)
+            if needsWrite {
+                for kind in [WidgetKinds.recent, WidgetKinds.nowPlaying, WidgetKinds.radio] {
+                    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+                }
+            }
+        } catch {
+            DebugLogger.log("Widget theme unavailable: \(error.localizedDescription)", category: .cache)
+        }
+    }
+
 }
 
 extension Color {

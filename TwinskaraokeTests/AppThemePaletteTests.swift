@@ -41,8 +41,12 @@ struct AppThemePaletteTests {
     @Test("Colour tokens follow the applied theme")
     func tokensFollowStore() {
         let store = AppThemeStore.shared
-        let original = store.palette
-        defer { restore(original) }
+        let original = store.definition
+        let selection = UserDefaults.standard.string(forKey: AppearanceMode.storageKey)
+        defer {
+            store.apply(original)
+            UserDefaults.standard.set(selection, forKey: AppearanceMode.storageKey)
+        }
 
         store.apply(.evil)
         #expect(rgb(.appAccent) == 0xFF0066)
@@ -52,11 +56,6 @@ struct AppThemePaletteTests {
         store.apply(.dark)
         #expect(store.palette == nil)
         #expect(rgb(.appAccent) == rgb(.appDefaultAccent))
-    }
-
-    private func restore(_ palette: AppThemePalette?) {
-        let mode = [AppearanceMode.neuro, .smocus, .evil].first { $0.palette == palette } ?? .dark
-        AppThemeStore.shared.apply(mode)
     }
 
     private func rgb(_ color: Color) -> Int {

@@ -1,34 +1,57 @@
 {
-  "fill" : "system-light",
-  "groups" : [
+  "fill": "system-light",
+  "groups": [
     {
-      "layers" : [
+      "layers": [
         {
-          "image-name" : "twins.png",
-          "name" : "twins",
-          "position" : {
-            "scale" : 0.8,
-            "translation-in-points" : [
+          "image-name": "label.svg",
+          "name": "Label",
+          "position": {
+            "scale": 1,
+            "translation-in-points": [
               0,
               0
             ]
           }
         }
       ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.3
       },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "twins.png",
+          "name": "twins",
+          "position": {
+            "scale": 0.8,
+            "translation-in-points": [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
       }
     }
   ],
-  "supported-platforms" : {
-    "circles" : [
+  "supported-platforms": {
+    "circles": [
       "watchOS"
     ],
-    "squares" : "shared"
+    "squares": "shared"
   }
 }

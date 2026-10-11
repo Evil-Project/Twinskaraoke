@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -16,6 +17,7 @@ final class RadioController {
     private var pollTimer: Timer?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     private var lastMetadataSignature: String?
+    @ObservationIgnored private var widgetPublishTask: Task<Void, Never>?
     @ObservationIgnored private let loadMetadata: @MainActor () async throws -> Data
 
     init(loadMetadata: @escaping @MainActor () async throws -> Data = {
@@ -113,6 +115,7 @@ final class RadioController {
                 prefetchArtwork(from: np)
                 refreshErrorMessage = nil
                 lastUpdated = Date()
+                publishWidgetMetadata(np, fetchedAt: lastUpdated!)
                 if AudioPlayerManager.shared.isRadioMode, let info = np.nowPlaying?.song {
                     let signature = metadataSignature(for: info)
                     if signature != lastMetadataSignature {
@@ -147,6 +150,22 @@ final class RadioController {
         ].joined(separator: "|")
     }
 
+    private func publishWidgetMetadata(_ metadata: RadioNowPlaying, fetchedAt: Date) {
+        let snapshot = WidgetRadioSnapshot(metadata: metadata, fetchedAt: fetchedAt)
+        let previousTask = widgetPublishTask
+        widgetPublishTask = Task {
+            await previousTask?.value
+            let store = WidgetSnapshotStore()
+            let previous = store.readRadio()
+            let saved = await WidgetRadioRepository.cache(snapshot, store: store)
+            // Still persist the successful fetch timestamp on unchanged polls.
+            // Only visible metadata/artwork changes warrant a timeline reload.
+            if !saved.hasSameContent(as: previous) {
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.radio)
+            }
+        }
+    }
+
     private func prefetchArtwork(from metadata: RadioNowPlaying) {
         let urls =
             [
@@ -164,6 +183,7 @@ final class RadioController {
         refreshErrorMessage = nil
         isRefreshing = false
         lastUpdated = Date()
+        publishWidgetMetadata(Self.uiTestNowPlaying, fetchedAt: lastUpdated!)
         if let info = nowPlaying?.nowPlaying?.song {
             lastMetadataSignature = metadataSignature(for: info)
         }

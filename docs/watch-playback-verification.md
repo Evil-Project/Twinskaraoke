@@ -48,7 +48,7 @@ The existing watch layouts and controls are retained. Artwork remains locally cr
 
 ## Remaining device checks
 
-No new Apple Developer portal capability is required by these changes. The existing watch companion identifier matches the iPhone target (`org.magnettilemanalt.Twinskaraoke`), and both targets declare background audio. Before installing on hardware, check that both targets use the intended signing team and provisioning profiles. An existing build warning reports an extension build number of 21 versus the containing app's 25; resolve that before an archive/distribution build.
+No new Apple Developer portal capability is required by these changes. The existing watch companion identifier matches the iPhone target (`org.magnettileman.Twinskaraoke`), and both targets declare background audio. Before installing on hardware, check that both targets use the intended signing team and provisioning profiles. An existing build warning reports an extension build number of 21 versus the containing app's 25; resolve that before an archive/distribution build.
 
 On the paired physical devices, verify:
 

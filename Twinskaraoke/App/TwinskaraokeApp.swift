@@ -24,6 +24,7 @@ struct TwinskaraokeApp: App {
         // to sign in on its own. No-op on devices that can't pair one.
         WatchSessionPublisher.shared.activate()
         IOSAppShortcuts.updateAppShortcutParameters()
+        AppThemeStore.shared.apply(AppThemeStore.shared.definition)
         WidgetSnapshotPublisher.shared.start()
     }
 
@@ -37,7 +38,7 @@ struct TwinskaraokeApp: App {
                 .injectHaptics()
                 .tint(.appAccent)
                 .onChange(of: appearanceMode) { _, mode in
-                    AppThemeStore.shared.apply(AppearanceMode(rawValue: mode) ?? .system)
+                    AppThemeStore.shared.applySelection(mode)
                 }
                 .shimejiSession()
                 .onAppear {
@@ -54,7 +55,7 @@ struct TwinskaraokeApp: App {
     }
 
     private var resolvedColorScheme: ColorScheme? {
-        (AppearanceMode(rawValue: appearanceMode) ?? .system).colorScheme
+        AppThemeStore.shared.definition.colorScheme
     }
 
     private var resolvedLanguage: AppLanguage {

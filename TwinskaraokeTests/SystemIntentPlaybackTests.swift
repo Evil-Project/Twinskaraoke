@@ -70,7 +70,7 @@ struct SystemIntentPlaybackTests {
         } catch SystemIntentError.noNext { }
     }
 
-    @Test func repeatReplaysTheSongThatEnded() async throws {
+    @Test func repeatLoopsCollectionsAndRepeatsSingleSelections() async throws {
         let player = AudioPlayerManager.shared
         let previousAI = player.aiEnabled
         player.aiEnabled = false
@@ -92,11 +92,11 @@ struct SystemIntentPlaybackTests {
             player.playNextOrRandom()
         }
 
-        // Repeat plays the song again from the start every time it ends.
+        // Continuous repeat walks the full collection and wraps to its start.
         player.repeatMode = .all
-        for _ in 0..<2 {
+        for index in [1, 2, 0, 1, 2, 0] {
             endSong()
-            #expect(player.currentSong?.id == songs[0].id)
+            #expect(player.currentSong?.id == songs[index].id)
             #expect(player.progress == 0)
         }
         #expect(player.repeatMode == .all)
@@ -116,6 +116,41 @@ struct SystemIntentPlaybackTests {
         #expect(player.currentSong?.id == songs[2].id)
         #expect(player.repeatMode == .all)
         #expect(player.queue.map(\.id) == songs.map(\.id))
+
+        // A direct song selection repeats itself, even with a list available
+        // as normal context. Repeat does not fetch or append autoplay songs.
+        player.play(song: songs[1], context: songs)
+        for _ in 0..<3 {
+            endSong()
+            #expect(player.currentSong?.id == songs[1].id)
+            #expect(player.progress == 0)
+            #expect(player.queue.map(\.id) == songs.map(\.id))
+        }
+
+        // Skipping out of a direct selection can start recommendations while
+        // Repeat All stays on. Exercise the same entry point as the async fetch.
+        for shuffled in [false, true] {
+            if player.isShuffled != shuffled { player.toggleShuffle() }
+            player.playAutoplay(song: songs[0], context: songs)
+            #expect(player.isShuffled == shuffled)
+            let cycle = player.queue
+            #expect(cycle.first?.id == songs[0].id)
+            for expected in cycle.dropFirst() + [cycle[0]] {
+                endSong()
+                #expect(player.currentSong?.id == expected.id)
+                #expect(player.progress == 0)
+                #expect(player.repeatMode == .all)
+                #expect(player.queue == cycle)
+            }
+            if shuffled {
+                player.toggleShuffle()
+                #expect(player.queue == songs)
+            }
+            player.play(song: songs[1], context: songs)
+            endSong()
+            #expect(player.currentSong?.id == songs[1].id)
+        }
+
     }
 
     private func cachedSong(index: Int) throws -> Song {

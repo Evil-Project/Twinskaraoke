@@ -87,12 +87,35 @@ nonisolated struct WidgetSnapshotStore: Sendable {
         let value: LibraryWidgetSnapshot? = read("library.json")
         return value?.schemaVersion == 1 ? value! : LibraryWidgetSnapshot()
     }
+    func readTheme() -> SharedThemeState {
+        if let value: SharedThemeState = read("theme.json"), value.isValid { return value }
+        // Version zero carried only the selection, before concrete colors were stored.
+        struct Legacy: Decodable { var schemaVersion: Int; var appearanceMode: String }
+        if let legacy: Legacy = read("theme.json"), legacy.schemaVersion == 0,
+           let mode = AppearanceMode(rawValue: legacy.appearanceMode) {
+            return SharedThemeState(definition: .builtIn(mode))
+        }
+        return .fallback
+    }
+    var hasCurrentThemeState: Bool {
+        let state: SharedThemeState? = read("theme.json")
+        return state?.isValid == true
+    }
+    func readRadio() -> WidgetRadioSnapshot {
+        let value: WidgetRadioSnapshot? = read("radio.json")
+        return value?.isValid == true ? value! : WidgetRadioSnapshot()
+    }
     private func read<T: Decodable>(_ name: String) -> T? {
         guard let directory, let data = try? Data(contentsOf: directory.appendingPathComponent(name)) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
     }
     func write(_ value: PlaybackWidgetSnapshot) throws { try write(value, name: "playback.json") }
     func write(_ value: LibraryWidgetSnapshot) throws { try write(value, name: "library.json") }
+    func write(_ value: SharedThemeState) throws {
+        guard value.isValid else { throw CocoaError(.fileWriteInvalidFileName) }
+        try write(value, name: "theme.json")
+    }
+    func write(_ value: WidgetRadioSnapshot) throws { try write(value, name: "radio.json") }
     private func write<T: Encodable>(_ value: T, name: String) throws {
         guard let directory else { throw CocoaError(.fileNoSuchFile) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -158,10 +158,8 @@ struct NweroAuroraBackdrop: View {
 
 // Reusable Modifier to apply background anywhere in your app
 struct AuroraBackgroundModifier: ViewModifier {
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
-
     private var isNwero: Bool {
-        (AppearanceMode(rawValue: appearanceMode) ?? .dark).usesAuroraBackground
+        AppThemeStore.shared.definition.backdrop == .aurora
     }
 
     func body(content: Content) -> some View {

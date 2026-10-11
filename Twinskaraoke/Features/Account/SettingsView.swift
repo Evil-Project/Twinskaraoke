@@ -303,6 +303,14 @@ struct SettingsView: View {
         Section {
             Toggle("Enable Experiments", isOn: experimentsToggleBinding)
                 .tint(.appAccent)
+            if experimentsEnabled || AppIconManager.shared.selected == .experimental {
+                NavigationLink {
+                    AppIconSettingsView()
+                } label: {
+                    Label("App Icon", systemImage: "app")
+                }
+                .accessibilityIdentifier("Settings.AppIcon")
+            }
             if experimentsEnabled {
                 Toggle("Experimental Themes", isOn: experimentalThemesToggleBinding)
                     .tint(.appAccent)

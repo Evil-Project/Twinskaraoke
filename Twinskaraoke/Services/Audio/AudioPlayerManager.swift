@@ -16,9 +16,9 @@ private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
 
-/// Both modes repeat the current song: `.all` until it is turned off, `.one`
-/// once more before switching itself off. The case names predate that and are
-/// kept because saved sessions, widget snapshots and the watch sync use them.
+/// `.all` loops a selected collection, or the song selected directly. `.one`
+/// replays the current song once before switching itself off. Raw case names
+/// stay compatible with saved sessions, widget snapshots and watch sync.
 nonisolated enum RepeatMode: Equatable, Sendable, Codable {
     case off, all, one
     var symbol: String {
@@ -107,6 +107,7 @@ final class AudioPlayerManager {
     var routeName: String = ""
     var repeatMode: RepeatMode = .off { didSet { scheduleSessionSave() } }
     var isShuffled: Bool { queueState.isShuffled }
+    var repeatsCurrentCollection: Bool { queueState.hasRepeatCollection }
     var autoplayEnabled: Bool = UserDefaults.standard.object(forKey: "nk.autoplayEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(autoplayEnabled, forKey: "nk.autoplayEnabled")
@@ -1547,8 +1548,8 @@ final class AudioPlayerManager {
 
                 // A crossfade would start the next song before this one ends,
                 // which is exactly when the end-of-song sleep timer stops.
-                // With repeat on this song replays when it ends, so there is no
-                // next song to blend into either.
+                // Repeat outcomes are resolved at the song's end, including
+                // collection wrapping; keep prepared crossfades disabled here.
                 if self.repeatMode == .off, !self.sleepTimer.endsWithCurrentSong {
                     self.transitionCoordinator.poll(
                         currentTime: t,
@@ -1568,7 +1569,14 @@ final class AudioPlayerManager {
     }
 
     func play(song: Song, context: [Song] = []) {
+        queueState.selectSingleSong()
         play(song: song, context: context, resetTransitionVolume: true)
+    }
+
+    /// Starts recommendations as a collection so Repeat All advances and wraps.
+    func playAutoplay(song: Song, context: [Song]) {
+        queueState.beginAutoplay(context: context, current: song)
+        play(song: song, resetTransitionVolume: true)
     }
 
     private func play(
@@ -2252,7 +2260,7 @@ final class AudioPlayerManager {
             if repeatMode == .one { repeatMode = .off }
             play(song: song, context: [], resetTransitionVolume: true, reportsPlayCount: false)
         case .play(let song):
-            play(song: song)
+            play(song: song, resetTransitionVolume: true)
         case .autoplay:
             fetchAutoplaySongs()
         case .stop:
@@ -2275,17 +2283,14 @@ final class AudioPlayerManager {
             seek(to: 0)
             return
         }
-        play(song: previous)
+        play(song: previous, resetTransitionVolume: true)
     }
 
     func toggleRepeat() {
         if WatchSessionPublisher.shared.routeToWatch(.repeatMode) { return }
         let nextBefore = queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         repeatMode = repeatMode.next()
-        // Turning repeat on makes "the next song" this song again, and turning
-        // it off brings the next song back. A crossfade prepared for the old
-        // answer would otherwise still start on schedule. One already under
-        // way is left to finish.
+        // Reconcile any prepared transition when the next repeat outcome changes.
         if !transitionCoordinator.state.isCrossfading,
            queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore
         {
@@ -2301,13 +2306,13 @@ final class AudioPlayerManager {
     func playInOrder(song: Song, context: [Song]) {
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
         queueState.beginInOrder(context: context)
-        play(song: song, context: context)
+        play(song: song, context: context, resetTransitionVolume: true)
     }
 
     func playCompanion(song: Song, context: [Song], shuffled: Bool) {
         if !shuffled { playInOrder(song: song, context: context); return }
         _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
-        play(song: song)
+        play(song: song, resetTransitionVolume: true)
     }
 
     func playShuffled(from songs: [Song]) {
@@ -2320,7 +2325,7 @@ final class AudioPlayerManager {
         // The state already contains the shuffled queue and its original
         // ordering. Passing that queue back as a context would shuffle it a
         // second time and overwrite the restoration order.
-        play(song: pick)
+        play(song: pick, resetTransitionVolume: true)
     }
 
     /// Jumps to a song that is already up next, leaving the queue as it is.
@@ -3728,7 +3733,7 @@ final class AudioPlayerManager {
                 #endif
                 return
             }
-            play(song: next, context: songs)
+            playAutoplay(song: next, context: songs)
         }
     }
 
