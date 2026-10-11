@@ -83,6 +83,6 @@ struct SleepTimerControl: ControlWidget {
             ControlWidgetButton(action: IOSControlSleepTimerIntent(duration: configuration.duration)) {
                 Label("Sleep Timer", systemImage: "moon.zzz")
             }
-        }.displayName("Sleep Timer").description("Stop playback after the selected duration or when the current song ends.")
+        }.displayName("Sleep Timer").description("Stop playback after the selected duration or when the current song ends. End-of-song timers are unavailable during live radio.")
     }
 }

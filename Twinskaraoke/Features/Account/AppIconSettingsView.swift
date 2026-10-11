@@ -46,7 +46,7 @@ struct AppIconSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Previews show the light and dark versions. Your system appearance controls which version is used. Apple Watch keeps its installed icon because watchOS does not support alternate app icons.")
+                Text("Previews show the light and dark versions. Your Home Screen icon appearance setting controls which version is used. Apple Watch keeps its installed icon because watchOS does not support alternate app icons.")
             }
             if !manager.isSupported {
                 Section {

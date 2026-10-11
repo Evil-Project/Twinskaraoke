@@ -46,10 +46,11 @@ struct ScreenBackgroundFill: View {
 }
 
 nonisolated extension Color {
+    private static let systemDefinition = SharedThemeDefinition.builtIn(.system)
+
     private static func adaptive(_ token: ThemeToken) -> Color {
         Color(uiColor: UIColor { trait in
-            let definition = SharedThemeDefinition.builtIn(.system)
-            let variant = definition.variant(for: trait.userInterfaceStyle == .dark ? .dark : .light)
+            let variant = systemDefinition.variant(for: trait.userInterfaceStyle == .dark ? .dark : .light)
             let rgba = variant[token]
             return UIColor(red: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha)
         })

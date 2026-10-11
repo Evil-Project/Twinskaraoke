@@ -6,7 +6,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.org.magnettilemanalt.Twinskaraoke</string>
+		<string>group.org.magnettileman.Twinskaraoke</string>
 	</array>
 </dict>
 </plist>

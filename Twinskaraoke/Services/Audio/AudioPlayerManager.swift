@@ -1573,6 +1573,12 @@ final class AudioPlayerManager {
         play(song: song, context: context, resetTransitionVolume: true)
     }
 
+    /// Starts recommendations as a collection so Repeat All advances and wraps.
+    func playAutoplay(song: Song, context: [Song]) {
+        queueState.beginAutoplay(context: context, current: song)
+        play(song: song, resetTransitionVolume: true)
+    }
+
     private func play(
         song: Song,
         context: [Song] = [],
@@ -3727,7 +3733,7 @@ final class AudioPlayerManager {
                 #endif
                 return
             }
-            play(song: next, context: songs)
+            playAutoplay(song: next, context: songs)
         }
     }
 

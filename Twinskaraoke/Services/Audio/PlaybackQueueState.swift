@@ -23,6 +23,12 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     mutating func selectSingleSong() { repeatsCollection = false }
     var hasRepeatCollection: Bool { repeatsCollection ?? (items.count > 1) }
 
+    /// Starts a repeatable recommendation collection, preserving the shuffle setting.
+    mutating func beginAutoplay(context: [Song], current: Song) {
+        repeatsCollection = true
+        replaceContext(context, current: current)
+    }
+
     mutating func replaceContext(
         _ context: [Song],
         current: Song,

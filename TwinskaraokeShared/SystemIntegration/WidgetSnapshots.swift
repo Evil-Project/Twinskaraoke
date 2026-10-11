@@ -74,7 +74,7 @@ nonisolated struct LibraryWidgetSnapshot: Codable, Equatable, Sendable {
 nonisolated struct WidgetSnapshotStore: Sendable {
     // Both bundles carry this value in Info.plist, matching their entitlements.
     static let groupID = Bundle.main.object(forInfoDictionaryKey: "WidgetAppGroupIdentifier") as? String
-        ?? "group.org.magnettilemanalt.Twinskaraoke"
+        ?? "group.org.magnettileman.Twinskaraoke"
     let directory: URL?
     init(directory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)) {
         self.directory = directory

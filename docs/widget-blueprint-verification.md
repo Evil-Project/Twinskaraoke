@@ -48,11 +48,11 @@ Environment: Xcode 27 SDK; iPhone 17 Pro simulator running iOS 26.5. App and wid
 
 Representative render sheets:
 
-![Radio themes and custom definition](/Users/yitzyryp/Documents/Twinskaraoke/docs/widget-blueprint-renders/themes.jpg)
+![Radio themes and custom definition](widget-blueprint-renders/themes.jpg)
 
-![All seven supported sizes in Neuro](/Users/yitzyryp/Documents/Twinskaraoke/docs/widget-blueprint-renders/sizes.jpg)
+![All seven supported sizes in Neuro](widget-blueprint-renders/sizes.jpg)
 
-![Failure, localized text, constrained-mode, and first-launch cases](/Users/yitzyryp/Documents/Twinskaraoke/docs/widget-blueprint-renders/edge-cases.jpg)
+![Failure, localized text, constrained-mode, and first-launch cases](widget-blueprint-renders/edge-cases.jpg)
 
 ## Remaining verification limits and personal steps
 

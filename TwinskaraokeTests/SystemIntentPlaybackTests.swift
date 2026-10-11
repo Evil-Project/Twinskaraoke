@@ -127,6 +127,30 @@ struct SystemIntentPlaybackTests {
             #expect(player.queue.map(\.id) == songs.map(\.id))
         }
 
+        // Skipping out of a direct selection can start recommendations while
+        // Repeat All stays on. Exercise the same entry point as the async fetch.
+        for shuffled in [false, true] {
+            if player.isShuffled != shuffled { player.toggleShuffle() }
+            player.playAutoplay(song: songs[0], context: songs)
+            #expect(player.isShuffled == shuffled)
+            let cycle = player.queue
+            #expect(cycle.first?.id == songs[0].id)
+            for expected in cycle.dropFirst() + [cycle[0]] {
+                endSong()
+                #expect(player.currentSong?.id == expected.id)
+                #expect(player.progress == 0)
+                #expect(player.repeatMode == .all)
+                #expect(player.queue == cycle)
+            }
+            if shuffled {
+                player.toggleShuffle()
+                #expect(player.queue == songs)
+            }
+            player.play(song: songs[1], context: songs)
+            endSong()
+            #expect(player.currentSong?.id == songs[1].id)
+        }
+
     }
 
     private func cachedSong(index: Int) throws -> Song {
