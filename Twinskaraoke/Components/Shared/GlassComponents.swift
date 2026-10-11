@@ -13,6 +13,10 @@ import SwiftUI
 /// circular buttons it backs.
 struct AppGlassBackground<S: Shape>: ViewModifier {
     let shape: S
+    /// The Reduce Transparency fill, `appSecondaryBackground` by default.
+    /// Controls on a sheet need another: under a website theme the sheet is
+    /// that same colour, so the default would erase their bounds.
+    var fallback: Color?
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -20,7 +24,7 @@ struct AppGlassBackground<S: Shape>: ViewModifier {
     func body(content: Content) -> some View {
         if reduceTransparency {
             content
-                .background(shape.fill(Color.appSecondaryBackground))
+                .background(shape.fill(fallback ?? .appSecondaryBackground))
                 .overlay {
                     if contrast == .increased {
                         shape.stroke(Color.appDivider, lineWidth: 1)
@@ -35,8 +39,8 @@ struct AppGlassBackground<S: Shape>: ViewModifier {
 extension View {
     /// Backs the view with Liquid Glass in `shape`, honouring Reduce
     /// Transparency and Increase Contrast.
-    func appGlassBackground(in shape: some Shape) -> some View {
-        modifier(AppGlassBackground(shape: shape))
+    func appGlassBackground(in shape: some Shape, fallback: Color? = nil) -> some View {
+        modifier(AppGlassBackground(shape: shape, fallback: fallback))
     }
 }
 

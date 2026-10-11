@@ -212,7 +212,7 @@ private struct PlayerLayoutMetrics {
     }
 
     var primaryControlSize: CGFloat {
-        isCompactHeight ? 52 : 56
+        isCompactHeight ? 56 : 60
     }
 
     var lyricsArtworkSize: CGFloat {
@@ -1181,7 +1181,7 @@ struct FullScreenPlayerView: View {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                     }
                 }
-                .modifier(ThemedPlayButtonFace(glyphSize: primarySize, diameter: rowHeight))
+                .modifier(ThemedPlayButtonFace(glyphSize: primarySize, rowHeight: rowHeight))
                 .frame(maxWidth: .infinity)
                 .frame(height: rowHeight)
             }
@@ -1206,11 +1206,14 @@ struct FullScreenPlayerView: View {
     /// The play/pause glyph. A website theme sets it on the site's gradient
     /// circle (`.fullscreen-play-btn`: primary into accent, 135°) with the
     /// glow the site gives its play buttons (`.play-button`:
-    /// `0 8px 24px primary/0.5`). The circle is as tall as the transport row,
-    /// so the row keeps its height and the side buttons stay put.
+    /// `0 8px 24px primary/0.5`). The circle grows with the glyph, about 7%
+    /// past the transport row, and overhangs it rather than growing it, so
+    /// the side buttons stay put.
     private struct ThemedPlayButtonFace: ViewModifier {
         let glyphSize: CGFloat
-        let diameter: CGFloat
+        let rowHeight: CGFloat
+
+        private var diameter: CGFloat { rowHeight * 1.07 }
 
         func body(content: Content) -> some View {
             if let palette = AppThemeStore.shared.palette {
