@@ -10,7 +10,12 @@ final class SystemIntegrationUITests: XCTestCase {
         app.launch()
         for (route, title) in [("search", "Search"), ("library", "Library"), ("radio", "Radio"), ("home", "Home")] {
             app.open(URL(string: "twinskaraoke://\(route)")!)
-            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10) || app.staticTexts[title].waitForExistence(timeout: 5))
+            if route == "search" {
+                // Search can omit its navigation title while showing browse content.
+                XCTAssertTrue(app.staticTexts["SearchBrowse.Featured"].waitForExistence(timeout: 10))
+            } else {
+                XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10) || app.staticTexts[title].waitForExistence(timeout: 5))
+            }
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "Deep link \(route)"
             attachment.lifetime = .keepAlways

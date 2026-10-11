@@ -1382,6 +1382,25 @@ final class TwinskaraokeUITests: XCTestCase {
     XCTAssertEqual(autoplay.value as? String, selectedAutoplay)
   }
 
+  func testExperimentalAppIconChooserShowsBothDesignsAndWatchLimitation() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-nk.language", "en", "-nk.experimentsEnabled", "YES"]
+    app.launch()
+    defer { app.terminate() }
+    openAccountToolbar(in: app)
+    openVisibleItem("Settings", in: app)
+    scrollToVisibleItem("App Icon", identifier: "Settings.AppIcon", in: app)
+    openVisibleItem("App Icon", identifier: "Settings.AppIcon", in: app)
+    XCTAssertTrue(app.navigationBars["App Icon"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.buttons["AppIcon.production"].exists)
+    XCTAssertTrue(app.buttons["AppIcon.experimental"].exists)
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "watchOS does not support alternate app icons")).firstMatch.exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Experimental app icon chooser"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
   func testSettingsUseSelectedLanguageForThemeAndStrength() throws {
     let app = XCUIApplication()
     app.launchArguments = ["-UITestMode", "1", "-nk.language", "de", "-nk.appearance", "light",

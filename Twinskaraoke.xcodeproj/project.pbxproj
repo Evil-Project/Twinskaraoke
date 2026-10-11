@@ -14,6 +14,8 @@
 		D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 /* PillarboxPlayer */; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1820000000000000000000D /* TwinskaraokeWidgets.appex in Embed iOS Widgets */ = {isa = PBXBuildFile; fileRef = E18200000000000000000002 /* TwinskaraokeWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E18200000000000000000021 /* TwinskaraokeShared/Models/RadioNowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */; };
+		E18200000000000000000023 /* TwinskaraokeShared/Localization/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -116,6 +118,8 @@
 		D1A000032FAD000100000003 /* Twinskaraoke Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1A000042FAD000100000004 /* Twinskaraoke Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E18200000000000000000002 /* TwinskaraokeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = TwinskaraokeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwinskaraokeShared/Models/RadioNowPlaying.swift; sourceTree = SOURCE_ROOT; };
+		E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = TwinskaraokeShared/Localization/Localizable.xcstrings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -322,6 +326,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		04F001D0307BE9DD0022135C /* Widget Shared Resources */ = {
+			isa = PBXGroup;
+			children = (
+				E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */,
+				E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */,
+			);
+			name = "Widget Shared Resources";
+			sourceTree = "<group>";
+		};
 		8C0263F917FCAAD4E520C8CF /* OS X */ = {
 			isa = PBXGroup;
 			children = (
@@ -355,6 +368,7 @@
 				D0DB31F62FA8A3F80089C24C /* Frameworks */,
 				D0F981B62F94C10900FD69AB /* Products */,
 				9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */,
+				04F001D0307BE9DD0022135C /* Widget Shared Resources */,
 			);
 			sourceTree = "<group>";
 		};
@@ -744,6 +758,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E18200000000000000000023 /* TwinskaraokeShared/Localization/Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -817,6 +832,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E18200000000000000000021 /* TwinskaraokeShared/Models/RadioNowPlaying.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -870,7 +886,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -884,7 +900,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = Twinskaraoke;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -906,7 +922,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -920,7 +936,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = Twinskaraoke;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -939,7 +955,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -951,7 +967,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -971,7 +987,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -983,7 +999,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1002,7 +1018,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
@@ -1013,8 +1029,8 @@
 					"@executable_path/../../Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp.watchwidgets;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.watchkitapp.watchwidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1031,7 +1047,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
@@ -1042,8 +1058,8 @@
 					"@executable_path/../../Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp.watchwidgets;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.watchkitapp.watchwidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1187,7 +1203,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1196,14 +1212,14 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.magnettileman.Twinskaraoke;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.magnettilemanalt.Twinskaraoke;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1224,7 +1240,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1233,14 +1249,14 @@
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.magnettileman.Twinskaraoke;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = org.magnettilemanalt.Twinskaraoke;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1259,12 +1275,13 @@
 		D0F982002F94C10B00FD69AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = ExperimentalAppIcon;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Twinskaraoke/Twinskaraoke.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1284,8 +1301,8 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -1302,12 +1319,13 @@
 		D0F982012F94C10B00FD69AB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = ExperimentalAppIcon;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Twinskaraoke/Twinskaraoke.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1327,8 +1345,8 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
@@ -1565,7 +1583,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TwinskaraokeWidgets/TwinskaraokeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWidgets/Info.plist;
@@ -1576,8 +1594,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.widgets;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -1596,7 +1614,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TwinskaraokeWidgets/TwinskaraokeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWidgets/Info.plist;
@@ -1607,8 +1625,8 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.14;
-				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.widgets;
+				MARKETING_VERSION = 1.0.15;
+				PRODUCT_BUNDLE_IDENTIFIER = org.magnettilemanalt.Twinskaraoke.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;

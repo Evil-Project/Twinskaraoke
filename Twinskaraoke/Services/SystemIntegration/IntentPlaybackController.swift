@@ -102,7 +102,7 @@ enum IntentPlaybackController {
         case .toggleRepeat:
             switch player.repeatMode {
             case .off: return String(localized: "Don't Repeat.")
-            case .all: return String(localized: "Repeat this song.")
+            case .all: return player.repeatsCurrentCollection ? String(localized: "Repeat this collection.") : String(localized: "Repeat this song.")
             case .one: return String(localized: "Repeat this song once.")
             }
         }

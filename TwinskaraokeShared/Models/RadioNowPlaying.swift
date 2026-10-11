@@ -10,14 +10,14 @@ nonisolated enum RadioStation {
     )!
 }
 
-struct RadioNowPlaying: Decodable {
+nonisolated struct RadioNowPlaying: Decodable, Sendable {
     let station: Station
     let listeners: Listeners?
     let nowPlaying: NowPlayingItem?
     let playingNext: NowPlayingItem?
     let songHistory: [HistoryItem]?
 
-    struct Station: Decodable {
+    struct Station: Decodable, Sendable {
         let name: String
         let description: String?
         let listenUrl: String
@@ -28,20 +28,20 @@ struct RadioNowPlaying: Decodable {
         }
     }
 
-    struct Listeners: Decodable {
+    struct Listeners: Decodable, Sendable {
         let total: Int
         let unique: Int
     }
 
-    struct NowPlayingItem: Decodable {
+    struct NowPlayingItem: Decodable, Sendable {
         let song: SongInfo
     }
 
-    struct HistoryItem: Decodable {
+    struct HistoryItem: Decodable, Sendable {
         let song: SongInfo
     }
 
-    struct SongInfo: Decodable {
+    struct SongInfo: Decodable, Sendable {
         let id: String
         let art: String?
         let text: String?
@@ -55,7 +55,7 @@ struct RadioNowPlaying: Decodable {
         }
     }
 
-    struct CustomFields: Decodable {
+    struct CustomFields: Decodable, Sendable {
         let songID: String?
 
         enum CodingKeys: String, CodingKey {
@@ -70,6 +70,31 @@ struct RadioNowPlaying: Decodable {
         case songHistory = "song_history"
     }
 }
+
+// Listener data is optional station metadata. A bad count must not discard
+// an otherwise valid song or prevent the app from starting the station.
+nonisolated extension RadioNowPlaying {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        station = try values.decode(Station.self, forKey: .station)
+        listeners = try? values.decode(Listeners.self, forKey: .listeners)
+        nowPlaying = try values.decodeIfPresent(NowPlayingItem.self, forKey: .nowPlaying)
+        playingNext = try values.decodeIfPresent(NowPlayingItem.self, forKey: .playingNext)
+        songHistory = try values.decodeIfPresent([HistoryItem].self, forKey: .songHistory)
+    }
+}
+nonisolated extension RadioNowPlaying.Listeners {
+    private enum CodingKeys: String, CodingKey { case total, unique }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        total = try values.decode(Int.self, forKey: .total)
+        guard total >= 0 else {
+            throw DecodingError.dataCorruptedError(forKey: .total, in: values, debugDescription: "Negative listener count")
+        }
+        unique = (try? values.decode(Int.self, forKey: .unique)) ?? 0
+    }
+}
+#if !WIDGET_EXTENSION
 
 extension RadioNowPlaying.SongInfo {
     var resolvedSongID: String? {
@@ -90,3 +115,5 @@ extension RadioNowPlaying.SongInfo {
         )
     }
 }
+
+#endif

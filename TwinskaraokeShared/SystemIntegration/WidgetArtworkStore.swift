@@ -57,12 +57,24 @@ nonisolated struct WidgetArtworkStore: Sendable {
         try (output as Data).write(to: directory.appendingPathComponent(filename), options: .atomic)
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
             .sorted { (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast > (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast }
-        for file in files.dropFirst(max(1, limit)) { try? FileManager.default.removeItem(at: file) }
+        let radioArtwork = WidgetSnapshotStore(directory: directory.deletingLastPathComponent()).readRadio().artworkFilename
+        for file in files.dropFirst(max(1, limit)) where file.lastPathComponent != radioArtwork {
+            try? FileManager.default.removeItem(at: file)
+        }
         return filename
     }
     func clear() throws {
         guard let directory, FileManager.default.fileExists(atPath: directory.path) else { return }
-        try FileManager.default.removeItem(at: directory)
+        // The public station cache must survive an account artwork purge.
+        let radioArtwork = WidgetSnapshotStore(directory: directory.deletingLastPathComponent()).readRadio().artworkFilename
+        if let radioArtwork {
+            for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                where file.lastPathComponent != radioArtwork {
+                try FileManager.default.removeItem(at: file)
+            }
+        } else {
+            try FileManager.default.removeItem(at: directory)
+        }
     }
 }
 #endif

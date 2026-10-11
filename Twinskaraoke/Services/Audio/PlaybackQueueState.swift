@@ -16,6 +16,12 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     private(set) var items: [Song] = []
     private(set) var originalItems: [Song] = []
     private(set) var isShuffled = false
+    /// Nil is an older saved session, whose existing multi-song queue is its
+    /// collection. New direct song selections explicitly use single-song repeat.
+    private(set) var repeatsCollection: Bool? = nil
+
+    mutating func selectSingleSong() { repeatsCollection = false }
+    var hasRepeatCollection: Bool { repeatsCollection ?? (items.count > 1) }
 
     mutating func replaceContext(
         _ context: [Song],
@@ -36,12 +42,14 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         items = songs
         originalItems = []
         isShuffled = shuffled
+        repeatsCollection = songs.count > 1
     }
 
     mutating func clear() {
         items = []
         originalItems = []
         isShuffled = false
+        repeatsCollection = nil
     }
 
     mutating func insertNext(_ song: Song, after current: Song) {
@@ -62,14 +70,14 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         }
     }
 
-    /// Where playback goes when a song ends by itself. Both repeat modes
-    /// replay the song; neither loops the queue.
+    /// Repeat Once replays the current song. Continuous repeat walks the
+    /// selected collection and wraps, or replays a direct single-song selection.
     func advance(
         after current: Song?,
         repeatMode: RepeatMode,
         autoplayEnabled: Bool
     ) -> Advance {
-        if repeatMode.isActive, let current {
+        if let current, repeatMode == .one || (repeatMode == .all && !hasRepeatCollection) {
             return .replayCurrent(current)
         }
         if let current,
@@ -78,6 +86,11 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         {
             return .play(items[index + 1])
         }
+        if repeatMode == .all, let current, hasRepeatCollection,
+           items.contains(where: { $0.id == current.id }), let first = items.first {
+            return first.id == current.id ? .replayCurrent(current) : .play(first)
+        }
+        if repeatMode == .all, let current { return .replayCurrent(current) }
         return autoplayEnabled ? .autoplay : .stop
     }
 
@@ -124,6 +137,7 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     }
 
     mutating func beginInOrder(context: [Song]) {
+        repeatsCollection = true
         isShuffled = false
         originalItems = []
         items = context
@@ -135,6 +149,7 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         shuffling: ([Song]) -> [Song] = { $0.shuffled() }
     ) -> Song? {
         guard let selected = selecting(songs) else { return nil }
+        repeatsCollection = true
         isShuffled = true
         originalItems = songs
         items = [selected] + shuffling(songs.filter { $0.id != selected.id })

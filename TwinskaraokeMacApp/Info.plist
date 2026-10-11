@@ -12,7 +12,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>org.magnettileman.Twinskaraoke.auth</string>
+			<string>org.magnettilemanalt.Twinskaraoke.auth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<!-- Discord OAuth redirects to neurokaraoke://auth. Without this
