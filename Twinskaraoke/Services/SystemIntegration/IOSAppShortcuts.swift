@@ -3,6 +3,12 @@ import AppIntents
 struct IOSAppShortcuts: AppShortcutsProvider {
     // Keep the automatic page to ten actions. Playlist names are resolved in
     // the Play Playlist picker rather than donated as hundreds of tiles.
+    //
+    // No phrase takes a parameter, so nothing calls
+    // `updateAppShortcutParameters()`: it only regenerates parameterized
+    // phrases. Called on every library change, it logged a failed refresh
+    // for each download and song change. Bring it back together with a
+    // phrase such as "Play \(\.$playlist) in \(.applicationName)".
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: IOSPlayPlaylistIntent(), phrases: [
             "Play a playlist in \(.applicationName)"
