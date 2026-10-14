@@ -4,6 +4,7 @@ import SwiftUI
 struct QRApproveView: View {
     let auth: AuthManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var phase: Phase = .scanning
     @State private var permission: CameraPermission = .unknown
@@ -98,7 +99,7 @@ struct QRApproveView: View {
             QRPermissionDeniedView {
                 AppHaptic.selection.play()
                 if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+                    openURL(url)
                 }
             }
         case let .unavailable(message):

@@ -2135,11 +2135,9 @@ final class AudioPlayerManager {
     private func reportLoadFailure(_ failure: PlaybackLoadFailure) {
         loadFailure = failure
         WatchSessionPublisher.shared.playbackDidChange()
-        #if canImport(UIKit)
-            // The message appears under the song, which a VoiceOver user is
-            // unlikely to be focused on at that moment.
-            UIAccessibility.post(notification: .announcement, argument: failure.message)
-        #endif
+        // The message appears under the song, which a VoiceOver user is
+        // unlikely to be focused on at that moment.
+        AccessibilityNotification.Announcement(failure.message).post()
     }
 
     @discardableResult

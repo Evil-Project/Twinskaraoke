@@ -55,6 +55,7 @@ struct LibraryView: View {
     private let pinStore = PinnedPlaylistsStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
     @State private var favoritesRefreshTask: Task<Void, Never>?
@@ -115,7 +116,8 @@ struct LibraryView: View {
                     Text(message).font(.footnote).padding()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
                 viewModel.fetchPlaylists()
                 viewModel.fetchFavoriteSongs()
             }

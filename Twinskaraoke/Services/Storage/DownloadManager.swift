@@ -598,9 +598,13 @@ final class DownloadManager {
         return entries
     }
 
-    func handleBackgroundEvents(completion: @escaping @Sendable () -> Void) {
-        backgroundTransport.handleEvents(completion: completion)
-        restorePendingDownloadsIfNeeded()
+    /// Returns once the background session has delivered every event it
+    /// relaunched the app for.
+    func handleBackgroundEvents() async {
+        await withCheckedContinuation { continuation in
+            backgroundTransport.handleEvents { continuation.resume() }
+            restorePendingDownloadsIfNeeded()
+        }
     }
 
     private func persistPendingDownloads() -> Bool {

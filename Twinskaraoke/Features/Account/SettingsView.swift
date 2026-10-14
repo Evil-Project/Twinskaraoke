@@ -861,6 +861,7 @@ struct NotificationsView: View {
     @Bindable private var notifications = DownloadNotifications.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
@@ -903,7 +904,7 @@ struct NotificationsView: View {
                 if notifications.permissionDenied {
                     Button("Open Notification Settings") {
                         guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
-                        UIApplication.shared.open(url)
+                        openURL(url)
                     }
                 }
             } footer: {

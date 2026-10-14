@@ -37,8 +37,8 @@ struct DeveloperMenuView: View {
                 Toggle("Debug Logging", isOn: $debugLogging)
                     .tint(.appAccent)
                 if debugLogging {
-                    Button("Export Debug Logs") {
-                        exportDebugLogs()
+                    ShareLink(item: DebugLogExport(), preview: SharePreview("Debug Logs")) {
+                        Text("Export Debug Logs")
                     }
                     .foregroundStyle(Color.appAccent)
                     Button("Clear Debug Logs") {
@@ -85,36 +85,12 @@ struct DeveloperMenuView: View {
             Text("The developer menu and related features will be hidden until you turn developer mode back on.")
         }
     }
+}
 
-    private func exportDebugLogs() {
-        #if canImport(UIKit)
-            let logs = DebugLogger.exportLogs()
-            let av = UIActivityViewController(
-                activityItems: [logs], applicationActivities: nil
-            )
-            if let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-                let root = windowScene.keyWindow?.rootViewController
-            {
-                var presenter = root
-                while let presented = presenter.presentedViewController {
-                    presenter = presented
-                }
-                // UIActivityViewController is a popover on iPad and crashes
-                // without a source view/rect.
-                if let popover = av.popoverPresentationController {
-                    popover.sourceView = presenter.view
-                    popover.sourceRect = CGRect(
-                        x: presenter.view.bounds.midX,
-                        y: presenter.view.bounds.midY,
-                        width: 0,
-                        height: 0
-                    )
-                    popover.permittedArrowDirections = []
-                }
-                presenter.present(av, animated: true)
-            }
-        #endif
+/// Reads the log buffer when the share sheet asks for it, not when the menu
+/// renders, so the export includes everything logged up to that moment.
+nonisolated private struct DebugLogExport: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation { (_: DebugLogExport) in DebugLogger.exportLogs() }
     }
 }

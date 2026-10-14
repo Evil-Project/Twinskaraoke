@@ -1,61 +1,85 @@
 import SwiftUI
 import WebKit
 
-struct CaptchaWebView: UIViewRepresentable {
+struct CaptchaWebView: View {
     let url: URL
     let onClose: () -> Void
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(allowedHost: url.host?.lowercased(), onClose: onClose)
+    @Environment(\.openURL) private var openURL
+    @State private var page: WebPage?
+    @State private var closeBridge = CloseBridge()
+
+    var body: some View {
+        Group {
+            if let page {
+                WebView(page)
+                    .scrollDisabled(true)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .webViewBackForwardNavigationGestures(.disabled)
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear(perform: load)
     }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let prefs = WKWebpagePreferences()
-        prefs.allowsContentJavaScript = true
-        config.defaultWebpagePreferences = prefs
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.uiDelegate = context.coordinator
-        webView.navigationDelegate = context.coordinator
-        webView.scrollView.isScrollEnabled = false
-        webView.scrollView.bounces = false
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
-        webView.load(URLRequest(url: url))
-        return webView
+    private func load() {
+        guard page == nil else { return }
+        closeBridge.onClose = onClose
+
+        // The page dismisses itself with `window.close()`. WebPage has no
+        // counterpart to WKUIDelegate's `webViewDidClose`, so the call is
+        // forwarded through a script message instead.
+        let controller = WKUserContentController()
+        controller.addUserScript(WKUserScript(
+            source: "window.close = function () { window.webkit.messageHandlers.\(CloseBridge.name).postMessage(null); };",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+        controller.add(closeBridge, name: CloseBridge.name)
+
+        var configuration = WebPage.Configuration()
+        configuration.defaultNavigationPreferences.allowsContentJavaScript = true
+        configuration.userContentController = controller
+
+        let decider = HostRestrictedNavigation(allowedHost: url.host?.lowercased()) { target in
+            openURL(target)
+        }
+        let page = WebPage(configuration: configuration, navigationDecider: decider)
+        page.load(URLRequest(url: url))
+        self.page = page
     }
 
-    func updateUIView(_: WKWebView, context _: Context) {}
+    @MainActor
+    final class CloseBridge: NSObject, WKScriptMessageHandler {
+        static let name = "twinsClose"
+        var onClose: (() -> Void)?
 
-    class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
+        func userContentController(_: WKUserContentController, didReceive _: WKScriptMessage) {
+            onClose?()
+        }
+    }
+
+    // The full-screen web view may only navigate within the captcha host;
+    // anything else is cancelled and handed to the system browser.
+    private struct HostRestrictedNavigation: WebPage.NavigationDeciding {
         let allowedHost: String?
-        let onClose: () -> Void
-        init(allowedHost: String?, onClose: @escaping () -> Void) {
-            self.allowedHost = allowedHost
-            self.onClose = onClose
-        }
+        let openExternally: (URL) -> Void
 
-        func webViewDidClose(_: WKWebView) {
-            onClose()
-        }
-
-        // The full-screen web view may only navigate within the captcha host;
-        // anything else is cancelled and handed to the system browser.
-        func webView(
-            _: WKWebView,
-            decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
-        ) {
-            guard navigationAction.targetFrame?.isMainFrame ?? true,
-                  let target = navigationAction.request.url,
+        func decidePolicy(
+            for action: WebPage.NavigationAction,
+            preferences _: inout WebPage.NavigationPreferences
+        ) async -> WKNavigationActionPolicy {
+            guard action.target?.isMainFrame ?? true,
+                  let target = action.request.url,
                   let scheme = target.scheme?.lowercased(),
                   scheme == "https" || scheme == "http",
                   target.host?.lowercased() != allowedHost
             else {
-                decisionHandler(.allow)
-                return
+                return .allow
             }
-            decisionHandler(.cancel)
-            UIApplication.shared.open(target)
+            openExternally(target)
+            return .cancel
         }
     }
 }
