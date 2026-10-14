@@ -248,11 +248,22 @@ struct PlaybackWidgetView: View {
             Group {
                 if let interval = snapshot.playbackInterval {
                     // WidgetKit advances the timer without per-second timeline reloads.
-                    ProgressView(timerInterval: interval, countsDown: false).labelsHidden()
+                    ProgressView(timerInterval: interval, countsDown: false) {
+                        EmptyView()
+                    } currentValueLabel: {
+                        EmptyView()
+                    }
+                    .transition(.identity)
                 } else {
                     ProgressView(value: snapshot.elapsed(at: snapshot.updatedAt), total: max(1, snapshot.durationSeconds ?? Double(snapshot.song?.duration ?? 0)))
+                        .transition(.identity)
                 }
-            }.tint(visual.accent).accessibilityLabel("Playback progress")
+            }
+            // Timer and paused progress must occupy the same slot when WidgetKit reloads.
+            .progressViewStyle(.linear)
+            .frame(height: 4)
+            .transaction { $0.animation = nil }
+            .tint(visual.accent).accessibilityLabel("Playback progress")
         }
     }
 

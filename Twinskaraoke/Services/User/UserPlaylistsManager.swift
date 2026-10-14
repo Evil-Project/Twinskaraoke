@@ -18,6 +18,10 @@ final class UserPlaylistsManager {
     private var stateGeneration = 0
     private var forcedReloadPending = false
 
+    @ObservationIgnored private var songCountGenerations: [String: Int] = [:]
+
+    @ObservationIgnored private let songMutations = PlaylistSongMutationCoordinator()
+
     func loadIfNeeded() {
         fetchPlaylists(force: false)
     }
@@ -107,22 +111,25 @@ final class UserPlaylistsManager {
             return
         }
 
+        let mutation = PlaylistSongMutationCoordinator.Key(playlistID: playlistID, songID: songID, adding: true)
+        guard songMutations.begin(mutation, completion: completion) else { return }
+
         Task {
             guard var req = try? KaraokeAPIClient.request(
                 pathSegments: ["api", "user", "playlists", playlistID],
                 queryItems: [URLQueryItem(name: "songId", value: songID)]
             ) else {
-                completion?(false)
+                songMutations.finish(mutation, success: false)
                 return
             }
             req.httpMethod = "PUT"
             let ok = (try? await KaraokeAPIClient.data(for: req)) != nil
             if ok {
-                adjustSongCount(forPlaylist: playlistID, by: 1)
                 PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
                 await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
+                await refreshSongCount(forPlaylist: playlistID)
             }
-            completion?(ok)
+            songMutations.finish(mutation, success: ok)
         }
     }
 
@@ -140,11 +147,14 @@ final class UserPlaylistsManager {
             return
         }
 
+        let mutation = PlaylistSongMutationCoordinator.Key(playlistID: playlistID, songID: songID, adding: false)
+        guard songMutations.begin(mutation, completion: completion) else { return }
+
         Task {
             guard var req = try? KaraokeAPIClient.request(
                 pathSegments: ["api", "playlist", playlistID, "song", songID]
             ) else {
-                completion?(false)
+                songMutations.finish(mutation, success: false)
                 return
             }
             req.httpMethod = "DELETE"
@@ -164,11 +174,11 @@ final class UserPlaylistsManager {
                 ok = false
             }
             if ok {
-                adjustSongCount(forPlaylist: playlistID, by: -1)
                 PlaylistSongCountStore.shared.invalidate(playlistID: playlistID)
                 await KaraokeAPIClient.invalidatePlaylistDetail(id: playlistID)
+                await refreshSongCount(forPlaylist: playlistID)
             }
-            completion?(ok)
+            songMutations.finish(mutation, success: ok)
         }
     }
 
@@ -200,7 +210,28 @@ final class UserPlaylistsManager {
         return true
     }
 
-    private func adjustSongCount(forPlaylist playlistID: String, by delta: Int) {
+    /// Reconciles successful writes with the server count, ignoring older concurrent refreshes.
+    private func refreshSongCount(forPlaylist playlistID: String) async {
+        let generation = stateGeneration
+        songCountGenerations[playlistID, default: 0] += 1
+        let countGeneration = songCountGenerations[playlistID]
+        do {
+            var request = try KaraokeAPIClient.request(pathSegments: ["api", "playlist", playlistID])
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let data = try await KaraokeAPIClient.data(for: request)
+            let detail = try JSONDecoder().decode(PlaylistDetail.self, from: data)
+            guard generation == stateGeneration, countGeneration == songCountGenerations[playlistID] else { return }
+            setSongCount(forPlaylist: playlistID, count: detail.songListDTOs.count)
+        } catch {
+            // A successful idempotent write or DELETE 404 does not prove a count delta.
+            // Retain the last count until the playlist list can be refreshed.
+            guard generation == stateGeneration, countGeneration == songCountGenerations[playlistID] else { return }
+            fetchPlaylists()
+        }
+    }
+
+    /// Replaces only the count while preserving the playlist metadata.
+    private func setSongCount(forPlaylist playlistID: String, count: Int) {
         guard let index = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         let playlist = playlists[index]
         playlists[index] = UserPlaylist(
@@ -213,7 +244,7 @@ final class UserPlaylistsManager {
             createdAt: playlist.createdAt,
             updatedAt: playlist.updatedAt,
             totalDuration: playlist.totalDuration,
-            songCount: max(0, playlist.songCount + delta),
+            songCount: max(0, count),
             playCount: playlist.playCount,
             favoriteCount: playlist.favoriteCount,
             playlistType: playlist.playlistType,
@@ -240,5 +271,30 @@ final class UserPlaylistsManager {
         loaded = false
         isLoading = false
         forcedReloadPending = false
+    }
+}
+
+/// Shares one in-flight mutation result with all windows requesting the same action.
+@MainActor
+final class PlaylistSongMutationCoordinator {
+    struct Key: Hashable {
+        let playlistID: String
+        let songID: String
+        let adding: Bool
+    }
+
+    private var completions: [Key: [(Bool) -> Void]] = [:]
+
+    /// Returns whether the caller should send the request; duplicate callers share its result.
+    func begin(_ key: Key, completion: ((Bool) -> Void)?) -> Bool {
+        let alreadyRunning = completions[key] != nil
+        completions[key, default: []].append(completion ?? { _ in })
+        return !alreadyRunning
+    }
+
+    /// Clears the pending request before notifying all callers, allowing later retries.
+    func finish(_ key: Key, success: Bool) {
+        let callbacks = completions.removeValue(forKey: key) ?? []
+        callbacks.forEach { $0(success) }
     }
 }
