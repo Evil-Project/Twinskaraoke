@@ -238,6 +238,10 @@ final class AudioManager {
 
     @discardableResult
     private func pausePlayback() -> Bool {
+        // An explicit pause during an interruption overrides the intent to
+        // resume when it ends. The interruption itself pauses the player
+        // directly, so this never clears its own intent.
+        shouldResumeAfterInterruption = false
         guard player != nil || playbackRequested || isLoading else { return false }
         playbackRequested = false
         player?.pause()
@@ -430,7 +434,9 @@ final class AudioManager {
     }
 
     private func audioSessionInterruptionBegan() {
-        shouldResumeAfterInterruption = playbackRequested
+        // Keep the intent of an earlier interruption still awaiting its end:
+        // a second one finds playback already paused.
+        shouldResumeAfterInterruption = shouldResumeAfterInterruption || playbackRequested
         if playbackRequested {
             player?.pause()
             isPlaying = false

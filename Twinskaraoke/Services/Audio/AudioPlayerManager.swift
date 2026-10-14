@@ -3216,13 +3216,18 @@ final class AudioPlayerManager {
 
     private func audioSessionInterruptionBegan() {
         guard phoneAudioAllowed else { return }
-        wasPlayingBeforeInterruption = isPlaybackRequested
+        let wasRequested = isPlaybackRequested
+        // A second deactivation can arrive before the first one's resumption
+        // recommendation, when playback is already paused. Keep the intent the
+        // first recorded; an explicit pause in between has already cleared it
+        // (pauseCurrentPlayback), and the end of an interruption always does.
+        wasPlayingBeforeInterruption = wasPlayingBeforeInterruption || wasRequested
         audioSessionController.markInterrupted()
         DebugLogger.log(
             "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
             category: .playback
         )
-        if wasPlayingBeforeInterruption {
+        if wasRequested {
             handlingAudioSessionInterruption = true
             pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
             handlingAudioSessionInterruption = false

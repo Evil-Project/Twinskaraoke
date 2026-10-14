@@ -627,7 +627,15 @@ class AudioManager {
     // background URLSession download service, rather than a foreground task
     // that can stall or be suspended before an entire song is downloaded.
     private func setupPlayer(with localURL: URL) {
-        guard WatchAuthManager.shared.canPlayLocally, playbackRequested else { return }
+        guard WatchAuthManager.shared.canPlayLocally else { return }
+        guard playbackRequested else {
+            // Paused, by an interruption say, while this song's cache was
+            // validating or its metadata loading. That work has now ended, so
+            // stop reporting a load: resumePlayback would otherwise wait on
+            // it forever instead of preparing the song again.
+            isLoading = false
+            return
+        }
         // Raced async cache validations can both reach here for one song;
         // tear down any existing player and its observers so two players
         // never run at once and no orphaned observer keeps firing.
@@ -744,6 +752,10 @@ class AudioManager {
 
     @discardableResult
     private func pausePlayback(cancelDownload: Bool = true) -> Bool {
+        // An explicit pause during an interruption (a companion command, the
+        // sleep timer, a lost route) overrides the intent to resume when it
+        // ends. audioSessionInterruptionBegan records its intent afterwards.
+        shouldResumeAfterInterruption = false
         let hasPendingDownload = player == nil && (playbackRequested || isLoading)
         if hasPendingDownload && cancelDownload {
             metadataToken = nil
@@ -1327,10 +1339,14 @@ class AudioManager {
         // The system takes the session away with the interruption, so the
         // next resume has to bring it back up rather than assume it is there.
         isSessionActive = false
-        shouldResumeAfterInterruption = playbackRequested
-        if playbackRequested {
+        let wasRequested = playbackRequested
+        if wasRequested {
             pausePlayback(cancelDownload: false)
         }
+        // After the pause, which clears it. Keep the intent of an earlier
+        // interruption still awaiting its end: a second one finds playback
+        // already paused.
+        shouldResumeAfterInterruption = shouldResumeAfterInterruption || wasRequested
     }
 
     private func audioSessionInterruptionEnded(shouldResume: Bool) {
