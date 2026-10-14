@@ -42,30 +42,34 @@ struct QueueView: View {
             .ignoresSafeArea()
             VStack(spacing: 0) {
                 header(upNextCount: upNext.count)
-                HStack(spacing: 12) {
-                    QueueModeButton(
-                        symbol: "shuffle",
-                        isActive: audioManager.isShuffled,
-                        accessibilityLabel: String(localized: "Shuffle"),
-                        accessibilityValue: audioManager.isShuffled ? String(localized: "On") : String(localized: "Off")
-                    ) {
-                        audioManager.toggleShuffle()
-                    }
-                    QueueModeButton(
-                        symbol: audioManager.repeatMode.symbol,
-                        isActive: audioManager.repeatMode.isActive,
-                        accessibilityLabel: String(localized: "Repeat"),
-                        accessibilityValue: repeatModeDescription
-                    ) {
-                        audioManager.toggleRepeat()
-                    }
-                    QueueModeButton(
-                        symbol: "infinity",
-                        isActive: audioManager.autoplayEnabled,
-                        accessibilityLabel: String(localized: "Autoplay"),
-                        accessibilityValue: audioManager.autoplayEnabled ? String(localized: "On") : String(localized: "Off")
-                    ) {
-                        audioManager.toggleAutoplay()
+                // One container renders the capsules together; matching the
+                // stack's spacing keeps them apart at rest (Apple's guidance).
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 12) {
+                        QueueModeButton(
+                            symbol: "shuffle",
+                            isActive: audioManager.isShuffled,
+                            accessibilityLabel: String(localized: "Shuffle"),
+                            accessibilityValue: audioManager.isShuffled ? String(localized: "On") : String(localized: "Off")
+                        ) {
+                            audioManager.toggleShuffle()
+                        }
+                        QueueModeButton(
+                            symbol: audioManager.repeatMode.symbol,
+                            isActive: audioManager.repeatMode.isActive,
+                            accessibilityLabel: String(localized: "Repeat"),
+                            accessibilityValue: repeatModeDescription
+                        ) {
+                            audioManager.toggleRepeat()
+                        }
+                        QueueModeButton(
+                            symbol: "infinity",
+                            isActive: audioManager.autoplayEnabled,
+                            accessibilityLabel: String(localized: "Autoplay"),
+                            accessibilityValue: audioManager.autoplayEnabled ? String(localized: "On") : String(localized: "Off")
+                        ) {
+                            audioManager.toggleAutoplay()
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -204,43 +208,45 @@ struct QueueView: View {
     }
 
     private func queueActions(_ upNextCount: Int) -> some View {
-        HStack(spacing: 8) {
-            if upNextCount > 1 || isReordering {
-                Button {
-                    AppHaptic.selection.play()
-                    withOptionalAnimation(queueMutationAnimation) {
-                        isReordering.toggle()
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 8) {
+                if upNextCount > 1 || isReordering {
+                    Button {
+                        AppHaptic.selection.play()
+                        withOptionalAnimation(queueMutationAnimation) {
+                            isReordering.toggle()
+                        }
+                    } label: {
+                        Text(isReordering ? "Done" : "Reorder")
+                            .font(AM.Font.rowCompactTitle.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .appGlassBackground(in: Capsule(), fallback: .appControlInactiveFill)
                     }
-                } label: {
-                    Text(isReordering ? "Done" : "Reorder")
-                        .font(AM.Font.rowCompactTitle.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .appGlassBackground(in: Capsule(), fallback: .appControlInactiveFill)
+                    .buttonStyle(PressableButtonStyle())
+                    .accessibilityIdentifier("Queue.Reorder")
+                    .accessibilityHint(isReordering ? "Finishes rearranging the queue." : "Shows handles to rearrange upcoming songs.")
                 }
-                .buttonStyle(PressableButtonStyle())
-                .accessibilityIdentifier("Queue.Reorder")
-                .accessibilityHint(isReordering ? "Finishes rearranging the queue." : "Shows handles to rearrange upcoming songs.")
-            }
-            if upNextCount > 0 {
-                Button(role: .destructive) {
-                    AppHaptic.dismiss.play()
-                    withOptionalAnimation(queueMutationAnimation) {
-                        audioManager.removeFromUpNext(at: IndexSet(integersIn: 0 ..< upNextCount))
+                if upNextCount > 0 {
+                    Button(role: .destructive) {
+                        AppHaptic.dismiss.play()
+                        withOptionalAnimation(queueMutationAnimation) {
+                            audioManager.removeFromUpNext(at: IndexSet(integersIn: 0 ..< upNextCount))
+                        }
+                    } label: {
+                        Text("Clear")
+                            .font(AM.Font.rowCompactTitle.weight(.semibold))
+                            .foregroundStyle(Color.appDestructive)
+                            .padding(.horizontal, 12)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .appGlassBackground(in: Capsule(), fallback: .appControlInactiveFill)
                     }
-                } label: {
-                    Text("Clear")
-                        .font(AM.Font.rowCompactTitle.weight(.semibold))
-                        .foregroundStyle(Color.appDestructive)
-                        .padding(.horizontal, 12)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .appGlassBackground(in: Capsule(), fallback: .appControlInactiveFill)
+                    .buttonStyle(PressableButtonStyle(scale: 0.93, dim: 0.72))
+                    .accessibilityLabel("Clear queue")
+                    .accessibilityValue(upNextCount == 1 ? "1 song queued" : "\(upNextCount) songs queued")
+                    .accessibilityHint("Removes all songs from Playing Next.")
+                    .transition(clearButtonTransition)
                 }
-                .buttonStyle(PressableButtonStyle(scale: 0.93, dim: 0.72))
-                .accessibilityLabel("Clear queue")
-                .accessibilityValue(upNextCount == 1 ? "1 song queued" : "\(upNextCount) songs queued")
-                .accessibilityHint("Removes all songs from Playing Next.")
-                .transition(clearButtonTransition)
             }
         }
     }

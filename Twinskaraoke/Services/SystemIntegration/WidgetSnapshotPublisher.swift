@@ -186,7 +186,6 @@ final class WidgetSnapshotPublisher {
                 try store.write(value)
                 previousLibrary = library
                 WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.recent)
-                IOSAppShortcuts.updateAppShortcutParameters()
             }
         } catch {
             DebugLogger.log("Widget snapshot unavailable: \(error.localizedDescription)", category: .cache)

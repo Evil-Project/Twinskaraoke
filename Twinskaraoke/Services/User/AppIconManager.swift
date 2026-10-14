@@ -6,7 +6,11 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     case experimental
 
     var id: String { rawValue }
-    var title: String { self == .production ? "Original" : "Experimental" }
+    /// `String(localized:)` so the names are extracted into the catalog;
+    /// a runtime `LocalizedStringKey(title)` never was.
+    var title: String {
+        self == .production ? String(localized: "Original") : String(localized: "Experimental")
+    }
 
     var alternateIconName: String? {
         switch self {

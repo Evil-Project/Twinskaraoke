@@ -605,10 +605,7 @@ final class AudioPlayerManager {
         // sink closures are main-actor-isolated, so delivering them on the
         // posting thread traps. Hop to main first, as the watch and TV
         // AudioManagers already do for the same handlers.
-        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleInterruption(note) }
-            .store(in: &cancellables)
+        observeAudioSessionInterruptions()
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
@@ -3161,43 +3158,93 @@ final class AudioPlayerManager {
         }
     }
 
-    private func handleInterruption(_ note: Notification) {
-        guard phoneAudioAllowed else { return }
+    /// iOS 27 deprecates `interruptionNotification` in favor of lifecycle
+    /// notifications: a system-sourced `didBecomeInactiveNotification` begins
+    /// an interruption, and `resumptionRecommendationNotification` ends it.
+    /// Unlike the legacy end signal, the recommendation does not depend on the
+    /// interrupting app reporting that it finished. Earlier releases only
+    /// post the legacy notification, so the app observes exactly one of the
+    /// two families, never both. Both are posted on the main queue.
+    private func observeAudioSessionInterruptions() {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    // The app's own deactivation is not an interruption.
+                    guard let context = note.userInfo?[AVAudioSession.deactivationContextKey]
+                        as? AVAudioSession.DeactivationContext,
+                        context.source == .system
+                    else { return }
+                    self?.audioSessionInterruptionBegan()
+                }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: AVAudioSession.resumptionRecommendationNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    let context = note.userInfo?[AVAudioSession.resumptionContextKey]
+                        as? AVAudioSession.ResumptionContext
+                    self?.audioSessionInterruptionEnded(shouldResume: context?.recommendation == .shouldResume)
+                }
+                .store(in: &cancellables)
+            return
+        }
+        #endif
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleLegacyInterruption(note) }
+            .store(in: &cancellables)
+    }
+
+    private func handleLegacyInterruption(_ note: Notification) {
         guard let info = note.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue)
         else { return }
         switch type {
         case .began:
-            wasPlayingBeforeInterruption = isPlaybackRequested
-            audioSessionController.markInterrupted()
-            DebugLogger.log(
-                "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
-                category: .playback
-            )
-            if wasPlayingBeforeInterruption {
-                handlingAudioSessionInterruption = true
-                pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
-                handlingAudioSessionInterruption = false
-            }
+            audioSessionInterruptionBegan()
         case .ended:
-            sleepTimer.checkExpiry()
-            guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else {
-                wasPlayingBeforeInterruption = false
-                return
-            }
-            let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
-            DebugLogger.log(
-                "Audio session interruption ended; system wants resume=\(opts.contains(.shouldResume)), app wants resume=\(wasPlayingBeforeInterruption)",
-                category: .playback
-            )
-            if opts.contains(.shouldResume), wasPlayingBeforeInterruption {
-                resumeCurrentPlayback(source: "audioSessionInterruptionEnded")
-            }
-            wasPlayingBeforeInterruption = false
+            let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+            audioSessionInterruptionEnded(shouldResume: opts.contains(.shouldResume))
         @unknown default:
+            guard phoneAudioAllowed else { return }
             wasPlayingBeforeInterruption = false
         }
+    }
+
+    private func audioSessionInterruptionBegan() {
+        guard phoneAudioAllowed else { return }
+        let wasRequested = isPlaybackRequested
+        // A second deactivation can arrive before the first one's resumption
+        // recommendation, when playback is already paused. Keep the intent the
+        // first recorded; an explicit pause in between has already cleared it
+        // (pauseCurrentPlayback), and the end of an interruption always does.
+        wasPlayingBeforeInterruption = wasPlayingBeforeInterruption || wasRequested
+        audioSessionController.markInterrupted()
+        DebugLogger.log(
+            "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
+            category: .playback
+        )
+        if wasRequested {
+            handlingAudioSessionInterruption = true
+            pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
+            handlingAudioSessionInterruption = false
+        }
+    }
+
+    private func audioSessionInterruptionEnded(shouldResume: Bool) {
+        guard phoneAudioAllowed else { return }
+        sleepTimer.checkExpiry()
+        DebugLogger.log(
+            "Audio session interruption ended; system wants resume=\(shouldResume), app wants resume=\(wasPlayingBeforeInterruption)",
+            category: .playback
+        )
+        if shouldResume, wasPlayingBeforeInterruption {
+            resumeCurrentPlayback(source: "audioSessionInterruptionEnded")
+        }
+        wasPlayingBeforeInterruption = false
     }
 
     private func handleRouteChange(_ note: Notification) {

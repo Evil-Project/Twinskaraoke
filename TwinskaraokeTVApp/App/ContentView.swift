@@ -15,33 +15,35 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView(onPlay: play)
-                .tabItem { Label("Home", systemImage: "house.fill") }
-                .tag(TVTab.home)
+            Tab("Home", systemImage: "house.fill", value: TVTab.home) {
+                HomeView(onPlay: play)
+            }
 
-            SearchView(onPlay: play)
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                .tag(TVTab.search)
+            // No `.search` role: it only changes which tab hosts a
+            // `.searchable` TabView, and SearchView owns its own field.
+            Tab("Search", systemImage: "magnifyingglass", value: TVTab.search) {
+                SearchView(onPlay: play)
+            }
 
-            LibraryView(onPlay: play)
-                .tabItem { Label("Library", systemImage: "music.note.list") }
-                .tag(TVTab.library)
+            Tab("Library", systemImage: "music.note.list", value: TVTab.library) {
+                LibraryView(onPlay: play)
+            }
 
-            PlaylistsView(onPlay: play)
-                .tabItem { Label("Playlists", systemImage: "list.bullet") }
-                .tag(TVTab.playlists)
+            Tab("Playlists", systemImage: "list.bullet", value: TVTab.playlists) {
+                PlaylistsView(onPlay: play)
+            }
 
-            AccountView()
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
-                .tag(TVTab.account)
+            Tab("Account", systemImage: "person.crop.circle", value: TVTab.account) {
+                AccountView()
+            }
 
-            PlayerView()
-                // "Playing", not "Now Playing": the tvOS tab bar is a
-                // fixed-width pill, and a sixth tab pushes the last label past
-                // its right edge, where it renders half-faded at rest.
-                .tabItem { Label("Playing", systemImage: "play.circle.fill") }
-                .tag(TVTab.nowPlaying)
-                .accessibilityLabel("Now Playing")
+            // "Playing", not "Now Playing": the tvOS tab bar is a fixed-width
+            // pill, and a sixth tab pushes the last label past its right
+            // edge, where it renders half-faded at rest.
+            Tab("Playing", systemImage: "play.circle.fill", value: TVTab.nowPlaying) {
+                PlayerView()
+                    .accessibilityLabel("Now Playing")
+            }
         }
         .environment(audioManager)
         .tint(.appAccent)

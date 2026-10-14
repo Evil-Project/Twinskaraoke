@@ -627,7 +627,15 @@ class AudioManager {
     // background URLSession download service, rather than a foreground task
     // that can stall or be suspended before an entire song is downloaded.
     private func setupPlayer(with localURL: URL) {
-        guard WatchAuthManager.shared.canPlayLocally, playbackRequested else { return }
+        guard WatchAuthManager.shared.canPlayLocally else { return }
+        guard playbackRequested else {
+            // Paused, by an interruption say, while this song's cache was
+            // validating or its metadata loading. That work has now ended, so
+            // stop reporting a load: resumePlayback would otherwise wait on
+            // it forever instead of preparing the song again.
+            isLoading = false
+            return
+        }
         // Raced async cache validations can both reach here for one song;
         // tear down any existing player and its observers so two players
         // never run at once and no orphaned observer keeps firing.
@@ -744,6 +752,10 @@ class AudioManager {
 
     @discardableResult
     private func pausePlayback(cancelDownload: Bool = true) -> Bool {
+        // An explicit pause during an interruption (a companion command, the
+        // sleep timer, a lost route) overrides the intent to resume when it
+        // ends. audioSessionInterruptionBegan records its intent afterwards.
+        shouldResumeAfterInterruption = false
         let hasPendingDownload = player == nil && (playbackRequested || isLoading)
         if hasPendingDownload && cancelDownload {
             metadataToken = nil
@@ -1264,39 +1276,84 @@ class AudioManager {
     }
 
     private func setupInterruptionHandler() {
-        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleInterruption(note) }
-            .store(in: &cancellables)
+        observeAudioSessionInterruptions()
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
             .store(in: &cancellables)
     }
 
-    private func handleInterruption(_ note: Notification) {
+    /// watchOS 27 deprecates `interruptionNotification` in favor of lifecycle
+    /// notifications: a system-sourced `didBecomeInactiveNotification` begins
+    /// an interruption, and `resumptionRecommendationNotification` ends it.
+    /// Earlier releases only post the legacy notification, so exactly one of
+    /// the two families is observed.
+    private func observeAudioSessionInterruptions() {
+        #if compiler(>=6.4)
+        if #available(watchOS 27.0, *) {
+            NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    // The app's own deactivation is not an interruption.
+                    guard let context = note.userInfo?[AVAudioSession.deactivationContextKey]
+                        as? AVAudioSession.DeactivationContext,
+                        context.source == .system
+                    else { return }
+                    self?.audioSessionInterruptionBegan()
+                }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: AVAudioSession.resumptionRecommendationNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    let context = note.userInfo?[AVAudioSession.resumptionContextKey]
+                        as? AVAudioSession.ResumptionContext
+                    self?.audioSessionInterruptionEnded(shouldResume: context?.recommendation == .shouldResume)
+                }
+                .store(in: &cancellables)
+            return
+        }
+        #endif
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleLegacyInterruption(note) }
+            .store(in: &cancellables)
+    }
+
+    private func handleLegacyInterruption(_ note: Notification) {
         guard let info = note.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue)
         else { return }
         switch type {
         case .began:
-            // The system takes the session away with the interruption, so the
-            // next resume has to bring it back up rather than assume it is there.
-            isSessionActive = false
-            shouldResumeAfterInterruption = playbackRequested
-            if playbackRequested {
-                pausePlayback(cancelDownload: false)
-            }
+            audioSessionInterruptionBegan()
         case .ended:
             guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
             let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
-            if opts.contains(.shouldResume), shouldResumeAfterInterruption {
-                resumePlayback()
-            }
-            shouldResumeAfterInterruption = false
+            audioSessionInterruptionEnded(shouldResume: opts.contains(.shouldResume))
         @unknown default: break
         }
+    }
+
+    private func audioSessionInterruptionBegan() {
+        // The system takes the session away with the interruption, so the
+        // next resume has to bring it back up rather than assume it is there.
+        isSessionActive = false
+        let wasRequested = playbackRequested
+        if wasRequested {
+            pausePlayback(cancelDownload: false)
+        }
+        // After the pause, which clears it. Keep the intent of an earlier
+        // interruption still awaiting its end: a second one finds playback
+        // already paused.
+        shouldResumeAfterInterruption = shouldResumeAfterInterruption || wasRequested
+    }
+
+    private func audioSessionInterruptionEnded(shouldResume: Bool) {
+        if shouldResume, shouldResumeAfterInterruption {
+            resumePlayback()
+        }
+        shouldResumeAfterInterruption = false
     }
 
     /// Mirrors the iOS route-change handling: when the current output device
