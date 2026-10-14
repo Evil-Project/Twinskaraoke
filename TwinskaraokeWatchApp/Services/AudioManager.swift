@@ -77,6 +77,9 @@ class AudioManager {
     private var radioArtworkURL: URL?
     private var radioStreamURL: URL?
     private var transferredPosition: Double?
+    /// Where a rebuilt player picks up after a media services reset. Keyed
+    /// by song so a different pick after the reset starts from the top.
+    private var resumeAfterReset: (songID: String, position: Double)?
     @ObservationIgnored private var companionProgressTimer: Timer?
     private var player: AVPlayer?
     private var timeObserver: Any?
@@ -653,8 +656,11 @@ class AudioManager {
         }
         if let position = transferredPosition, position.isFinite, position > 0 {
             player.seek(to: CMTime(seconds: position, preferredTimescale: 600))
+        } else if let resume = resumeAfterReset, resume.songID == currentSong?.id {
+            player.seek(to: CMTime(seconds: resume.position, preferredTimescale: 600))
         }
         transferredPosition = nil
+        resumeAfterReset = nil
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         playerItem.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
@@ -1281,6 +1287,36 @@ class AudioManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleMediaServicesReset() }
+            .store(in: &cancellables)
+    }
+
+    /// The media server restarted and took the player and session with it.
+    /// Apple's contract: rebuild them, and don't restart playback until the
+    /// user asks. Retire the player and keep the position, so the next Play
+    /// rebuilds through `resumePlayback`: the station again, or the song from
+    /// `transferredPosition`.
+    private func handleMediaServicesReset() {
+        isSessionActive = false
+        shouldResumeAfterInterruption = false
+        if player == nil {
+            // Something still loading would start on its own when it lands:
+            // a song once its cache validation or metadata lookup finishes,
+            // a station with a player built before the reset. Dropping the
+            // request and the radio token stops both, and the next Play
+            // prepares again.
+            guard playbackRequested || isLoading else { return }
+            metadataToken = nil
+        } else if !isRadioMode, let song = currentSong, currentTime.isFinite, currentTime > 0 {
+            resumeAfterReset = (song.id, currentTime)
+        }
+        cleanupPlayer()
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        updateNowPlayingInfo()
     }
 
     /// watchOS 27 deprecates `interruptionNotification` in favor of lifecycle

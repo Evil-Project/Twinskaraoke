@@ -48,15 +48,25 @@ final class AudioManager {
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    private var mediaServicesResetObserver: AnyCancellable?
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
+    /// Where a rebuilt player picks up after a media services reset. Keyed
+    /// by song so a different pick after the reset starts from the top.
+    private var resumeAfterReset: (songID: String, position: Double)?
     private var failedQueueIndices = Set<Int>()
 
     private init() {
         configureAudioSession()
         setupRemoteCommands()
         setupInterruptionHandler()
+        // Its own subscription, made once: `prepareAndPlay` clears
+        // `cancellables`, and a reset can land before anything plays.
+        mediaServicesResetObserver = NotificationCenter.default
+            .publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleMediaServicesReset() }
     }
 
     /// Clamped to 0...1: `currentTime` can briefly overshoot `duration` around
@@ -155,6 +165,11 @@ final class AudioManager {
         let player = AVPlayer(playerItem: playerItem)
         self.player = player
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        if let resume = resumeAfterReset, resume.songID == currentSong?.id {
+            player.seek(to: CMTime(seconds: resume.position, preferredTimescale: 600))
+            currentTime = resume.position
+        }
+        resumeAfterReset = nil
 
         playerItem.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
@@ -546,6 +561,24 @@ final class AudioManager {
         }
         player?.pause()
         player = nil
+    }
+
+    /// The media server restarted and took the player and the session
+    /// configuration with it. Apple's contract: rebuild both, and don't restart
+    /// playback until the user asks. The next Play rebuilds through
+    /// `resumePlayback`, which seeks the new player back to where this one was.
+    private func handleMediaServicesReset() {
+        configureAudioSession()
+        shouldResumeAfterInterruption = false
+        guard player != nil else { return }
+        if let song = currentSong, currentTime.isFinite, currentTime > 0 {
+            resumeAfterReset = (song.id, currentTime)
+        }
+        cleanupPlayer()
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        updateNowPlayingInfo()
     }
 
     isolated deinit {

@@ -2010,6 +2010,12 @@ final class AudioPlayerManager {
 
         if isRadioMode {
             guard let player = radioPlayer else {
+                // A media services reset retires the player but keeps the
+                // station, so Play tunes back in.
+                if let url = radioStreamURL, let song = currentSong {
+                    playRadio(streamURL: url, song: song, artworkURL: radioArtworkURL)
+                    return true
+                }
                 radioPlaybackRequested = false
                 setPlaybackState(playing: false, buffering: false, reason: "resume.radio.noPlayer.\(source)")
                 return false
@@ -2083,16 +2089,25 @@ final class AudioPlayerManager {
             if let fileURL = song.audioURL != nil ? immediateLocalPlaybackFileURL(for: song) : localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
                 startPlayingFile(fileURL, startAt: resumeAt)
+                // A fresh engine starts on the main mix. Re-enter karaoke the
+                // way a normal song start does, or a reset rebuild would
+                // silently bring the vocals back.
+                if aiEnabled, anyAIEffectActive { applyMLSeparationIfNeeded() }
                 return true
             }
             if let remoteURL = song.audioURL {
                 let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+                let reentersStems = aiEnabled && anyAIEffectActive
+                // Like a normal song start, the separation requested below
+                // must survive the cached file starting.
                 startStreamPlayback(
                     url: remoteURL,
                     songID: song.id,
                     expectedDuration: expectedDuration,
-                    startAt: resumeAt
+                    startAt: resumeAt,
+                    resetSeparationOnCacheReady: !reentersStems
                 )
+                if reentersStems { applyMLSeparationIfNeeded() }
                 return true
             }
             setPlaybackState(
@@ -2493,7 +2508,9 @@ final class AudioPlayerManager {
         cancelAutoplayRequest()
         AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
-        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id
+        // A media services reset keeps the station but retires its player, so
+        // only a live player counts as already tuned in.
+        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id && radioPlayer != nil
         if alreadyOnSameStation {
             currentSong = song
             radioArtworkURL = artworkURL
@@ -2699,6 +2716,21 @@ final class AudioPlayerManager {
         return try await remoteCache()
     }
 
+    /// One session for every remote-playback download. Connections are pooled
+    /// per session, so a session per song paid a fresh TLS handshake and
+    /// HTTP/3 race to storage on every skip, then tore the connection down
+    /// unfinished. The async `download(from:)` cancels its own task when the
+    /// caller's Task is cancelled, so nothing needs invalidating per song.
+    private nonisolated static let remotePlaybackSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 180
+        return URLSession(configuration: configuration)
+    }()
+
     // @concurrent: cache validation, file moves, and possible decompression
     // are blocking file I/O that must stay off the main actor.
     @concurrent private static func cacheRemoteAudio(
@@ -2721,18 +2753,10 @@ final class AudioPlayerManager {
         DebugLogger.log("Remote playback cache start for \(songID)", category: .cache)
         try? FileManager.default.removeItem(at: partialURL)
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 180
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        let (temporaryURL, response) = try await session.download(from: remoteURL)
-        try Task.checkCancellation()
-        guard AudioCacheStore.acceptsAudioResponse(response) else {
+        let (temporaryURL, response) = try await remotePlaybackSession.download(from: remoteURL)
+        guard !Task.isCancelled, AudioCacheStore.acceptsAudioResponse(response) else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            try Task.checkCancellation()
             throw RemotePlaybackCacheError.invalidResponse
         }
 
@@ -3138,24 +3162,44 @@ final class AudioPlayerManager {
         avEngine.seek(to: position)
     }
 
+    /// The media server restarted, so every audio object built against it is
+    /// dead. Apple's contract for `mediaServicesWereResetNotification` is to
+    /// rebuild the players and the session configuration, and not to restart
+    /// playback until the user asks. Restarting the old engine here played
+    /// through stale objects and resumed on its own.
+    ///
+    /// Everything is torn down and left paused at `lastKnownPlaybackTime`,
+    /// which the progress tick keeps current. The next Play then takes the
+    /// cold-resume path: a fresh engine, stream player or radio player.
     private func handleMediaServicesReset() {
         guard phoneAudioAllowed else { return }
-        DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
+        DebugLogger.log("Media services were reset — rebuilding audio, staying paused", category: .playback)
         audioSessionController.resetAfterMediaServicesLoss()
-        resumeAfterMediaServicesReset()
-    }
-
-    private func resumeAfterMediaServicesReset() {
-        guard phoneAudioAllowed else { return }
-        guard isPlaying else { return }
-        guard audioSessionController.performWhenReady({ [weak self] in
-            self?.resumeAfterMediaServicesReset()
-        }, replacingPending: false) else { return }
-        if isPlaying, !isRadioMode, !isStreamMode {
-            let position = lastKnownPlaybackTime
-            avEngine.startEngineIfNeeded()
-            avEngine.seek(to: position)
-        }
+        audioSessionController.configureCategory()
+        wasPlayingBeforeInterruption = false
+        cancelAutoplayRequest()
+        cancelPendingTransitionWork()
+        aiStemSwitchInFlightSongID = nil
+        // Stem work started before the reset would otherwise finish into
+        // switchActivePlaybackToStems and build a new engine on its own.
+        // Resume re-enters AI stems when an effect is on.
+        instrumentalTask?.cancel()
+        instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
+        separationGeneration &+= 1
+        VocalSeparator.shared.cancel()
+        VocalSeparator.shared.cleanupRealtimeTemp()
+        loadedEngine?.stop()
+        loadedEngine = nil
+        stopRadioPlayer()
+        stopStreamPlayer()
+        setPlaybackState(
+            playing: false,
+            buffering: false,
+            forceNowPlayingUpdate: true,
+            reason: "mediaServicesReset"
+        )
     }
 
     /// iOS 27 deprecates `interruptionNotification` in favor of lifecycle
