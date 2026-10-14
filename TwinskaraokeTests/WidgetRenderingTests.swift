@@ -45,6 +45,33 @@ nonisolated final class WidgetRenderingTests: XCTestCase {
         }
         try render(AnyView(RadioWidgetView(entry: RadioWidgetEntry(), familyOverride: .systemMedium)), theme: .builtIn(.light), family: .systemMedium, scheme: .light, name: "first-launch-no-metadata")
     }
+    @MainActor func testPlaybackLayoutStaysStableWhenPaused() throws {
+        var snapshot = PlaybackWidgetSnapshot(
+            song: WidgetSong(id: "song", title: "Wake Me Up Before You Go-Go", artist: "Wham!"),
+            isPlaying: true, hasPrevious: true, hasNext: true
+        )
+        snapshot.elapsedSeconds = 60
+        snapshot.durationSeconds = 180
+        for family in [WidgetFamily.systemMedium, .systemLarge] {
+            var sizes: [CGSize] = []
+            for isPlaying in [true, false] {
+                snapshot.isPlaying = isPlaying
+                let view = WidgetThemedView(theme: .builtIn(.dark)) {
+                    PlaybackWidgetView(snapshot: snapshot, familyOverride: family)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                let renderer = ImageRenderer(content: view)
+                renderer.proposedSize = ProposedViewSize(width: 332, height: nil)
+                let image = try XCTUnwrap(renderer.uiImage)
+                sizes.append(image.size)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "playback-\(label(family))-\(isPlaying ? "playing" : "paused")"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            XCTAssertEqual(sizes[0], sizes[1], "Play/pause must preserve the widget's intrinsic layout in \(label(family))")
+        }
+    }
     @MainActor private func radio(theme: SharedThemeDefinition) -> RadioWidgetEntry {
         var snapshot = WidgetRadioSnapshot()
         snapshot.title = "Wake Me Up Before You Go-Go"
