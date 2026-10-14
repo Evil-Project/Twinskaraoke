@@ -592,11 +592,13 @@ struct DownloadManagerTests {
 
     @Test("A foreground event batch cannot complete a later background wake")
     func backgroundCompletionWaitsForCurrentBatch() async throws {
-        let transport = BackgroundDownloadTransport()
+        let clock = Mutex<TimeInterval>(0)
+        let transport = BackgroundDownloadTransport(claimWindow: 10, now: { clock.withLock { $0 } })
         let session = URLSession(configuration: .ephemeral)
         defer { session.invalidateAndCancel() }
         let calls = Mutex(0)
         transport.urlSessionDidFinishEvents(forBackgroundURLSession: session)
+        clock.withLock { $0 = 60 }
         transport.handleEvents { calls.withLock { $0 += 1 } }
         try await Task.sleep(for: .milliseconds(30))
         #expect(calls.withLock { $0 } == 0)
@@ -607,6 +609,27 @@ struct DownloadManagerTests {
         }
         #expect(calls.withLock { $0 } == 1)
         transport.urlSessionDidFinishEvents(forBackgroundURLSession: session)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(calls.withLock { $0 } == 1)
+    }
+
+    @Test("A wake completion that arrives just after its batch finished still completes")
+    func backgroundCompletionClaimsJustFinishedBatch() async throws {
+        let clock = Mutex<TimeInterval>(0)
+        let transport = BackgroundDownloadTransport(claimWindow: 10, now: { clock.withLock { $0 } })
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let calls = Mutex(0)
+        transport.urlSessionDidFinishEvents(forBackgroundURLSession: session)
+        clock.withLock { $0 = 0.5 }
+        transport.handleEvents { calls.withLock { $0 += 1 } }
+        for _ in 0..<100 {
+            if calls.withLock({ $0 }) == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(calls.withLock { $0 } == 1)
+        // The batch is claimed once; the next wake waits for its own.
+        transport.handleEvents { calls.withLock { $0 += 1 } }
         try await Task.sleep(for: .milliseconds(30))
         #expect(calls.withLock { $0 } == 1)
     }

@@ -11,6 +11,25 @@ nonisolated final class BackgroundDownloadTransport: NSObject, URLSessionDownloa
     private var pendingDeliveries = 0
     private var eventsFinished = false
     private var eventCompletion: (@Sendable () -> Void)?
+    /// When a batch last finished with no completion waiting for it.
+    private var unclaimedBatchFinishedAt: TimeInterval?
+    private let claimWindow: TimeInterval
+    private let now: @Sendable () -> TimeInterval
+
+    /// SwiftUI's `.backgroundTask(.urlSession)` hands over the wake event's
+    /// completion asynchronously, after the system has already relaunched the
+    /// session, so a short batch can finish first. A batch that finished within
+    /// `claimWindow` therefore satisfies the completion that arrives for it;
+    /// one that finished earlier (a foreground delivery) still cannot complete
+    /// a later wake.
+    init(
+        claimWindow: TimeInterval = 10,
+        now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
+        self.claimWindow = claimWindow
+        self.now = now
+        super.init()
+    }
 
     static var inboxDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -45,6 +64,13 @@ nonisolated final class BackgroundDownloadTransport: NSObject, URLSessionDownloa
 
     func handleEvents(completion: @escaping @Sendable () -> Void) {
         lock.lock()
+        if let finishedAt = unclaimedBatchFinishedAt, now() - finishedAt <= claimWindow {
+            unclaimedBatchFinishedAt = nil
+            lock.unlock()
+            DispatchQueue.main.async(execute: completion)
+            return
+        }
+        unclaimedBatchFinishedAt = nil
         eventCompletion = completion
         lock.unlock()
         finishEventsIfReady()
@@ -119,8 +145,9 @@ nonisolated final class BackgroundDownloadTransport: NSObject, URLSessionDownloa
         lock.lock()
         let completion = eventsFinished && pendingDeliveries == 0 ? eventCompletion : nil
         if eventsFinished && pendingDeliveries == 0 {
-            // A foreground delivery may have no app-delegate completion.
-            // Consume that batch too; it cannot satisfy a later wake event.
+            // A batch with no completion yet is either a foreground delivery
+            // or a wake whose completion is still on its way; see `init`.
+            unclaimedBatchFinishedAt = eventCompletion == nil ? now() : nil
             eventCompletion = nil
             eventsFinished = false
         }
