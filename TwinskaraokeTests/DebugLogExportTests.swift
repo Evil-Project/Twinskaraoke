@@ -17,4 +17,18 @@ struct DebugLogExportTests {
         #expect(text.hasPrefix("Twinskaraoke debug log\n"))
         #expect(text.contains("Entries: "))
     }
+
+    @Test func entryTimestampsStayTwentyFourHour() throws {
+        // The formatter is private; its output is checked through an entry.
+        let key = "nk.debugLogging"
+        let previous = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
+        defer { UserDefaults.standard.set(previous, forKey: key) }
+
+        DebugLogger.log("timestamp probe", category: .ui)
+        let entry = try #require(DebugLogger.exportLogs()
+            .split(separator: "\n").last { $0.hasSuffix("timestamp probe") })
+        #expect(!entry.contains("AM") && !entry.contains("PM"))
+        #expect(entry.wholeMatch(of: /\[UI\] \d{2}:\d{2}:\d{2}\.\d{3} .*/) != nil)
+    }
 }

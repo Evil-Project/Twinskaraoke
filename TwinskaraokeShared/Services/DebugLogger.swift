@@ -34,6 +34,9 @@ nonisolated enum LogCategory: String {
 nonisolated enum DebugLogger {
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
+        // Without a fixed locale the device's 12-hour setting rewrites "HH"
+        // into "h a", so entries read "8:29:03.423 PM".
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
@@ -87,7 +90,8 @@ nonisolated enum DebugLogger {
         let build = info?["CFBundleVersion"] as? String ?? "?"
         var lines = [
             "Twinskaraoke debug log",
-            "Exported: \(now.ISO8601Format())",
+            // Local time with its offset, matching the entries below.
+            "Exported: \(now.formatted(Date.ISO8601FormatStyle(timeZone: .current)))",
             "Version: \(version) (\(build))",
             "Entries: \(entries.count)",
         ]
