@@ -30,7 +30,7 @@ private struct SplashNoticeModifier: ViewModifier {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: message)
         .task(id: "\(revision)-\(message ?? "")") {
             guard let notice = message else { return }
-            UIAccessibility.post(notification: .announcement, argument: notice)
+            AccessibilityNotification.Announcement(notice).post()
             do { try await Task.sleep(for: .seconds(8)) } catch { return }
             message = nil
         }

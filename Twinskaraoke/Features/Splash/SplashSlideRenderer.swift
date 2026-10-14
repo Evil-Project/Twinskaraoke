@@ -122,98 +122,102 @@ private struct SplashCanvasContainerAccessibility: ViewModifier {
     }
 }
 
-/// UIKit keeps editing touches inside the actual tile, independent of the scrolling inspector.
-private struct SplashCanvasTouchSurface: UIViewRepresentable {
+/// Editing touches stay inside the tile: a drag that starts here moves or
+/// resizes the item and is not handed to the scrolling canvas around it.
+private struct SplashCanvasTouchSurface: View {
     let select: () -> Void
     let move: (Double, Double) -> Void
     let resize: (Double, Double, Double) -> Void
     let selected: Bool
     let finish: () -> Void
-    /// Creates the gesture coordinator with the current canvas editing callbacks.
-    func makeCoordinator() -> Coordinator { Coordinator(select: select, move: move, resize: resize, selected: selected, finish: finish) }
-    func makeUIView(context: Context) -> Surface {
-        let view = Surface()
-        view.backgroundColor = .clear
-        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.drag(_:)))
-        pan.maximumNumberOfTouches = 1
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tap))
-        let pinch = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pinch(_:)))
-        view.addGestureRecognizer(pan); view.addGestureRecognizer(tap); view.addGestureRecognizer(pinch)
-        view.pan = pan; view.pinch = pinch
-        return view
+
+    private struct DragProgress {
+        var previous: CGSize
+        var pulling: Bool
     }
-    /// Refreshes editing callbacks and selection state on the existing touch surface.
-    func updateUIView(_ view: Surface, context: Context) {
-        context.coordinator.select = select; context.coordinator.move = move
-        context.coordinator.resize = resize; context.coordinator.selected = selected
-        context.coordinator.finish = finish
-        view.protectItemDrag()
+
+    @State private var drag: DragProgress?
+    @State private var previousScale: CGFloat?
+    /// Reset by SwiftUI when the gesture ends *or* is cancelled, which is the
+    /// only way to hear about a cancellation; `finish()` hangs off it.
+    @GestureState private var isActive = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { select() }
+                .gesture(editGesture(in: proxy))
+        }
+        .onChange(of: isActive) { _, active in
+            guard !active, drag != nil || previousScale != nil else { return }
+            drag = nil
+            previousScale = nil
+            finish()
+        }
     }
-    final class Surface: UIView {
-        var pan: UIPanGestureRecognizer?
-        var pinch: UIPinchGestureRecognizer?
-        private weak var protectedScroll: UIScrollView?
-        /// Installs scroll gesture dependencies after the canvas surface joins its hierarchy.
-        override func didMoveToWindow() { super.didMoveToWindow(); protectItemDrag() }
-        func protectItemDrag() {
-            guard let pan else { return }
-            var ancestor = superview
-            while let view = ancestor {
-                if let scroll = view as? UIScrollView {
-                    guard protectedScroll !== scroll else { return }
-                    protectedScroll = scroll
-                    scroll.panGestureRecognizer.require(toFail: pan)
-                    if let pinch { scroll.panGestureRecognizer.require(toFail: pinch) }
-                    break
+
+    /// Drag and pinch read from one combined value, so a pinch owns the item
+    /// no matter which of the two gestures reports first. Translation is
+    /// measured globally: the tile moves under the finger, so a local
+    /// translation would chase its own movement.
+    private func editGesture(in proxy: GeometryProxy) -> some Gesture {
+        DragGesture(coordinateSpace: .global)
+            .simultaneously(with: MagnifyGesture())
+            .updating($isActive) { _, state, _ in state = true }
+            .onChanged { value in
+                if let magnify = value.second {
+                    magnifyChanged(magnify.magnification, size: proxy.size)
+                    // Keep the drag baseline at the finger so movement during
+                    // the pinch is never applied afterwards.
+                    if let translation = value.first?.translation {
+                        if drag == nil {
+                            drag = DragProgress(previous: translation, pulling: false)
+                        } else {
+                            drag?.previous = translation
+                        }
+                    }
+                } else if let dragValue = value.first {
+                    dragChanged(dragValue, in: proxy)
                 }
-                ancestor = view.superview
             }
-        }
-        /// Restricts gesture hit testing to the canvas element’s own bounds.
-        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { bounds.contains(point) }
+            .onEnded { value in
+                guard value.second == nil, let translation = value.first?.translation else { return }
+                apply(translation, height: proxy.size.height)
+            }
     }
-    final class Coordinator: NSObject {
-        var select: () -> Void
-        var move: (Double, Double) -> Void
-        var resize: (Double, Double, Double) -> Void
-        var selected: Bool
-        var finish: () -> Void
-        private var previous = CGPoint.zero
-        private var previousScale: CGFloat = 1
-        private var pulling = false
-        /// Configures the rendered element and its local editing or interaction callbacks.
-        init(select: @escaping () -> Void, move: @escaping (Double, Double) -> Void, resize: @escaping (Double, Double, Double) -> Void, selected: Bool, finish: @escaping () -> Void) {
-            self.select = select; self.move = move; self.resize = resize; self.selected = selected; self.finish = finish
+
+    private func dragChanged(_ value: DragGesture.Value, in proxy: GeometryProxy) {
+        if drag == nil {
+            let frame = proxy.frame(in: .global)
+            let origin = CGPoint(x: value.startLocation.x - frame.minX, y: value.startLocation.y - frame.minY)
+            drag = DragProgress(
+                previous: .zero,
+                pulling: selected && origin.x > frame.width - 44 && origin.y > frame.height - 44
+            )
+            select()
         }
-        /// Converts incremental pinch changes into resize deltas and finishes with grid alignment.
-        @objc func pinch(_ pinch: UIPinchGestureRecognizer) {
-            if pinch.state == .began { previousScale = 1; select() }
-            if pinch.state == .changed || pinch.state == .ended, let view = pinch.view {
-                let factor = pinch.scale / max(0.01, previousScale)
-                resize(view.bounds.width * (factor - 1), view.bounds.height * (factor - 1), view.bounds.height)
-                previousScale = pinch.scale
-            }
-            if pinch.state == .ended || pinch.state == .cancelled { finish() }
+        apply(value.translation, height: proxy.size.height)
+    }
+
+    private func apply(_ translation: CGSize, height: CGFloat) {
+        guard var progress = drag else { return }
+        let dx = translation.width - progress.previous.width
+        let dy = translation.height - progress.previous.height
+        if progress.pulling { resize(dx, dy, height) } else { move(dx, dy) }
+        progress.previous = translation
+        drag = progress
+    }
+
+    /// Converts incremental pinch changes into resize deltas.
+    private func magnifyChanged(_ magnification: CGFloat, size: CGSize) {
+        if previousScale == nil {
+            previousScale = 1
+            select()
         }
-        /// Selects the canvas element touched by the user.
-        @objc func tap() { select() }
-        @objc func drag(_ pan: UIPanGestureRecognizer) {
-            if pan.state == .began {
-                previous = .zero
-                let origin = pan.location(in: pan.view)
-                let bounds = pan.view?.bounds ?? .zero
-                pulling = selected && origin.x > bounds.width - 44 && origin.y > bounds.height - 44
-                select()
-            }
-            if pan.state == .changed || pan.state == .ended {
-                let translation = pan.translation(in: pan.view?.window)
-                if pulling {
-                    resize(translation.x - previous.x, translation.y - previous.y, Double(pan.view?.bounds.height ?? 1))
-                } else { move(translation.x - previous.x, translation.y - previous.y) }
-                previous = translation
-            }
-            if pan.state == .ended || pan.state == .cancelled { previous = .zero; finish() }
-        }
+        let factor = magnification / max(0.01, previousScale ?? 1)
+        resize(size.width * (factor - 1), size.height * (factor - 1), size.height)
+        previousScale = magnification
     }
 }
 

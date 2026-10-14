@@ -44,7 +44,7 @@ Disposable playback/stem-cache probes now preserve files after unreadable header
 
 The player displays MPVolumeView with documented track/thumbnail image customization: a thin continuous track and an invisible thumb with the normal system touch target. It no longer searches the view's internal UISlider hierarchy or synthesizes slider events. System routing, volume buttons, and accessibility are owned by the native control. [MPVolumeView](https://developer.apple.com/documentation/mediaplayer/mpvolumeview)
 
-On iOS 27 artwork destinations use standard push navigation, with the app's horizontal content-swipe guard cancelling row touches before Back. The legacy private-name zoom recognizer suppressor is disabled on iOS 27; the older iOS 26 workaround remains version-gated. Simply restoring native zoom was tested and rejected: hosted run 34724539014 reproduced accidental playback from a tap during dismissal. The existing swipe-back regression remains enabled in CI. `ClearPresentationBackground` has no active call sites.
+On iOS 27 artwork destinations use standard push navigation, with the app's horizontal content-swipe guard cancelling row touches before Back. The legacy private-name zoom recognizer suppressor is disabled on iOS 27; the older iOS 26 workaround remains version-gated. Simply restoring native zoom was tested and rejected: hosted run 34724539014 reproduced accidental playback from a tap during dismissal. The existing swipe-back regression remains enabled in CI.
 
 ### Scene ownership
 

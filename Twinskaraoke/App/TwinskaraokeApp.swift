@@ -51,6 +51,13 @@ struct TwinskaraokeApp: App {
                     )
                 }
         }
+        #if canImport(UIKit)
+            // The system relaunches the app to deliver finished offline
+            // downloads; it suspends it again once this returns.
+            .backgroundTask(.urlSession(BackgroundDownloadTransport.identifier)) {
+                await DownloadManager.shared.handleBackgroundEvents()
+            }
+        #endif
     }
 
     private var resolvedColorScheme: ColorScheme? {

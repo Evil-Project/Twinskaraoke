@@ -350,6 +350,7 @@ private struct BrowseCategoriesView: View {
     let topChartVM: TopChartViewModel
     let publicPlaylistsVM: PublicPlaylistsViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     private let genres: [(String, [Color])] = [
         (
             "Pop", [Color(red: 0.90, green: 0.20, blue: 0.55), Color(red: 0.40, green: 0.05, blue: 0.30)]
@@ -468,7 +469,8 @@ private struct BrowseCategoriesView: View {
             async let playlists: Void = publicPlaylistsVM.refreshPublicPlaylists()
             _ = await (genres, topChart, playlists)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+        .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
                 publicPlaylistsVM.loadIfNeeded()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
