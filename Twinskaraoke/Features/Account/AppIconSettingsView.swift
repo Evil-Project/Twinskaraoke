@@ -17,7 +17,7 @@ struct AppIconSettingsView: View {
                                 iconPreview(choice, dark: true)
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(LocalizedStringKey(choice.title))
+                                Text(verbatim: choice.title)
                                     .foregroundStyle(.primary)
                                 Text(choice == .production ? "Default app icon" : "Try the experimental app icon")
                                     .font(.caption)
