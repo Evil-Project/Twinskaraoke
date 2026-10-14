@@ -138,53 +138,66 @@ private struct SplashCanvasTouchSurface: View {
 
     @State private var drag: DragProgress?
     @State private var previousScale: CGFloat?
-    /// Reset by SwiftUI when a gesture ends *or* is cancelled, which is the
-    /// only way to hear about a cancellation; `finish()` hangs off these.
-    @GestureState private var isDragging = false
-    @GestureState private var isMagnifying = false
+    /// Reset by SwiftUI when the gesture ends *or* is cancelled, which is the
+    /// only way to hear about a cancellation; `finish()` hangs off it.
+    @GestureState private var isActive = false
 
     var body: some View {
         GeometryReader { proxy in
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { select() }
-                .gesture(dragGesture(in: proxy).simultaneously(with: magnifyGesture(size: proxy.size)))
+                .gesture(editGesture(in: proxy))
         }
-        .onChange(of: isDragging) { _, active in
-            guard !active, drag != nil else { return }
+        .onChange(of: isActive) { _, active in
+            guard !active, drag != nil || previousScale != nil else { return }
             drag = nil
-            finish()
-        }
-        .onChange(of: isMagnifying) { _, active in
-            guard !active, previousScale != nil else { return }
             previousScale = nil
             finish()
         }
     }
 
-    /// Translation is measured globally: the tile moves under the finger, so
-    /// a local translation would chase its own movement.
-    private func dragGesture(in proxy: GeometryProxy) -> some Gesture {
+    /// Drag and pinch read from one combined value, so a pinch owns the item
+    /// no matter which of the two gestures reports first. Translation is
+    /// measured globally: the tile moves under the finger, so a local
+    /// translation would chase its own movement.
+    private func editGesture(in proxy: GeometryProxy) -> some Gesture {
         DragGesture(coordinateSpace: .global)
-            .updating($isDragging) { _, state, _ in state = true }
+            .simultaneously(with: MagnifyGesture())
+            .updating($isActive) { _, state, _ in state = true }
             .onChanged { value in
-                // A pinch owns both fingers; don't also drag the item around.
-                guard previousScale == nil else { return }
-                if drag == nil {
-                    let frame = proxy.frame(in: .global)
-                    let origin = CGPoint(x: value.startLocation.x - frame.minX, y: value.startLocation.y - frame.minY)
-                    drag = DragProgress(
-                        previous: .zero,
-                        pulling: selected && origin.x > frame.width - 44 && origin.y > frame.height - 44
-                    )
-                    select()
+                if let magnify = value.second {
+                    magnifyChanged(magnify.magnification, size: proxy.size)
+                    // Keep the drag baseline at the finger so movement during
+                    // the pinch is never applied afterwards.
+                    if let translation = value.first?.translation {
+                        if drag == nil {
+                            drag = DragProgress(previous: translation, pulling: false)
+                        } else {
+                            drag?.previous = translation
+                        }
+                    }
+                } else if let dragValue = value.first {
+                    dragChanged(dragValue, in: proxy)
                 }
-                apply(value.translation, height: proxy.size.height)
             }
             .onEnded { value in
-                guard previousScale == nil, drag != nil else { return }
-                apply(value.translation, height: proxy.size.height)
+                guard value.second == nil, let translation = value.first?.translation else { return }
+                apply(translation, height: proxy.size.height)
             }
+    }
+
+    private func dragChanged(_ value: DragGesture.Value, in proxy: GeometryProxy) {
+        if drag == nil {
+            let frame = proxy.frame(in: .global)
+            let origin = CGPoint(x: value.startLocation.x - frame.minX, y: value.startLocation.y - frame.minY)
+            drag = DragProgress(
+                previous: .zero,
+                pulling: selected && origin.x > frame.width - 44 && origin.y > frame.height - 44
+            )
+            select()
+        }
+        apply(value.translation, height: proxy.size.height)
     }
 
     private func apply(_ translation: CGSize, height: CGFloat) {
@@ -197,18 +210,14 @@ private struct SplashCanvasTouchSurface: View {
     }
 
     /// Converts incremental pinch changes into resize deltas.
-    private func magnifyGesture(size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .updating($isMagnifying) { _, state, _ in state = true }
-            .onChanged { value in
-                if previousScale == nil {
-                    previousScale = 1
-                    select()
-                }
-                let factor = value.magnification / max(0.01, previousScale ?? 1)
-                resize(size.width * (factor - 1), size.height * (factor - 1), size.height)
-                previousScale = value.magnification
-            }
+    private func magnifyChanged(_ magnification: CGFloat, size: CGSize) {
+        if previousScale == nil {
+            previousScale = 1
+            select()
+        }
+        let factor = magnification / max(0.01, previousScale ?? 1)
+        resize(size.width * (factor - 1), size.height * (factor - 1), size.height)
+        previousScale = magnification
     }
 }
 
