@@ -151,6 +151,14 @@ final class FavoritesManager {
         let songs: [Song]
         do {
             songs = try await fetchSongs()
+        } catch where Self.isCancellation(error) {
+            // Invalidating the favorites cache cancels a fetch in flight; at
+            // launch the companion refresh does exactly that to the first load.
+            // Whoever invalidated either reloads or leaves `loaded` false for
+            // the next `loadIfNeeded()`, so this is superseded, not failed, and
+            // must not start the retry backoff.
+            DebugLogger.log("Favorites load superseded by a newer request", category: .network)
+            return
         } catch {
             DebugLogger.log(
                 "Favorites load failed: \(error.localizedDescription)",
@@ -169,6 +177,10 @@ final class FavoritesManager {
         favoriteIDs = Set(songs.map(\.id))
         loaded = true
         lastLoadFailure = nil
+    }
+
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 
     private func scheduleReloadAfterMutationsIfNeeded() {
