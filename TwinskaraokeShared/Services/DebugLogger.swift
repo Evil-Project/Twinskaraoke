@@ -73,6 +73,37 @@ nonisolated enum DebugLogger {
         logQueue.sync { recentLogs.joined(separator: "\n") }
     }
 
+    /// Writes the buffer to a text file for sharing. The buffer lives only in
+    /// memory and only fills while Debug Logging is on, so it is often empty
+    /// right after a relaunch; the header says so instead of producing an
+    /// empty file that share targets silently drop.
+    static func exportLogFile(
+        in directory: URL = FileManager.default.temporaryDirectory,
+        now: Date = Date()
+    ) throws -> URL {
+        let entries = logQueue.sync { recentLogs }
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        var lines = [
+            "Twinskaraoke debug log",
+            "Exported: \(now.ISO8601Format())",
+            "Version: \(version) (\(build))",
+            "Entries: \(entries.count)",
+        ]
+        if entries.isEmpty {
+            lines.append("No entries. Logging records only while Debug Logging is on, and the buffer is cleared when the app quits.")
+        }
+        lines.append("")
+        lines.append(contentsOf: entries)
+
+        let stamp = now.formatted(.iso8601.year().month().day().dateSeparator(.omitted)
+            .time(includingFractionalSeconds: false).timeSeparator(.omitted))
+        let url = directory.appendingPathComponent("Twinskaraoke-debug-log-\(stamp).txt")
+        try Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
+        return url
+    }
+
     static func clearLogs() {
         logQueue.async { recentLogs.removeAll() }
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import Darwin
+import UniformTypeIdentifiers
 
 struct DeveloperMenuView: View {
     @AppStorage("nk.debugLogging") private var debugLogging: Bool = false
@@ -88,9 +89,13 @@ struct DeveloperMenuView: View {
 }
 
 /// Reads the log buffer when the share sheet asks for it, not when the menu
-/// renders, so the export includes everything logged up to that moment.
+/// renders, so the export includes everything logged up to that moment. A
+/// file rather than plain text: Files and messengers keep it as a document,
+/// and a long log is not truncated into a chat message.
 nonisolated private struct DebugLogExport: Transferable {
     static var transferRepresentation: some TransferRepresentation {
-        ProxyRepresentation { (_: DebugLogExport) in DebugLogger.exportLogs() }
+        FileRepresentation(exportedContentType: .plainText) { (_: DebugLogExport) in
+            SentTransferredFile(try DebugLogger.exportLogFile())
+        }
     }
 }
