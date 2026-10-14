@@ -2013,6 +2013,12 @@ final class AudioPlayerManager {
 
         if isRadioMode {
             guard let player = radioPlayer else {
+                // A media services reset retires the player but keeps the
+                // station, so Play tunes back in.
+                if let url = radioStreamURL, let song = currentSong {
+                    playRadio(streamURL: url, song: song, artworkURL: radioArtworkURL)
+                    return true
+                }
                 radioPlaybackRequested = false
                 setPlaybackState(playing: false, buffering: false, reason: "resume.radio.noPlayer.\(source)")
                 return false
@@ -2086,6 +2092,10 @@ final class AudioPlayerManager {
             if let fileURL = song.audioURL != nil ? immediateLocalPlaybackFileURL(for: song) : localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
                 startPlayingFile(fileURL, startAt: resumeAt)
+                // A fresh engine starts on the main mix. Re-enter karaoke the
+                // way a normal song start does, or a reset rebuild would
+                // silently bring the vocals back.
+                if aiEnabled, anyAIEffectActive { applyMLSeparationIfNeeded() }
                 return true
             }
             if let remoteURL = song.audioURL {
@@ -2096,6 +2106,7 @@ final class AudioPlayerManager {
                     expectedDuration: expectedDuration,
                     startAt: resumeAt
                 )
+                if aiEnabled, anyAIEffectActive { applyMLSeparationIfNeeded() }
                 return true
             }
             setPlaybackState(
@@ -3141,24 +3152,34 @@ final class AudioPlayerManager {
         avEngine.seek(to: position)
     }
 
+    /// The media server restarted, so every audio object built against it is
+    /// dead. Apple's contract for `mediaServicesWereResetNotification` is to
+    /// rebuild the players and the session configuration, and not to restart
+    /// playback until the user asks. Restarting the old engine here played
+    /// through stale objects and resumed on its own.
+    ///
+    /// Everything is torn down and left paused at `lastKnownPlaybackTime`,
+    /// which the progress tick keeps current. The next Play then takes the
+    /// cold-resume path: a fresh engine, stream player or radio player.
     private func handleMediaServicesReset() {
         guard phoneAudioAllowed else { return }
-        DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
+        DebugLogger.log("Media services were reset — rebuilding audio, staying paused", category: .playback)
         audioSessionController.resetAfterMediaServicesLoss()
-        resumeAfterMediaServicesReset()
-    }
-
-    private func resumeAfterMediaServicesReset() {
-        guard phoneAudioAllowed else { return }
-        guard isPlaying else { return }
-        guard audioSessionController.performWhenReady({ [weak self] in
-            self?.resumeAfterMediaServicesReset()
-        }, replacingPending: false) else { return }
-        if isPlaying, !isRadioMode, !isStreamMode {
-            let position = lastKnownPlaybackTime
-            avEngine.startEngineIfNeeded()
-            avEngine.seek(to: position)
-        }
+        audioSessionController.configureCategory()
+        wasPlayingBeforeInterruption = false
+        cancelAutoplayRequest()
+        cancelPendingTransitionWork()
+        aiStemSwitchInFlightSongID = nil
+        loadedEngine?.stop()
+        loadedEngine = nil
+        stopRadioPlayer()
+        stopStreamPlayer()
+        setPlaybackState(
+            playing: false,
+            buffering: false,
+            forceNowPlayingUpdate: true,
+            reason: "mediaServicesReset"
+        )
     }
 
     private func handleInterruption(_ note: Notification) {
