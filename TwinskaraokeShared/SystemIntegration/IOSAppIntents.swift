@@ -206,7 +206,7 @@ struct IOSStartSleepTimerIntent: AppIntent {
 struct IOSOpenSearchIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Search"
     static let description = IntentDescription("Open Twinskaraoke’s search screen to find music.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
         AppRouter.shared.open(.search)
@@ -218,7 +218,7 @@ struct IOSOpenSearchIntent: AppIntent {
 struct IOSOpenLyricsIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Lyrics"
     static let description = IntentDescription("Open the lyrics screen for the loaded song. Requires a song to be loaded.")
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -234,7 +234,7 @@ struct IOSOpenLyricsIntent: AppIntent {
 struct IOSControlFavoriteCurrentSongIntent: AppIntent {
     static let title: LocalizedStringResource = "Favorite This Song"
     static let isDiscoverable = false
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -247,7 +247,7 @@ struct IOSControlFavoriteCurrentSongIntent: AppIntent {
 struct IOSControlSleepTimerIntent: AppIntent {
     static let title: LocalizedStringResource = "Sleep Timer"
     static let isDiscoverable = false
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @Parameter(title: "Duration", default: .thirty) var duration: SleepTimerDuration
     init() {}
     init(duration: SleepTimerDuration) { self.duration = duration }
