@@ -2100,13 +2100,17 @@ final class AudioPlayerManager {
             }
             if let remoteURL = song.audioURL {
                 let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+                let reentersStems = aiEnabled && anyAIEffectActive
+                // Like a normal song start, the separation requested below
+                // must survive the cached file starting.
                 startStreamPlayback(
                     url: remoteURL,
                     songID: song.id,
                     expectedDuration: expectedDuration,
-                    startAt: resumeAt
+                    startAt: resumeAt,
+                    resetSeparationOnCacheReady: !reentersStems
                 )
-                if aiEnabled, anyAIEffectActive { applyMLSeparationIfNeeded() }
+                if reentersStems { applyMLSeparationIfNeeded() }
                 return true
             }
             setPlaybackState(
@@ -2507,7 +2511,9 @@ final class AudioPlayerManager {
         cancelAutoplayRequest()
         AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
-        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id
+        // A media services reset keeps the station but retires its player, so
+        // only a live player counts as already tuned in.
+        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id && radioPlayer != nil
         if alreadyOnSameStation {
             currentSong = song
             radioArtworkURL = artworkURL
@@ -3177,6 +3183,16 @@ final class AudioPlayerManager {
         cancelAutoplayRequest()
         cancelPendingTransitionWork()
         aiStemSwitchInFlightSongID = nil
+        // Stem work started before the reset would otherwise finish into
+        // switchActivePlaybackToStems and build a new engine on its own.
+        // Resume re-enters AI stems when an effect is on.
+        instrumentalTask?.cancel()
+        instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
+        separationGeneration &+= 1
+        VocalSeparator.shared.cancel()
+        VocalSeparator.shared.cleanupRealtimeTemp()
         loadedEngine?.stop()
         loadedEngine = nil
         stopRadioPlayer()

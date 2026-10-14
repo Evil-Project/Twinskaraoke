@@ -1292,8 +1292,15 @@ class AudioManager {
     private func handleMediaServicesReset() {
         isSessionActive = false
         shouldResumeAfterInterruption = false
-        guard player != nil else { return }
-        if !isRadioMode, let song = currentSong, currentTime.isFinite, currentTime > 0 {
+        if player == nil {
+            // Something still loading would start on its own when it lands:
+            // a song once its cache validation or metadata lookup finishes,
+            // a station with a player built before the reset. Dropping the
+            // request and the radio token stops both, and the next Play
+            // prepares again.
+            guard playbackRequested || isLoading else { return }
+            metadataToken = nil
+        } else if !isRadioMode, let song = currentSong, currentTime.isFinite, currentTime > 0 {
             resumeAfterReset = (song.id, currentTime)
         }
         cleanupPlayer()
