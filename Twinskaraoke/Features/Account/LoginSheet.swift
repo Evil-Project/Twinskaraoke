@@ -231,11 +231,11 @@ struct LoginSheet: View {
 
     private var divider: some View {
         HStack(spacing: 12) {
-            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            Rectangle().fill(.separator).frame(height: 0.5)
             Text("OR")
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            Rectangle().fill(.separator).frame(height: 0.5)
         }
     }
 

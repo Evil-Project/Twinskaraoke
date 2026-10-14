@@ -47,7 +47,7 @@ struct SettingsView: View {
                 presenting: pendingAction
             ) { action in
                 Button("Cancel", role: .cancel) {}
-                    .tint(Color(uiColor: .systemBlue))
+                    .tint(.blue)
                 Button(LocalizedStringKey(action.actionLabel), role: .destructive) {
                     perform(action)
                 }

@@ -166,7 +166,7 @@ struct AccountView: View {
             }
             .alert("Sign out?", isPresented: $showSignOutConfirm) {
                 Button("Cancel", role: .cancel) {}
-                    .tint(Color(uiColor: .systemBlue))
+                    .tint(.blue)
                 Button("Sign Out", role: .destructive) {
                     AppHaptic.dismiss.play()
                     auth.logout()
