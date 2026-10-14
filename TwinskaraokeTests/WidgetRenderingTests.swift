@@ -45,15 +45,19 @@ nonisolated final class WidgetRenderingTests: XCTestCase {
         }
         try render(AnyView(RadioWidgetView(entry: RadioWidgetEntry(), familyOverride: .systemMedium)), theme: .builtIn(.light), family: .systemMedium, scheme: .light, name: "first-launch-no-metadata")
     }
+    /// Checks both outer bounds and progress-region pixels across playing and paused snapshots.
     @MainActor func testPlaybackLayoutStaysStableWhenPaused() throws {
         var snapshot = PlaybackWidgetSnapshot(
             song: WidgetSong(id: "song", title: "Wake Me Up Before You Go-Go", artist: "Wham!"),
             isPlaying: true, hasPrevious: true, hasNext: true
         )
-        snapshot.elapsedSeconds = 60
+        // Use a completed interval so timer advancement cannot change fill pixels.
+        snapshot.updatedAt = Date().addingTimeInterval(-360)
+        snapshot.elapsedSeconds = 180
         snapshot.durationSeconds = 180
         for family in [WidgetFamily.systemMedium, .systemLarge] {
             var sizes: [CGSize] = []
+            var progressRegions: [Data] = []
             for isPlaying in [true, false] {
                 snapshot.isPlaying = isPlaying
                 let view = WidgetThemedView(theme: .builtIn(.dark)) {
@@ -64,12 +68,20 @@ nonisolated final class WidgetRenderingTests: XCTestCase {
                 renderer.proposedSize = ProposedViewSize(width: 332, height: nil)
                 let image = try XCTUnwrap(renderer.uiImage)
                 sizes.append(image.size)
+                // Includes artwork, metadata, and the progress bar, stopping before
+                // the transport row whose play/pause symbol is expected to change.
+                let region = CGRect(x: 0, y: 0, width: image.size.width,
+                                    height: family == .systemLarge ? 84 : 64)
+                let crop = try XCTUnwrap(image.cgImage?.cropping(to: region))
+                progressRegions.append(try XCTUnwrap(UIImage(cgImage: crop).pngData()))
                 let attachment = XCTAttachment(image: image)
                 attachment.name = "playback-\(label(family))-\(isPlaying ? "playing" : "paused")"
                 attachment.lifetime = .keepAlways
                 add(attachment)
             }
             XCTAssertEqual(sizes[0], sizes[1], "Play/pause must preserve the widget's intrinsic layout in \(label(family))")
+            XCTAssertEqual(progressRegions[0], progressRegions[1],
+                           "Progress and metadata must not move within the widget's bounds in \(label(family))")
         }
     }
     @MainActor private func radio(theme: SharedThemeDefinition) -> RadioWidgetEntry {

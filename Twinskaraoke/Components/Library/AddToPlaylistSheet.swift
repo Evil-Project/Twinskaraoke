@@ -35,45 +35,14 @@ struct AddToPlaylistSheet: View {
                     } else {
                         VStack(spacing: 10) {
                             ForEach(manager.playlists) { playlist in
-                                Button {
-                                    select(playlist)
-                                } label: {
-                                    AddToPlaylistRow(
-                                        playlist: playlist,
-                                        state: state(for: playlist)
-                                    )
-                                }
-                                .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.82, haptic: rowHaptic(for: playlist)))
-                                .disabled(inFlight.contains(playlist.id) || removing.contains(playlist.id)
-                                          || (!checked.contains(playlist.id) && !checkFailed.contains(playlist.id)))
-                                .task { await checkMembership(in: playlist) }
-                                .contextMenu {
-                                    if checked.contains(playlist.id) {
-                                        if added.contains(playlist.id) {
-                                            Button(role: .destructive) {
-                                                select(playlist)
-                                            } label: {
-                                                Label("Remove from Playlist", systemImage: "minus.circle")
-                                            }
-                                            .disabled(inFlight.contains(playlist.id) || removing.contains(playlist.id))
-                                        } else {
-                                            Button {
-                                                select(playlist)
-                                            } label: {
-                                                Label("Add to Playlist", systemImage: "plus.circle")
-                                            }
-                                            .disabled(inFlight.contains(playlist.id) || removing.contains(playlist.id))
-                                        }
-                                    }
-                                    Button {
-                                        AppHaptic.selection.play()
-                                        showCreatePlaylist = true
-                                    } label: {
-                                        Label("New Playlist", systemImage: "music.note.list")
-                                    }
-                                } preview: {
-                                    AddToPlaylistPreview(playlist: playlist)
-                                }
+                                playlistButton(playlist)
+                            }
+                        }
+                        .task(id: manager.playlists.map(\.id)) {
+                            // Avoid a burst of full-detail downloads when the sheet opens.
+                            for playlist in manager.playlists {
+                                guard !Task.isCancelled else { return }
+                                await checkMembership(in: playlist)
                             }
                         }
                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
@@ -147,7 +116,7 @@ struct AddToPlaylistSheet: View {
             .alert("Could Not Remove Song", isPresented: $showRemovalError) {
                 Button("OK", role: .cancel) { }
             } message: {
-                Text("The song is still in the playlist. Please try again.")
+                Text("Unable to confirm removal. Please try again.")
             }
             .animation(reduceMotion ? nil : AppMotion.snap, value: removing)
             .animation(reduceMotion ? nil : AppMotion.snap, value: inFlight)
@@ -195,6 +164,56 @@ struct AddToPlaylistSheet: View {
         .padding(.vertical, 32)
     }
 
+    /// Keeps row interaction and styling separate from the sheet to bound SwiftUI type checking.
+    private func playlistButton(_ playlist: UserPlaylist) -> some View {
+        Button {
+            select(playlist)
+        } label: {
+            AddToPlaylistRow(playlist: playlist, state: state(for: playlist))
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.82, haptic: rowHaptic(for: playlist)))
+        .disabled(isBusy(playlist) || (!checked.contains(playlist.id) && !checkFailed.contains(playlist.id)))
+        .contextMenu {
+            playlistMenu(playlist)
+        } preview: {
+            AddToPlaylistPreview(playlist: playlist)
+        }
+    }
+
+    /// Offers the action matching the verified membership, using the same confirmation as a tap.
+    @ViewBuilder
+    private func playlistMenu(_ playlist: UserPlaylist) -> some View {
+        if checked.contains(playlist.id) {
+            if added.contains(playlist.id) {
+                Button(role: .destructive) {
+                    select(playlist)
+                } label: {
+                    Label("Remove from Playlist", systemImage: "minus.circle")
+                }
+                .disabled(isBusy(playlist))
+            } else {
+                Button {
+                    select(playlist)
+                } label: {
+                    Label("Add to Playlist", systemImage: "plus.circle")
+                }
+                .disabled(isBusy(playlist))
+            }
+        }
+        Button {
+            AppHaptic.selection.play()
+            showCreatePlaylist = true
+        } label: {
+            Label("New Playlist", systemImage: "music.note.list")
+        }
+    }
+
+    /// Prevents another action on a row while its add or removal is pending.
+    private func isBusy(_ playlist: UserPlaylist) -> Bool {
+        inFlight.contains(playlist.id) || removing.contains(playlist.id)
+    }
+
+    /// Prioritizes pending operations and lookup failures over the last verified membership.
     private func state(for playlist: UserPlaylist) -> AddToPlaylistRowState {
         if removing.contains(playlist.id) { return .removing }
         if inFlight.contains(playlist.id) { return .adding }
@@ -205,17 +224,23 @@ struct AddToPlaylistSheet: View {
         return .idle
     }
 
+    /// Provides selection feedback only when the row can accept an interaction.
     private func rowHaptic(for playlist: UserPlaylist) -> AppHaptic? {
         inFlight.contains(playlist.id) || removing.contains(playlist.id) ? nil : .selection
     }
 
+    /// Reads current server membership without using the playlist browsing cache.
     private func checkMembership(in playlist: UserPlaylist) async {
         guard !checked.contains(playlist.id), !checking.contains(playlist.id) else { return }
         checking.insert(playlist.id)
         checkFailed.remove(playlist.id)
         defer { checking.remove(playlist.id) }
         do {
-            let detail = try await KaraokeAPIClient.playlistDetail(id: playlist.id)
+            // Actions need current membership, not the browsing cache's 60-second snapshot.
+            var request = try KaraokeAPIClient.request(pathSegments: ["api", "playlist", playlist.id])
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let data = try await KaraokeAPIClient.data(for: request)
+            let detail = try JSONDecoder().decode(PlaylistDetail.self, from: data)
             try Task.checkCancellation()
             if detail.songListDTOs.contains(where: { $0.id == song.id }) {
                 added.insert(playlist.id)
@@ -225,10 +250,12 @@ struct AddToPlaylistSheet: View {
             checked.insert(playlist.id)
         } catch {
             guard !Task.isCancelled else { return }
+            DebugLogger.log("Playlist membership check failed: \(type(of: error))", category: .network)
             checkFailed.insert(playlist.id)
         }
     }
 
+    /// Retries unknown membership, adds an absent song, or asks before removing an existing one.
     private func select(_ playlist: UserPlaylist) {
         guard !inFlight.contains(playlist.id), !removing.contains(playlist.id) else { return }
         guard checked.contains(playlist.id) else {
@@ -243,6 +270,7 @@ struct AddToPlaylistSheet: View {
         }
     }
 
+    /// Applies a confirmed removal and makes ambiguous failures retry membership verification.
     private func remove(from playlist: UserPlaylist) {
         guard added.contains(playlist.id), !inFlight.contains(playlist.id),
               !removing.contains(playlist.id) else { return }
@@ -255,11 +283,14 @@ struct AddToPlaylistSheet: View {
                 hasChanges = true
             } else {
                 AppHaptic.error.play()
+                checked.remove(playlist.id)
+                checkFailed.insert(playlist.id)
                 showRemovalError = true
             }
         }
     }
 
+    /// Adds only after absence is verified and updates the row after the request succeeds.
     private func add(to playlist: UserPlaylist) {
         guard checked.contains(playlist.id), !inFlight.contains(playlist.id),
               !removing.contains(playlist.id), !added.contains(playlist.id) else { return }
