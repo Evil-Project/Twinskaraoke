@@ -2713,6 +2713,21 @@ final class AudioPlayerManager {
         return try await remoteCache()
     }
 
+    /// One session for every remote-playback download. Connections are pooled
+    /// per session, so a session per song paid a fresh TLS handshake and
+    /// HTTP/3 race to storage on every skip, then tore the connection down
+    /// unfinished. The async `download(from:)` cancels its own task when the
+    /// caller's Task is cancelled, so nothing needs invalidating per song.
+    private nonisolated static let remotePlaybackSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 180
+        return URLSession(configuration: configuration)
+    }()
+
     // @concurrent: cache validation, file moves, and possible decompression
     // are blocking file I/O that must stay off the main actor.
     @concurrent private static func cacheRemoteAudio(
@@ -2735,18 +2750,10 @@ final class AudioPlayerManager {
         DebugLogger.log("Remote playback cache start for \(songID)", category: .cache)
         try? FileManager.default.removeItem(at: partialURL)
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 180
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        let (temporaryURL, response) = try await session.download(from: remoteURL)
-        try Task.checkCancellation()
-        guard AudioCacheStore.acceptsAudioResponse(response) else {
+        let (temporaryURL, response) = try await remotePlaybackSession.download(from: remoteURL)
+        guard !Task.isCancelled, AudioCacheStore.acceptsAudioResponse(response) else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            try Task.checkCancellation()
             throw RemotePlaybackCacheError.invalidResponse
         }
 

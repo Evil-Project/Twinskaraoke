@@ -419,6 +419,20 @@ final class TransitionCoordinator {
 
 // URLSession delegates must be Sendable; cross-thread state is guarded by stateLock.
 private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    /// Shared by every predownload so the next song reuses the warm
+    /// connection to storage. Each download attaches itself as its task's
+    /// delegate, which receives the data callbacks; cancelling one task
+    /// leaves the session serving the next.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = false
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 180
+        return URLSession(configuration: configuration)
+    }()
+
     private let songID: String
     private let expectedDuration: TimeInterval?
     private let partialURL: URL
@@ -426,7 +440,6 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     private var remoteURL: URL?
     private var fileHandle: FileHandle?
     private var task: URLSessionDataTask?
-    private var session: URLSession?
     private var didComplete = false
     private let stateLock = NSLock()
     private var isCancelled = false
@@ -466,14 +479,8 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             finish()
             return
         }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.waitsForConnectivity = false
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 180
-        let newSession = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        let newTask = newSession.dataTask(with: remoteURL)
+        let newTask = Self.session.dataTask(with: remoteURL)
+        newTask.delegate = self
 
         // Re-check and publish atomically. cancel() may have run during the
         // cache probe and file setup above, when session/task were still nil
@@ -483,14 +490,12 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         if isCancelled {
             stateLock.unlock()
             newTask.cancel()
-            newSession.invalidateAndCancel()
             handle.closeFile()
             try? FileManager.default.removeItem(at: partialURL)
             // cancel() already resumed the continuation via finish().
             return
         }
         fileHandle = handle
-        session = newSession
         task = newTask
         stateLock.unlock()
 
@@ -504,11 +509,9 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         stateLock.lock()
         isCancelled = true
         task?.cancel()
-        session?.invalidateAndCancel()
         fileHandle?.closeFile()
         fileHandle = nil
         task = nil
-        session = nil
         stateLock.unlock()
         try? FileManager.default.removeItem(at: partialURL)
         finish()
@@ -535,15 +538,13 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         stateLock.unlock()
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         stateLock.lock()
         let cancelled = isCancelled
         fileHandle?.closeFile()
         fileHandle = nil
         self.task = nil
-        self.session = nil
         stateLock.unlock()
-        session.invalidateAndCancel()
         guard !cancelled else { return }
         if error == nil, AudioCacheStore.acceptsAudioResponse(task.response),
            AudioCacheStore.isPlayableAudioFile(at: partialURL),
