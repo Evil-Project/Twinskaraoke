@@ -64,7 +64,6 @@ final class UserPlaylistsManager {
 
             self.playlists = decoded
             self.loaded = true
-            RecentlyAddedTracker.shared.registerIfNew(decoded.map(\.id))
         }
     }
 

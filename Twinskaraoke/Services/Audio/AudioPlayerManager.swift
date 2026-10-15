@@ -1561,6 +1561,11 @@ final class AudioPlayerManager {
                 }
             }
         }
+        // It fires for the life of the app, playing or not. Tolerance lets
+        // the system batch it with other wakeups; 10% is Apple's suggested
+        // floor and invisible at a 4 Hz progress readout. Crossfade starts
+        // are scheduled to the exact deadline elsewhere, not by this tick.
+        timer.tolerance = 0.025
         pollTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -1897,7 +1902,7 @@ final class AudioPlayerManager {
         }
         if isRadioMode {
             let wasActive = radioPlaybackRequested || isPlaying || isBuffering
-            guard let player = radioPlayer else {
+            guard radioPlayer != nil else {
                 radioPlaybackRequested = false
                 setPlaybackState(
                     playing: false,
@@ -1916,9 +1921,14 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            radioPlaybackRequested = false
+            // Stopped, not paused: every surface labels this Stop, and live
+            // radio has no position worth keeping. Pausing held the stream's
+            // connection open and resumed from wherever the buffer had got to,
+            // behind the broadcast. The station, song and mini player stay;
+            // resume finds no player and tunes back in at the live edge, the
+            // path a media services reset already takes.
             lastKnownPlaybackTime = activePlaybackTime()
-            player.pause()
+            stopRadioPlayer()
             setPlaybackState(playing: false, buffering: false, reason: "pause.radio.\(source)")
             return true
         }
@@ -2010,8 +2020,8 @@ final class AudioPlayerManager {
 
         if isRadioMode {
             guard let player = radioPlayer else {
-                // A media services reset retires the player but keeps the
-                // station, so Play tunes back in.
+                // Stopping and a media services reset both retire the player
+                // but keep the station, so Play tunes back in.
                 if let url = radioStreamURL, let song = currentSong {
                     playRadio(streamURL: url, song: song, artworkURL: radioArtworkURL)
                     return true

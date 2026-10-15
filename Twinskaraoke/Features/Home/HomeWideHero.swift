@@ -32,7 +32,7 @@ struct WideHomeHero: View {
                     }
                 }
                 if let playlist {
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {
                         WideHeroActionRowContent(
                             systemImage: "music.note.list",
                             title: String(localized: "Open Top Pick"),
@@ -87,7 +87,7 @@ struct WideNewHero: View {
                     WideHeroSongRow(song: secondary, context: context.isEmpty ? [secondary] : context, label: String(localized: "Trending Now"))
                 }
                 if let playlist {
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {
                         WideHeroActionRowContent(
                             systemImage: "square.grid.2x2.fill",
                             title: String(localized: "New This Week"),

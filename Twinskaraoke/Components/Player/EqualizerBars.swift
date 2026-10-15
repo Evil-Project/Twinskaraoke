@@ -3,9 +3,14 @@ import SwiftUI
 struct EqualizerBars: View {
     let isAnimating: Bool
     var pausesWhileScrolling = true
+    /// For bars in the app's own lists, which the open full-screen player
+    /// covers without unmounting. The queue's bars sit on top of the player
+    /// and leave this off.
+    var pausesUnderPlayer = false
     @Environment(\.appReduceEffects) private var reduceEffects
     @Environment(\.scenePhase) private var scenePhase
     private let scrollState = ScrollPerformanceState.shared
+    private let presentation = NowPlayingPresentation.shared
     @State private var animationClock = ActiveAnimationClock()
     @State private var isVisible: Bool = false
 
@@ -47,14 +52,19 @@ struct EqualizerBars: View {
 
     private func barHeight(for index: Int, total: CGFloat, elapsed: TimeInterval) -> CGFloat {
         guard isAnimating && !reduceEffects else { return total * 0.3 }
-        let speeds: [Double] = [3.4, 2.7, 4.1]
-        let offsets: [Double] = [0.0, 0.45, 0.9]
-        let v = (sin(elapsed * speeds[index] + offsets[index] * .pi * 2) + 1) / 2
+        let v = (sin(elapsed * Self.speeds[index] + Self.offsets[index] * .pi * 2) + 1) / 2
         return total * (0.3 + 0.7 * v)
     }
+
+    // Static, so drawing a frame does not allocate them for every bar.
+    private static let speeds: [Double] = [3.4, 2.7, 4.1]
+    private static let offsets: [Double] = [0.0, 0.45, 0.9]
 
     private var shouldAnimateBars: Bool {
         isAnimating && isVisible && !reduceEffects && scenePhase == .active
             && (!pausesWhileScrolling || !scrollState.isScrolling)
+            // `isExpanded` flips once per open or close, so reading it costs
+            // no per-frame invalidation during a drag.
+            && (!pausesUnderPlayer || !presentation.isExpanded)
     }
 }

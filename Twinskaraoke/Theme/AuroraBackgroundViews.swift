@@ -71,46 +71,6 @@ struct FloatingClouds: View {
     }
 }
 
-/// A slow diagonal light sweep layered above the blurred clouds. This is
-/// what pushes the wash from "blurry colored blobs" to something that reads
-/// as an actual aurora — a faint band of light drifting across the sky.
-private struct AuroraShimmerOverlay: View {
-    @Environment(\.appReduceEffects) private var reduceEffects
-    @State private var animate = false
-
-    var body: some View {
-        LinearGradient(
-            colors: [
-                .white.opacity(0),
-                .white.opacity(0.07),
-                .white.opacity(0),
-            ],
-            startPoint: animate ? .bottomLeading : .topTrailing,
-            endPoint: animate ? .topTrailing : .bottomLeading
-        )
-        .blendMode(.plusLighter)
-        .onAppear {
-            guard !reduceEffects else { return }
-            withOptionalAnimation(
-                Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
-            ) {
-                animate = true
-            }
-        }
-        .onChange(of: reduceEffects) { _, shouldReduce in
-            if shouldReduce {
-                withOptionalAnimation(nil) { animate = false }
-            } else {
-                withOptionalAnimation(
-                    Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
-                ) {
-                    animate = true
-                }
-            }
-        }
-    }
-}
-
 struct LinearNonTransparency: View {
     // Nwero always renders its dark palette; see the note on FloatingClouds.
     private let scheme: ColorScheme = .dark

@@ -267,8 +267,7 @@ private struct PositionedRandomSong: Identifiable {
     struct ID: Hashable {
         let offset: Int
         let songID: String
-        let displayArtist: String
-        let durationText: String
+        let metadata: Song.RowMetadata
     }
 
     let offset: Int
@@ -278,8 +277,7 @@ private struct PositionedRandomSong: Identifiable {
         ID(
             offset: offset,
             songID: song.id,
-            displayArtist: song.displayArtist,
-            durationText: song.durationText
+            metadata: song.rowMetadata
         )
     }
 }

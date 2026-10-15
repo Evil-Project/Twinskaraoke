@@ -128,8 +128,6 @@ struct PlayerArtworkView: View {
     }
 }
 
-/// Reports the artwork's frame as the morph target under an owner unique to
-/// this view instance; see `NowPlayingPresentation.FrameReports`.
 /// A website theme rings the artwork in its primary, as the site does its
 /// covers (`.song-cover-placeholder`: `0 0 40px primary/0.3`, and `/0.2` on
 /// `.playlist-main-cover`): brighter while playing, softer while paused.
@@ -146,6 +144,8 @@ private struct ThemedArtworkGlow: ViewModifier {
     }
 }
 
+/// Reports the artwork's frame as the morph target under an owner unique to
+/// this view instance; see `NowPlayingPresentation.FrameReports`.
 private struct PlayerArtworkFrameReporter: ViewModifier {
     @State private var owner = UUID().uuidString
 

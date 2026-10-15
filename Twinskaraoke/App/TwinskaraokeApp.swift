@@ -20,6 +20,9 @@ struct TwinskaraokeApp: App {
             RecentlyPlayedStore.resetPersistedHistoryForUITesting()
         }
         ImageCacheConfig.applyLimits()
+        // Written by a "recently added" tracker that nothing ever read back,
+        // and that grew by every playlist id the app fetched.
+        UserDefaults.standard.removeObject(forKey: "nk.recentlyAddedDates.v1")
         // Mirrors the signed-in session to the paired watch, which has no way
         // to sign in on its own. No-op on devices that can't pair one.
         WatchSessionPublisher.shared.activate()

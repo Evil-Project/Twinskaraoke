@@ -378,6 +378,23 @@ nonisolated struct Song: Codable, Identifiable, Equatable, Sendable {
     return String(format: "%d:%02d", m, s)
   }
 
+  /// The fields `displayArtist` and `durationText` are derived from, for a
+  /// list row's identity to change when they arrive late.
+  ///
+  /// Hashing these is the point: a `ForEach` computes every element's id on
+  /// each pass, and the derived strings cost a filter, two joins, a catalog
+  /// lookup and a `String(format:)` per song. On a long playlist that was
+  /// thousands of each per frame of a scroll-driven update.
+  struct RowMetadata: Hashable, Sendable {
+    let originalArtists: [String]?
+    let coverArtists: [String]?
+    let duration: Int
+  }
+
+  var rowMetadata: RowMetadata {
+    RowMetadata(originalArtists: originalArtists, coverArtists: coverArtists, duration: duration)
+  }
+
   /// Identity-based equality: two `Song` values are equal when they share an
   /// `id`, even if their metadata (title, artists, artwork, …) differs. Do not
   /// use `==` to detect metadata changes between two instances.

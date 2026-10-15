@@ -33,6 +33,10 @@ struct SettingsView: View {
         settingsContent
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            // The sizes are otherwise measured at launch and after playback
+            // events, so browsing alone left the image and lyrics figures
+            // showing whatever they were when the app started.
+            .task { cacheManager.refreshSizes() }
             .alert("Could Not Clear Storage", isPresented: $showStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -126,10 +130,10 @@ struct SettingsView: View {
     private var audioSection: some View {
         Section {
             Toggle("Auto Mix", isOn: $audioManager.autoMixEnabled)
-            .toggleHaptic(audioManager.autoMixEnabled)
+                .toggleHaptic(audioManager.autoMixEnabled)
                 .tint(.appAccent)
             Toggle("Crossfade", isOn: $audioManager.crossfadeEnabled)
-            .toggleHaptic(audioManager.crossfadeEnabled)
+                .toggleHaptic(audioManager.crossfadeEnabled)
                 .tint(.appAccent)
             if audioManager.crossfadeEnabled {
                 CrossfadeDurationRow(
@@ -158,7 +162,7 @@ struct SettingsView: View {
     private var downloadsSection: some View {
         Section {
             Toggle("Auto-Download Played Songs", isOn: $downloadOnPlay)
-            .toggleHaptic(downloadOnPlay)
+                .toggleHaptic(downloadOnPlay)
                 .onChange(of: downloadOnPlay) { _, enabled in
                     if enabled { audioManager.autoDownloadCurrentSongIfEnabled() }
                 }
@@ -173,7 +177,7 @@ struct SettingsView: View {
     private var lyricsSection: some View {
         Section {
             Toggle("Respect Reduce Motion", isOn: $respectReducedMotion)
-            .toggleHaptic(respectReducedMotion)
+                .toggleHaptic(respectReducedMotion)
                 .tint(.appAccent)
         } header: {
             Text("Lyrics")
@@ -366,7 +370,7 @@ struct SettingsView: View {
     private var equalizerSection: some View {
         Section {
             Toggle("Equalizer", isOn: $audioManager.eqEnabled)
-            .toggleHaptic(audioManager.eqEnabled)
+                .toggleHaptic(audioManager.eqEnabled)
                 .tint(.appAccent)
             if audioManager.eqEnabled {
                 Picker("Preset", selection: $audioManager.eqPreset) {
@@ -392,7 +396,7 @@ struct SettingsView: View {
     private var aiAudioSection: some View {
         Section {
             Toggle("AI Audio Processing", isOn: $audioManager.aiEnabled)
-            .toggleHaptic(audioManager.aiEnabled)
+                .toggleHaptic(audioManager.aiEnabled)
                 .tint(.appAccent)
 
             if audioManager.aiEnabled {
@@ -453,7 +457,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Bass Enhance", isOn: $audioManager.bassEnhanceMode)
-            .toggleHaptic(audioManager.bassEnhanceMode)
+                .toggleHaptic(audioManager.bassEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.bassEnhanceMode {
@@ -470,7 +474,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Vocal Enhance", isOn: $audioManager.vocalEnhanceMode)
-            .toggleHaptic(audioManager.vocalEnhanceMode)
+                .toggleHaptic(audioManager.vocalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.vocalEnhanceMode {
@@ -487,7 +491,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Instrumental Enhance", isOn: $audioManager.instrumentalEnhanceMode)
-            .toggleHaptic(audioManager.instrumentalEnhanceMode)
+                .toggleHaptic(audioManager.instrumentalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.instrumentalEnhanceMode {

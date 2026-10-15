@@ -38,8 +38,11 @@ private struct PressableButtonBody: View {
   let haptic: AppHaptic?
   let pressAnimation: Animation?
   @Environment(\.isEnabled) private var isEnabled
-  @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-  @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
+  /// From the environment every app root injects, not an `@AppStorage` of its
+  /// own. This body backs every pressable control on screen — each row of a
+  /// long list has one or two — and each `@AppStorage` instance registers its
+  /// own defaults observation, set up and torn down as rows scroll past.
+  @Environment(\.appReduceMotion) private var reduceMotion
   @State private var wasPressed = false
 
   var body: some View {
@@ -66,12 +69,5 @@ private struct PressableButtonBody: View {
       haptic?.play()
     }
     wasPressed = isPressed
-  }
-
-  private var reduceMotion: Bool {
-    AppMotion.reduceMotion(
-      systemReduceMotion: systemReduceMotion,
-      respectPreference: respectReducedMotion
-    )
   }
 }

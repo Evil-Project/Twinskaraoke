@@ -154,6 +154,10 @@ final class ShimejiEngine: NSObject {
         guard displayLink == nil else { return }
         respawn(manifest: manifest)
         let link = CADisplayLink(target: self, selector: #selector(tick))
+        // Pixel sprites whose frames change a few times a second gain nothing
+        // from 120 Hz, and an uncapped link held a ProMotion display at its
+        // top rate for as long as the characters were out.
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }

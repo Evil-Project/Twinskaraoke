@@ -185,10 +185,6 @@ enum AM {
             return min(max(rawWidth, minimum), maximum)
         }
 
-        static func playlistShelfTileWidth(for availableWidth: CGFloat) -> CGFloat {
-            min(max(availableWidth * 0.42, 148), Spacing.shelfTile)
-        }
-
         static func adaptiveGridColumns(
             minimum: CGFloat,
             spacing: CGFloat = Spacing.l
@@ -376,7 +372,10 @@ struct AccountToolbarButton: View {
 
     var body: some View {
         NavigationLink {
-            AccountView()
+            // Every tab root carries this button. Built eagerly, each toolbar
+            // pass minted an AuthManager, which reads the session and
+            // registers three notification observers, only to discard it.
+            DeferredView { AccountView() }
         } label: {
             if let url = avatarURL {
                 ToolbarAvatarLabel(url: url)

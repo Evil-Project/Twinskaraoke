@@ -7,7 +7,7 @@ struct AppMotionTests {
     @Test("Decorative animation resumes from its paused phase after scene deactivation")
     func animationPauseContinuity() {
         let start = Date(timeIntervalSinceReferenceDate: 0)
-        var clock = ActiveAnimationClock()
+        let clock = ActiveAnimationClock()
         clock.setRunning(true, at: start)
         clock.setRunning(false, at: start.addingTimeInterval(2))
         #expect(clock.elapsed(at: start.addingTimeInterval(100)) == 2)
@@ -23,7 +23,7 @@ struct AppMotionTests {
     @Test("An initially paused animation does not count time before first appearance")
     func initiallyPausedAnimation() {
         let start = Date(timeIntervalSinceReferenceDate: 0)
-        var clock = ActiveAnimationClock()
+        let clock = ActiveAnimationClock()
         clock.setRunning(false, at: start)
         #expect(clock.elapsed(at: start.addingTimeInterval(100)) == 0)
         clock.setRunning(true, at: start.addingTimeInterval(100))

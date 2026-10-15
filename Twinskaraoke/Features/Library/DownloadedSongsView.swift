@@ -52,29 +52,29 @@ struct DownloadedSongsView: View {
                             .padding(.horizontal)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(localSongs.enumerated()), id: \.element.id) { idx, song in
-                                SongRow(song: song, size: .regular)
-                                    .id(
-                                        DownloadedSongRowIdentity(
-                                            songID: song.id,
-                                            duration: song.duration
-                                        )
-                                    )
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 8)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        play(song)
-                                    }
-                                    .songRowAccessibility(song: song) {
-                                        play(song)
-                                    }
-                                    .contextMenu {
-                                        DownloadedSongMenuItems(song: song) {
-                                            removeDownload(song)
+                                // A button with the press style, like every
+                                // other song list. The row's own context menu
+                                // already offers Remove Download; a second one
+                                // here only answered a press on the padding.
+                                Button {
+                                    play(song)
+                                } label: {
+                                    SongRow(song: song, size: .regular)
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                        .contentShape(Rectangle())
+                                        .songRowAccessibility(song: song) {
+                                            play(song)
                                         }
-                                    } preview: {
-                                        SongContextPreview(song: song)
-                                    }
+                                }
+                                .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
+                                .accessibilityHint("Starts playback.")
+                                .id(
+                                    DownloadedSongRowIdentity(
+                                        songID: song.id,
+                                        duration: song.duration
+                                    )
+                                )
                                 if idx < localSongs.count - 1 {
                                     Divider().padding(.leading, 76)
                                 }
@@ -304,12 +304,6 @@ struct DownloadedSongsView: View {
         AudioPlayerManager.shared.play(song: song, context: localSongs)
     }
 
-    private func removeDownload(_ song: Song) {
-        AppHaptic.dismiss.play()
-        downloads.remove(songID: song.id)
-        refresh()
-    }
-
     private func requestRemoveAllDownloads() {
         AppHaptic.selection.play()
         showRemoveAllConfirmation = true
@@ -405,54 +399,6 @@ private struct DownloadedEmptyHintRow: View {
     }
 }
 
-private struct DownloadedSongMenuItems: View {
-    let song: Song
-    let onRemove: () -> Void
-    private let favorites = FavoritesManager.shared
-
-    var body: some View {
-        Button {
-            AppHaptic.selection.play()
-            AudioPlayerManager.shared.playNext(song: song)
-        } label: {
-            Label("Play Next", systemImage: "text.insert")
-        }
-
-        Button {
-            AppHaptic.selection.play()
-            AudioPlayerManager.shared.playLast(song: song)
-        } label: {
-            Label("Play Last", systemImage: "text.append")
-        }
-
-        if favorites.isAvailable {
-            Button {
-                let wasFavorite = favorites.isFavorite(song.id)
-                favorites.toggle(songID: song.id)
-                if wasFavorite {
-                    AppHaptic.selection.play()
-                } else {
-                    AppHaptic.success.play()
-                }
-            } label: {
-                if favorites.isFavorite(song.id) {
-                    Label("Remove from Favorites", systemImage: "star.slash")
-                } else {
-                    Label("Favorite", systemImage: "star")
-                }
-            }
-        }
-
-        Divider()
-
-        Button(role: .destructive) {
-            onRemove()
-        } label: {
-            Label("Remove Download", systemImage: "trash")
-        }
-    }
-}
-
 private struct DownloadedSongsMenu: View {
     let playInOrder: () -> Void
     let shuffle: () -> Void
@@ -483,11 +429,12 @@ private struct DownloadedSongsMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.headline)
                 .foregroundStyle(Color.appAccent)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.65, haptic: .selection))
+        .accessibilityLabel("More Actions")
     }
 }

@@ -15,9 +15,14 @@ private final class SongDownloadRowState {
     /// registration parked in `DownloadManager`'s registrar until the next
     /// download change, so browsing without downloading piled them up and the
     /// next download fired them all at once.
+    ///
+    /// The seed read is untracked for the same reason: this runs while the
+    /// *parent* builds the row, and a tracked read subscribed the parent to
+    /// every download start and finish. The row's own subscription is the
+    /// one `startObserving` sets up.
     init(songID: String) {
         self.songID = songID
-        status = DownloadManager.shared.status(for: songID)
+        status = DownloadManager.shared.untrackedStatus(for: songID)
     }
 
     /// Called from the row's `onAppear`, so only the instance SwiftUI kept
@@ -126,7 +131,7 @@ struct SongRow: View {
                         .fill(Color.appArtworkOverlay)
                         .frame(width: size.artSize, height: size.artSize)
 
-                    EqualizerBars(isAnimating: playback.isPlaying)
+                    EqualizerBars(isAnimating: playback.isPlaying, pausesUnderPlayer: true)
                         .frame(width: size.indicatorSize, height: size.indicatorSize)
                         .foregroundStyle(.primary)
                 }

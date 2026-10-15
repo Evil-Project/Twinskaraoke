@@ -24,7 +24,6 @@ final class SavedPlaylistsStore {
         if isSaved(playlist) { return }
         playlists.insert(playlist, at: 0)
         savedIDs.insert(playlist.id)
-        RecentlyAddedTracker.shared.bump(playlist.id)
         save()
     }
 

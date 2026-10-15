@@ -19,6 +19,10 @@ struct Twinskaraoke_Watch_AppApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
+                // As the phone, TV and Mac roots do: shared controls such as
+                // `PressableButtonStyle` and `LyricsBouncingDots` read the
+                // result from the environment.
+                .injectReduceMotion()
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active {
                         AudioManager.shared.sleepTimer.checkExpiry()

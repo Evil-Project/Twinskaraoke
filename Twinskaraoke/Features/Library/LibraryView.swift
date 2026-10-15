@@ -263,44 +263,36 @@ struct LibraryView: View {
 
     private var libraryPrimaryLinksContent: some View {
         VStack(spacing: 0) {
-            libraryLink(
-                icon: "music.note.list",
-                title: String(localized: "Playlists"),
-                destination: PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
-            )
-            libraryLink(icon: "music.mic", title: String(localized: "Artists"), destination: ArtistsView())
-            libraryLink(icon: "music.note", title: String(localized: "Songs"), destination: LibrarySongsView())
-            libraryLink(
-                icon: "arrow.down.circle",
-                title: String(localized: "Downloaded"),
-                destination: DownloadedSongsView()
-            )
-            libraryLink(
-                icon: "arrow.up.circle",
-                title: String(localized: "Uploaded"),
-                destination: UploadedSongsView()
-            )
-            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery"), destination: ArtGalleryView())
-            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery"), destination: VideoGalleryView())
-            libraryLink(
-                icon: "shuffle",
-                title: String(localized: "Random Songs"),
-                destination: RandomSongsView(),
-                showsDivider: false
-            )
+            libraryLink(icon: "music.note.list", title: String(localized: "Playlists")) {
+                PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
+            }
+            libraryLink(icon: "music.mic", title: String(localized: "Artists")) { ArtistsView() }
+            libraryLink(icon: "music.note", title: String(localized: "Songs")) { LibrarySongsView() }
+            libraryLink(icon: "arrow.down.circle", title: String(localized: "Downloaded")) {
+                DownloadedSongsView()
+            }
+            libraryLink(icon: "arrow.up.circle", title: String(localized: "Uploaded")) { UploadedSongsView() }
+            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery")) { ArtGalleryView() }
+            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery")) { VideoGalleryView() }
+            libraryLink(icon: "shuffle", title: String(localized: "Random Songs"), showsDivider: false) {
+                RandomSongsView()
+            }
         }
     }
 
+    /// The destination is a closure, built on push: each screen behind these
+    /// links owns a `@State` view model, and building all eight on every
+    /// Library update allocated and discarded eight models each time.
     @ViewBuilder
     private func libraryLink(
         icon: String,
         title: String,
         subtitle: String? = nil,
-        destination: some View,
-        showsDivider: Bool = true
+        showsDivider: Bool = true,
+        @ViewBuilder destination: @escaping () -> some View
     ) -> some View {
         NavigationLink {
-            destination
+            DeferredView(destination)
         } label: {
             LibraryRow(icon: icon, color: .appAccent, title: title, subtitle: subtitle)
                 .contentShape(Rectangle())
@@ -425,7 +417,7 @@ private struct WideLibraryHero: View {
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
 
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {
                         Image(systemName: "chevron.right")
                             .font(AM.Font.chevron)
                             .foregroundStyle(Color.appAccent)
@@ -681,27 +673,6 @@ struct LibraryRow: View {
     }
 }
 
-struct PlaylistListRow: View {
-    let playlist: Playlist
-    var body: some View {
-        HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.thumb)
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
 struct PlaylistsGridScreen: View {
     let viewModel: PlaylistsViewModel
     /// Supplied by LibraryView, which owns the NavigationStack.
@@ -711,12 +682,13 @@ struct PlaylistsGridScreen: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""
-    @State private var favoritesRefreshTask: Task<Void, Never>?
     let cols = AM.Layout.playlistGridColumns
 
 
+    /// Observed, unlike the keychain: a sign-in or sign-out while this screen
+    /// is on the stack shows or hides New Playlist straight away.
     private var isLoggedIn: Bool {
-        CredentialStore.isAuthenticated
+        userManager.isAvailable
     }
 
     var body: some View {
@@ -802,15 +774,10 @@ struct PlaylistsGridScreen: View {
                 }
             }
         }
+        // No favourites refetch of its own: this screen is only ever pushed
+        // from LibraryView, which stays mounted beneath it, shares this view
+        // model and already refetches on every star change.
         .task { userManager.loadIfNeeded() }
-        .onChange(of: favorites.favoriteIDs) { _, _ in
-            favoritesRefreshTask?.cancel()
-            favoritesRefreshTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                viewModel.fetchFavoriteSongs(force: true)
-            }
-        }
         .sheet(isPresented: $showCreateSheet) {
             CreatePlaylistSheet()
         }
