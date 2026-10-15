@@ -749,10 +749,6 @@ final class AVEnginePlayback {
         setInstrumentalEQGain(dB: 0)
     }
 
-    func switchToFinalFile(url: URL) {
-        currentURL = url
-    }
-
     var currentTime: TimeInterval {
         mainPlayer.currentTime
     }

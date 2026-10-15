@@ -673,27 +673,6 @@ struct LibraryRow: View {
     }
 }
 
-struct PlaylistListRow: View {
-    let playlist: Playlist
-    var body: some View {
-        HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.thumb)
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
 struct PlaylistsGridScreen: View {
     let viewModel: PlaylistsViewModel
     /// Supplied by LibraryView, which owns the NavigationStack.

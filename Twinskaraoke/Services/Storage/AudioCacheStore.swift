@@ -281,12 +281,6 @@ nonisolated enum AudioCacheStore {
         fm.createFile(atPath: sourceURL.path, contents: data)
     }
 
-    static func writeStartOffset(_ offset: TimeInterval, for songID: String) {
-        _ = ensureSongDirectory(for: songID)
-        let data = "\(offset)".data(using: .utf8)
-        fm.createFile(atPath: files(for: songID).offset.path, contents: data)
-    }
-
     static func readStartOffset(for songID: String) -> TimeInterval {
         guard let data = try? Data(contentsOf: files(for: songID).offset),
               let str = String(data: data, encoding: .utf8),

@@ -185,10 +185,6 @@ enum AM {
             return min(max(rawWidth, minimum), maximum)
         }
 
-        static func playlistShelfTileWidth(for availableWidth: CGFloat) -> CGFloat {
-            min(max(availableWidth * 0.42, 148), Spacing.shelfTile)
-        }
-
         static func adaptiveGridColumns(
             minimum: CGFloat,
             spacing: CGFloat = Spacing.l

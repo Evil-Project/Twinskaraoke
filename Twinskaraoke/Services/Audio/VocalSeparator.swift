@@ -276,10 +276,6 @@ final class VocalSeparator {
         cachedVocalsURL(forSongID: songID) != nil && cachedInstrumentsURL(forSongID: songID) != nil
     }
 
-    func cachedStartOffset(forSongID songID: String) -> TimeInterval {
-        AudioCacheStore.readStartOffset(for: songID)
-    }
-
     func separate(
         forSongID songID: String, sourceURL: URL, initiatedByBackground: Bool = false
     ) async throws -> CachedStems {

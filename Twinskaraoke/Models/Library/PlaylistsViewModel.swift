@@ -85,16 +85,6 @@ final class PlaylistsViewModel {
         combinedPlaylists = buildCombinedPlaylists()
     }
 
-    func recentlyAddedPlaylists(saved: [Playlist]) -> [Playlist] {
-        let serverIDs = Set(playlists.map(\.id))
-        let localOnly = saved.filter { !serverIDs.contains($0.id) }
-        let combined = (playlists + localOnly).sorted { lhs, rhs in
-            RecentlyAddedTracker.shared.date(for: lhs.id)
-                > RecentlyAddedTracker.shared.date(for: rhs.id)
-        }
-        return [favoritesPlaylist] + combined
-    }
-
     /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
     /// until both the playlists and the favorite songs have finished loading.
     ///
@@ -126,7 +116,6 @@ final class PlaylistsViewModel {
                 }
                 playlists = loaded
                 hasLoadedPlaylists = true
-                RecentlyAddedTracker.shared.registerIfNew(loaded.map(\.id))
             } catch {
                 errorMessage = String(localized: "Playlists couldn’t be loaded. Pull to refresh to retry.")
             }

@@ -150,7 +150,7 @@ struct ModernizationRegressionTests {
 
         let state = TabState()
         let host = UIHostingController(rootView: TabFixture(state: state))
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = makeTestWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = host
         window.isHidden = false
         host.view.frame = window.bounds
