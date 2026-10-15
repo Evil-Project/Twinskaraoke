@@ -398,8 +398,8 @@ struct RadioView: View {
                         .controlSize(.regular)
                 } else {
                     // Stop, not pause, as the player and the mini player
-                    // show it: live radio rejoins the broadcast, it does not
-                    // pick up where it left off.
+                    // show it: stopping retires the stream, and playing again
+                    // tunes back in live rather than resuming the buffer.
                     Image(systemName: isLivePlaying ? "stop.fill" : "play.fill")
                         .font(.title3.bold())
                         .foregroundStyle(Color.black)
