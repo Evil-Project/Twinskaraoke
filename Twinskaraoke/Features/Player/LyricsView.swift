@@ -54,6 +54,9 @@ struct LyricsView: View {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Resolved once per pass. As a computed property read inside the
+            // `ForEach`, the binary search ran again for every row built.
+            let currentIndex = currentIndex
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 8) {

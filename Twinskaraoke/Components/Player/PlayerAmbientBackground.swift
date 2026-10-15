@@ -99,6 +99,9 @@ struct PlayerAmbientBackground: View {
             // 32px server-blurred variant instead of the full card image:
             // far less decode, memory and GPU work for the same visual result.
             let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
+            // Outside the timeline: it parses the URL, and the timeline's
+            // content runs on every display frame while the player breathes.
+            let blurRadius = runtimeBlurRadius
             // The image goes in an `overlay` so it cannot influence the size of
             // anything above it. `.aspectRatio(.fill)` always resolves to a size
             // that *covers* the proposal, and `.frame(maxWidth:maxHeight:)` does
@@ -129,7 +132,7 @@ struct PlayerAmbientBackground: View {
                                 .resizable()
                                 .interpolation(.low)
                                 .aspectRatio(contentMode: .fill)
-                                .blur(radius: runtimeBlurRadius)
+                                .blur(radius: blurRadius)
                                 .saturation(1.05)
                                 // Deliberately no `.drawingGroup()`. It bought
                                 // nothing here — the source is the 32px

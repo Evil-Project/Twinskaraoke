@@ -75,7 +75,9 @@ struct ZoomNavigationLink<Destination: View, Label: View>: View {
 
     var body: some View {
         NavigationLink {
-            destination()
+            // Deferred, so a grid of links does not build every destination
+            // (and its view model) on each pass of the grid.
+            DeferredView(destination)
                 .zoomTransitionDestination(
                     id: id,
                     in: namespace,

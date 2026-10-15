@@ -1561,6 +1561,11 @@ final class AudioPlayerManager {
                 }
             }
         }
+        // It fires for the life of the app, playing or not. Tolerance lets
+        // the system batch it with other wakeups; 10% is Apple's suggested
+        // floor and invisible at a 4 Hz progress readout. Crossfade starts
+        // are scheduled to the exact deadline elsewhere, not by this tick.
+        timer.tolerance = 0.025
         pollTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }

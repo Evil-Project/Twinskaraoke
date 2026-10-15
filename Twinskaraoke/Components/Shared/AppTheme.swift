@@ -376,7 +376,10 @@ struct AccountToolbarButton: View {
 
     var body: some View {
         NavigationLink {
-            AccountView()
+            // Every tab root carries this button. Built eagerly, each toolbar
+            // pass minted an AuthManager, which reads the session and
+            // registers three notification observers, only to discard it.
+            DeferredView { AccountView() }
         } label: {
             if let url = avatarURL {
                 ToolbarAvatarLabel(url: url)

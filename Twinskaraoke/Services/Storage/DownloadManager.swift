@@ -478,6 +478,21 @@ final class DownloadManager {
         )
     }
 
+    /// `status(for:)` without registering an observation dependency.
+    ///
+    /// For seeding per-row state from an initializer. A row's initializer runs
+    /// inside whatever is building the row, so a tracked read there subscribes
+    /// that whole view — a playlist screen, a search list — to every download
+    /// starting or finishing. Reads the macro's backing storage, which is what
+    /// `publishedState` itself wraps with the registrar's access call.
+    func untrackedStatus(for songID: String) -> SongDownloadStatus {
+        SongDownloadStatus.make(
+            downloadedIDs: _publishedState.downloadedIDs,
+            inProgress: _publishedState.inProgress,
+            songID: songID
+        )
+    }
+
     func status(for songs: [Song]) -> SongCollectionDownloadStatus {
         SongCollectionDownloadStatus.make(
             downloadedIDs: downloadedIDs,

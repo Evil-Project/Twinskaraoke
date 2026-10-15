@@ -6,11 +6,11 @@ struct VideoGalleryView: View {
     @State private var filter: VideoGalleryFilter = .all
     private let cols = AM.Layout.adaptiveGridColumns(minimum: 164, spacing: 16)
 
-    private var videos: [GalleryVideo] {
-        filter.apply(to: viewModel.videos)
-    }
-
     var body: some View {
+        // Filtered once per pass and handed down. As a computed property it
+        // re-filtered the whole catalogue (~1,400 videos) at every use, five
+        // per pass and once more for each cell that scrolled into view.
+        let videos = filter.apply(to: viewModel.videos)
         ScrollView {
             if viewModel.videos.isEmpty, viewModel.isLoading {
                 VideoGallerySkeleton()
@@ -34,7 +34,7 @@ struct VideoGalleryView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 420)
             } else {
-                galleryContent
+                galleryContent(videos: videos)
             }
         }
         .scrollIndicators(.hidden)
@@ -50,7 +50,8 @@ struct VideoGalleryView: View {
     }
 
     @ViewBuilder
-    private var galleryContent: some View {
+    private func galleryContent(videos: [GalleryVideo]) -> some View {
+        let lastVideoID = videos.last?.id
         VStack(alignment: .leading, spacing: 24) {
             if let featured = videos.first {
                 ZoomNavigationLink(id: featured.id, in: zoomNamespace) {
@@ -98,7 +99,7 @@ struct VideoGalleryView: View {
                             // scattered thinly through ~1400 items. Paging off
                             // the last *displayed* row keeps both filters going.
                             .onAppear {
-                                if video.id == videos.last?.id {
+                                if video.id == lastVideoID {
                                     viewModel.loadMore()
                                 } else {
                                     viewModel.loadMoreIfNeeded(current: video)

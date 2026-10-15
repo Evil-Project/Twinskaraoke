@@ -54,7 +54,7 @@ struct ArtistsView: View {
             } else {
                 List {
                     ForEach(displayedArtists) { artist in
-                        NavigationLink(destination: ArtistDetailView(artist: artist)) {
+                        NavigationLink(destination: DeferredView { ArtistDetailView(artist: artist) }) {
                             ArtistRow(artist: artist)
                         }
                         .onAppear { viewModel.loadMoreIfNeeded(current: artist) }

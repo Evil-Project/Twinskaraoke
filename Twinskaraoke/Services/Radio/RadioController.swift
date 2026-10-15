@@ -43,6 +43,9 @@ final class RadioController {
                 await self?.refresh()
             }
         }
+        // Metadata, not playback: a second or so either way is unnoticeable,
+        // and lets the system batch the wakeup with others.
+        timer.tolerance = 1.5
         pollTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }

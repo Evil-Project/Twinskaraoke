@@ -263,44 +263,36 @@ struct LibraryView: View {
 
     private var libraryPrimaryLinksContent: some View {
         VStack(spacing: 0) {
-            libraryLink(
-                icon: "music.note.list",
-                title: String(localized: "Playlists"),
-                destination: PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
-            )
-            libraryLink(icon: "music.mic", title: String(localized: "Artists"), destination: ArtistsView())
-            libraryLink(icon: "music.note", title: String(localized: "Songs"), destination: LibrarySongsView())
-            libraryLink(
-                icon: "arrow.down.circle",
-                title: String(localized: "Downloaded"),
-                destination: DownloadedSongsView()
-            )
-            libraryLink(
-                icon: "arrow.up.circle",
-                title: String(localized: "Uploaded"),
-                destination: UploadedSongsView()
-            )
-            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery"), destination: ArtGalleryView())
-            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery"), destination: VideoGalleryView())
-            libraryLink(
-                icon: "shuffle",
-                title: String(localized: "Random Songs"),
-                destination: RandomSongsView(),
-                showsDivider: false
-            )
+            libraryLink(icon: "music.note.list", title: String(localized: "Playlists")) {
+                PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
+            }
+            libraryLink(icon: "music.mic", title: String(localized: "Artists")) { ArtistsView() }
+            libraryLink(icon: "music.note", title: String(localized: "Songs")) { LibrarySongsView() }
+            libraryLink(icon: "arrow.down.circle", title: String(localized: "Downloaded")) {
+                DownloadedSongsView()
+            }
+            libraryLink(icon: "arrow.up.circle", title: String(localized: "Uploaded")) { UploadedSongsView() }
+            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery")) { ArtGalleryView() }
+            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery")) { VideoGalleryView() }
+            libraryLink(icon: "shuffle", title: String(localized: "Random Songs"), showsDivider: false) {
+                RandomSongsView()
+            }
         }
     }
 
+    /// The destination is a closure, built on push: each screen behind these
+    /// links owns a `@State` view model, and building all eight on every
+    /// Library update allocated and discarded eight models each time.
     @ViewBuilder
     private func libraryLink(
         icon: String,
         title: String,
         subtitle: String? = nil,
-        destination: some View,
-        showsDivider: Bool = true
+        showsDivider: Bool = true,
+        @ViewBuilder destination: @escaping () -> some View
     ) -> some View {
         NavigationLink {
-            destination
+            DeferredView(destination)
         } label: {
             LibraryRow(icon: icon, color: .appAccent, title: title, subtitle: subtitle)
                 .contentShape(Rectangle())
@@ -425,7 +417,7 @@ private struct WideLibraryHero: View {
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
 
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {
                         Image(systemName: "chevron.right")
                             .font(AM.Font.chevron)
                             .foregroundStyle(Color.appAccent)
