@@ -397,7 +397,10 @@ struct RadioView: View {
                     ProgressView()
                         .controlSize(.regular)
                 } else {
-                    Image(systemName: isLivePlaying ? "pause.fill" : "play.fill")
+                    // Stop, not pause, as the player and the mini player
+                    // show it: live radio rejoins the broadcast, it does not
+                    // pick up where it left off.
+                    Image(systemName: isLivePlaying ? "stop.fill" : "play.fill")
                         .font(.title3.bold())
                         .foregroundStyle(Color.black)
                         .offset(x: isLivePlaying ? 0 : 2)
@@ -406,7 +409,7 @@ struct RadioView: View {
             }
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.85))
-        .accessibilityLabel(isLivePlaying ? "Pause live station" : "Play live station")
+        .accessibilityLabel(isLivePlaying ? "Stop live station" : "Play live station")
         .accessibilityValue(accessibilityValue)
         .accessibilityHint("Controls the live radio stream.")
     }

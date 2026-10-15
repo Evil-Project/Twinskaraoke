@@ -49,7 +49,7 @@ struct RadioQueueHero: View {
                 AppHaptic.commit.play()
                 onPlayPause()
             } label: {
-                Label(isPlaying ? "Pause live station" : "Play live station", systemImage: isPlaying ? "pause.fill" : "play.fill")
+                Label(isPlaying ? "Stop live station" : "Play live station", systemImage: isPlaying ? "stop.fill" : "play.fill")
                     .labelStyle(.iconOnly)
                     .font(.headline.bold())
                     .foregroundStyle(Color.appControlActiveForeground)
@@ -58,7 +58,7 @@ struct RadioQueueHero: View {
                     .offset(x: isPlaying ? 0 : 1)
             }
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.76))
-            .accessibilityLabel(isPlaying ? "Pause live station" : "Play live station")
+            .accessibilityLabel(isPlaying ? "Stop live station" : "Play live station")
         }
         .padding(10)
         .appGlassBackground(in: RoundedRectangle(cornerRadius: 14, style: .continuous))

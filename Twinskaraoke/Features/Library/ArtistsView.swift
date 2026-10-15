@@ -200,9 +200,11 @@ struct ArtistDetailView: View {
                                 ArtistSongRow(song: song, showsArtwork: true) {
                                     play(song)
                                 }
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                Divider().padding(.leading, 76)
+                                // The last row has nothing to separate it from,
+                                // as in every other song list.
+                                if song.id != songs.last?.id {
+                                    Divider().padding(.leading, 76)
+                                }
                             }
                         }
                     } else if loader.isLoading {
@@ -243,12 +245,13 @@ struct ArtistDetailView: View {
                         ArtistActionsMenu(songs: songs)
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.headline)
                             .foregroundStyle(Color.appAccent)
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
-                    .buttonStyle(PressableButtonStyle(scale: 0.92, dim: 0.78, haptic: .selection))
+                    .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.65, haptic: .selection))
+                    .accessibilityLabel("More Actions")
                 }
             }
         }
@@ -334,15 +337,20 @@ private struct ArtistSongRow: View {
     var showsArtwork = true
     let onPlay: () -> Void
 
+    /// A button with the press style rather than a tap gesture, so the row
+    /// answers a touch the way every other song list does.
     var body: some View {
-        SongRow(song: song, size: .regular, showsArtwork: showsArtwork)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onPlay()
-            }
-            .songRowAccessibility(song: song) {
-                onPlay()
-            }
+        Button(action: onPlay) {
+            SongRow(song: song, size: .regular, showsArtwork: showsArtwork)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .songRowAccessibility(song: song) {
+                    onPlay()
+                }
+        }
+        .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
+        .accessibilityHint("Starts playback.")
     }
 }
 

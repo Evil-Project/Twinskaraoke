@@ -703,12 +703,13 @@ struct PlaylistsGridScreen: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""
-    @State private var favoritesRefreshTask: Task<Void, Never>?
     let cols = AM.Layout.playlistGridColumns
 
 
+    /// Observed, unlike the keychain: a sign-in or sign-out while this screen
+    /// is on the stack shows or hides New Playlist straight away.
     private var isLoggedIn: Bool {
-        CredentialStore.isAuthenticated
+        userManager.isAvailable
     }
 
     var body: some View {
@@ -794,15 +795,10 @@ struct PlaylistsGridScreen: View {
                 }
             }
         }
+        // No favourites refetch of its own: this screen is only ever pushed
+        // from LibraryView, which stays mounted beneath it, shares this view
+        // model and already refetches on every star change.
         .task { userManager.loadIfNeeded() }
-        .onChange(of: favorites.favoriteIDs) { _, _ in
-            favoritesRefreshTask?.cancel()
-            favoritesRefreshTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                viewModel.fetchFavoriteSongs(force: true)
-            }
-        }
         .sheet(isPresented: $showCreateSheet) {
             CreatePlaylistSheet()
         }
