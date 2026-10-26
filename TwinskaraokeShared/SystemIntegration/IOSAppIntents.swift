@@ -50,7 +50,7 @@ nonisolated enum SleepTimerDuration: String, AppEnum {
 
 struct IOSPlayRadioIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Twinskaraoke Radio"
-    static let description = IntentDescription("Play Twinskaraoke Radio in Twinskaraoke.")
+    static let description = IntentDescription("Start listening to Twinskaraoke’s live radio station.")
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -63,7 +63,7 @@ struct IOSPlayRadioIntent: AudioPlaybackIntent {
 
 struct IOSTogglePlaybackIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play or Pause"
-    static let description = IntentDescription("Play or Pause in Twinskaraoke.")
+    static let description = IntentDescription("Pause or resume the loaded song or live radio stream.")
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -76,7 +76,7 @@ struct IOSTogglePlaybackIntent: AudioPlaybackIntent {
 
 struct IOSNextTrackIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Next Track"
-    static let description = IntentDescription("Next Track in Twinskaraoke.")
+    static let description = IntentDescription("Skip to the next song in the current playback queue. Requires a queued song and is unavailable during live radio.")
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -89,7 +89,7 @@ struct IOSNextTrackIntent: AudioPlaybackIntent {
 
 struct IOSPreviousTrackIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Previous Track"
-    static let description = IntentDescription("Previous Track in Twinskaraoke.")
+    static let description = IntentDescription("Play the previous queued song, or restart the current song after three seconds of playback. Unavailable during live radio.")
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -102,6 +102,7 @@ struct IOSPreviousTrackIntent: AudioPlaybackIntent {
 
 struct IOSPlayFavoritesIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Favorites"
+    static let description = IntentDescription("Play your favorite songs with optional shuffle, repeat, and sleep timer settings. Requires signing in and a nonempty favorites collection.")
     @Parameter(title: "Shuffle", default: false) var shuffle: Bool
     @Parameter(title: "Repeat", default: .off) var repeatMode: IntentRepeatMode
     @Parameter(title: "Sleep Timer") var sleepTimer: SleepTimerDuration?
@@ -120,6 +121,7 @@ struct IOSPlayFavoritesIntent: AudioPlaybackIntent {
 }
 struct IOSPlayDownloadsIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Downloaded Songs"
+    static let description = IntentDescription("Play songs with available downloads, using the selected shuffle, repeat, and optional sleep timer settings.")
     @Parameter(title: "Shuffle", default: false) var shuffle: Bool
     @Parameter(title: "Repeat", default: .off) var repeatMode: IntentRepeatMode
     @Parameter(title: "Sleep Timer") var sleepTimer: SleepTimerDuration?
@@ -139,6 +141,7 @@ struct IOSPlayDownloadsIntent: AudioPlaybackIntent {
 
 struct IOSPlayPlaylistIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Play Playlist"
+    static let description = IntentDescription("Play the selected playlist with shuffle, repeat, and an optional sleep timer. Personal playlists require signing in.")
     @Parameter(title: "Playlist") var playlist: PlaylistEntity
     @Parameter(title: "Shuffle", default: false) var shuffle: Bool
     @Parameter(title: "Repeat", default: .off) var repeatMode: IntentRepeatMode
@@ -176,6 +179,7 @@ struct IOSControlPlayPlaylistIntent: AudioPlaybackIntent {
 #if !WIDGET_EXTENSION
 struct IOSFavoriteCurrentSongIntent: AppIntent {
     static let title: LocalizedStringResource = "Add Current Song to Favorites"
+    static let description = IntentDescription("Add the loaded song to your favorites if it is not already saved. Requires signing in and is unavailable during live radio.")
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -187,6 +191,7 @@ struct IOSFavoriteCurrentSongIntent: AppIntent {
 }
 struct IOSStartSleepTimerIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Sleep Timer"
+    static let description = IntentDescription("Stop playback after the selected duration or when the current song ends. Requires loaded playback; live radio supports timed durations only.")
     @Parameter(title: "Duration", default: .thirty) var duration: SleepTimerDuration
     static var parameterSummary: some ParameterSummary { Summary("Start a \(\.$duration) sleep timer") }
     @MainActor func perform() async throws -> some IntentResult {
@@ -200,7 +205,8 @@ struct IOSStartSleepTimerIntent: AppIntent {
 }
 struct IOSOpenSearchIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Search"
-    static let openAppWhenRun = true
+    static let description = IntentDescription("Open Twinskaraoke’s search screen to find music.")
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
         AppRouter.shared.open(.search)
@@ -211,7 +217,8 @@ struct IOSOpenSearchIntent: AppIntent {
 #endif
 struct IOSOpenLyricsIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Lyrics"
-    static let openAppWhenRun = true
+    static let description = IntentDescription("Open the lyrics screen for the loaded song. Requires a song to be loaded.")
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -227,7 +234,7 @@ struct IOSOpenLyricsIntent: AppIntent {
 struct IOSControlFavoriteCurrentSongIntent: AppIntent {
     static let title: LocalizedStringResource = "Favorite This Song"
     static let isDiscoverable = false
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @MainActor func perform() async throws -> some IntentResult {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -240,7 +247,7 @@ struct IOSControlFavoriteCurrentSongIntent: AppIntent {
 struct IOSControlSleepTimerIntent: AppIntent {
     static let title: LocalizedStringResource = "Sleep Timer"
     static let isDiscoverable = false
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = .foreground
     @Parameter(title: "Duration", default: .thirty) var duration: SleepTimerDuration
     init() {}
     init(duration: SleepTimerDuration) { self.duration = duration }
@@ -256,6 +263,7 @@ struct IOSControlSleepTimerIntent: AppIntent {
 #if !WIDGET_EXTENSION
 struct IOSShowCurrentSongIntent: AppIntent {
     static let title: LocalizedStringResource = "Show Current Song"
+    static let description = IntentDescription("Return the loaded song’s title and artist as text. Requires a song to be loaded.")
     @MainActor func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         #if !WIDGET_EXTENSION
         WidgetSnapshotPublisher.shared.start()
@@ -276,6 +284,7 @@ nonisolated enum IntentRepeatMode: String, AppEnum {
 nonisolated enum PlaybackSetting { case toggleRepeat, toggleShuffle }
 struct IOSToggleRepeatIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Toggle Repeat"
+    static let description = IntentDescription("Cycle between no repeat, replaying the current song once, and repeating the selected playlist or collection. A directly selected song repeats on its own. Unavailable during live radio.")
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -288,6 +297,7 @@ struct IOSToggleRepeatIntent: AudioPlaybackIntent {
 }
 struct IOSToggleShuffleIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Toggle Shuffle"
+    static let description = IntentDescription("Turn shuffle on or off for the current queue, restoring its original order when turned off. Requires a loaded song and is unavailable during live radio.")
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
         #if WIDGET_EXTENSION
         try requireApplicationProcess()
@@ -305,6 +315,7 @@ nonisolated enum TransportAction: String, AppEnum {
 }
 struct IOSTransportIntent: AudioPlaybackIntent {
     static let title: LocalizedStringResource = "Control Playback"
+    static let description = IntentDescription("Pause or resume playback, skip to the next queued song, or go back or restart, using the selected control. Track changes are unavailable during live radio.")
     @Parameter(title: "Control", default: .toggle) var action: TransportAction
     static var parameterSummary: some ParameterSummary { Summary("\(\.$action)") }
     @MainActor func perform() async throws -> some IntentResult {

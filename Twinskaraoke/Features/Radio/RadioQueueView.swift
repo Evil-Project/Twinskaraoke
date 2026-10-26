@@ -131,12 +131,12 @@ struct RadioQueueView: View {
                 playOrPauseLiveStation()
             } label: {
                 LibraryActionButtonLabel(
-                    symbol: isLivePlaying ? "pause.fill" : "play.fill",
-                    text: isLivePlaying ? String(localized: "Pause Live") : String(localized: "Play Live")
+                    symbol: isLivePlaying ? "stop.fill" : "play.fill",
+                    text: isLivePlaying ? String(localized: "Stop Live") : String(localized: "Play Live")
                 )
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
-            .accessibilityLabel(isLivePlaying ? "Pause live station" : "Play live station")
+            .accessibilityLabel(isLivePlaying ? "Stop live station" : "Play live station")
             .accessibilityValue(radio.nowPlaying?.station.name ?? "Twinskaraoke Radio")
             .accessibilityHint("Controls the live radio stream.")
 

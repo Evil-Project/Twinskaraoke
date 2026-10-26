@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "update",
+  "id": "update-placeholder",
+  "enabled": false,
+  "nextLabel": "Next",
+  "finalLabel": "Done",
+  "slides": [
+    {
+      "id": "update-slide-1",
+      "title": "Slide title",
+      "body": "Description placeholder",
+      "symbol": "photo",
+      "imageDescription": "Image placeholder",
+      "backgroundColor": "#101827",
+      "textColor": "#FFFFFF",
+      "layout": "imageAbove",
+      "alignment": "center",
+      "typography": "standard"
+    },
+    {
+      "id": "update-slide-2",
+      "title": "Slide title",
+      "body": "Description placeholder",
+      "symbol": "photo",
+      "imageDescription": "Image placeholder",
+      "backgroundColor": "#101827",
+      "textColor": "#FFFFFF",
+      "layout": "imageAbove",
+      "alignment": "center",
+      "typography": "standard"
+    }
+  ],
+  "targetVersion": "1.0.14"
+}

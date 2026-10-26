@@ -49,9 +49,11 @@ struct LibraryView: View {
     private let pinStore = PinnedPlaylistsStore.shared
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showCreateSheet = false
     @State private var path = NavigationPath()
     @State private var favoritesRefreshTask: Task<Void, Never>?
+    @AppStorage(AppLanguage.storageKey) private var languageMode: String = AppLanguage.system.rawValue
 
     private var usesCompactToolbar: Bool {
         horizontalSizeClass == .compact
@@ -107,7 +109,8 @@ struct LibraryView: View {
                     Text(message).font(.footnote).padding()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
                 viewModel.fetchPlaylists()
                 viewModel.fetchFavoriteSongs()
             }
@@ -131,6 +134,11 @@ struct LibraryView: View {
             }
             .sheet(isPresented: $showCreateSheet) {
                 CreatePlaylistSheet()
+            }
+            // The model names Favourite Songs in the selected language, which
+            // it cannot observe; Library is always mounted, so it relays it.
+            .onChange(of: languageMode) { _, _ in
+                viewModel.languageDidChange()
             }
         }
     }
@@ -226,7 +234,9 @@ struct LibraryView: View {
     }
 
     private var featuredWidePlaylist: Playlist? {
+        // Without an account, Favourite Songs is empty and cannot open.
         let all = viewModel.allPlaylists(saved: savedStore.playlists)
+            .filter { !$0.isFavorites || favorites.isAvailable }
         if let favoritesPlaylist = all.first(where: { $0.isFavorites }) {
             return favoritesPlaylist
         }
@@ -243,44 +253,36 @@ struct LibraryView: View {
 
     private var libraryPrimaryLinksContent: some View {
         VStack(spacing: 0) {
-            libraryLink(
-                icon: "music.note.list",
-                title: String(localized: "Playlists"),
-                destination: PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
-            )
-            libraryLink(icon: "music.mic", title: String(localized: "Artists"), destination: ArtistsView())
-            libraryLink(icon: "music.note", title: String(localized: "Songs"), destination: LibrarySongsView())
-            libraryLink(
-                icon: "arrow.down.circle",
-                title: String(localized: "Downloaded"),
-                destination: DownloadedSongsView()
-            )
-            libraryLink(
-                icon: "arrow.up.circle",
-                title: String(localized: "Uploaded"),
-                destination: UploadedSongsView()
-            )
-            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery"), destination: ArtGalleryView())
-            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery"), destination: VideoGalleryView())
-            libraryLink(
-                icon: "shuffle",
-                title: String(localized: "Random Songs"),
-                destination: RandomSongsView(),
-                showsDivider: false
-            )
+            libraryLink(icon: "music.note.list", title: String(localized: "Playlists")) {
+                PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
+            }
+            libraryLink(icon: "music.mic", title: String(localized: "Artists")) { ArtistsView() }
+            libraryLink(icon: "music.note", title: String(localized: "Songs")) { LibrarySongsView() }
+            libraryLink(icon: "arrow.down.circle", title: String(localized: "Downloaded")) {
+                DownloadedSongsView()
+            }
+            libraryLink(icon: "arrow.up.circle", title: String(localized: "Uploaded")) { UploadedSongsView() }
+            libraryLink(icon: "paintpalette", title: String(localized: "Art Gallery")) { ArtGalleryView() }
+            libraryLink(icon: "play.rectangle", title: String(localized: "Video Gallery")) { VideoGalleryView() }
+            libraryLink(icon: "shuffle", title: String(localized: "Random Songs"), showsDivider: false) {
+                RandomSongsView()
+            }
         }
     }
 
+    /// The destination is a closure, built on push: each screen behind these
+    /// links owns a `@State` view model, and building all eight on every
+    /// Library update allocated and discarded eight models each time.
     @ViewBuilder
     private func libraryLink(
         icon: String,
         title: String,
         subtitle: String? = nil,
-        destination: some View,
-        showsDivider: Bool = true
+        showsDivider: Bool = true,
+        @ViewBuilder destination: @escaping () -> some View
     ) -> some View {
         NavigationLink {
-            destination
+            DeferredView(destination)
         } label: {
             LibraryRow(icon: icon, color: .appAccent, title: title, subtitle: subtitle)
                 .contentShape(Rectangle())
@@ -399,7 +401,7 @@ private struct WideLibraryHero: View {
                     .disabled(playableSongs.isEmpty)
                     .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
 
-                    NavigationLink(destination: PlaylistDetailView(playlist: playlist)) {
+                    NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {
                         Image(systemName: "chevron.right")
                             .font(AM.Font.chevron)
                             .foregroundStyle(Color.appAccent)
@@ -653,27 +655,6 @@ struct LibraryRow: View {
     }
 }
 
-struct PlaylistListRow: View {
-    let playlist: Playlist
-    var body: some View {
-        HStack(spacing: 12) {
-            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.thumb)
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                PlaylistSongCountLabel(playlist: playlist, fallbackText: String(localized: "Playlist"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
 struct PlaylistsGridScreen: View {
     let viewModel: PlaylistsViewModel
     let zoomNamespace: Namespace.ID
@@ -682,16 +663,20 @@ struct PlaylistsGridScreen: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var showCreateSheet = false
     @State private var searchText = ""
-    @State private var favoritesRefreshTask: Task<Void, Never>?
     let cols = AM.Layout.playlistGridColumns
 
 
+    /// Observed, unlike the keychain: a sign-in or sign-out while this screen
+    /// is on the stack shows or hides New Playlist straight away.
     private var isLoggedIn: Bool {
-        CredentialStore.isAuthenticated
+        userManager.isAvailable
     }
 
     var body: some View {
-        let all = viewModel.combinedPlaylists
+        // Favourite Songs lives in the account. Signed out it can only show
+        // "0 songs" and open onto a list that cannot load, so it is left out
+        // here as it already is from the pinned shelf.
+        let all = viewModel.combinedPlaylists.filter { !$0.isFavorites || favorites.isAvailable }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayed = query.isEmpty ? all : all.filter { playlist in
             playlist.name.localizedCaseInsensitiveContains(query)
@@ -700,6 +685,16 @@ struct PlaylistsGridScreen: View {
             Group {
                 if (viewModel.isLoading || userManager.isLoading), all.isEmpty {
                     PlaylistsSkeletonView()
+                } else if all.isEmpty, !favorites.isAvailable {
+                    // Signed out, "playlists you add will appear here" promises
+                    // something this screen cannot do: creating one needs an
+                    // account. Same wording as Add to Playlist.
+                    MusicEmptyState(
+                        title: String(localized: "Sign In to Use Playlists"),
+                        message: String(localized: "Sign in from Account to create playlists and add songs to them.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.top, 48)
                 } else if displayed.isEmpty {
                     MusicEmptyState(
                         title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),
@@ -754,15 +749,10 @@ struct PlaylistsGridScreen: View {
                 }
             }
         }
+        // No favourites refetch of its own: this screen is only ever pushed
+        // from LibraryView, which stays mounted beneath it, shares this view
+        // model and already refetches on every star change.
         .task { userManager.loadIfNeeded() }
-        .onChange(of: favorites.favoriteIDs) { _, _ in
-            favoritesRefreshTask?.cancel()
-            favoritesRefreshTask = Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                viewModel.fetchFavoriteSongs(force: true)
-            }
-        }
         .sheet(isPresented: $showCreateSheet) {
             CreatePlaylistSheet()
         }

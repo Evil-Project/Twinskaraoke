@@ -727,6 +727,50 @@ final class TwinskaraokeUITests: XCTestCase {
                          "The rendered artwork should dip below its resting thumbnail position before settling.")
   }
 
+  /// A song change re-identifies the player's artwork, and the outgoing
+  /// view's `onDisappear` used to clear the morph target after the new one had
+  /// reported it. Every close after a track change then fell back to a plain
+  /// slide, with no landing.
+  func testPlayerArtworkStillSettlesAfterSongChange() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "home",
+                           "-UITestPlayerTracking", "-UITestPlayerClosingArtwork"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Made for You"].waitForExistence(timeout: 8))
+    openVisibleItem("Wake Me Up Before You Go-Go",
+                    identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+    let mini = app.buttons["MiniPlayerBar"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    mini.tap()
+    let handle = app.buttons["PlayerDismissHandle"]
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    let next = app.buttons["Next track"].firstMatch
+    XCTAssertTrue(waitUntil(timeout: 8) { next.isHittable })
+    // The bar stays in the tree under the open player, and its value names
+    // the current song, so it shows that Next really changed the song before
+    // the close below is measured.
+    let songBeforeNext = mini.value as? String
+    next.tap()
+    XCTAssertTrue(
+      waitUntil(timeout: 8) { (mini.value as? String) != songBeforeNext },
+      "Next must change the song, or this measures an ordinary close."
+    )
+    let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.2, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 180)),
+                withVelocity: 700, thenHoldForDuration: 0)
+    XCTAssertTrue(waitUntil(timeout: 8) { mini.isHittable })
+    mini.tap()
+    XCTAssertTrue(waitUntil(timeout: 8) { handle.isHittable })
+    let probe = app.descendants(matching: .any)["PlayerTrackingProbe"].firstMatch
+    let measurements = try XCTUnwrap(probe.value as? String).split(separator: ",")
+    guard measurements.count == 6 else {
+      XCTFail("The landing tracking probe must report six measurements.")
+      return
+    }
+    XCTAssertGreaterThan(Int(measurements[4]) ?? 0, 8,
+                         "Closing after a song change must still land the artwork in the mini player.")
+  }
+
   func testShortMiniPlayerFlicksAndDragsExpand() throws {
     try checkShortMiniPlayerGestures(competingGesture: false)
   }
@@ -1287,8 +1331,9 @@ final class TwinskaraokeUITests: XCTestCase {
 
     openVisibleItem("Settings", in: app)
     XCTAssertTrue(
-      app.navigationBars["Music"].waitForExistence(timeout: 8)
-        || app.staticTexts["Music"].waitForExistence(timeout: 8),
+      app.navigationBars["Settings"].waitForExistence(timeout: 8)
+        // "Settings" alone would also match the Account row that opened it.
+        || app.staticTexts["Audio"].waitForExistence(timeout: 8),
       "Expected Settings to open from Account."
     )
 
@@ -1335,6 +1380,25 @@ final class TwinskaraokeUITests: XCTestCase {
     openVisibleItem("Settings", in: app)
     XCTAssertTrue(autoplay.waitForExistence(timeout: 8))
     XCTAssertEqual(autoplay.value as? String, selectedAutoplay)
+  }
+
+  func testExperimentalAppIconChooserShowsBothDesignsAndWatchLimitation() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-UITestMode", "1", "-nk.language", "en", "-nk.experimentsEnabled", "YES"]
+    app.launch()
+    defer { app.terminate() }
+    openAccountToolbar(in: app)
+    openVisibleItem("Settings", in: app)
+    scrollToVisibleItem("App Icon", identifier: "Settings.AppIcon", in: app)
+    openVisibleItem("App Icon", identifier: "Settings.AppIcon", in: app)
+    XCTAssertTrue(app.navigationBars["App Icon"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.buttons["AppIcon.production"].exists)
+    XCTAssertTrue(app.buttons["AppIcon.experimental"].exists)
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "watchOS does not support alternate app icons")).firstMatch.exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Experimental app icon chooser"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
   }
 
   func testSettingsUseSelectedLanguageForThemeAndStrength() throws {

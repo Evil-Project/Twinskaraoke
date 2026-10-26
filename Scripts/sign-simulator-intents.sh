@@ -2,6 +2,7 @@
 # WidgetKit and Shortcuts require a Team ID in the simulator app signature.
 # Xcode 27 otherwise signs simulator products ad hoc, which linkd rejects.
 set -eu
+if [ "${CODE_SIGNING_ALLOWED:-YES}" = "NO" ]; then exit 0; fi
 if [ "${PLATFORM_NAME:-}" != "iphonesimulator" ]; then exit 0; fi
 app_path="${BUILT_PRODUCTS_DIR:?}/Twinskaraoke.app"
 widget_path="$app_path/PlugIns/TwinskaraokeWidgets.appex"

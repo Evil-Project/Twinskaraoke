@@ -52,12 +52,17 @@ private struct PopupHostView: View {
         }
         .sheet(isPresented: Binding(
             get: { AppRouter.shared.detail != nil },
-            set: { if !$0 { AppRouter.shared.detail = nil } }
-        )) {
+            set: { if !$0 { AppRouter.shared.dismissDetail() } }
+        ), onDismiss: { AppRouter.shared.resumeAfterSplash() }) {
             NavigationStack {
                 if let route = AppRouter.shared.detail {
                     RoutedDetailView(route: route)
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.detail = nil } } }
+                        // A second link while the sheet is up replaces the
+                        // route in place; a fresh identity drops the previous
+                        // route's loaded song or playlist instead of showing
+                        // it until the new one arrives.
+                        .id(route.url)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { AppRouter.shared.dismissDetail() } } }
                 }
             }
         }
@@ -80,7 +85,7 @@ private struct PopupHostView: View {
         .onAppear {
             FavoritesManager.shared.loadIfNeeded()
             UserPlaylistsManager.shared.loadIfNeeded()
-            if DeveloperMode.shouldTriggerEasterEgg() {
+            if !AppRuntime.isUITestMode && DeveloperMode.shouldTriggerEasterEgg() {
                 showCaptcha = true
             }
         }
@@ -123,30 +128,11 @@ private struct PopupHostView: View {
     }
 
     private var rootTabs: some View {
-        TabView(selection: selectedTabBinding) {
-            ForEach(RootSection.allCases) { section in
-                Tab(
-                    section.title,
-                    systemImage: section.systemImage,
-                    value: section,
-                    role: section.tabRole
-                ) {
-                    section.content
-                }
-            }
-        }
-        .tint(.appAccent)
-        .tabViewBottomAccessory(isEnabled: showsMiniPlayer) {
+        RootTabShell(selection: selectedTabBinding, showsAccessory: showsMiniPlayer) { section in
+            section.content
+        } accessory: {
             MiniPlayerBar()
         }
-        // The system owns minimization entirely. A short-scroll-up reveal was
-        // built on top of this once, by flipping the policy to `.never` to
-        // force an expansion; iOS 27 applies that flip with no transition at
-        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
-        // every comparable app restore at the scroll edge, which is what this
-        // does now.
-        .tabBarMinimizeBehavior(.onScrollDown)
-        .background(TabSearchProminenceInstaller().frame(width: 0, height: 0))
     }
 
     private var sidebarShell: some View {
@@ -221,6 +207,54 @@ private struct PopupHostView: View {
         return section
     }
 
+}
+
+/// Shared root tab configuration, hosted independently by regression tests.
+struct RootTabShell<Content: View, Accessory: View>: View {
+    @Binding var selection: RootSection
+    var showsAccessory: Bool
+    @ViewBuilder var content: (RootSection) -> Content
+    @ViewBuilder var accessory: () -> Accessory
+
+    var body: some View {
+        // Driven off `allCases` and `content` so the enum stays the only place
+        // a section is described — the sidebar already builds itself the same
+        // way, and listing the screens here too let the two drift apart.
+        //
+        // `systemImage` is the unfilled symbol: the tab bar fills it for the
+        // selected tab itself. Passing the filled variant is what made Home and
+        // New render filled even while unselected.
+        TabView(selection: $selection) {
+            ForEach(RootSection.allCases) { section in
+                Tab(
+                    section.title,
+                    systemImage: section.systemImage,
+                    value: section,
+                    role: section.tabRole
+                ) {
+                    content(section)
+                }
+            }
+        }
+        .tint(.appAccent)
+        // Declare activation in SwiftUI so tab rebuilds preserve the separate
+        // Search button instead of resetting an underlying UIKit assignment.
+        .tabViewSearchActivation(.searchTabSelection)
+        // The mini player goes in the system's own accessory slot — the one
+        // Apple Music uses. That is what gives it Liquid Glass, the merge into
+        // the minimized tab bar, and a bottom content inset on every screen
+        // underneath, none of which we now maintain ourselves.
+        .tabViewBottomAccessory(isEnabled: showsAccessory) {
+            accessory()
+        }
+        // The system owns minimization entirely. A short-scroll-up reveal was
+        // built on top of this once, by flipping the policy to `.never` to
+        // force an expansion; iOS 27 applies that flip with no transition at
+        // all, and no API exists to ask for one. Apple Music, Pocket Casts and
+        // every comparable app restore at the scroll edge, which is what this
+        // does now.
+        .tabBarMinimizeBehavior(.onScrollDown)
+    }
 }
 
 enum RootSection: String, CaseIterable, Identifiable {
@@ -337,8 +371,12 @@ private extension RootSection {
         }
     }
 
+    /// A website theme tints every section in its primary, as the site's own
+    /// sidebar does; next to it the fixed purple, orange, blue and green
+    /// below would clash. Every other theme keeps one colour per section.
     var sidebarTint: Color {
-        switch self {
+        if let primary = AppThemeStore.shared.palette?.primary { return primary }
+        return switch self {
         case .home:
             .appAccent
         case .new:

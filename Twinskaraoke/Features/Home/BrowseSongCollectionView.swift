@@ -165,7 +165,9 @@ struct BrowseSongCollectionView: View {
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
                         .accessibilityIdentifier("BrowseSongCollection.song.\(song.id)")
-                        Divider().padding(.leading, rowHorizontalPadding + 60)
+                        if song.id != songs.last?.id {
+                            Divider().padding(.leading, rowHorizontalPadding + 60)
+                        }
                     }
                 }
             }
@@ -187,13 +189,9 @@ struct BrowseSongCollectionView: View {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
                 }
             } label: {
-                Label("Play", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.primary.opacity(0.08))
-                    .foregroundStyle(Color.appAccent)
-                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
+                // The shared label, so this collection's buttons match a
+                // playlist's, an artist's and Downloaded's.
+                LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Play \(title)")
@@ -202,13 +200,7 @@ struct BrowseSongCollectionView: View {
                 AppHaptic.selection.play()
                 AudioPlayerManager.shared.playShuffled(from: songs)
             } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.primary.opacity(0.08))
-                    .foregroundStyle(Color.appAccent)
-                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
+                LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
             }
             .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.82))
             .accessibilityLabel("Shuffle \(title)")

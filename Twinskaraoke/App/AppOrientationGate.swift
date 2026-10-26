@@ -48,29 +48,10 @@ import SwiftUI
     final class AppDelegate: NSObject, UIApplicationDelegate {
         func application(
             _: UIApplication,
-            handleEventsForBackgroundURLSession identifier: String,
-            completionHandler: @escaping () -> Void
-        ) {
-            guard identifier == BackgroundDownloadTransport.identifier else { completionHandler(); return }
-            let completion = BackgroundEventCompletion(completionHandler)
-            DownloadManager.shared.handleBackgroundEvents {
-                Task { @MainActor in completion.call() }
-            }
-        }
-
-        func application(
-            _: UIApplication,
             supportedInterfaceOrientationsFor window: UIWindow?
         ) -> UIInterfaceOrientationMask {
             AppOrientationGate.shared.supportedOrientations(in: window?.windowScene)
         }
-    }
-
-    @MainActor
-    private final class BackgroundEventCompletion {
-        private let completion: () -> Void
-        init(_ completion: @escaping () -> Void) { self.completion = completion }
-        func call() { completion() }
     }
 
     /// Resolves the actual hosting scene, including moves between windows.

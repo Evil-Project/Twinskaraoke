@@ -15,9 +15,14 @@ private final class SongDownloadRowState {
     /// registration parked in `DownloadManager`'s registrar until the next
     /// download change, so browsing without downloading piled them up and the
     /// next download fired them all at once.
+    ///
+    /// The seed read is untracked for the same reason: this runs while the
+    /// *parent* builds the row, and a tracked read subscribed the parent to
+    /// every download start and finish. The row's own subscription is the
+    /// one `startObserving` sets up.
     init(songID: String) {
         self.songID = songID
-        status = DownloadManager.shared.status(for: songID)
+        status = DownloadManager.shared.untrackedStatus(for: songID)
     }
 
     /// Called from the row's `onAppear`, so only the instance SwiftUI kept
@@ -126,7 +131,7 @@ struct SongRow: View {
                         .fill(Color.appArtworkOverlay)
                         .frame(width: size.artSize, height: size.artSize)
 
-                    EqualizerBars(isAnimating: playback.isPlaying)
+                    EqualizerBars(isAnimating: playback.isPlaying, pausesUnderPlayer: true)
                         .frame(width: size.indicatorSize, height: size.indicatorSize)
                         .foregroundStyle(.primary)
                 }
@@ -358,21 +363,23 @@ struct MusicGridCard: View {
 struct SongActionsMenuItems: View {
     let song: Song
     let onAddToPlaylist: () -> Void
-    private let isDownloaded: Bool
-    private let isDownloading: Bool
     private let favorites = FavoritesManager.shared
     @Environment(\.playlistSongRemoval) private var playlistRemoval
 
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {
         self.song = song
         self.onAddToPlaylist = onAddToPlaylist
-
-        let downloads = DownloadManager.shared
-        isDownloaded = downloads.isDownloaded(song.id)
-        isDownloading = downloads.isDownloading(song.id)
     }
 
+    // Download state is read here, in `body`, and not in `init`. Every row's
+    // menu and context menu builds one of these while the *row's* body runs,
+    // so a read in `init` subscribed the whole row to `downloadedIDs` and
+    // `inProgress`: each download that started or finished redrew every
+    // visible song row, which `SongDownloadRowState` exists to prevent.
     var body: some View {
+        let downloads = DownloadManager.shared
+        let isDownloaded = downloads.isDownloaded(song.id)
+        let isDownloading = downloads.isDownloading(song.id)
         Button {
             AppHaptic.selection.play()
             AudioPlayerManager.shared.playNext(song: song)

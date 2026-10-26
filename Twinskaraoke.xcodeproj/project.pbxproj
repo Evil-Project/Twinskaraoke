@@ -1,4 +1,4 @@
-
+// !$*UTF8*$!
 {
 	archiveVersion = 1;
 	classes = {
@@ -14,27 +14,21 @@
 		D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 /* PillarboxPlayer */; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1820000000000000000000D /* TwinskaraokeWidgets.appex in Embed iOS Widgets */ = {isa = PBXBuildFile; fileRef = E18200000000000000000002 /* TwinskaraokeWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E18200000000000000000021 /* TwinskaraokeShared/Models/RadioNowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */; };
+		E18200000000000000000023 /* TwinskaraokeShared/Localization/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
-		6B9B0FBB9503BD62326D2B0D  = {isa = PBXBuildFile; fileRef = 6B789992B5FC6B90FC2528F9 ; };
-		93D8E68C2F9B5FA60090FBFA  = {isa = PBXBuildFile; productRef = 93D8E68B2F9B5FA60090FBFA ; };
-		D0BB0000000000000000E00B  = {isa = PBXBuildFile; fileRef = D0BB0000000000000000E00A ; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		D0C385982FB0BD870055284E  = {isa = PBXBuildFile; productRef = D0C385972FB0BD870055284E ; };
-		D0E1CB022FC2000100000003  = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 ; };
-		D0F981D92F94C10A00FD69AB  = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB ; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-
-
-
-		D0BB0000000000000000E00E  = {
+/* Begin PBXContainerItemProxy section */
+		D0BB0000000000000000E00E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = D0F981AD2F94C10900FD69AB ;
+			containerPortal = D0F981AD2F94C10900FD69AB /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D0BB0000000000000000E003;
 			remoteInfo = TwinskaraokeWatchWidgets;
 		};
-		D0F981DA2F94C10A00FD69AB  = {
+		D0F981DA2F94C10A00FD69AB /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = D0F981AD2F94C10900FD69AB ;
+			containerPortal = D0F981AD2F94C10900FD69AB /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = D0F981D72F94C10A00FD69AB;
 			remoteInfo = "Twinskaraoke Watch App";
@@ -76,26 +70,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
-
-
-		D0BB0000000000000000E00C  = {
+/* Begin PBXCopyFilesBuildPhase section */
+		D0BB0000000000000000E00C /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				D0BB0000000000000000E00B ,
+				D0BB0000000000000000E00B /* TwinskaraokeWatchWidgets.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D0F981FE2F94C10B00FD69AB  = {
+		D0F981FE2F94C10B00FD69AB /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
 			dstSubfolderSpec = 16;
 			files = (
-				D0F981D92F94C10A00FD69AB ,
+				D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -125,6 +118,8 @@
 		D1A000032FAD000100000003 /* Twinskaraoke Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1A000042FAD000100000004 /* Twinskaraoke Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E18200000000000000000002 /* TwinskaraokeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = TwinskaraokeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TwinskaraokeShared/Models/RadioNowPlaying.swift; sourceTree = SOURCE_ROOT; };
+		E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = TwinskaraokeShared/Localization/Localizable.xcstrings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -172,94 +167,48 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
-		33CB3DD4ECD8C15D69EDD6DE  = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "Twinskaraoke Mac App.app"; path = Twinskaraoke.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		6B789992B5FC6B90FC2528F9  = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
-		D0AA0000000000000000E00A  = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke TV App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		D0BB0000000000000000E00A  = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TwinskaraokeWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		D0F981B52F94C10900FD69AB  = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Twinskaraoke.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		D0F981D82F94C10A00FD69AB  = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Twinskaraoke Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-
-
-
-		00728E6A614F7CF94D24315C  = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 5DA46CA312C58DE7DB9D897B ;
-		};
-		D01D91C82FA07A4100E300C5  = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = D0F981B42F94C10900FD69AB ;
-		};
-		D01D91D02FB1000100E30001  = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = D0F981D72F94C10A00FD69AB ;
-		};
-		D0AA0000000000000000E001  = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = D0AA0000000000000000E003 ;
-		};
-		D0BB0000000000000000E002  = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = D0BB0000000000000000E003 ;
-		};
-
-
-
-		9C112CB9C663FE29A9452A2F  = {
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				00728E6A614F7CF94D24315C ,
+				00728E6A614F7CF94D24315C /* Exceptions for "TwinskaraokeMacApp" folder in "Twinskaraoke Mac App" target */,
 			);
 			path = TwinskaraokeMacApp;
 			sourceTree = "<group>";
 		};
-		D0A500002FBD000100000001  = {
+		D0A500002FBD000100000001 /* TwinskaraokeShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TwinskaraokeShared;
 			sourceTree = "<group>";
 		};
-		D0AA0000000000000000E002  = {
+		D0AA0000000000000000E002 /* TwinskaraokeTVApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				D0AA0000000000000000E001 ,
+				D0AA0000000000000000E001 /* Exceptions for "TwinskaraokeTVApp" folder in "Twinskaraoke TV App" target */,
 			);
 			path = TwinskaraokeTVApp;
 			sourceTree = "<group>";
 		};
-		D0BB0000000000000000E001  = {
+		D0BB0000000000000000E001 /* TwinskaraokeWatchWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				D0BB0000000000000000E002 ,
+				D0BB0000000000000000E002 /* Exceptions for "TwinskaraokeWatchWidgets" folder in "TwinskaraokeWatchWidgets" target */,
 			);
 			path = TwinskaraokeWatchWidgets;
 			sourceTree = "<group>";
 		};
-		D0F981B72F94C10900FD69AB  = {
+		D0F981B72F94C10900FD69AB /* Twinskaraoke */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				D01D91C82FA07A4100E300C5 ,
+				D01D91C82FA07A4100E300C5 /* Exceptions for "Twinskaraoke" folder in "Twinskaraoke" target */,
 			);
 			path = Twinskaraoke;
 			sourceTree = "<group>";
 		};
-		D0F981DC2F94C10A00FD69AB  = {
+		D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				D01D91D02FB1000100E30001 ,
+				D01D91D02FB1000100E30001 /* Exceptions for "TwinskaraokeWatchApp" folder in "Twinskaraoke Watch App" target */,
 			);
 			path = TwinskaraokeWatchApp;
 			sourceTree = "<group>";
@@ -376,61 +325,28 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
-
-		553C27659840CF311C04C6C8  = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				6B9B0FBB9503BD62326D2B0D ,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0AA0000000000000000E005  = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0BB0000000000000000E005  = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0F981B22F94C10900FD69AB  = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				93D8E68C2F9B5FA60090FBFA ,
-				D0C385982FB0BD870055284E ,
-				D0E1CB022FC2000100000003 ,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0F981D52F94C10A00FD69AB  = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-
-
-
-		8C0263F917FCAAD4E520C8CF  = {
+/* Begin PBXGroup section */
+		04F001D0307BE9DD0022135C /* Widget Shared Resources */ = {
 			isa = PBXGroup;
 			children = (
-				6B789992B5FC6B90FC2528F9 ,
+				E18200000000000000000020 /* TwinskaraokeShared/Models/RadioNowPlaying.swift */,
+				E18200000000000000000022 /* TwinskaraokeShared/Localization/Localizable.xcstrings */,
+			);
+			name = "Widget Shared Resources";
+			sourceTree = "<group>";
+		};
+		8C0263F917FCAAD4E520C8CF /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				6B789992B5FC6B90FC2528F9 /* Cocoa.framework */,
 			);
 			name = "OS X";
 			sourceTree = "<group>";
 		};
-		D0DB31F62FA8A3F80089C24C  = {
+		D0DB31F62FA8A3F80089C24C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				8C0263F917FCAAD4E520C8CF ,
+				8C0263F917FCAAD4E520C8CF /* OS X */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -452,10 +368,11 @@
 				D0DB31F62FA8A3F80089C24C /* Frameworks */,
 				D0F981B62F94C10900FD69AB /* Products */,
 				9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */,
+				04F001D0307BE9DD0022135C /* Widget Shared Resources */,
 			);
 			sourceTree = "<group>";
 		};
-		D0F981B62F94C10900FD69AB  = {
+		D0F981B62F94C10900FD69AB /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				D0F981B52F94C10900FD69AB /* Twinskaraoke.app */,
@@ -472,75 +389,75 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+/* End PBXGroup section */
 
-
-
-		5DA46CA312C58DE7DB9D897B  = {
+/* Begin PBXNativeTarget section */
+		5DA46CA312C58DE7DB9D897B /* Twinskaraoke Mac App */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 82E389AD91C3DCF2095408FE ;
+			buildConfigurationList = 82E389AD91C3DCF2095408FE /* Build configuration list for PBXNativeTarget "Twinskaraoke Mac App" */;
 			buildPhases = (
-				AF3FD74579D40D20E2AACBF0 ,
-				553C27659840CF311C04C6C8 ,
-				A9813A5D13F2AE72AE0E8AB2 ,
+				AF3FD74579D40D20E2AACBF0 /* Sources */,
+				553C27659840CF311C04C6C8 /* Frameworks */,
+				A9813A5D13F2AE72AE0E8AB2 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				9C112CB9C663FE29A9452A2F ,
-				D0A500002FBD000100000001 ,
+				9C112CB9C663FE29A9452A2F /* TwinskaraokeMacApp */,
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
 			);
 			name = "Twinskaraoke Mac App";
 			productName = "Twinskaraoke Mac App";
-			productReference = 33CB3DD4ECD8C15D69EDD6DE ;
+			productReference = 33CB3DD4ECD8C15D69EDD6DE /* Twinskaraoke Mac App.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D0AA0000000000000000E003  = {
+		D0AA0000000000000000E003 /* Twinskaraoke TV App */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D0AA0000000000000000E007 ;
+			buildConfigurationList = D0AA0000000000000000E007 /* Build configuration list for PBXNativeTarget "Twinskaraoke TV App" */;
 			buildPhases = (
-				D0AA0000000000000000E004 ,
-				D0AA0000000000000000E005 ,
-				D0AA0000000000000000E006 ,
+				D0AA0000000000000000E004 /* Sources */,
+				D0AA0000000000000000E005 /* Frameworks */,
+				D0AA0000000000000000E006 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D0A500002FBD000100000001 ,
-				D0AA0000000000000000E002 ,
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
+				D0AA0000000000000000E002 /* TwinskaraokeTVApp */,
 			);
 			name = "Twinskaraoke TV App";
 			productName = "Twinskaraoke TV App";
-			productReference = D0AA0000000000000000E00A ;
+			productReference = D0AA0000000000000000E00A /* Twinskaraoke TV App.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D0BB0000000000000000E003  = {
+		D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D0BB0000000000000000E007 ;
+			buildConfigurationList = D0BB0000000000000000E007 /* Build configuration list for PBXNativeTarget "TwinskaraokeWatchWidgets" */;
 			buildPhases = (
-				D0BB0000000000000000E004 ,
-				D0BB0000000000000000E005 ,
-				D0BB0000000000000000E006 ,
+				D0BB0000000000000000E004 /* Sources */,
+				D0BB0000000000000000E005 /* Frameworks */,
+				D0BB0000000000000000E006 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				D0A500002FBD000100000001 ,
-				D0BB0000000000000000E001 ,
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
+				D0BB0000000000000000E001 /* TwinskaraokeWatchWidgets */,
 			);
 			name = TwinskaraokeWatchWidgets;
 			productName = TwinskaraokeWatchWidgets;
-			productReference = D0BB0000000000000000E00A ;
+			productReference = D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		D0F981B42F94C10900FD69AB  = {
+		D0F981B42F94C10900FD69AB /* Twinskaraoke */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D0F981FF2F94C10B00FD69AB ;
+			buildConfigurationList = D0F981FF2F94C10B00FD69AB /* Build configuration list for PBXNativeTarget "Twinskaraoke" */;
 			buildPhases = (
 				D0F981B12F94C10900FD69AB /* Sources */,
 				D0F981B22F94C10900FD69AB /* Frameworks */,
@@ -555,40 +472,82 @@
 				E1820000000000000000000F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				D0A500002FBD000100000001 ,
-				D0F981B72F94C10900FD69AB ,
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
+				D0F981B72F94C10900FD69AB /* Twinskaraoke */,
 			);
 			name = Twinskaraoke;
 			packageProductDependencies = (
-				93D8E68B2F9B5FA60090FBFA ,
-				D0C385972FB0BD870055284E ,
-				D0E1CB012FC2000100000002 ,
+				93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */,
+				D0C385972FB0BD870055284E /* Spleeter */,
+				D0E1CB012FC2000100000002 /* PillarboxPlayer */,
 			);
 			productName = Twinskaraoke;
-			productReference = D0F981B52F94C10900FD69AB ;
+			productReference = D0F981B52F94C10900FD69AB /* Twinskaraoke.app */;
 			productType = "com.apple.product-type.application";
 		};
-		D0F981D72F94C10A00FD69AB  = {
+		D0F981C12F94C10A00FD69AB /* TwinskaraokeTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D0F981FB2F94C10B00FD69AB ;
+			buildConfigurationList = D1A000342FAD000100000034 /* Build configuration list for PBXNativeTarget "TwinskaraokeTests" */;
 			buildPhases = (
-				D0F981D42F94C10A00FD69AB ,
-				D0F981D52F94C10A00FD69AB ,
-				D0F981D62F94C10A00FD69AB ,
-				D0BB0000000000000000E00C ,
+				D1A000092FAD000100000009 /* Sources */,
+				D1A0000A2FAD00010000000A /* Frameworks */,
+				D1A0000B2FAD00010000000B /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				D0BB0000000000000000E00D ,
+				D1A000162FAD000100000016 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				D0A500002FBD000100000001 ,
-				D0F981DC2F94C10A00FD69AB ,
+				D1A000052FAD000100000005 /* TwinskaraokeTests */,
+			);
+			name = TwinskaraokeTests;
+			productName = TwinskaraokeTests;
+			productReference = D1A000012FAD000100000001 /* TwinskaraokeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D0F981CB2F94C10A00FD69AB /* TwinskaraokeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1A000392FAD000100000039 /* Build configuration list for PBXNativeTarget "TwinskaraokeUITests" */;
+			buildPhases = (
+				D1A0000C2FAD00010000000C /* Sources */,
+				D1A0000D2FAD00010000000D /* Frameworks */,
+				D1A0000E2FAD00010000000E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D1A000182FAD000100000018 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D1A000062FAD000100000006 /* TwinskaraokeUITests */,
+			);
+			name = TwinskaraokeUITests;
+			productName = TwinskaraokeUITests;
+			productReference = D1A000022FAD000100000002 /* TwinskaraokeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		D0F981D72F94C10A00FD69AB /* Twinskaraoke Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0F981FB2F94C10B00FD69AB /* Build configuration list for PBXNativeTarget "Twinskaraoke Watch App" */;
+			buildPhases = (
+				D0F981D42F94C10A00FD69AB /* Sources */,
+				D0F981D52F94C10A00FD69AB /* Frameworks */,
+				D0F981D62F94C10A00FD69AB /* Resources */,
+				D0BB0000000000000000E00C /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D0BB0000000000000000E00D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D0A500002FBD000100000001 /* TwinskaraokeShared */,
+				D0F981DC2F94C10A00FD69AB /* TwinskaraokeWatchApp */,
 			);
 			name = "Twinskaraoke Watch App";
 			productName = "Twinskaraoke Watch App";
-			productReference = D0F981D82F94C10A00FD69AB ;
+			productReference = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
 		D0F981E62F94C10B00FD69AB /* Twinskaraoke Watch AppTests */ = {
@@ -656,9 +615,8 @@
 		};
 /* End PBXNativeTarget section */
 
-
-
-		D0F981AD2F94C10900FD69AB  = {
+/* Begin PBXProject section */
+		D0F981AD2F94C10900FD69AB /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
@@ -671,12 +629,28 @@
 					D0F981B42F94C10900FD69AB = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
+					D0F981C12F94C10A00FD69AB = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = D0F981B42F94C10900FD69AB;
+					};
+					D0F981CB2F94C10A00FD69AB = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = D0F981B42F94C10900FD69AB;
+					};
 					D0F981D72F94C10A00FD69AB = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
+					D0F981E62F94C10B00FD69AB = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = D0F981D72F94C10A00FD69AB;
+					};
+					D0F981F02F94C10B00FD69AB = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = D0F981D72F94C10A00FD69AB;
+					};
 				};
 			};
-			buildConfigurationList = D0F981B02F94C10900FD69AB ;
+			buildConfigurationList = D0F981B02F94C10900FD69AB /* Build configuration list for PBXProject "Twinskaraoke" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -693,12 +667,12 @@
 			mainGroup = D0F981AC2F94C10900FD69AB;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				93D8E68A2F9B5FA60090FBFA ,
-				D0C385962FB0BD870055284E ,
-				D0E1CB002FC2000100000001 ,
+				93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+				D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */,
+				D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */,
 			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = D0F981B62F94C10900FD69AB ;
+			productRefGroup = D0F981B62F94C10900FD69AB /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -714,6 +688,7 @@
 				5DA46CA312C58DE7DB9D897B /* Twinskaraoke Mac App */,
 			);
 		};
+/* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A9813A5D13F2AE72AE0E8AB2 /* Resources */ = {
@@ -783,6 +758,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E18200000000000000000023 /* TwinskaraokeShared/Localization/Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -856,45 +832,37 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E18200000000000000000021 /* TwinskaraokeShared/Models/RadioNowPlaying.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-		A9813A5D13F2AE72AE0E8AB2  = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+/* Begin PBXTargetDependency section */
+		D0BB0000000000000000E00D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */;
+			targetProxy = D0BB0000000000000000E00E /* PBXContainerItemProxy */;
 		};
-		D0AA0000000000000000E006  = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		D0F981DB2F94C10A00FD69AB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0F981D72F94C10A00FD69AB /* Twinskaraoke Watch App */;
+			targetProxy = D0F981DA2F94C10A00FD69AB /* PBXContainerItemProxy */;
 		};
-		D0BB0000000000000000E006  = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		D1A000162FAD000100000016 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0F981B42F94C10900FD69AB /* Twinskaraoke */;
+			targetProxy = D1A000152FAD000100000015 /* PBXContainerItemProxy */;
 		};
-		D0F981B32F94C10900FD69AB  = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		D1A000182FAD000100000018 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0F981B42F94C10900FD69AB /* Twinskaraoke */;
+			targetProxy = D1A000172FAD000100000017 /* PBXContainerItemProxy */;
 		};
-		D0F981D62F94C10A00FD69AB  = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		D1A0001A2FAD00010000001A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D0F981D72F94C10A00FD69AB /* Twinskaraoke Watch App */;
+			targetProxy = D1A000192FAD000100000019 /* PBXContainerItemProxy */;
 		};
 		D1A0001C2FAD00010000001C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -908,60 +876,8 @@
 		};
 /* End PBXTargetDependency section */
 
-
-
-		AF3FD74579D40D20E2AACBF0  = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0AA0000000000000000E004  = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0BB0000000000000000E004  = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0F981B12F94C10900FD69AB  = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D0F981D42F94C10A00FD69AB  = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-
-
-
-		D0BB0000000000000000E00D  = {
-			isa = PBXTargetDependency;
-			target = D0BB0000000000000000E003 ;
-			targetProxy = D0BB0000000000000000E00E ;
-		};
-		D0F981DB2F94C10A00FD69AB  = {
-			isa = PBXTargetDependency;
-			target = D0F981D72F94C10A00FD69AB ;
-			targetProxy = D0F981DA2F94C10A00FD69AB ;
-		};
-
-
-
-		5B1A014CE7225A17D4464070  = {
+/* Begin XCBuildConfiguration section */
+		5B1A014CE7225A17D4464070 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -970,7 +886,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -997,7 +913,7 @@
 			};
 			name = Debug;
 		};
-		A095B85321C326FB5C8D692E  = {
+		A095B85321C326FB5C8D692E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -1006,7 +922,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -1033,13 +949,13 @@
 			};
 			name = Release;
 		};
-		D0AA0000000000000000E008  = {
+		D0AA0000000000000000E008 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1065,13 +981,13 @@
 			};
 			name = Debug;
 		};
-		D0AA0000000000000000E009  = {
+		D0AA0000000000000000E009 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1098,11 +1014,11 @@
 			};
 			name = Release;
 		};
-		D0BB0000000000000000E008  = {
+		D0BB0000000000000000E008 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
@@ -1113,7 +1029,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp.watchwidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1127,11 +1043,11 @@
 			};
 			name = Debug;
 		};
-		D0BB0000000000000000E009  = {
+		D0BB0000000000000000E009 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWatchWidgets/Info.plist;
@@ -1142,7 +1058,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp.watchwidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1157,7 +1073,7 @@
 			};
 			name = Release;
 		};
-		D0F981F92F94C10B00FD69AB  = {
+		D0F981F92F94C10B00FD69AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1197,6 +1113,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = GQCU59RKTN;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -1222,7 +1139,7 @@
 			};
 			name = Debug;
 		};
-		D0F981FA2F94C10B00FD69AB  = {
+		D0F981FA2F94C10B00FD69AB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -1280,13 +1197,13 @@
 			};
 			name = Release;
 		};
-		D0F981FC2F94C10B00FD69AB  = {
+		D0F981FC2F94C10B00FD69AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1301,7 +1218,7 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1317,13 +1234,13 @@
 			};
 			name = Debug;
 		};
-		D0F981FD2F94C10B00FD69AB  = {
+		D0F981FD2F94C10B00FD69AB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1338,7 +1255,7 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -1355,15 +1272,16 @@
 			};
 			name = Release;
 		};
-		D0F982002F94C10B00FD69AB  = {
+		D0F982002F94C10B00FD69AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = ExperimentalAppIcon;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Twinskaraoke/Twinskaraoke.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1383,7 +1301,7 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1398,15 +1316,16 @@
 			};
 			name = Debug;
 		};
-		D0F982012F94C10B00FD69AB  = {
+		D0F982012F94C10B00FD69AB /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = ExperimentalAppIcon;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Twinskaraoke/Twinskaraoke.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1426,7 +1345,7 @@
 					"@executable_path/Frameworks",
 				);
 				LM_ENABLE_LINK_GENERATION = YES;
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1664,7 +1583,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TwinskaraokeWidgets/TwinskaraokeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWidgets/Info.plist;
@@ -1675,7 +1594,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1695,7 +1614,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = TwinskaraokeWidgets/TwinskaraokeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 21;
+				CURRENT_PROJECT_VERSION = 30;
 				DEVELOPMENT_TEAM = SXA95NB9A4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TwinskaraokeWidgets/Info.plist;
@@ -1706,7 +1625,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.12;
+				MARKETING_VERSION = 1.0.15;
 				PRODUCT_BUNDLE_IDENTIFIER = org.magnettileman.Twinskaraoke.widgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -1824,65 +1743,8 @@
 		};
 /* End XCConfigurationList section */
 
-
-		82E389AD91C3DCF2095408FE  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A095B85321C326FB5C8D692E ,
-				5B1A014CE7225A17D4464070 ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D0AA0000000000000000E007  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0AA0000000000000000E008 ,
-				D0AA0000000000000000E009 ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D0BB0000000000000000E007  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0BB0000000000000000E008 ,
-				D0BB0000000000000000E009 ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D0F981B02F94C10900FD69AB  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0F981F92F94C10B00FD69AB ,
-				D0F981FA2F94C10B00FD69AB ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D0F981FB2F94C10B00FD69AB  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0F981FC2F94C10B00FD69AB ,
-				D0F981FD2F94C10B00FD69AB ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		D0F981FF2F94C10B00FD69AB  = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0F982002F94C10B00FD69AB ,
-				D0F982012F94C10B00FD69AB ,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-
-
-
-		93D8E68A2F9B5FA60090FBFA  = {
+/* Begin XCRemoteSwiftPackageReference section */
+		93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/SDWebImage/SDWebImageSwiftUI";
 			requirement = {
@@ -1890,7 +1752,7 @@
 				minimumVersion = 3.1.4;
 			};
 		};
-		D0C385962FB0BD870055284E  = {
+		D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jiyimeta/swift-spleeter";
 			requirement = {
@@ -1898,7 +1760,7 @@
 				minimumVersion = 0.2.0;
 			};
 		};
-		D0E1CB002FC2000100000001  = {
+		D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/SRGSSR/pillarbox-apple";
 			requirement = {
@@ -1906,25 +1768,25 @@
 				minimumVersion = 19.0.0;
 			};
 		};
+/* End XCRemoteSwiftPackageReference section */
 
-
-
-		93D8E68B2F9B5FA60090FBFA  = {
+/* Begin XCSwiftPackageProductDependency section */
+		93D8E68B2F9B5FA60090FBFA /* SDWebImageSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 93D8E68A2F9B5FA60090FBFA ;
+			package = 93D8E68A2F9B5FA60090FBFA /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
 			productName = SDWebImageSwiftUI;
 		};
-		D0C385972FB0BD870055284E  = {
+		D0C385972FB0BD870055284E /* Spleeter */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D0C385962FB0BD870055284E ;
+			package = D0C385962FB0BD870055284E /* XCRemoteSwiftPackageReference "swift-spleeter" */;
 			productName = Spleeter;
 		};
-		D0E1CB012FC2000100000002  = {
+		D0E1CB012FC2000100000002 /* PillarboxPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D0E1CB002FC2000100000001 ;
+			package = D0E1CB002FC2000100000001 /* XCRemoteSwiftPackageReference "pillarbox-apple" */;
 			productName = PillarboxPlayer;
 		};
-
+/* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = D0F981AD2F94C10900FD69AB ;
+	rootObject = D0F981AD2F94C10900FD69AB /* Project object */;
 }

@@ -31,8 +31,12 @@ struct SettingsView: View {
 
     var body: some View {
         settingsContent
-            .navigationTitle("Music")
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            // The sizes are otherwise measured at launch and after playback
+            // events, so browsing alone left the image and lyrics figures
+            // showing whatever they were when the app started.
+            .task { cacheManager.refreshSizes() }
             .alert("Could Not Clear Storage", isPresented: $showStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -47,7 +51,7 @@ struct SettingsView: View {
                 presenting: pendingAction
             ) { action in
                 Button("Cancel", role: .cancel) {}
-                    .tint(Color(uiColor: .systemBlue))
+                    .tint(.blue)
                 Button(LocalizedStringKey(action.actionLabel), role: .destructive) {
                     perform(action)
                 }
@@ -104,7 +108,7 @@ struct SettingsView: View {
     }
 
     private var settingsList: some View {
-        List {
+        InsetGroupedList {
             audioSection
             downloadsSection
             if DeviceCapability.supportsKaraoke {
@@ -121,18 +125,15 @@ struct SettingsView: View {
             developerSection
             experimentsSection
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 
     private var audioSection: some View {
         Section {
             Toggle("Auto Mix", isOn: $audioManager.autoMixEnabled)
-            .toggleHaptic(audioManager.autoMixEnabled)
+                .toggleHaptic(audioManager.autoMixEnabled)
                 .tint(.appAccent)
             Toggle("Crossfade", isOn: $audioManager.crossfadeEnabled)
-            .toggleHaptic(audioManager.crossfadeEnabled)
+                .toggleHaptic(audioManager.crossfadeEnabled)
                 .tint(.appAccent)
             if audioManager.crossfadeEnabled {
                 CrossfadeDurationRow(
@@ -161,7 +162,7 @@ struct SettingsView: View {
     private var downloadsSection: some View {
         Section {
             Toggle("Auto-Download Played Songs", isOn: $downloadOnPlay)
-            .toggleHaptic(downloadOnPlay)
+                .toggleHaptic(downloadOnPlay)
                 .onChange(of: downloadOnPlay) { _, enabled in
                     if enabled { audioManager.autoDownloadCurrentSongIfEnabled() }
                 }
@@ -176,7 +177,7 @@ struct SettingsView: View {
     private var lyricsSection: some View {
         Section {
             Toggle("Respect Reduce Motion", isOn: $respectReducedMotion)
-            .toggleHaptic(respectReducedMotion)
+                .toggleHaptic(respectReducedMotion)
                 .tint(.appAccent)
         } header: {
             Text("Lyrics")
@@ -296,6 +297,14 @@ struct SettingsView: View {
         Section {
             Toggle("Enable Experiments", isOn: experimentsToggleBinding)
                 .tint(.appAccent)
+            if experimentsEnabled || AppIconManager.shared.selected == .experimental {
+                NavigationLink {
+                    AppIconSettingsView()
+                } label: {
+                    Label("App Icon", systemImage: "app")
+                }
+                .accessibilityIdentifier("Settings.AppIcon")
+            }
             if experimentsEnabled {
                 Toggle("Experimental Themes", isOn: experimentalThemesToggleBinding)
                     .tint(.appAccent)
@@ -351,7 +360,7 @@ struct SettingsView: View {
     private var equalizerSection: some View {
         Section {
             Toggle("Equalizer", isOn: $audioManager.eqEnabled)
-            .toggleHaptic(audioManager.eqEnabled)
+                .toggleHaptic(audioManager.eqEnabled)
                 .tint(.appAccent)
             if audioManager.eqEnabled {
                 Picker("Preset", selection: $audioManager.eqPreset) {
@@ -377,7 +386,7 @@ struct SettingsView: View {
     private var aiAudioSection: some View {
         Section {
             Toggle("AI Audio Processing", isOn: $audioManager.aiEnabled)
-            .toggleHaptic(audioManager.aiEnabled)
+                .toggleHaptic(audioManager.aiEnabled)
                 .tint(.appAccent)
 
             if audioManager.aiEnabled {
@@ -438,7 +447,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Bass Enhance", isOn: $audioManager.bassEnhanceMode)
-            .toggleHaptic(audioManager.bassEnhanceMode)
+                .toggleHaptic(audioManager.bassEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.bassEnhanceMode {
@@ -455,7 +464,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Vocal Enhance", isOn: $audioManager.vocalEnhanceMode)
-            .toggleHaptic(audioManager.vocalEnhanceMode)
+                .toggleHaptic(audioManager.vocalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.vocalEnhanceMode {
@@ -472,7 +481,7 @@ struct SettingsView: View {
                 )
             }
             Toggle("Instrumental Enhance", isOn: $audioManager.instrumentalEnhanceMode)
-            .toggleHaptic(audioManager.instrumentalEnhanceMode)
+                .toggleHaptic(audioManager.instrumentalEnhanceMode)
                 .tint(.appAccent)
                 .disabled(audioManager.isBackgroundKaraokeLocked)
             if audioManager.instrumentalEnhanceMode {
@@ -643,12 +652,12 @@ private struct SettingsStorageActionRow: View {
         HStack(spacing: 10) {
             Image(systemName: symbol)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.appAccent)
+                .foregroundStyle(isDestructive ? Color.appDestructive : Color.appAccent)
                 .frame(width: 36, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body)
-                    .foregroundStyle(isDestructive ? Color.appAccent : .primary)
+                    .foregroundStyle(isDestructive ? Color.appDestructive : .primary)
                 Text(detail)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -846,6 +855,7 @@ struct NotificationsView: View {
     @Bindable private var notifications = DownloadNotifications.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
@@ -875,7 +885,7 @@ struct NotificationsView: View {
     }
 
     private var notificationsList: some View {
-        List {
+        InsetGroupedList {
             Section {
                 Toggle("Download Notifications", isOn: Binding(
                     get: { notifications.isEnabled },
@@ -888,7 +898,7 @@ struct NotificationsView: View {
                 if notifications.permissionDenied {
                     Button("Open Notification Settings") {
                         guard let url = URL(string: UIApplication.openNotificationSettingsURLString) else { return }
-                        UIApplication.shared.open(url)
+                        openURL(url)
                     }
                 }
             } footer: {
@@ -897,8 +907,5 @@ struct NotificationsView: View {
                     : "Notify when downloads finish while the app is in the background."))
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 }

@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SDWebImageSwiftUI
 import SwiftUI
 
@@ -5,6 +6,7 @@ struct LoginSheet: View {
     let auth: AuthManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var username = ""
     @State private var password = ""
     @State private var showPassword = false
@@ -227,11 +229,11 @@ struct LoginSheet: View {
 
     private var divider: some View {
         HStack(spacing: 12) {
-            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            Rectangle().fill(.separator).frame(height: 0.5)
             Text("OR")
                 .font(.caption.bold())
                 .foregroundStyle(.secondary)
-            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            Rectangle().fill(.separator).frame(height: 0.5)
         }
     }
 
@@ -239,7 +241,7 @@ struct LoginSheet: View {
         Button {
             guard !auth.isLoading else { return }
             AppHaptic.commit.play()
-            Task { await auth.loginWithDiscord() }
+            Task { await auth.loginWithDiscord(using: webAuthenticationSession) }
         } label: {
             HStack(spacing: 10) {
                 DiscordIcon(size: 20, color: .white)

@@ -34,7 +34,11 @@ final class PlaylistsViewModel {
         let favoriteCount = max(favoriteSongs.count, FavoritesManager.shared.favoriteIDs.count)
         return Playlist(
             id: Playlist.favoritesID,
-            name: "Favourite Songs",
+            // Localized here: the name is drawn verbatim wherever the
+            // playlist is, from the Library grid to the detail screen's title.
+            // In the app's selected language, which `String(localized:)` alone
+            // would not follow; `languageDidChange()` rebuilds it.
+            name: String(localized: "Favourite Songs", bundle: AppLanguage.selected.localizationBundle),
             songCount: favoriteCount,
             mosaicMedia: nil,
             songListDTOs: favoriteSongs
@@ -48,24 +52,30 @@ final class PlaylistsViewModel {
     }
 
     private func recomputeCombinedPlaylists() {
+        let next = buildCombinedPlaylists()
+        // Guarded because @Observable publishes on every write, including one
+        // that stores an identical value, and `favoritesPlaylist` builds a fresh
+        // struct on each call — so an unguarded assignment re-renders the whole
+        // library on any unrelated source change. Combine's removeDuplicates
+        // used to absorb this.
+        guard next != combinedPlaylists else { return }
+        combinedPlaylists = next
+    }
+
+    private func buildCombinedPlaylists() -> [Playlist] {
         let all = allPlaylists(saved: SavedPlaylistsStore.shared.playlists)
         let existingIDs = Set(all.map(\.id))
         let uniqueUser = UserPlaylistsManager.shared.playlists
             .map { $0.asPlaylist() }
             .filter { !existingIDs.contains($0.id) }
-        let next = uniqueUser + all
-        guard next != combinedPlaylists else { return }
-        combinedPlaylists = next
+        return uniqueUser + all
     }
 
-    func recentlyAddedPlaylists(saved: [Playlist]) -> [Playlist] {
-        let serverIDs = Set(playlists.map(\.id))
-        let localOnly = saved.filter { !serverIDs.contains($0.id) }
-        let combined = (playlists + localOnly).sorted { lhs, rhs in
-            RecentlyAddedTracker.shared.date(for: lhs.id)
-                > RecentlyAddedTracker.shared.date(for: rhs.id)
-        }
-        return [favoritesPlaylist] + combined
+    /// Rebuilds the list for a new app language. Unguarded on purpose:
+    /// `Playlist.==` compares ids, so a renamed Favourite Songs compares
+    /// equal to the old one and the guard above would keep it.
+    func languageDidChange() {
+        combinedPlaylists = buildCombinedPlaylists()
     }
 
     /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
@@ -99,7 +109,6 @@ final class PlaylistsViewModel {
                 }
                 playlists = loaded
                 hasLoadedPlaylists = true
-                RecentlyAddedTracker.shared.registerIfNew(loaded.map(\.id))
             } catch {
                 errorMessage = String(localized: "Playlists couldn’t be loaded. Pull to refresh to retry.")
             }

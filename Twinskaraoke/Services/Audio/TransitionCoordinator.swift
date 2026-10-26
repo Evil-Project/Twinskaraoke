@@ -83,7 +83,6 @@ final class TransitionCoordinator {
         totalDuration: TimeInterval,
         currentSong: Song?,
         queue: [Song],
-        repeatMode: RepeatMode,
         autoMixEnabled: Bool,
         crossfadeEnabled: Bool,
         crossfadeSeconds: Double,
@@ -105,7 +104,7 @@ final class TransitionCoordinator {
         switch state {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
-            if let nextSong = nextSongInQueue(current: currentSong, queue: queue, repeatMode: repeatMode) {
+            if let nextSong = nextSongInQueue(current: currentSong, queue: queue) {
                 guard failedPreparationNextSongID != nextSong.id else { return }
                 beginPreparing(
                     nextSong: nextSong, currentSong: currentSong,
@@ -284,11 +283,11 @@ final class TransitionCoordinator {
         return AudioCacheStore.playableMainURL(for: song.id, expectedRemoteURL: song.audioURL, expectedDuration: expectedDuration)
     }
 
-    private func nextSongInQueue(current: Song, queue: [Song], repeatMode: RepeatMode) -> Song? {
-        guard !queue.isEmpty, let idx = queue.firstIndex(where: { $0.id == current.id }) else { return nil }
-        if idx + 1 < queue.count { return queue[idx + 1] }
-        if repeatMode == .all { return queue.first }
-        return nil
+    /// The manager polls only with repeat off, so the next song is simply the
+    /// one after this in the queue.
+    private func nextSongInQueue(current: Song, queue: [Song]) -> Song? {
+        guard let idx = queue.firstIndex(where: { $0.id == current.id }), idx + 1 < queue.count else { return nil }
+        return queue[idx + 1]
     }
 
     private func predownload(song: Song, from remoteURL: URL) async {
@@ -395,6 +394,20 @@ final class TransitionCoordinator {
     }
 }
 private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    /// Shared by every predownload so the next song reuses the warm
+    /// connection to storage. Each download attaches itself as its task's
+    /// delegate, which receives the data callbacks; cancelling one task
+    /// leaves the session serving the next.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = false
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 180
+        return URLSession(configuration: configuration)
+    }()
+
     private let songID: String
     private let expectedDuration: TimeInterval?
     private let partialURL: URL
@@ -402,7 +415,6 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     private var remoteURL: URL?
     private var fileHandle: FileHandle?
     private var task: URLSessionDataTask?
-    private var session: URLSession?
     private var didComplete = false
     private let stateLock = NSLock()
     private var isCancelled = false
@@ -435,25 +447,22 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             finish()
             return
         }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.waitsForConnectivity = false
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 180
-        let newSession = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        let newTask = newSession.dataTask(with: remoteURL)
+        let newTask = Self.session.dataTask(with: remoteURL)
+        newTask.delegate = self
+
+        // Re-check and publish atomically. cancel() may have run during the
+        // cache probe and file setup above, when session/task were still nil
+        // and it therefore had nothing to tear down — without this the
+        // download would start untracked and run to completion unobserved.
         stateLock.lock()
         if isCancelled {
             stateLock.unlock()
             newTask.cancel()
-            newSession.invalidateAndCancel()
             handle.closeFile()
             try? FileManager.default.removeItem(at: partialURL)
             return
         }
         fileHandle = handle
-        session = newSession
         task = newTask
         stateLock.unlock()
         newTask.resume()
@@ -464,11 +473,9 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         stateLock.lock()
         isCancelled = true
         task?.cancel()
-        session?.invalidateAndCancel()
         fileHandle?.closeFile()
         fileHandle = nil
         task = nil
-        session = nil
         stateLock.unlock()
         try? FileManager.default.removeItem(at: partialURL)
         finish()
@@ -495,15 +502,13 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         stateLock.unlock()
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         stateLock.lock()
         let cancelled = isCancelled
         fileHandle?.closeFile()
         fileHandle = nil
         self.task = nil
-        self.session = nil
         stateLock.unlock()
-        session.invalidateAndCancel()
         guard !cancelled else { return }
         if error == nil, AudioCacheStore.acceptsAudioResponse(task.response),
            AudioCacheStore.isPlayableAudioFile(at: partialURL),

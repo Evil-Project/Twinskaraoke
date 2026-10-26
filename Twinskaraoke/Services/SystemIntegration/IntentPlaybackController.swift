@@ -12,8 +12,7 @@ enum IntentPlaybackController {
         case .next:
             guard !player.isRadioMode, let song = player.currentSong,
                   let index = player.queue.firstIndex(where: { $0.id == song.id }),
-                  index + 1 < player.queue.count || player.repeatMode == .all ||
-                  (player.repeatMode == .one && player.repeatOnceRemaining) else { throw SystemIntentError.noNext }
+                  index + 1 < player.queue.count else { throw SystemIntentError.noNext }
             player.skipToNext()
         case .previous:
             guard !player.isRadioMode, player.currentSong != nil, !player.queue.isEmpty else { throw SystemIntentError.noPrevious }
@@ -103,8 +102,8 @@ enum IntentPlaybackController {
         case .toggleRepeat:
             switch player.repeatMode {
             case .off: return String(localized: "Don't Repeat.")
-            case .all: return String(localized: "Repeat the playlist.")
-            case .one: return String(localized: "Repeat the playlist once.")
+            case .all: return player.repeatsCurrentCollection ? String(localized: "Repeat this collection.") : String(localized: "Repeat this song.")
+            case .one: return String(localized: "Repeat this song once.")
             }
         }
     }
@@ -114,6 +113,6 @@ enum IntentPlaybackController {
         if duration == .endOfSong {
             guard !player.isRadioMode else { throw SystemIntentError.liveTimer }
             player.startSleepTimerAtEndOfSong()
-        } else { player.sleepTimer.start(minutes: duration.minutes) }
+        } else { player.setSleepTimer(minutes: duration.minutes) }
     }
 }

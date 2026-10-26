@@ -19,7 +19,8 @@ struct PlayerAmbientBackground: View {
     @State private var isVisible = false
 
     private var shouldAnimateAmbient: Bool {
-        isPlaying && isVisible && !reduceEffects && scenePhase == .active
+        isPlaying && isVisible && animationsActive && !reduceEffects
+            && scenePhase == .active && !scrollState.isScrolling
     }
     private static let breathingPeriod: TimeInterval = 12
     private static let safeAreaOverscan: CGFloat = 96
@@ -29,7 +30,11 @@ struct PlayerAmbientBackground: View {
             Color(.systemBackground)
             blurredArtworkLayer
             colorWashLayer
-            vignetteLayer
+            if let theme = AppThemeStore.shared.palette {
+                ThemedPlayerBackdrop(palette: theme)
+            } else {
+                vignetteLayer
+            }
         }
         .padding(-Self.safeAreaOverscan)
         .ignoresSafeArea()
@@ -59,6 +64,19 @@ struct PlayerAmbientBackground: View {
     private var blurredArtworkLayer: some View {
         if let artworkURL {
             let backdropURL = ArtworkURLBuilder.variantURL(from: artworkURL, variant: .blur) ?? artworkURL
+            // Outside the timeline: it parses the URL, and the timeline's
+            // content runs on every display frame while the player breathes.
+            let blurRadius = runtimeBlurRadius
+            // The image goes in an `overlay` so it cannot influence the size of
+            // anything above it. `.aspectRatio(.fill)` always resolves to a size
+            // that *covers* the proposal, and `.frame(maxWidth:maxHeight:)` does
+            // not clamp a child that came back larger — it adopts the child's
+            // size. That let the image inflate the frame, the frame inflate the
+            // ZStack, and the backdrop end up laid out at the artwork's aspect
+            // ratio instead of the screen's, so it no longer covered the display.
+            // Overlay content never feeds size back to its parent, which keeps the
+            // clamp without an explicit numeric frame for an animation to
+            // interpolate.
             Color.clear
                 .overlay {
                     WebImage(
@@ -79,7 +97,7 @@ struct PlayerAmbientBackground: View {
                                 .resizable()
                                 .interpolation(.low)
                                 .aspectRatio(contentMode: .fill)
-                                .blur(radius: runtimeBlurRadius)
+                                .blur(radius: blurRadius)
                                 .saturation(1.05)
                                 .drawingGroup(opaque: true, colorMode: .linear)
                                 .scaleEffect(1.22 + 0.06 * phase)
@@ -208,5 +226,49 @@ struct PlayerAmbientBackground: View {
                 }
             }
         #endif
+    }
+}
+
+/// A website theme's take on the player backdrop, in place of the neutral
+/// vignette. The artwork still shows through, but dimmed the way the site dims
+/// it behind its full-screen player (`brightness(0.3)`), and framed by the
+/// theme rather than by black:
+///
+/// - the page colour fading in at the top and bottom (`.fullscreen-overlay`:
+///   0.8 → clear by 15%, clear from 75% → 0.95), which is also what keeps the
+///   title and the transport readable over a bright cover;
+/// - the primary and accent glows the site puts behind its heroes
+///   (`.hero-background`). They are relative to the screen, as the site's
+///   percentage radii are, so an iPad gets the same composition as a phone.
+private struct ThemedPlayerBackdrop: View {
+    let palette: AppThemePalette
+
+    var body: some View {
+        ZStack {
+            // The site's 30% brightness, dimmed with the page colour rather
+            // than black so it also pulls the cover's colours toward the theme.
+            palette.background.opacity(0.7)
+            EllipticalGradient(
+                colors: [palette.primary.opacity(0.4), .clear],
+                center: UnitPoint(x: 0.25, y: 0.3),
+                endRadiusFraction: 0.6
+            )
+            EllipticalGradient(
+                colors: [palette.accent.opacity(0.32), .clear],
+                center: UnitPoint(x: 0.8, y: 0.62),
+                endRadiusFraction: 0.6
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: palette.background.opacity(0.8), location: 0),
+                    .init(color: .clear, location: 0.15),
+                    .init(color: .clear, location: 0.75),
+                    .init(color: palette.background.opacity(0.95), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .allowsHitTesting(false)
     }
 }

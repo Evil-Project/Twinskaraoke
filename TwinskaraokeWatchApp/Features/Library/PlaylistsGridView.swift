@@ -2,12 +2,19 @@ import SwiftUI
 struct PlaylistRoute: Hashable {
     let id: String
     let name: String
+    /// The songs the list endpoint already handed over, for personal playlists.
+    ///
+    /// `/api/user/playlists` returns each playlist with its songs inline, and
+    /// account-scoped detail request may still be loading during navigation.
+    /// Carry those songs through the push so the screen starts with content.
     let fallbackSongs: [Song]
+    let isPersonal: Bool
 
     init(playlist: Playlist) {
         id = playlist.id
         name = playlist.name
         fallbackSongs = playlist.isPersonal ? playlist.songListDTOs ?? [] : []
+        isPersonal = playlist.isPersonal
     }
     static func == (lhs: PlaylistRoute, rhs: PlaylistRoute) -> Bool {
         lhs.id == rhs.id && lhs.name == rhs.name
@@ -53,6 +60,14 @@ struct PlaylistsGridView: View {
                 } else if showsUserPlaylistsError {
                     userPlaylistsErrorSection
                 }
+                if auth.linkState == .awaitingPhone {
+                    VStack(alignment: .leading) {
+                        Text("Syncing your iPhone account…").font(.caption).foregroundStyle(.secondary)
+                        Button("Sync Account") { auth.syncNow() }
+                    }
+                } else if userViewModel.isLoading, userViewModel.playlists.isEmpty {
+                    ProgressView("Loading Your Playlists")
+                }
                 curatedContent
             }
         }
@@ -61,7 +76,8 @@ struct PlaylistsGridView: View {
             PlaylistDetailView(
                 playlistID: route.id,
                 playlistName: route.name,
-                fallbackSongs: route.fallbackSongs
+                fallbackSongs: route.fallbackSongs,
+                isPersonal: route.isPersonal
             )
         }
         .animation(listAnimation, value: viewModel.playlists.count)
@@ -84,6 +100,10 @@ struct PlaylistsGridView: View {
             } else {
                 userViewModel.reset()
             }
+        }
+        .onChange(of: auth.accountRevision) { _, _ in
+            userViewModel.reset()
+            if auth.linkState == .signedIn { userViewModel.fetch(force: true) }
         }
         .onDisappear {
             WatchArtworkPrefetcher.shared.cancel(reason: "playlistsGrid")
@@ -276,6 +296,7 @@ private struct WatchPlaylistsHeader: View {
 }
 struct WatchPlaylistCard: View {
     let playlist: Playlist
+    @State private var cover = WatchPlaylistCoverLoader()
 
     var body: some View {
         VStack(spacing: 7) {
@@ -287,10 +308,18 @@ struct WatchPlaylistCard: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.secondary.opacity(0.65))
                     }
-                WatchCachedImage(url: playlist.thumbnailURL ?? playlist.imageURL) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Color.clear
+                GeometryReader { geometry in
+                    let urls = cover.urls.isEmpty ? WatchPlaylistArtwork.urls(for: playlist) : cover.urls
+                    if urls.count > 1 {
+                        let side = geometry.size.width / 2
+                        LazyVGrid(columns: [GridItem(.fixed(side), spacing: 0), GridItem(.fixed(side), spacing: 0)], spacing: 0) {
+                            ForEach(0..<4, id: \.self) { index in
+                                coverImage(urls[index % urls.count], side: side)
+                            }
+                        }
+                    } else if let url = urls.first {
+                        coverImage(url, side: geometry.size.width)
+                    }
                 }
             }
             .aspectRatio(1, contentMode: .fit)
@@ -330,5 +359,13 @@ struct WatchPlaylistCard: View {
                 .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 12))
+        .task(id: "\(playlist.id):\(WatchAuthManager.shared.accountRevision):\(WatchPlaylistArtwork.urls(for: playlist))") { await cover.load(playlist) }
+    }
+
+    private func coverImage(_ url: URL, side: CGFloat) -> some View {
+        WatchCachedImage(url: url) { image in
+            image.resizable().scaledToFill().frame(width: side, height: side).clipped()
+        } placeholder: { Color.clear }
+        .frame(width: side, height: side)
     }
 }

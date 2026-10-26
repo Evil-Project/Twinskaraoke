@@ -31,6 +31,9 @@ nonisolated enum LogCategory: String {
 nonisolated enum DebugLogger {
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
+        // Without a fixed locale the device's 12-hour setting rewrites "HH"
+        // into "h a", so entries read "8:29:03.423 PM".
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
@@ -51,7 +54,7 @@ nonisolated enum DebugLogger {
     ) {
         guard isEnabled else { return }
         let msg = message()
-        let timestamp = dateFormatter.string(from: Date())
+        let timestamp = Self.timestamp(for: Date())
         let fileName = (file as NSString).lastPathComponent
         let entry = "[\(category.rawValue)] \(timestamp) \(fileName):\(line) — \(msg)"
 
@@ -65,8 +68,70 @@ nonisolated enum DebugLogger {
         }
     }
 
+    /// The entry timestamp, always 24-hour regardless of the device setting.
+    static func timestamp(for date: Date) -> String {
+        dateFormatter.string(from: date)
+    }
+
     static func exportLogs() -> String {
         logQueue.sync { recentLogs.joined(separator: "\n") }
+    }
+
+    /// Writes the buffer to a text file for sharing. The buffer lives only in
+    /// memory and only fills while Debug Logging is on, so it is often empty
+    /// right after a relaunch; the header says so instead of producing an
+    /// empty file that share targets silently drop.
+    static func exportLogFile(
+        in directory: URL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DebugLogExports", isDirectory: true),
+        now: Date = Date()
+    ) throws -> URL {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        removeStaleExports(in: directory, now: now)
+
+        let entries = logQueue.sync { recentLogs }
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        var lines = [
+            "Twinskaraoke debug log",
+            // Local time with its offset, matching the entries below.
+            "Exported: \(now.formatted(Date.ISO8601FormatStyle(timeZone: .current)))",
+            "Version: \(version) (\(build))",
+            "Entries: \(entries.count)",
+        ]
+        if entries.isEmpty {
+            lines.append("No entries. Logging records only while Debug Logging is on, and the buffer is cleared when the app quits.")
+        }
+        lines.append("")
+        lines.append(contentsOf: entries)
+
+        let stamp = now.formatted(.iso8601.year().month().day().dateSeparator(.omitted)
+            .time(includingFractionalSeconds: false).timeSeparator(.omitted))
+        // The suffix keeps two exports in the same second from replacing a
+        // file that a share sheet is still reading.
+        let suffix = UUID().uuidString.prefix(8)
+        let url = directory.appendingPathComponent("\(exportPrefix)\(stamp)-\(suffix).txt")
+        try Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
+        return url
+    }
+
+    private static let exportPrefix = "Twinskaraoke-debug-log-"
+    private static let staleExportAge: TimeInterval = 10 * 60
+
+    /// Exports are plaintext and the system purges the temporary directory on
+    /// its own schedule. A share has long finished with a file this old, so
+    /// remove those instead of leaving logs behind.
+    private static func removeStaleExports(in directory: URL, now: Date) {
+        let fileManager = FileManager.default
+        let files = (try? fileManager.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in files where file.lastPathComponent.hasPrefix(exportPrefix) {
+            guard let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate,
+                now.timeIntervalSince(modified) > staleExportAge else { continue }
+            try? fileManager.removeItem(at: file)
+        }
     }
 
     static func clearLogs() {

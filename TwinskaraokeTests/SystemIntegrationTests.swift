@@ -71,7 +71,7 @@ struct SystemIntegrationTests {
         #expect(!FileManager.default.fileExists(atPath: store.directory!.path))
     }
     @MainActor @Test func routerSelectsDestination() {
-        let router = AppRouter()
+        let router = AppRouter(isSplashBlocking: { false })
         router.open(.search)
         #expect(router.section == .search)
         router.open(.playlist("one"))
@@ -100,7 +100,7 @@ struct SystemIntegrationTests {
         let missing = WidgetRadioSnapshot.decode(Data("{}".utf8))
         #expect(missing.snapshot.title == "Twinskaraoke Radio")
         #expect(missing.artworkURL == nil)
-        let payload = Data(#"{"now_playing":{"song":{"title":"Live track","artist":"Artist","art":"https://example.com/art.jpg"}}}"#.utf8)
+        let payload = Data(#"{"station":{"name":"Radio","listen_url":"https://example.com/live"},"now_playing":{"song":{"id":"live","title":"Live track","artist":"Artist","art":"https://example.com/art.jpg"}}}"#.utf8)
         let result = WidgetRadioSnapshot.decode(payload)
         #expect(result.snapshot.title == "Live track")
         #expect(result.snapshot.artist == "Artist")
@@ -142,7 +142,11 @@ struct SystemIntegrationTests {
                 #expect((actions[name] != nil) == (bundle == host))
             }
         }
-        #expect(WidgetSnapshotStore().directory != nil)
+        // CI intentionally builds without signing, so its host cannot obtain
+        // an entitled container. Signed simulator/device runs verify access.
+        if FileManager.default.fileExists(atPath: host.bundleURL.appendingPathComponent("_CodeSignature").path) {
+            #expect(WidgetSnapshotStore().directory != nil)
+        }
     }
     @Test func playbackProgressAnchorsAndClamps() {
         let date = Date(timeIntervalSince1970: 1_000)

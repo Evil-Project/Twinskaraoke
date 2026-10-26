@@ -62,14 +62,11 @@ struct AccountView: View {
     }
 
     private var accountList: some View {
-        List {
+        InsetGroupedList {
             profileSection
             generalSection
             if auth.isLoggedIn { signOutSection }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
         .refreshable {
             if auth.isLoggedIn {
                 AppHaptic.selection.play()
@@ -163,13 +160,13 @@ struct AccountView: View {
                 HStack {
                     Spacer()
                     Text("Sign Out")
-                        .foregroundStyle(Color.appAccent)
+                        .foregroundStyle(Color.appDestructive)
                     Spacer()
                 }
             }
             .alert("Sign out?", isPresented: $showSignOutConfirm) {
                 Button("Cancel", role: .cancel) {}
-                    .tint(Color(uiColor: .systemBlue))
+                    .tint(.blue)
                 Button("Sign Out", role: .destructive) {
                     AppHaptic.dismiss.play()
                     auth.logout()
@@ -260,11 +257,13 @@ private struct SignInPromptRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
+            Spacer(minLength: 8)
+            // No 44pt frame: the whole row is the button, so the chevron is
+            // only a glyph, and its old target width squeezed the subtitle
+            // onto a second line with room to spare.
             Image(systemName: "chevron.right")
                 .font(AM.Font.chevron)
                 .foregroundStyle(.tertiary)
-                .frame(width: 44, height: 44)
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 6)

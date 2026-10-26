@@ -102,7 +102,6 @@ struct QueueView: View {
             }
         }
         .navigationTitle(showsCurrentSong ? "Queue" : "")
-        .animation(queueAnimation, value: audioManager.currentSong?.id)
         .onAppear {
             prefetchArtwork()
         }

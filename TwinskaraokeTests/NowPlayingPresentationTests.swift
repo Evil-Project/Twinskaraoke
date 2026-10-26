@@ -58,6 +58,42 @@ struct NowPlayingPresentationTests {
         #expect(state.dragSource == .miniPlayer)
     }
 
+    /// The player's artwork is re-identified per song and the bar is rehosted
+    /// by the accessory slot. The replacement reports its frame before the
+    /// outgoing view's `onDisappear`, and the outgoing view may still deliver
+    /// a late frame of its own; neither may take the frame from the
+    /// replacement. That used to leave no morph after any song change.
+    @Test func replacedReportersCannotTakeTheFrameFromTheirReplacement() {
+        let state = NowPlayingPresentation()
+        let outgoing = CGRect(x: 40, y: 150, width: 300, height: 300)
+        let replacement = CGRect(x: 41, y: 151, width: 300, height: 300)
+        state.reportPlayerArtworkFrame(outgoing, owner: "artwork-1")
+        state.reportPlayerArtworkFrame(replacement, owner: "artwork-2")
+        state.reportPlayerArtworkFrame(outgoing, owner: "artwork-1")
+        state.removePlayerArtworkFrame(owner: "artwork-1")
+        #expect(state.playerArtworkFrame == replacement)
+
+        let bar = CGRect(x: 13, y: 691, width: 350, height: 58)
+        state.reportBarFrame(bar, owner: "bar-1")
+        state.reportBarFrame(bar, owner: "bar-2")
+        state.reportBarFrame(nil, owner: "bar-1")
+        state.removeBarFrame(owner: "bar-1")
+        #expect(state.barFrame == bar)
+
+        state.reportBarArtworkFrame(CGRect(x: 25, y: 700, width: 40, height: 40))
+        state.expand()
+        #expect(state.isMorphingArtwork)
+    }
+
+    /// The artwork leaving the screen, for the lyrics surface, still clears
+    /// the target, so the morph never aims at where it used to be.
+    @Test func lastReporterLeavingClearsTheFrame() {
+        let state = NowPlayingPresentation()
+        state.reportPlayerArtworkFrame(CGRect(x: 40, y: 150, width: 300, height: 300), owner: "artwork-1")
+        state.removePlayerArtworkFrame(owner: "artwork-1")
+        #expect(state.playerArtworkFrame == nil)
+    }
+
     @Test func missingDestinationSkipsClosingSettlement() {
         let state = stateWithArtwork()
         state.reportBarFrame(nil)

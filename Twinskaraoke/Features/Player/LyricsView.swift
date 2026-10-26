@@ -9,10 +9,28 @@ struct LyricsView: View {
     var hasNoLyrics: Bool = false
     let onSeek: (TimeInterval) -> Void
     var onRetry: (() -> Void)?
+    /// False while the player is closed, when `currentTime` is a still rather
+    /// than live. The first update after it turns true jumps to the current
+    /// line instead of animating there: the lyrics have been standing still
+    /// off screen, and a scroll and highlight change running from that stale
+    /// line would play out under the opening transition.
+    var isLive = true
     @Environment(\.appReduceMotion) private var reduceMotion
+    /// `isLive` as of the previous update, so the update that turns it on can
+    /// be told apart from the ones after it.
+    @State private var wasLive = true
 
     private var scrollAnimation: Animation? {
         reduceMotion ? nil : AppMotion.gentle
+    }
+
+    private var animatesLineChanges: Bool {
+        isLive && wasLive
+    }
+
+    private struct ScrollTarget: Equatable {
+        let index: Int
+        let isLive: Bool
     }
 
     private var currentIndex: Int {
@@ -36,6 +54,9 @@ struct LyricsView: View {
             emptyState
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
+            // Resolved once per pass. As a computed property read inside the
+            // `ForEach`, the binary search ran again for every row built.
+            let currentIndex = currentIndex
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 8) {
@@ -69,6 +90,7 @@ struct LyricsView: View {
                                 currentTime: line.isInstrumental && index == currentIndex
                                     ? currentTime
                                     : nil,
+                                animatesLineChanges: animatesLineChanges,
                                 showTranslation: showTranslations,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
@@ -92,12 +114,20 @@ struct LyricsView: View {
                             .frame(height: 60)
                     }
                 )
-                .onChange(of: currentIndex) { _, idx in
-                    if idx < 0 {
-                        scrollTo("intro-dots", proxy: proxy)
-                    } else if idx < lyrics.count {
-                        scrollTo(lyrics[idx].id, proxy: proxy)
+                .onChange(of: ScrollTarget(index: currentIndex, isLive: isLive)) { old, new in
+                    guard new.isLive else { return }
+                    let animated = old.isLive
+                    guard new.index != old.index || !animated else { return }
+                    if new.index < 0 {
+                        scrollTo("intro-dots", proxy: proxy, animated: animated)
+                    } else if new.index < lyrics.count {
+                        scrollTo(lyrics[new.index].id, proxy: proxy, animated: animated)
                     }
+                }
+                // `initial`, so a view first mounted while the player is
+                // closed starts out not live rather than on the default.
+                .onChange(of: isLive, initial: true) { _, live in
+                    wasLive = live
                 }
             }
         }
@@ -140,6 +170,7 @@ private struct LyricLineRow: View, Equatable {
     let index: Int
     let currentIndex: Int
     let currentTime: TimeInterval?
+    let animatesLineChanges: Bool
     let showTranslation: Bool
     let nextLineTime: TimeInterval?
     let onSeek: (TimeInterval) -> Void
@@ -172,6 +203,7 @@ private struct LyricLineRow: View, Equatable {
             && lhs.index == rhs.index
             && lhs.currentIndex == rhs.currentIndex
             && lhs.currentTime == rhs.currentTime
+            && lhs.animatesLineChanges == rhs.animatesLineChanges
             && lhs.showTranslation == rhs.showTranslation
             && lhs.nextLineTime == rhs.nextLineTime
     }
@@ -195,6 +227,7 @@ private struct LyricLineRow: View, Equatable {
                         Text(line.text)
                             .scaledSystemFont(size: isCurrent ? 30 : 23, weight: isCurrent ? .bold : .semibold)
                             .foregroundStyle(lineColor)
+                            .modifier(LyricGlow(color: glowColor))
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -255,7 +288,7 @@ private struct LyricLineRow: View, Equatable {
     }
 
     private var lineAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.gentle
+        reduceMotion || !animatesLineChanges ? nil : AppMotion.gentle
     }
 
     private var translationAnimation: Animation? {
@@ -272,6 +305,23 @@ private struct LyricLineRow: View, Equatable {
         return .primary.opacity(0.55)
     }
 
+    /// A website theme haloes the current line in its primary, after the
+    /// site's two-layer `text-shadow` on `.fullscreen-lyric-line.active` —
+    /// though the text itself stays white, and the glow is a fraction of the
+    /// site's full-strength one, which drowned the words at this size. Every
+    /// other theme keeps the plain Apple Music line.
+    private var themeHighlight: Color? {
+        AppThemeStore.shared.palette?.primary
+    }
+
+    /// `nil` without a website theme, so those lines carry no shadow at all;
+    /// `.clear` on a themed line that is not current, so the glow can fade
+    /// between lines without the text changing identity.
+    private var glowColor: Color? {
+        guard let themeHighlight else { return nil }
+        return isCurrent ? themeHighlight : .clear
+    }
+
     private var lineBlur: CGFloat {
         guard !reduceMotion, !isCurrent else { return 0 }
         return min(2.0, 0.7 * CGFloat(distance))
@@ -283,6 +333,22 @@ private struct LyricLineRow: View, Equatable {
         return max(0.5, 1.0 - Double(distance - 2) * 0.1)
     }
 
+}
+
+private struct LyricGlow: ViewModifier {
+    let color: Color?
+
+    func body(content: Content) -> some View {
+        if let color {
+            // A tight rim and a soft bloom, the site's two layers at a
+            // fraction of their strength.
+            content
+                .shadow(color: color.opacity(0.4), radius: 4)
+                .shadow(color: color.opacity(0.25), radius: 14)
+        } else {
+            content
+        }
+    }
 }
 
 private func formattedLyricTime(_ seconds: TimeInterval) -> String {
@@ -304,7 +370,8 @@ private extension LyricsView {
             VStack(spacing: 14) {
                 MusicEmptyState(
                     title: String(localized: "Couldn't load lyrics"),
-                    message: String(localized: "Check your connection and try again.")
+                    message: String(localized: "Check your connection and try again."),
+                    systemImage: "exclamationmark.bubble"
                 )
                 if let onRetry {
                     Button {
@@ -327,7 +394,8 @@ private extension LyricsView {
         } else if hasNoLyrics {
             MusicEmptyState(
                 title: String(localized: "No lyrics for this song"),
-                message: String(localized: "Lyrics will appear here when they are available.")
+                message: String(localized: "Lyrics will appear here when they are available."),
+                systemImage: "quote.bubble"
             )
         } else {
             LyricsLoadingSkeleton()

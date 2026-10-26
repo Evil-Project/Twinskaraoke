@@ -13,6 +13,9 @@ private final class TimerStepCounter: @unchecked Sendable {
     var step = 0
 }
 
+/// `.all` loops a selected collection, or the song selected directly. `.one`
+/// replays the current song once before switching itself off. Raw case names
+/// stay compatible with saved sessions, widget snapshots and watch sync.
 nonisolated enum RepeatMode: Equatable, Sendable, Codable {
     case off, all, one
     var symbol: String {
@@ -57,6 +60,14 @@ final class PlaybackClock {
 @Observable
 final class AudioPlayerManager {
     static let shared = AudioPlayerManager()
+    private var watchMirror: CompanionPlayback.Snapshot?
+    private var transferredPlayback: CompanionPlayback.Snapshot?
+    /// Read from the publisher's in-memory lease, which is the only writer of
+    /// the persisted one. This is checked several times per playback tick —
+    /// the poll timer, `playbackTime`, `playbackDuration`, the Now Playing
+    /// rate — and decoding the lease out of UserDefaults each time cost a
+    /// JSON decode per check, dozens of times a second while playing.
+    private var phoneAudioAllowed: Bool { !WatchSessionPublisher.shared.watchOwnsAudio }
     var currentSong: Song? { didSet { scheduleSessionSave() } }
     var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
@@ -91,14 +102,9 @@ final class AudioPlayerManager {
     private var deferredAIEffect: AudioEffect?
     var routeIcon: String = "airplayaudio"
     var routeName: String = ""
-    var repeatMode: RepeatMode = .off {
-        didSet {
-            if repeatMode == .one && oldValue != .one { repeatOnceRemaining = true }
-            scheduleSessionSave()
-        }
-    }
-    private(set) var repeatOnceRemaining = true
+    var repeatMode: RepeatMode = .off { didSet { scheduleSessionSave() } }
     var isShuffled: Bool { queueState.isShuffled }
+    var repeatsCurrentCollection: Bool { queueState.hasRepeatCollection }
     var autoplayEnabled: Bool = UserDefaults.standard.object(forKey: "nk.autoplayEnabled") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(autoplayEnabled, forKey: "nk.autoplayEnabled")
@@ -108,6 +114,7 @@ final class AudioPlayerManager {
         }
     }
     var isRadioMode: Bool = false
+    var radioStreamURL: URL?
     var radioArtworkURL: URL?
     private var isStreamMode: Bool {
         streamPlayer != nil
@@ -407,6 +414,9 @@ final class AudioPlayerManager {
     private var autoplayRequestToken: UUID?
     @ObservationIgnored private var autoplayTask: Task<Void, Never>?
     private var cacheRecoverySongID: String?
+    // Song IDs already sent through enrichSongMetadataIfNeeded this session;
+    // a song replaying with repeat on would otherwise re-issue the search +
+    // trending fallback requests every time it starts over.
     private var enrichmentAttemptedSongIDs = Set<String>()
     private var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
@@ -423,6 +433,7 @@ final class AudioPlayerManager {
     private var artworkURL: URL?
     private var artworkTask: (any SDWebImageOperation)?
     @ObservationIgnored private var artworkProcessingTask: Task<Void, Never>?
+    @ObservationIgnored private var artworkGraceTask: Task<Void, Never>?
     private var playerArtworkWarmupTasks: [String: any SDWebImageOperation] = [:]
     private var warmedPlayerArtworkAt: [String: Date] = [:]
     private var currentPlaybackURL: URL?
@@ -489,6 +500,7 @@ final class AudioPlayerManager {
     }
 
     private var isPlaybackRequested: Bool {
+        if !phoneAudioAllowed { return watchMirror?.isPlaying ?? false }
         if audioSessionController.hasPendingPlayback { return true }
         if isRadioMode { return radioPlaybackRequested }
         if isRemotePlaybackCaching { return streamPlaybackRequested }
@@ -518,6 +530,7 @@ final class AudioPlayerManager {
         forceNowPlayingUpdate: Bool = false,
         reason: String = #function
     ) {
+        guard phoneAudioAllowed else { return }
         let changed = isPlaying != playing || isBuffering != buffering || reloadArtwork
         isPlaying = playing
         isBuffering = buffering
@@ -571,10 +584,7 @@ final class AudioPlayerManager {
         // sink closures are main-actor-isolated, so delivering them on the
         // posting thread traps. Hop to main first, as the watch and TV
         // AudioManagers already do for the same handlers.
-        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleInterruption(note) }
-            .store(in: &cancellables)
+        observeAudioSessionInterruptions()
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleRouteChange(note) }
@@ -754,7 +764,76 @@ final class AudioPlayerManager {
         return engine
     }
 
+    func companionFailure(_ message: String) {
+        loadFailure = .companion(message)
+    }
+
+    func suspendForWatchTransfer() {
+        sleepTimer.cancel()
+        audioSessionController.cancelPendingPlayback()
+        cancelAutoplayRequest()
+        cancelPendingTransitionWork()
+        transitionCoordinator.reset()
+        sessionRestoreAllowed = false
+        separationGeneration &+= 1
+        instrumentalTask?.cancel()
+        instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
+        VocalSeparator.shared.cancel()
+        loadedEngine?.cancelCrossfade()
+        loadedEngine?.stop()
+        stopRadioPlayer()
+        stopStreamPlayer()
+        isPlaying = false
+        isBuffering = false
+    }
+
+    func applyWatchSnapshot(_ snapshot: CompanionPlayback.Snapshot) {
+        guard !phoneAudioAllowed else { return }
+        sleepTimer.mirror(deadline: snapshot.sleepDeadline, endsWithCurrentSong: snapshot.sleepAtEndOfSong == true)
+        watchMirror = snapshot
+        currentSong = snapshot.song
+        queueState.mirror(snapshot.queue, shuffled: snapshot.isShuffled)
+        isRadioMode = snapshot.isRadio
+        radioArtworkURL = snapshot.radioArtworkURL
+        radioStreamURL = snapshot.radioStreamURL
+        repeatMode = switch snapshot.repeatSetting { case .off: .off; case .one: .one; case .all: .all }
+        isPlaying = snapshot.isPlaying
+        isBuffering = false
+        progress = snapshot.duration > 0 ? snapshot.position / snapshot.duration : 0
+        routeName = "Apple Watch"
+        routeIcon = "applewatch"
+        loadFailure = snapshot.error.map { .companion($0) }
+        updateNowPlayingInfo(reloadArtwork: true)
+    }
+
+    func finishWatchTransfer(_ snapshot: CompanionPlayback.Snapshot) {
+        sleepTimer.cancel()
+        if let deadline = snapshot.sleepDeadline { sleepTimer.start(deadline: deadline) }
+        else if snapshot.sleepAtEndOfSong == true { sleepTimer.startEndOfSong() }
+        watchMirror = nil
+        currentSong = snapshot.song
+        queueState.mirror(snapshot.queue, shuffled: snapshot.isShuffled)
+        isPlaying = false
+        isBuffering = false
+        isRadioMode = snapshot.isRadio
+        radioStreamURL = snapshot.radioStreamURL
+        radioArtworkURL = snapshot.radioArtworkURL
+        repeatMode = switch snapshot.repeatSetting { case .off: .off; case .one: .one; case .all: .all }
+        transferredPlayback = snapshot
+        lastKnownPlaybackTime = snapshot.position
+        progress = snapshot.duration > 0 ? snapshot.position / snapshot.duration : 0
+        updateRouteIcon()
+        updateNowPlayingInfo(reloadArtwork: true)
+    }
+
+    func replaceCompanionQueue(_ songs: [Song]) {
+        queueState.mirror(songs, shuffled: isShuffled)
+    }
+
     private func scheduleSessionSave(periodic: Bool = false) {
+        WatchSessionPublisher.shared.playbackDidChange(periodic: periodic)
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if periodic && now - lastSessionSaveAt < 10 { return }
@@ -768,14 +847,15 @@ final class AudioPlayerManager {
     }
 
     private func persistPlaybackSession() {
+        guard phoneAudioAllowed else { return }
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
         PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
             position: preferredStreamResumeTime(for: song) ?? playbackTime,
-            repeatMode: repeatMode, wasPlaying: isPlaying,
-            repeatOnceRemaining: repeatOnceRemaining))
+            repeatMode: repeatMode, wasPlaying: isPlaying))
     }
 
     private func restorePlaybackSession() {
+        guard phoneAudioAllowed else { return }
         guard usesSessionPersistence, !sessionRestoring, sessionRestoreAllowed, currentSong == nil else { return }
         sessionRestoring = true
         Task { @MainActor [weak self] in
@@ -786,7 +866,6 @@ final class AudioPlayerManager {
             currentSong = saved.song
             queueState = saved.queue
             repeatMode = saved.repeatMode
-            repeatOnceRemaining = saved.repeatOnceRemaining ?? true
             lastKnownPlaybackTime = saved.resumePosition
             progress = saved.song.duration > 0 ? saved.resumePosition / Double(saved.song.duration) : 0
             // Restore context without starting playback on launch.
@@ -813,6 +892,7 @@ final class AudioPlayerManager {
         }
         artworkTask?.cancel()
         artworkProcessingTask?.cancel()
+        artworkGraceTask?.cancel()
         playerArtworkWarmupTasks.values.forEach { $0.cancel() }
         playerArtworkWarmupTasks.removeAll()
         cacheCompressionTask?.cancel()
@@ -949,10 +1029,14 @@ final class AudioPlayerManager {
     }
 
     var playbackTime: TimeInterval {
-        activePlaybackTime()
+        if let transferredPlayback { return transferredPlayback.position }
+        if !phoneAudioAllowed, let watchMirror { return watchMirror.position }
+        return activePlaybackTime()
     }
 
     var playbackDuration: TimeInterval {
+        if let transferredPlayback { return transferredPlayback.duration }
+        if !phoneAudioAllowed, let watchMirror { return watchMirror.duration }
         if isStreamMode {
             let streamDuration = streamPlayer?.currentItem?.duration.seconds ?? .nan
             if streamDuration.isFinite, streamDuration > 0 {
@@ -1178,6 +1262,7 @@ final class AudioPlayerManager {
         for song: Song, stems: CachedStems, sourceURL: URL,
         onReady: (() -> Void)? = nil
     ) {
+        guard phoneAudioAllowed else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.switchActivePlaybackToStems(for: song, stems: stems, sourceURL: sourceURL, onReady: onReady)
         }, replacingPending: false) else { return }
@@ -1362,7 +1447,7 @@ final class AudioPlayerManager {
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                guard !self.isRadioMode else { return }
+                guard self.phoneAudioAllowed, !self.isRadioMode else { return }
                 guard !self.isEditingProgress else { return }
                 guard self.currentSong != nil else { return }
                 if self.suppressTransitionAfterSeek {
@@ -1391,13 +1476,12 @@ final class AudioPlayerManager {
                     }
                     self.updateNowPlayingElapsed(t)
 
-                    if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                    if self.repeatMode == .off, !self.sleepTimer.endsWithCurrentSong {
                         self.transitionCoordinator.poll(
                             currentTime: t,
                             totalDuration: dur,
                             currentSong: self.currentSong,
                             queue: self.queue,
-                            repeatMode: self.repeatMode,
                             autoMixEnabled: self.autoMixEnabled,
                             crossfadeEnabled: self.crossfadeEnabled,
                             crossfadeSeconds: self.crossfadeSeconds,
@@ -1423,13 +1507,14 @@ final class AudioPlayerManager {
 
                 // A crossfade would start the next song before this one ends,
                 // which is exactly when the end-of-song sleep timer stops.
-                if self.repeatMode != .one, !self.sleepTimer.endsWithCurrentSong {
+                // Repeat outcomes are resolved at the song's end, including
+                // collection wrapping; keep prepared crossfades disabled here.
+                if self.repeatMode == .off, !self.sleepTimer.endsWithCurrentSong {
                     self.transitionCoordinator.poll(
                         currentTime: t,
                         totalDuration: totalDur,
                         currentSong: self.currentSong,
                         queue: self.queue,
-                        repeatMode: self.repeatMode,
                         autoMixEnabled: self.autoMixEnabled,
                         crossfadeEnabled: self.crossfadeEnabled,
                         crossfadeSeconds: self.crossfadeSeconds,
@@ -1438,12 +1523,24 @@ final class AudioPlayerManager {
                 }
             }
         }
+        // It fires for the life of the app, playing or not. Tolerance lets
+        // the system batch it with other wakeups; 10% is Apple's suggested
+        // floor and invisible at a 4 Hz progress readout. Crossfade starts
+        // are scheduled to the exact deadline elsewhere, not by this tick.
+        timer.tolerance = 0.025
         pollTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
 
     func play(song: Song, context: [Song] = []) {
+        queueState.selectSingleSong()
         play(song: song, context: context, resetTransitionVolume: true)
+    }
+
+    /// Starts recommendations as a collection so Repeat All advances and wraps.
+    func playAutoplay(song: Song, context: [Song]) {
+        queueState.beginAutoplay(context: context, current: song)
+        play(song: song, resetTransitionVolume: true)
     }
 
     private func play(
@@ -1453,6 +1550,8 @@ final class AudioPlayerManager {
         preserveCacheRecoveryState: Bool = false,
         reportsPlayCount: Bool = true
     ) {
+        if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context.isEmpty ? queue : context) { return }
+        transferredPlayback = nil
         sessionRestoreAllowed = false
         sessionPersistenceReady = true
         guard audioSessionController.performWhenReady({ [weak self] in
@@ -1511,7 +1610,6 @@ final class AudioPlayerManager {
             DownloadManager.shared.download(song: song)
         }
         warmPlayerArtwork(for: song)
-        if !context.isEmpty { repeatOnceRemaining = true }
         queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
         let fileURL = song.audioURL != nil
@@ -1575,6 +1673,7 @@ final class AudioPlayerManager {
     }
 
     func playNext(song: Song) {
+        if WatchSessionPublisher.shared.routeToWatch(.playNext, song: song) { return }
         guard !isRadioMode else {
             play(song: song)
             return
@@ -1589,6 +1688,7 @@ final class AudioPlayerManager {
     }
 
     func playLast(song: Song) {
+        if WatchSessionPublisher.shared.routeToWatch(.playLast, song: song) { return }
         guard !isRadioMode else {
             play(song: song)
             return
@@ -1598,12 +1698,12 @@ final class AudioPlayerManager {
             return
         }
 
-        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining)
+        let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         queueState.insertLast(song, after: current)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
         // the last song, and only then is the prepared work stale.
-        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled, repeatOnceRemaining: repeatOnceRemaining) != nextBefore {
+        if queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore {
             nextSongChanged()
         }
     }
@@ -1628,6 +1728,7 @@ final class AudioPlayerManager {
         startAt: TimeInterval = 0,
         resetSeparation: Bool = true
     ) {
+        guard phoneAudioAllowed else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.startPlayingFile(url, startAt: startAt, resetSeparation: resetSeparation)
         }, replacingPending: false) else { return }
@@ -1747,6 +1848,7 @@ final class AudioPlayerManager {
     }
     @discardableResult
     private func pauseCurrentPlayback(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(.pause) { return true }
         audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
         if !handlingAudioSessionInterruption {
@@ -1754,7 +1856,7 @@ final class AudioPlayerManager {
         }
         if isRadioMode {
             let wasActive = radioPlaybackRequested || isPlaying || isBuffering
-            guard let player = radioPlayer else {
+            guard radioPlayer != nil else {
                 radioPlaybackRequested = false
                 setPlaybackState(
                     playing: false,
@@ -1773,9 +1875,14 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            radioPlaybackRequested = false
+            // Stopped, not paused: every surface labels this Stop, and live
+            // radio has no position worth keeping. Pausing held the stream's
+            // connection open and resumed from wherever the buffer had got to,
+            // behind the broadcast. The station, song and mini player stay;
+            // resume finds no player and tunes back in at the live edge, the
+            // path a media services reset already takes.
             lastKnownPlaybackTime = activePlaybackTime()
-            player.pause()
+            stopRadioPlayer()
             setPlaybackState(playing: false, buffering: false, reason: "pause.radio.\(source)")
             return true
         }
@@ -1840,12 +1947,37 @@ final class AudioPlayerManager {
     }
     @discardableResult
     private func resumeCurrentPlayback(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(.resume) { return true }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.resumeCurrentPlayback(source: source)
         }, replacingPending: true) else { return true }
 
+        if let state = transferredPlayback, let song = state.song {
+            transferredPlayback = nil
+            if state.isRadio, let url = state.radioStreamURL {
+                isRadioMode = false
+                playRadio(streamURL: url, song: song, artworkURL: state.radioArtworkURL)
+            } else if let fileURL = localPlaybackFileURL(for: song) {
+                startPlayingFile(fileURL, startAt: max(0, state.position))
+            } else if let url = song.audioURL {
+                startStreamPlayback(url: url, songID: song.id,
+                    expectedDuration: song.duration > 0 ? Double(song.duration) : nil,
+                    startAt: max(0, state.position))
+            } else {
+                companionFailure("Choose the song or station again to start playback.")
+                return false
+            }
+            return true
+        }
+
         if isRadioMode {
             guard let player = radioPlayer else {
+                // Stopping and a media services reset both retire the player
+                // but keep the station, so Play tunes back in.
+                if let url = radioStreamURL, let song = currentSong {
+                    playRadio(streamURL: url, song: song, artworkURL: radioArtworkURL)
+                    return true
+                }
                 radioPlaybackRequested = false
                 setPlaybackState(playing: false, buffering: false, reason: "resume.radio.noPlayer.\(source)")
                 return false
@@ -1919,16 +2051,25 @@ final class AudioPlayerManager {
             if let fileURL = song.audioURL != nil ? immediateLocalPlaybackFileURL(for: song) : localPlaybackFileURL(for: song) {
                 clearPreferredStreamResumeTime()
                 startPlayingFile(fileURL, startAt: resumeAt)
+                // A fresh engine starts on the main mix. Re-enter karaoke the
+                // way a normal song start does, or a reset rebuild would
+                // silently bring the vocals back.
+                if aiEnabled, anyAIEffectActive { applyMLSeparationIfNeeded() }
                 return true
             }
             if let remoteURL = song.audioURL {
                 let expectedDuration = song.duration > 0 ? TimeInterval(song.duration) : nil
+                let reentersStems = aiEnabled && anyAIEffectActive
+                // Like a normal song start, the separation requested below
+                // must survive the cached file starting.
                 startStreamPlayback(
                     url: remoteURL,
                     songID: song.id,
                     expectedDuration: expectedDuration,
-                    startAt: resumeAt
+                    startAt: resumeAt,
+                    resetSeparationOnCacheReady: !reentersStems
                 )
+                if reentersStems { applyMLSeparationIfNeeded() }
                 return true
             }
             setPlaybackState(
@@ -1955,15 +2096,15 @@ final class AudioPlayerManager {
 
     private func reportLoadFailure(_ failure: PlaybackLoadFailure) {
         loadFailure = failure
-        #if canImport(UIKit)
-            // The message appears under the song, which a VoiceOver user is
-            // unlikely to be focused on at that moment.
-            UIAccessibility.post(notification: .announcement, argument: failure.message)
-        #endif
+        WatchSessionPublisher.shared.playbackDidChange()
+        // The message appears under the song, which a VoiceOver user is
+        // unlikely to be focused on at that moment.
+        AccessibilityNotification.Announcement(failure.message).post()
     }
 
     @discardableResult
     func togglePlayPause(source: String = #function) -> Bool {
+        if WatchSessionPublisher.shared.routeToWatch(isPlaying ? .pause : .resume) { return true }
         if isPlaybackRequested {
             return pauseCurrentPlayback(source: "toggle.\(source)")
         }
@@ -1971,6 +2112,7 @@ final class AudioPlayerManager {
     }
 
     func pauseIfPlaying() {
+        if WatchSessionPublisher.shared.routeToWatch(.pause) { return }
         guard isPlaybackRequested else { return }
         pauseCurrentPlayback(source: "pauseIfPlaying")
     }
@@ -1979,11 +2121,21 @@ final class AudioPlayerManager {
     /// prepared would carry playback into the next song first, so it is
     /// dropped, and none is prepared while the timer is armed.
     func startSleepTimerAtEndOfSong() {
+        if WatchSessionPublisher.shared.routeToWatch(.sleepTimer, sleepAtEndOfSong: true) { return }
         sleepTimer.startEndOfSong()
+        WatchSessionPublisher.shared.playbackDidChange()
         cancelPendingTransitionWork()
     }
 
+    func setSleepTimer(minutes: Int? = nil) {
+        if WatchSessionPublisher.shared.routeToWatch(.sleepTimer, sleepMinutes: minutes) { return }
+        sleepTimer.cancel()
+        if let minutes { sleepTimer.start(minutes: minutes) }
+        WatchSessionPublisher.shared.playbackDidChange()
+    }
+
     func seek(to fraction: Double) {
+        if WatchSessionPublisher.shared.routeToWatch(.seek, position: fraction * playbackDuration) { return }
         guard fraction.isFinite, (0.0 ... 1.0).contains(fraction) else { return }
         if isRadioMode { return }
         defer { scheduleSessionSave() }
@@ -2051,24 +2203,21 @@ final class AudioPlayerManager {
 
     /// Moves on when a song ends by itself.
     func playNextOrRandom() {
+        guard phoneAudioAllowed else { return }
         if isRadioMode { return }
         perform(queueState.advance(
             after: currentSong,
             repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled,
-            repeatOnceRemaining: repeatOnceRemaining
+            autoplayEnabled: autoplayEnabled
         ))
     }
 
-    /// The Next button and lock-screen command follow the active queue order.
+    /// The Next button and lock-screen command. Unlike a song ending, a skip
+    /// leaves the song even with repeat on.
     func skipToNext() {
+        if WatchSessionPublisher.shared.routeToWatch(.next) { return }
         if isRadioMode { return }
-        perform(queueState.skip(
-            after: currentSong,
-            repeatMode: repeatMode,
-            autoplayEnabled: autoplayEnabled,
-            repeatOnceRemaining: repeatOnceRemaining
-        ))
+        perform(queueState.skip(after: currentSong, autoplayEnabled: autoplayEnabled))
     }
 
     private func perform(_ advance: PlaybackQueueState.Advance) {
@@ -2077,11 +2226,13 @@ final class AudioPlayerManager {
             beginTrackTransitionBackgroundTask()
         #endif
         switch advance {
-        case .restartOnce(let first):
-            repeatOnceRemaining = false
-            play(song: first)
+        case .replayCurrent(let song):
+            // The replay spends Repeat Once, so this play-through ends into
+            // the next song as usual. A replay is not a new listen either.
+            if repeatMode == .one { repeatMode = .off }
+            play(song: song, context: [], resetTransitionVolume: true, reportsPlayCount: false)
         case .play(let song):
-            play(song: song)
+            play(song: song, resetTransitionVolume: true)
         case .autoplay:
             fetchAutoplaySongs()
         case .stop:
@@ -2098,32 +2249,55 @@ final class AudioPlayerManager {
     }
 
     func playPrevious() {
+        if WatchSessionPublisher.shared.routeToWatch(.previous) { return }
         if isRadioMode { return }
         guard let previous = queueState.previous(before: currentSong, elapsed: playbackTime) else {
             seek(to: 0)
             return
         }
-        play(song: previous)
+        play(song: previous, resetTransitionVolume: true)
     }
 
     func toggleRepeat() {
+        if WatchSessionPublisher.shared.routeToWatch(.repeatMode) { return }
+        let nextBefore = queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         repeatMode = repeatMode.next()
+        // Reconcile any prepared transition when the next repeat outcome changes.
+        if !transitionCoordinator.state.isCrossfading,
+           queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore
+        {
+            nextSongChanged()
+        }
     }
 
     func toggleShuffle() {
+        if WatchSessionPublisher.shared.routeToWatch(.shuffle) { return }
         queueState.toggleShuffle(current: currentSong)
     }
 
     func playInOrder(song: Song, context: [Song]) {
-        repeatOnceRemaining = true
+        if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
         queueState.beginInOrder(context: context)
-        play(song: song, context: context)
+        play(song: song, context: context, resetTransitionVolume: true)
+    }
+
+    func playCompanion(song: Song, context: [Song], shuffled: Bool) {
+        if !shuffled { playInOrder(song: song, context: context); return }
+        _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
+        play(song: song, resetTransitionVolume: true)
     }
 
     func playShuffled(from songs: [Song]) {
-        repeatOnceRemaining = true
+        if !phoneAudioAllowed {
+            let shuffled = songs.shuffled()
+            if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
+            return
+        }
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
-        play(song: pick)
+        // The state already contains the shuffled queue and its original
+        // ordering. Passing that queue back as a context would shuffle it a
+        // second time and overwrite the restoration order.
+        play(song: pick, resetTransitionVolume: true)
     }
 
     /// Jumps to a song that is already up next, leaving the queue as it is.
@@ -2143,10 +2317,12 @@ final class AudioPlayerManager {
 
     func moveInUpNext(from source: IndexSet, to destination: Int) {
         queueState.moveUpNext(after: currentSong, from: source, to: destination)
+        WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
     }
 
     func removeFromUpNext(at offsets: IndexSet) {
         queueState.removeUpNext(after: currentSong, at: offsets)
+        WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
     }
 
     private func observeManagedPlayer(
@@ -2283,14 +2459,18 @@ final class AudioPlayerManager {
     }
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
+        if WatchSessionPublisher.shared.routeToWatch(.radio, song: song, streamURL: streamURL, artworkURL: artworkURL) { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.playRadio(streamURL: streamURL, song: song, artworkURL: artworkURL)
         }, replacingPending: true) else { return }
 
+        radioStreamURL = streamURL
         cancelAutoplayRequest()
         AppPerformance.event("Radio Playback Request")
         resetEasterEggWork()
-        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id
+        // A media services reset keeps the station but retires its player, so
+        // only a live player counts as already tuned in.
+        let alreadyOnSameStation = isRadioMode && currentSong?.id == song.id && radioPlayer != nil
         if alreadyOnSameStation {
             currentSong = song
             radioArtworkURL = artworkURL
@@ -2320,7 +2500,22 @@ final class AudioPlayerManager {
         startRadio(url: streamURL)
     }
 
+    /// A watch Stop command retires the stream and clears its mirrored card.
+    func stopRadioPlayback() {
+        if WatchSessionPublisher.shared.routeToWatch(.stopRadio) { return }
+        guard isRadioMode else { return }
+        stopRadioPlayer()
+        RadioController.shared.stop()
+        isRadioMode = false
+        radioArtworkURL = nil
+        currentSong = nil
+        progress = 0
+        setPlaybackState(playing: false, buffering: false, reason: "watch.stopRadio")
+        WatchSessionPublisher.shared.playbackDidChange()
+    }
+
     private func startRadio(url: URL) {
+        guard phoneAudioAllowed else { return }
         stopRadioPlayer()
         currentPlaybackURL = url
         let item = AVPlayerItem(url: url)
@@ -2362,6 +2557,7 @@ final class AudioPlayerManager {
         autoplay: Bool = true,
         resetSeparationOnCacheReady: Bool = true
     ) {
+        guard phoneAudioAllowed else { return }
         stopStreamPlayer()
         stopRadioPlayer()
         loadedEngine?.stop()
@@ -2478,6 +2674,21 @@ final class AudioPlayerManager {
         return try await remoteCache()
     }
 
+    /// One session for every remote-playback download. Connections are pooled
+    /// per session, so a session per song paid a fresh TLS handshake and
+    /// HTTP/3 race to storage on every skip, then tore the connection down
+    /// unfinished. The async `download(from:)` cancels its own task when the
+    /// caller's Task is cancelled, so nothing needs invalidating per song.
+    private nonisolated static let remotePlaybackSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 180
+        return URLSession(configuration: configuration)
+    }()
+
     // @concurrent: cache validation, file moves, and possible decompression
     // are blocking file I/O that must stay off the main actor.
     @concurrent private static func cacheRemoteAudio(
@@ -2500,18 +2711,10 @@ final class AudioPlayerManager {
         DebugLogger.log("Remote playback cache start for \(songID)", category: .cache)
         try? FileManager.default.removeItem(at: partialURL)
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.urlCache = nil
-        configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 180
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
-
-        let (temporaryURL, response) = try await session.download(from: remoteURL)
-        try Task.checkCancellation()
-        guard AudioCacheStore.acceptsAudioResponse(response) else {
+        let (temporaryURL, response) = try await remotePlaybackSession.download(from: remoteURL)
+        guard !Task.isCancelled, AudioCacheStore.acceptsAudioResponse(response) else {
+            try? FileManager.default.removeItem(at: temporaryURL)
+            try Task.checkCancellation()
             throw RemotePlaybackCacheError.invalidResponse
         }
 
@@ -2611,7 +2814,7 @@ final class AudioPlayerManager {
     }
 
     func updateRadioMetadata(song: Song, artworkURL: URL?) {
-        guard isRadioMode else { return }
+        guard phoneAudioAllowed, isRadioMode else { return }
         currentSong = song
         radioArtworkURL = artworkURL
         updateNowPlayingInfo(reloadArtwork: true)
@@ -2723,6 +2926,7 @@ final class AudioPlayerManager {
     }
 
     private func applyMLSeparationIfNeeded() {
+        guard phoneAudioAllowed else { return }
         instrumentalTask?.cancel()
         instrumentalTask = nil
         preparedStemTask?.cancel()
@@ -2897,6 +3101,7 @@ final class AudioPlayerManager {
     }
 
     private func recoverFromEngineConfigChange() {
+        guard phoneAudioAllowed else { return }
         guard isPlaying, !isRadioMode, !isStreamMode else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.recoverFromEngineConfigChange()
@@ -2910,63 +3115,137 @@ final class AudioPlayerManager {
         avEngine.seek(to: position)
     }
 
+    /// The media server restarted, so every audio object built against it is
+    /// dead. Apple's contract for `mediaServicesWereResetNotification` is to
+    /// rebuild the players and the session configuration, and not to restart
+    /// playback until the user asks. Restarting the old engine here played
+    /// through stale objects and resumed on its own.
+    ///
+    /// Everything is torn down and left paused at `lastKnownPlaybackTime`,
+    /// which the progress tick keeps current. The next Play then takes the
+    /// cold-resume path: a fresh engine, stream player or radio player.
     private func handleMediaServicesReset() {
-        DebugLogger.log("Media services were reset — reconfiguring audio", category: .playback)
+        guard phoneAudioAllowed else { return }
+        DebugLogger.log("Media services were reset — rebuilding audio, staying paused", category: .playback)
         audioSessionController.resetAfterMediaServicesLoss()
-        resumeAfterMediaServicesReset()
+        audioSessionController.configureCategory()
+        wasPlayingBeforeInterruption = false
+        cancelAutoplayRequest()
+        cancelPendingTransitionWork()
+        aiStemSwitchInFlightSongID = nil
+        // Stem work started before the reset would otherwise finish into
+        // switchActivePlaybackToStems and build a new engine on its own.
+        // Resume re-enters AI stems when an effect is on.
+        instrumentalTask?.cancel()
+        instrumentalTask = nil
+        preparedStemTask?.cancel()
+        preparedStemTask = nil
+        separationGeneration &+= 1
+        VocalSeparator.shared.cancel()
+        VocalSeparator.shared.cleanupRealtimeTemp()
+        loadedEngine?.stop()
+        loadedEngine = nil
+        stopRadioPlayer()
+        stopStreamPlayer()
+        setPlaybackState(
+            playing: false,
+            buffering: false,
+            forceNowPlayingUpdate: true,
+            reason: "mediaServicesReset"
+        )
     }
 
-    private func resumeAfterMediaServicesReset() {
-        guard isPlaying else { return }
-        guard audioSessionController.performWhenReady({ [weak self] in
-            self?.resumeAfterMediaServicesReset()
-        }, replacingPending: false) else { return }
-        if isPlaying, !isRadioMode, !isStreamMode {
-            let position = lastKnownPlaybackTime
-            avEngine.startEngineIfNeeded()
-            avEngine.seek(to: position)
+    /// iOS 27 deprecates `interruptionNotification` in favor of lifecycle
+    /// notifications: a system-sourced `didBecomeInactiveNotification` begins
+    /// an interruption, and `resumptionRecommendationNotification` ends it.
+    /// Unlike the legacy end signal, the recommendation does not depend on the
+    /// interrupting app reporting that it finished. Earlier releases only
+    /// post the legacy notification, so the app observes exactly one of the
+    /// two families, never both. Both are posted on the main queue.
+    private func observeAudioSessionInterruptions() {
+        #if compiler(>=6.4)
+        if #available(iOS 27.0, *) {
+            NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    // The app's own deactivation is not an interruption.
+                    guard let context = note.userInfo?[AVAudioSession.deactivationContextKey]
+                        as? AVAudioSession.DeactivationContext,
+                        context.source == .system
+                    else { return }
+                    self?.audioSessionInterruptionBegan()
+                }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: AVAudioSession.resumptionRecommendationNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    let context = note.userInfo?[AVAudioSession.resumptionContextKey]
+                        as? AVAudioSession.ResumptionContext
+                    self?.audioSessionInterruptionEnded(shouldResume: context?.recommendation == .shouldResume)
+                }
+                .store(in: &cancellables)
+            return
         }
+        #endif
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in self?.handleLegacyInterruption(note) }
+            .store(in: &cancellables)
     }
 
-    private func handleInterruption(_ note: Notification) {
+    private func handleLegacyInterruption(_ note: Notification) {
         guard let info = note.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue)
         else { return }
         switch type {
         case .began:
-            wasPlayingBeforeInterruption = isPlaybackRequested
-            audioSessionController.markInterrupted()
-            DebugLogger.log(
-                "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
-                category: .playback
-            )
-            if wasPlayingBeforeInterruption {
-                handlingAudioSessionInterruption = true
-                pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
-                handlingAudioSessionInterruption = false
-            }
+            audioSessionInterruptionBegan()
         case .ended:
-            sleepTimer.checkExpiry()
-            guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else {
-                wasPlayingBeforeInterruption = false
-                return
-            }
-            let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
-            DebugLogger.log(
-                "Audio session interruption ended; system wants resume=\(opts.contains(.shouldResume)), app wants resume=\(wasPlayingBeforeInterruption)",
-                category: .playback
-            )
-            if opts.contains(.shouldResume), wasPlayingBeforeInterruption {
-                resumeCurrentPlayback(source: "audioSessionInterruptionEnded")
-            }
-            wasPlayingBeforeInterruption = false
+            let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
+            audioSessionInterruptionEnded(shouldResume: opts.contains(.shouldResume))
         @unknown default:
+            guard phoneAudioAllowed else { return }
             wasPlayingBeforeInterruption = false
         }
     }
 
+    private func audioSessionInterruptionBegan() {
+        guard phoneAudioAllowed else { return }
+        let wasRequested = isPlaybackRequested
+        // A second deactivation can arrive before the first one's resumption
+        // recommendation, when playback is already paused. Keep the intent the
+        // first recorded; an explicit pause in between has already cleared it
+        // (pauseCurrentPlayback), and the end of an interruption always does.
+        wasPlayingBeforeInterruption = wasPlayingBeforeInterruption || wasRequested
+        audioSessionController.markInterrupted()
+        DebugLogger.log(
+            "Audio session interruption began; should resume later=\(wasPlayingBeforeInterruption)",
+            category: .playback
+        )
+        if wasRequested {
+            handlingAudioSessionInterruption = true
+            pauseCurrentPlayback(source: "audioSessionInterruptionBegan")
+            handlingAudioSessionInterruption = false
+        }
+    }
+
+    private func audioSessionInterruptionEnded(shouldResume: Bool) {
+        guard phoneAudioAllowed else { return }
+        sleepTimer.checkExpiry()
+        DebugLogger.log(
+            "Audio session interruption ended; system wants resume=\(shouldResume), app wants resume=\(wasPlayingBeforeInterruption)",
+            category: .playback
+        )
+        if shouldResume, wasPlayingBeforeInterruption {
+            resumeCurrentPlayback(source: "audioSessionInterruptionEnded")
+        }
+        wasPlayingBeforeInterruption = false
+    }
+
     private func handleRouteChange(_ note: Notification) {
+        guard phoneAudioAllowed else { return }
         updateRouteIcon()
         guard let info = note.userInfo,
               let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
@@ -2978,6 +3257,7 @@ final class AudioPlayerManager {
     }
 
     func updateRouteIcon() {
+        if !phoneAudioAllowed { routeName = "Apple Watch"; routeIcon = "applewatch"; return }
         let route = audioSessionController.currentRoute
         routeName = route.name
         routeIcon = route.symbol
@@ -3112,9 +3392,17 @@ final class AudioPlayerManager {
             includeExistingArtwork: !shouldReloadArtwork
         )
         if shouldReloadArtwork {
+            let artworkChanged = artworkURL != targetArt
             artworkURL = targetArt
             #if canImport(UIKit)
-                if reloadArtwork { nowPlayingArtwork = nil }
+                // Only a different image is stale. Every (re)start of the
+                // same song — a stem switch, a fallback to the main mix, a
+                // stream that finished caching — asks for a reload, and
+                // dropping the image there blinked the mini player's artwork
+                // to the placeholder while the identical picture was fetched
+                // back from the cache. The fetch below still runs and swaps
+                // in whatever it returns.
+                if artworkChanged { retireNowPlayingArtwork(replacement: targetArt) }
             #endif
             warmPlayerArtwork(for: song)
             if let targetArt {
@@ -3189,6 +3477,32 @@ final class AudioPlayerManager {
                 : nil
         )
     }
+
+    #if canImport(UIKit)
+        /// How long the outgoing cover may stand in for one still loading.
+        private static let artworkHandoffGrace: Duration = .milliseconds(600)
+
+        /// Lets the mini player go straight from the outgoing cover to the new
+        /// one, which it crossfades, instead of fading out to the placeholder
+        /// and back in. The replacement is usually in the image cache and
+        /// lands well inside the grace period. If it has not arrived by then,
+        /// or there is no artwork to load, the placeholder takes over, so an
+        /// old cover never stays on a new song.
+        private func retireNowPlayingArtwork(replacement: URL?) {
+            artworkGraceTask?.cancel()
+            artworkGraceTask = nil
+            guard let replacement, let outgoing = nowPlayingArtwork else {
+                nowPlayingArtwork = nil
+                return
+            }
+            artworkGraceTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: Self.artworkHandoffGrace)
+                guard !Task.isCancelled, let self, self.artworkURL == replacement,
+                      self.nowPlayingArtwork === outgoing else { return }
+                self.nowPlayingArtwork = nil
+            }
+        }
+    #endif
 
     private func loadArtworkAsync(from url: URL) {
         let songID = currentSong?.id
@@ -3441,7 +3755,7 @@ final class AudioPlayerManager {
                 #endif
                 return
             }
-            play(song: next, context: songs)
+            playAutoplay(song: next, context: songs)
         }
     }
 
@@ -3497,6 +3811,7 @@ final class AudioPlayerManager {
     }
 
     private func handleTransitionBegin(plan: TransitionCoordinator.TransitionPlan) {
+        guard phoneAudioAllowed else { return }
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif

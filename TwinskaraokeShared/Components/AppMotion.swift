@@ -39,7 +39,16 @@ enum DisplayRefreshRate {
 /// pauses and disappearances. Decorative `TimelineView` animations read their
 /// elapsed time from this rather than from wall-clock `context.date`, so a
 /// paused effect resumes where it stopped instead of jumping forward.
-nonisolated struct ActiveAnimationClock {
+///
+/// A class, held in `@State`, so starting it is a write to the object rather
+/// than to the view's state. As a struct, a view inserted while its effect was
+/// already meant to run — the equalizer in the row of a song that starts while
+/// another is playing, a backdrop whose artwork arrives mid-song — started the
+/// clock in the update that inserted it, SwiftUI dropped that state write, and
+/// the effect sat frozen at its first frame until something toggled it again.
+/// Nothing reads the clock outside a `TimelineView` tick, so it needs no
+/// observation of its own.
+nonisolated final class ActiveAnimationClock {
     private var accumulated: TimeInterval = 0
     private var activeSince: Date?
 
@@ -47,7 +56,7 @@ nonisolated struct ActiveAnimationClock {
         accumulated + (activeSince.map { max(0, date.timeIntervalSince($0)) } ?? 0)
     }
 
-    mutating func setRunning(_ running: Bool, at date: Date) {
+    func setRunning(_ running: Bool, at date: Date) {
         if running {
             if activeSince == nil { activeSince = date }
         } else {

@@ -4,7 +4,13 @@ import SwiftUI
 @Observable
 final class NowPlayingPresentation {
     static let shared = NowPlayingPresentation()
-    private(set) var progress: Double = 0
+
+    /// 0 with the player fully off-screen, 1 with it fully open. Written
+    /// continuously while a drag is in flight and animated to an endpoint when
+    /// one commits.
+    private(set) var progress: Double = 0 {
+        didSet { syncIsPresenting() }
+    }
     enum DragSource { case miniPlayer, fullPlayer }
     private(set) var dragSource: DragSource?
     /// Retained through settlement/cancellation. Interactive closing keeps the
@@ -33,9 +39,24 @@ final class NowPlayingPresentation {
 
     /// Whether the player is open as a matter of intent. See the type's
     /// documentation for why this is not `progress > 0.5`.
-    private(set) var isExpanded = false
-    var isPresenting: Bool {
-        isExpanded || progress > 0
+    private(set) var isExpanded = false {
+        didSet { syncIsPresenting() }
+    }
+
+    /// Whether the overlay needs to render and take touches at all. False in
+    /// the resting collapsed state, which is what keeps the player out of the
+    /// hit-testing path while someone is using the rest of the app.
+    ///
+    /// Stored, and written only when it flips, rather than computed from
+    /// `progress`. The player stays mounted while closed, and its playback-
+    /// driven parts (lyrics, the scrubber) read this to stop following the
+    /// clock off-screen. Computing it from `progress` would subscribe them to
+    /// every frame of a drag instead.
+    private(set) var isPresenting = false
+
+    private func syncIsPresenting() {
+        let presenting = isExpanded || progress > 0
+        if isPresenting != presenting { isPresenting = presenting }
     }
     var isTransitioning: Bool {
         progress > 0 && progress < 1
@@ -86,16 +107,74 @@ final class NowPlayingPresentation {
         isSettlingArtwork = true
     }
 
-    func reportBarFrame(_ frame: CGRect?) {
-        barFrame = frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }
+    /// Frames reported by views that can be replaced in place.
+    ///
+    /// The player's artwork is re-identified per song and the accessory slot
+    /// rehosts the bar. A replacement reports its frame before the outgoing
+    /// view's `onDisappear` runs (measured on the simulator: new artwork
+    /// frame, then `nil`), and `onGeometryChange` only reports again on a
+    /// change, so a plain "clear on disappear" wiped the new frame for good:
+    /// after any song change the player had no artwork frame, and opening and
+    /// closing fell back to a plain slide.
+    ///
+    /// So each reporting view instance has its own owner, the most recently
+    /// registered reporter that has a frame is the one used, and a view that
+    /// goes away removes only its own entry. A stale report from an outgoing
+    /// view, nil or not, cannot displace a newer one.
+    struct FrameReports {
+        private var owners: [String] = []
+        private var frames: [String: CGRect] = [:]
+
+        /// Bound on views that registered and never disappeared.
+        private static let capacity = 8
+
+        var current: CGRect? {
+            owners.last(where: { frames[$0] != nil }).flatMap { frames[$0] }
+        }
+
+        mutating func report(_ frame: CGRect?, from owner: String) {
+            if !owners.contains(owner) {
+                owners.append(owner)
+                if owners.count > Self.capacity {
+                    frames[owners.removeFirst()] = nil
+                }
+            }
+            frames[owner] = frame
+        }
+
+        mutating func remove(_ owner: String) {
+            owners.removeAll { $0 == owner }
+            frames[owner] = nil
+        }
+    }
+
+    @ObservationIgnored private var barFrames = FrameReports()
+    @ObservationIgnored private var playerArtworkFrames = FrameReports()
+
+    /// Reports without an owner share one entry (`""`), for callers that are
+    /// never replaced in place.
+    func reportBarFrame(_ frame: CGRect?, owner: String = "") {
+        barFrames.report(frame.flatMap { $0.width > 0 && $0.height > 0 ? $0 : nil }, from: owner)
+        barFrame = barFrames.current
+    }
+
+    func removeBarFrame(owner: String) {
+        barFrames.remove(owner)
+        barFrame = barFrames.current
     }
 
     func reportBarArtworkFrame(_ frame: CGRect?) {
         barArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
     }
 
-    func reportPlayerArtworkFrame(_ frame: CGRect?) {
-        playerArtworkFrame = frame.flatMap { $0.width > 0 ? $0 : nil }
+    func reportPlayerArtworkFrame(_ frame: CGRect?, owner: String = "") {
+        playerArtworkFrames.report(frame.flatMap { $0.width > 0 ? $0 : nil }, from: owner)
+        playerArtworkFrame = playerArtworkFrames.current
+    }
+
+    func removePlayerArtworkFrame(owner: String) {
+        playerArtworkFrames.remove(owner)
+        playerArtworkFrame = playerArtworkFrames.current
     }
 
     init() {}

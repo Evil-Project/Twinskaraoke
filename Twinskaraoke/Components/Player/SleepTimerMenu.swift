@@ -18,7 +18,7 @@ private struct SleepTimerActions: View {
         Group {
             ForEach([15, 30, 45, 60], id: \.self) { minutes in
                 Button("\(minutes) minutes") {
-                    audioManager.sleepTimer.start(minutes: minutes)
+                    audioManager.setSleepTimer(minutes: minutes)
                 }
             }
             // A live station has no end to wait for.
@@ -29,7 +29,7 @@ private struct SleepTimerActions: View {
             }
             if audioManager.sleepTimer.isActive {
                 Button("Cancel Sleep Timer", role: .destructive) {
-                    audioManager.sleepTimer.cancel()
+                    audioManager.setSleepTimer()
                 }
             }
         }

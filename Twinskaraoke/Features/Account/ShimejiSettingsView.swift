@@ -7,7 +7,7 @@ struct ShimejiSettingsView: View {
     @AppStorage("nk.shimeji.canClimb") private var canClimb: Bool = true
 
     var body: some View {
-        List {
+        InsetGroupedList {
             statusSection
             if resources.manifest != nil {
                 behaviorSection
@@ -19,9 +19,6 @@ struct ShimejiSettingsView: View {
         }
         .navigationTitle("Shimeji")
         .navigationBarTitleDisplayMode(.inline)
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
         .onAppear {
             resources.downloadIfNeeded()
         }

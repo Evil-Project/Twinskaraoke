@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -16,6 +17,7 @@ final class RadioController {
     private var pollTimer: Timer?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     private var lastMetadataSignature: String?
+    @ObservationIgnored private var widgetPublishTask: Task<Void, Never>?
     @ObservationIgnored private let loadMetadata: @MainActor () async throws -> Data
 
     init(loadMetadata: @escaping @MainActor () async throws -> Data = {
@@ -25,6 +27,15 @@ final class RadioController {
         self.loadMetadata = loadMetadata
     }
     func start() {
+        if AppRuntime.isUITestMode {
+            pollTimer?.invalidate()
+            pollTimer = nil
+            refreshTask?.cancel()
+            refreshTask = nil
+            applyUITestFixture()
+            return
+        }
+
         Task { await refresh() }
         pollTimer?.invalidate()
         let timer = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
@@ -32,6 +43,9 @@ final class RadioController {
                 await self?.refresh()
             }
         }
+        // Metadata, not playback: a second or so either way is unnoticeable,
+        // and lets the system batch the wakeup with others.
+        timer.tolerance = 1.5
         pollTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
@@ -67,6 +81,11 @@ final class RadioController {
     }
 
     func refresh() async {
+        if AppRuntime.isUITestMode {
+            applyUITestFixture()
+            return
+        }
+
         if let existing = refreshTask {
             await existing.value
             return
@@ -99,6 +118,7 @@ final class RadioController {
                 prefetchArtwork(from: np)
                 refreshErrorMessage = nil
                 lastUpdated = Date()
+                publishWidgetMetadata(np, fetchedAt: lastUpdated!)
                 if AudioPlayerManager.shared.isRadioMode, let info = np.nowPlaying?.song {
                     let signature = metadataSignature(for: info)
                     if signature != lastMetadataSignature {
@@ -133,6 +153,22 @@ final class RadioController {
         ].joined(separator: "|")
     }
 
+    private func publishWidgetMetadata(_ metadata: RadioNowPlaying, fetchedAt: Date) {
+        let snapshot = WidgetRadioSnapshot(metadata: metadata, fetchedAt: fetchedAt)
+        let previousTask = widgetPublishTask
+        widgetPublishTask = Task {
+            await previousTask?.value
+            let store = WidgetSnapshotStore()
+            let previous = store.readRadio()
+            let saved = await WidgetRadioRepository.cache(snapshot, store: store)
+            // Still persist the successful fetch timestamp on unchanged polls.
+            // Only visible metadata/artwork changes warrant a timeline reload.
+            if !saved.hasSameContent(as: previous) {
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.radio)
+            }
+        }
+    }
+
     private func prefetchArtwork(from metadata: RadioNowPlaying) {
         let urls =
             [
@@ -145,4 +181,67 @@ final class RadioController {
         ArtworkPrefetcher.shared.prefetch(urls: urls, limit: 10, reason: "radio metadata")
     }
 
+    private func applyUITestFixture() {
+        nowPlaying = Self.uiTestNowPlaying
+        refreshErrorMessage = nil
+        isRefreshing = false
+        lastUpdated = Date()
+        publishWidgetMetadata(Self.uiTestNowPlaying, fetchedAt: lastUpdated!)
+        if let info = nowPlaying?.nowPlaying?.song {
+            lastMetadataSignature = metadataSignature(for: info)
+        }
+    }
+
+    private static var uiTestNowPlaying: RadioNowPlaying {
+        RadioNowPlaying(
+            station: RadioNowPlaying.Station(
+                name: "Twinskaraoke Radio",
+                description: "Neuro 21 live from the karaoke room",
+                listenUrl: "https://radio.twinskaraoke.com/listen/neuro_21/radio.mp3"
+            ),
+            listeners: RadioNowPlaying.Listeners(total: 42, unique: 24),
+            nowPlaying: RadioNowPlaying.NowPlayingItem(
+                song: RadioNowPlaying.SongInfo(
+                    id: "ui-radio-song-1",
+                    art: nil,
+                    text: "Wake Me Up Before You Go-Go - Wham!",
+                    artist: "Wham!",
+                    title: "Wake Me Up Before You Go-Go",
+                    customFields: RadioNowPlaying.CustomFields(songID: "ui-radio-song-1")
+                )
+            ),
+            playingNext: RadioNowPlaying.NowPlayingItem(
+                song: RadioNowPlaying.SongInfo(
+                    id: "ui-radio-song-2",
+                    art: nil,
+                    text: "Hero - Mili",
+                    artist: "Mili",
+                    title: "Hero",
+                    customFields: RadioNowPlaying.CustomFields(songID: "ui-radio-song-2")
+                )
+            ),
+            songHistory: [
+                RadioNowPlaying.HistoryItem(
+                    song: RadioNowPlaying.SongInfo(
+                        id: "ui-radio-song-3",
+                        art: nil,
+                        text: "Cure For Me - AURORA",
+                        artist: "AURORA",
+                        title: "Cure For Me",
+                        customFields: RadioNowPlaying.CustomFields(songID: "ui-radio-song-3")
+                    )
+                ),
+                RadioNowPlaying.HistoryItem(
+                    song: RadioNowPlaying.SongInfo(
+                        id: "ui-radio-song-4",
+                        art: nil,
+                        text: "Bad Apple!! - Nomico",
+                        artist: "Nomico",
+                        title: "Bad Apple!!",
+                        customFields: RadioNowPlaying.CustomFields(songID: "ui-radio-song-4")
+                    )
+                ),
+            ]
+        )
+    }
 }

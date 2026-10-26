@@ -46,20 +46,22 @@ struct PlayerArtworkView: View {
                 #endif
             }
             .frame(width: size, height: size)
-            .onGeometryChange(for: CGRect.self) { proxy in
-                // The expanded destination must stay fixed while the entire
-                // player moves. A global frame includes its animated offset.
-                proxy.frame(in: .named("FullPlayerSurface"))
-            } action: { frame in
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame)
-            }
-            .onDisappear {
-                NowPlayingPresentation.shared.reportPlayerArtworkFrame(nil)
-            }
+            // The morph target, reported from the artwork itself rather than
+            // from the body: the body carries `.frame(maxWidth: .infinity)`, so
+            // its frame is the full column width, and `size` is often smaller —
+            // the flying artwork was landing at the column's width and only
+            // snapping down to the real one when the morph ended. Reported from
+            // here it covers all five call sites (compact, both iPad layouts,
+            // radio), and only one is ever on screen.
+            //
+            // Inside the `.id(song.id)` below, so every song's artwork, and
+            // every instance, reports under its own owner.
+            .modifier(PlayerArtworkFrameReporter())
             .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)
             .scaleEffect(artworkScale)
             .amShadow(audioManager.isPlaying ? AM.Shadow.heroPlaying : AM.Shadow.heroIdle)
+            .modifier(ThemedArtworkGlow(isPlaying: audioManager.isPlaying))
             .animation(artworkPlaybackAnimation, value: audioManager.isPlaying)
             if audioManager.isBuffering {
                 bufferingOverlay
@@ -96,6 +98,45 @@ struct PlayerArtworkView: View {
 
     private var bufferingTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
+    }
+}
+
+/// A website theme rings the artwork in its primary, as the site does its
+/// covers (`.song-cover-placeholder`: `0 0 40px primary/0.3`, and `/0.2` on
+/// `.playlist-main-cover`): brighter while playing, softer while paused.
+/// Without a theme it adds nothing, not even an empty shadow pass.
+private struct ThemedArtworkGlow: ViewModifier {
+    let isPlaying: Bool
+
+    func body(content: Content) -> some View {
+        if let primary = AppThemeStore.shared.palette?.primary {
+            content.shadow(color: primary.opacity(isPlaying ? 0.3 : 0.2), radius: 20)
+        } else {
+            content
+        }
+    }
+}
+
+/// Reports the artwork's frame as the morph target under an owner unique to
+/// this view instance; see `NowPlayingPresentation.FrameReports`.
+private struct PlayerArtworkFrameReporter: ViewModifier {
+    @State private var owner = UUID().uuidString
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { proxy in
+                // The expanded destination must stay fixed while the entire
+                // player moves. A global frame includes its animated offset.
+                proxy.frame(in: .named("FullPlayerSurface"))
+            } action: { frame in
+                NowPlayingPresentation.shared.reportPlayerArtworkFrame(frame, owner: owner)
+            }
+            // The artwork is not always on screen — the lyrics surface
+            // replaces it — and a frame left behind after it goes would aim
+            // the morph at somewhere the artwork no longer is.
+            .onDisappear {
+                NowPlayingPresentation.shared.removePlayerArtworkFrame(owner: owner)
+            }
     }
 }
 

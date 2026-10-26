@@ -14,6 +14,10 @@ final class RecentlyPlayedStore {
         load()
     }
 
+    static func resetPersistedHistoryForUITesting() {
+        UserDefaults.standard.removeObject(forKey: Self.storageKey)
+    }
+
     func record(_ playlist: Playlist) {
         var next = playlists.filter { $0.id != playlist.id }
         next.insert(playlist, at: 0)
@@ -35,6 +39,9 @@ final class RecentlyPlayedStore {
     }
 
     private func save() {
+        // Persist lightweight metadata only: songListDTOs embeds full song
+        // arrays (~1MB for a 900-song playlist) and stays in memory. load()
+        // still decodes older blobs that include the songs.
         let stripped = playlists.map {
             Playlist(
                 id: $0.id,

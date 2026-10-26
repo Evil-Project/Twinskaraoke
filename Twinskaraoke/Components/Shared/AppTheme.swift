@@ -5,33 +5,16 @@ import SwiftUI
     import UIKit
 #endif
 
-enum AppearanceMode: String, CaseIterable {
-    case system, light, dark, nwero
-    var label: String {
-        switch self {
-        case .system: "System"
-        case .light: "Light"
-        case .dark: "Dark"
-        case .nwero: "Nwero"
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: nil
-        case .light: .light
-        case .dark: .dark
-        case .nwero: .dark
-        }
-    }
-
-    var usesAuroraBackground: Bool {
-        self == .nwero
-    }
-    var isExperimental: Bool {
-        self == .nwero
+extension AppearanceMode {
+    var palette: AppThemePalette? {
+        let definition = SharedThemeDefinition.builtIn(self)
+        return definition.usesPalette ? AppThemePalette(definition: definition) : nil
     }
 }
+
+/// A screen surface driven by the observed shared theme. Aurora themes draw
+/// an opaque backdrop in each screen so navigation transitions composite
+/// normally; other themes use the standard or grouped background token.
 struct ScreenBackgroundFill: View {
     enum Style {
         case standard
@@ -40,10 +23,8 @@ struct ScreenBackgroundFill: View {
 
     var style: Style = .standard
 
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
-
     private var isNwero: Bool {
-        (AppearanceMode(rawValue: appearanceMode) ?? .dark).usesAuroraBackground
+        AppThemeStore.shared.definition.backdrop == .aurora
     }
 
     var body: some View {
@@ -61,142 +42,47 @@ struct ScreenBackgroundFill: View {
 }
 
 nonisolated extension Color {
-    #if canImport(UIKit)
-        private static func adaptive(light: UIColor, dark: UIColor) -> Color {
-            Color(
-                uiColor: UIColor { trait in
-                    trait.userInterfaceStyle == .dark ? dark : light
-                }
-            )
-        }
-    #endif
+    private static let systemDefinition = SharedThemeDefinition.builtIn(.system)
 
-    #if canImport(UIKit)
-        static let appBackground = adaptive(
-            light: UIColor.systemBackground,
-            dark: UIColor.black
-        )
-        static let appSecondaryBackground = adaptive(
-            light: UIColor.secondarySystemBackground,
-            dark: UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1)
-        )
-        static let appGroupedBackground = adaptive(
-            light: UIColor.systemGroupedBackground,
-            dark: UIColor.black
-        )
-        static let appSheetGradientTop = adaptive(
-            light: UIColor.systemBackground,
-            dark: UIColor(red: 0.04, green: 0.04, blue: 0.05, alpha: 1)
-        )
-        static let appSheetGradientBottom = adaptive(
-            light: UIColor.secondarySystemBackground,
-            dark: .black
-        )
-        static let appGlassFill = adaptive(
-            light: UIColor.white.withAlphaComponent(0.78),
-            dark: UIColor.white.withAlphaComponent(0.12)
-        )
-        static let appGlassFillStrong = adaptive(
-            light: UIColor.white.withAlphaComponent(0.95),
-            dark: UIColor.white.withAlphaComponent(0.18)
-        )
-        static let appGlassForeground = adaptive(
-            light: UIColor.label.withAlphaComponent(0.85),
-            dark: UIColor.white.withAlphaComponent(0.85)
-        )
-        static let appControlActiveFill = adaptive(
-            light: UIColor.label,
-            dark: .white
-        )
-        static let appControlActiveForeground = adaptive(
-            light: .white,
-            dark: .black
-        )
-        static let appControlInactiveFill = adaptive(
-            light: UIColor.black.withAlphaComponent(0.08),
-            dark: UIColor.white.withAlphaComponent(0.16)
-        )
-        static let appPlayerActionFill = adaptive(
-            light: UIColor.black.withAlphaComponent(0.12),
-            dark: UIColor.white.withAlphaComponent(0.10)
-        )
-        static let appArtworkOverlay = adaptive(
-            light: UIColor.white.withAlphaComponent(0.45),
-            dark: UIColor.black.withAlphaComponent(0.40)
-        )
-        static let appDivider = adaptive(
-            light: UIColor.separator.withAlphaComponent(0.42),
-            dark: UIColor.white.withAlphaComponent(0.11)
-        )
-        static let appShadow = adaptive(
-            light: UIColor.black.withAlphaComponent(0.16),
-            dark: UIColor.black.withAlphaComponent(0.36)
-        )
-        static let appHeroShadowIdle = adaptive(
-            light: UIColor.black.withAlphaComponent(0.14),
-            dark: UIColor.black.withAlphaComponent(0.22)
-        )
-        static let appHeroShadowPlaying = adaptive(
-            light: UIColor.black.withAlphaComponent(0.20),
-            dark: UIColor.black.withAlphaComponent(0.45)
-        )
-        static let appAmbientWash = adaptive(
-            light: UIColor.white.withAlphaComponent(0.24),
-            dark: UIColor.black.withAlphaComponent(0.28)
-        )
-        static let appAmbientVignetteTop = adaptive(
-            light: UIColor.white.withAlphaComponent(0.34),
-            dark: UIColor.black.withAlphaComponent(0.52)
-        )
-        static let appAmbientVignetteMid = adaptive(
-            light: UIColor.white.withAlphaComponent(0.10),
-            dark: UIColor.black.withAlphaComponent(0.18)
-        )
-        static let appAmbientVignetteBottom = adaptive(
-            light: UIColor.white.withAlphaComponent(0.40),
-            dark: UIColor.black.withAlphaComponent(0.58)
-        )
-        static let appAmbientRadial = adaptive(
-            light: UIColor.white.withAlphaComponent(0.08),
-            dark: UIColor.black.withAlphaComponent(0.14)
-        )
-        static let appFavoritesTileBackground = adaptive(
-            light: UIColor(red: 0.98, green: 0.98, blue: 1.0, alpha: 1),
-            dark: UIColor.secondarySystemBackground
-        )
-        static let appPlaceholderPrimary = adaptive(
-            light: UIColor(red: 0.86, green: 0.87, blue: 0.90, alpha: 1),
-            dark: UIColor(red: 0.12, green: 0.12, blue: 0.14, alpha: 1)
-        )
-        static let appPlaceholderSecondary = adaptive(
-            light: UIColor(red: 0.95, green: 0.95, blue: 0.96, alpha: 1),
-            dark: UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)
-        )
-        static let appPlaceholderTertiary = adaptive(
-            light: UIColor(red: 0.78, green: 0.78, blue: 0.82, alpha: 1),
-            dark: UIColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1)
-        )
-        static let appPlaceholderQuaternary = adaptive(
-            light: UIColor(red: 0.72, green: 0.72, blue: 0.76, alpha: 1),
-            dark: UIColor(red: 0.04, green: 0.04, blue: 0.05, alpha: 1)
-        )
-        static let appPlaceholderSheen = adaptive(
-            light: UIColor(red: 0.62, green: 0.63, blue: 0.67, alpha: 0.18),
-            dark: UIColor(red: 0.28, green: 0.28, blue: 0.32, alpha: 0.36)
-        )
-        static let appPlaceholderSheenSoft = adaptive(
-            light: UIColor(red: 0.62, green: 0.63, blue: 0.67, alpha: 0.10),
-            dark: UIColor(red: 0.24, green: 0.24, blue: 0.28, alpha: 0.22)
-        )
-        static let appToolbarPillBackground = adaptive(
-            light: UIColor.black.withAlphaComponent(0.82),
-            dark: UIColor.white.withAlphaComponent(0.12)
-        )
-        static let appToolbarAvatarBackground = adaptive(
-            light: UIColor.black.withAlphaComponent(0.72),
-            dark: UIColor.white.withAlphaComponent(0.12)
-        )
-    #endif
+    private static func adaptive(_ token: ThemeToken) -> Color {
+        Color(uiColor: UIColor { trait in
+            let variant = systemDefinition.variant(for: trait.userInterfaceStyle == .dark ? .dark : .light)
+            let rgba = variant[token]
+            return UIColor(red: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha)
+        })
+    }
+    static let standardBackground = adaptive(.standardBackground)
+    static let standardSecondaryBackground = adaptive(.standardSecondaryBackground)
+    static let standardGroupedBackground = adaptive(.standardGroupedBackground)
+    static let standardSheetGradientTop = adaptive(.standardSheetGradientTop)
+    static let standardSheetGradientBottom = adaptive(.standardSheetGradientBottom)
+    static let appGlassFill = adaptive(.appGlassFill)
+    static let appGlassFillStrong = adaptive(.appGlassFillStrong)
+    static let appGlassForeground = adaptive(.appGlassForeground)
+    static let appControlActiveFill = adaptive(.appControlActiveFill)
+    static let appControlActiveForeground = adaptive(.appControlActiveForeground)
+    static let appControlInactiveFill = adaptive(.appControlInactiveFill)
+    static let standardPlayerActionFill = adaptive(.standardPlayerActionFill)
+    static let appArtworkOverlay = adaptive(.appArtworkOverlay)
+    static let appDivider = adaptive(.appDivider)
+    static let appShadow = adaptive(.appShadow)
+    static let appHeroShadowIdle = adaptive(.appHeroShadowIdle)
+    static let appHeroShadowPlaying = adaptive(.appHeroShadowPlaying)
+    static let appAmbientWash = adaptive(.appAmbientWash)
+    static let appAmbientVignetteTop = adaptive(.appAmbientVignetteTop)
+    static let appAmbientVignetteMid = adaptive(.appAmbientVignetteMid)
+    static let appAmbientVignetteBottom = adaptive(.appAmbientVignetteBottom)
+    static let appAmbientRadial = adaptive(.appAmbientRadial)
+    static let appFavoritesTileBackground = adaptive(.appFavoritesTileBackground)
+    static let appPlaceholderPrimary = adaptive(.appPlaceholderPrimary)
+    static let appPlaceholderSecondary = adaptive(.appPlaceholderSecondary)
+    static let appPlaceholderTertiary = adaptive(.appPlaceholderTertiary)
+    static let appPlaceholderQuaternary = adaptive(.appPlaceholderQuaternary)
+    static let appPlaceholderSheen = adaptive(.appPlaceholderSheen)
+    static let appPlaceholderSheenSoft = adaptive(.appPlaceholderSheenSoft)
+    static let appToolbarPillBackground = adaptive(.appToolbarPillBackground)
+    static let appToolbarAvatarBackground = adaptive(.appToolbarAvatarBackground)
+
 }
 
 enum AM {
@@ -286,10 +172,6 @@ enum AM {
             let minimum = compact ? 118.0 : 148.0
             let maximum = compact ? 152.0 : 190.0
             return min(max(rawWidth, minimum), maximum)
-        }
-
-        static func playlistShelfTileWidth(for availableWidth: CGFloat) -> CGFloat {
-            min(max(availableWidth * 0.42, 148), Spacing.shelfTile)
         }
 
         static func adaptiveGridColumns(
@@ -405,6 +287,30 @@ extension View {
     }
 }
 
+/// The inset-grouped `List` the settings-style screens share: Settings,
+/// Account, About and the screens under them.
+///
+/// Its rows would otherwise draw on the system's grey, which sits wrong on a
+/// website theme's tinted page, so those themes give rows their own
+/// `--*-bg-secondary`. Every other theme passes `nil`, which keeps the system
+/// row fill. The `Group` is what carries it: `listRowBackground` on the `List`
+/// itself never reaches the rows, while a `Group` hands it to every section.
+struct InsetGroupedList<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        List {
+            Group {
+                content
+            }
+            .listRowBackground(AppThemeStore.shared.palette?.secondaryBackground)
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .groupedScreenBackground()
+    }
+}
+
 extension View {
     /// Reports this view's width into `width`, ignoring sub-point jitter.
     ///
@@ -444,7 +350,10 @@ struct AccountToolbarButton: View {
 
     var body: some View {
         NavigationLink {
-            AccountView()
+            // Every tab root carries this button. Built eagerly, each toolbar
+            // pass minted an AuthManager, which reads the session and
+            // registers three notification observers, only to discard it.
+            DeferredView { AccountView() }
         } label: {
             if let url = avatarURL {
                 ToolbarAvatarLabel(url: url)

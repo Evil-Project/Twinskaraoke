@@ -10,6 +10,7 @@ final class SleepTimer {
     /// Music's "When Current Song Ends". Playback asks `consumeEndOfSong()`
     /// when a song finishes by itself.
     private(set) var endsWithCurrentSong = false
+    @ObservationIgnored private var isAuthoritative = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let onExpiry: () -> Void
 
@@ -24,12 +25,13 @@ final class SleepTimer {
     func startEndOfSong() {
         cancel()
         endsWithCurrentSong = true
+        isAuthoritative = true
     }
 
     /// Whether a song that just ended should stop playback here. Disarms the
     /// timer when it does, so the stop happens once.
     func consumeEndOfSong() -> Bool {
-        guard endsWithCurrentSong else { return false }
+        guard isAuthoritative, endsWithCurrentSong else { return false }
         endsWithCurrentSong = false
         return true
     }
@@ -37,8 +39,14 @@ final class SleepTimer {
     func start(minutes: Int) {
         guard minutes > 0 else { return }
         cancel()
-        let duration = TimeInterval(minutes) * 60
-        deadline = Date().addingTimeInterval(duration)
+        start(deadline: Date().addingTimeInterval(TimeInterval(minutes) * 60))
+    }
+
+    func start(deadline: Date) {
+        cancel()
+        self.deadline = deadline
+        isAuthoritative = true
+        let duration = max(0, deadline.timeIntervalSinceNow)
         task = Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(duration))
@@ -49,16 +57,24 @@ final class SleepTimer {
         }
     }
 
+    /// A companion displays the deadline but never runs a second expiry task.
+    func mirror(deadline: Date?, endsWithCurrentSong: Bool) {
+        cancel()
+        self.deadline = deadline
+        self.endsWithCurrentSong = endsWithCurrentSong
+    }
+
     func cancel() {
         task?.cancel()
         task = nil
+        isAuthoritative = false
         deadline = nil
         endsWithCurrentSong = false
     }
 
     /// Reconcile after suspension as well as the scheduled background expiry.
     func checkExpiry(now: Date = .now) {
-        guard let deadline, now >= deadline else { return }
+        guard isAuthoritative, let deadline, now >= deadline else { return }
         expire()
     }
 

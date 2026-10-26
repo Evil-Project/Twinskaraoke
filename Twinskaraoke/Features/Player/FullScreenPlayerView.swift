@@ -195,7 +195,7 @@ private struct PlayerLayoutMetrics {
     }
 
     var primaryControlSize: CGFloat {
-        isCompactHeight ? 52 : 56
+        isCompactHeight ? 56 : 60
     }
 
     var lyricsArtworkSize: CGFloat {
@@ -213,10 +213,23 @@ private struct PlayerLayoutMetrics {
         containerSize.width > 0 && containerSize.height > 0
     }
 }
-private let playerTitleButtonBackground = Color.appPlayerActionFill
 
-private func playerTitleIconColor(isActive _: Bool = false) -> Color {
-    Color.primary
+/// The soft filled circle the player's actions sit on, Apple Music's treatment
+/// for favorite, more and the queue-mode badge on Playing Next. It is a theme
+/// token rather than a literal grey here so the three title surfaces and the
+/// badge in ``PlayerBottomToolbar`` cannot drift apart.
+///
+/// Computed, not a `let`: a global `let` is initialised once, on first use,
+/// and would keep whichever theme was active then.
+private var playerTitleButtonBackground: Color {
+    Color.appPlayerActionFill
+}
+
+/// A website theme lights an active action — a saved favourite — in its
+/// primary. Every other theme keeps the glyph white either way.
+private func playerTitleIconColor(isActive: Bool = false) -> Color {
+    guard isActive, let primary = AppThemeStore.shared.palette?.primary else { return .primary }
+    return primary
 }
 private let playerTitleButtonChromeInset: CGFloat = 10
 
@@ -954,6 +967,7 @@ struct FullScreenPlayerView: View {
         let metrics: PlayerLayoutMetrics
         @Environment(AudioPlayerManager.self) private var audioManager
         private let clock = PlaybackClock.shared
+        private let presentation = NowPlayingPresentation.shared
         @Environment(\.appReduceMotion) private var reduceMotion
 
         private func formattedTime(_ seconds: Double) -> String {
@@ -966,16 +980,25 @@ struct FullScreenPlayerView: View {
             @Bindable var audioManager = audioManager
             let duration = max(audioManager.playbackDuration, 0)
             let elapsed = min(max(audioManager.playbackTime, 0), duration)
+            // The player stays mounted while it is closed, so this would
+            // otherwise redraw the scrubber and both timecodes on every
+            // playback tick behind the rest of the app. Off screen it shows a
+            // still taken from the player itself — `playbackTime` is not
+            // observed — and only an open player follows the clock.
+            let isLive = presentation.isPresenting
+            let progress: Binding<Double> = isLive
+                ? $clock.progress
+                : .constant(duration > 0 ? elapsed / duration : 0)
             return VStack(spacing: 0) {
                 AppleMusicProgressBar(
-                    progress: $clock.progress,
+                    progress: progress,
                     isScrubbing: $audioManager.isEditingProgress,
                     onSeekEnd: { fraction in audioManager.seek(to: fraction) },
                     accessibilityLabel: String(localized: "Playback position"),
                     accessibilityValueText:
                     String(localized: "\(formattedTime(elapsed)) elapsed, \(formattedTime(max(0, duration - elapsed))) remaining"),
                     accessibilityHint: String(localized: "Drag or swipe up and down to seek."),
-                    scrubValueText: formattedTime(duration * clock.progress)
+                    scrubValueText: isLive ? formattedTime(duration * clock.progress) : nil
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.progressTopPadding)
@@ -1016,10 +1039,24 @@ struct FullScreenPlayerView: View {
         let onSeek: (TimeInterval) -> Void
         var onRetry: (() -> Void)?
         private let clock = PlaybackClock.shared
+        private let presentation = NowPlayingPresentation.shared
         @Environment(AudioPlayerManager.self) private var audioManager
 
         var body: some View {
-            let _ = clock.progress
+            // This read is load-bearing. `audioManager.playbackTime` is a
+            // computed property over the AVPlayer, so it registers nothing with
+            // observation — reading `clock.progress`, which ticks with playback,
+            // is what re-evaluates this view and advances the highlighted line.
+            // Under @ObservedObject merely holding `clock` subscribed the view;
+            // @Observable only tracks properties that are actually read.
+            //
+            // Only while the player is on screen, though: it stays mounted
+            // when closed, and following the clock there re-rendered the
+            // lyrics, and animated them to each new line, behind the rest of
+            // the app. `isPresenting` flips once per open or close, not per
+            // frame of a drag.
+            let isLive = presentation.isPresenting
+            let _ = isLive ? clock.progress : 0
             LyricsView(
                 lyrics: lyrics,
                 currentTime: audioManager.playbackTime,
@@ -1028,7 +1065,8 @@ struct FullScreenPlayerView: View {
                 didFail: didFail,
                 hasNoLyrics: hasNoLyrics,
                 onSeek: onSeek,
-                onRetry: onRetry
+                onRetry: onRetry,
+                isLive: isLive
             )
         }
     }
@@ -1061,8 +1099,7 @@ struct FullScreenPlayerView: View {
                         Image(systemName: audioManager.isPlaying ? "pause.fill" : "play.fill")
                     }
                 }
-                .font(.system(size: primarySize, weight: .bold))
-                .foregroundStyle(.primary)
+                .modifier(ThemedPlayButtonFace(glyphSize: primarySize, rowHeight: rowHeight))
                 .frame(maxWidth: .infinity)
                 .frame(height: rowHeight)
             }
@@ -1081,6 +1118,37 @@ struct FullScreenPlayerView: View {
             .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
             .accessibilityLabel("Next track")
             .accessibilityHint("Skips to the next song.")
+        }
+    }
+
+    /// The play/pause glyph. A website theme sets it on the site's gradient
+    /// circle (`.fullscreen-play-btn`: primary into accent, 135°) with the
+    /// glow the site gives its play buttons (`.play-button`:
+    /// `0 8px 24px primary/0.5`). The circle grows with the glyph, about 7%
+    /// past the transport row, and overhangs it rather than growing it, so
+    /// the side buttons stay put.
+    private struct ThemedPlayButtonFace: ViewModifier {
+        let glyphSize: CGFloat
+        let rowHeight: CGFloat
+
+        private var diameter: CGFloat { rowHeight * 1.07 }
+
+        func body(content: Content) -> some View {
+            if let palette = AppThemeStore.shared.palette {
+                content
+                    .font(.system(size: diameter * 0.46, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: diameter, height: diameter)
+                    .background {
+                        Circle()
+                            .fill(palette.gradient)
+                            .shadow(color: palette.primary.opacity(0.5), radius: 12, y: 8)
+                    }
+            } else {
+                content
+                    .font(.system(size: glyphSize, weight: .bold))
+                    .foregroundStyle(.primary)
+            }
         }
     }
 

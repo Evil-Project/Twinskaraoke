@@ -141,7 +141,6 @@ struct SearchView: View {
         }
         .navigationTitle("Search")
         .animation(stateAnimation, value: viewModel.searchText)
-        .animation(stateAnimation, value: audioManager.currentSong?.id)
         .animation(stateAnimation, value: viewModel.results.count)
         .animation(stateAnimation, value: viewModel.isLoading)
         .navigationDestination(isPresented: $showPlayer) {

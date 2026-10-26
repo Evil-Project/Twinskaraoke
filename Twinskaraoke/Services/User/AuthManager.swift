@@ -3,22 +3,8 @@ import CryptoKit
 import Foundation
 import Security
 import Observation
+import SwiftUI
 import UIKit
-
-@MainActor
-private final class WebAuthenticationPresentationContextProvider:
-    NSObject, ASWebAuthenticationPresentationContextProviding
-{
-    private let anchor: ASPresentationAnchor
-
-    init(anchor: ASPresentationAnchor) {
-        self.anchor = anchor
-    }
-
-    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        anchor
-    }
-}
 
 @MainActor
 @Observable
@@ -31,13 +17,11 @@ final class AuthManager: NSObject {
     private(set) var errorMessage: String?
     private(set) var authToken: String?
     private let defaults = UserDefaults.standard
-    private var webAuthenticationSession: ASWebAuthenticationSession?
-    private var webAuthenticationContextProvider: WebAuthenticationPresentationContextProvider?
+    @ObservationIgnored private var webAuthenticationTask: Task<URL, Error>?
     private var sessionExpiredObserver: NSObjectProtocol?
     private var restorationObservers: [NSObjectProtocol] = []
     private(set) var isRestoringSession = true
     private var loginGeneration = UUID()
-    @ObservationIgnored private var webAuthenticationContinuation: CheckedContinuation<URL, Error>?
     @ObservationIgnored private let requestData: @MainActor (URLRequest) async throws -> (Data, URLResponse)
 
     private enum K {
@@ -90,8 +74,10 @@ final class AuthManager: NSObject {
             forName: .karaokeSessionExpired,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { @Sendable [weak self] note in
+            let expiredToken = note.userInfo?["requestToken"] as? String
             Task { @MainActor [weak self] in
+                guard let expiredToken, CredentialStore.token == expiredToken else { return }
                 self?.handleExpiredSession()
             }
         }
@@ -223,16 +209,13 @@ final class AuthManager: NSObject {
         }
     }
 
-    func loginWithDiscord() async {
-        guard !isLoading, webAuthenticationSession == nil else { return }
+    func loginWithDiscord(using webAuthentication: WebAuthenticationSession) async {
+        guard !isLoading, webAuthenticationTask == nil else { return }
         isLoading = true
         let generation = UUID()
         loginGeneration = generation
         errorMessage = nil
         do {
-            guard let presentationAnchor = activePresentationAnchor() else {
-                throw AuthError.invalidCallback
-            }
             let verifier = makeVerifier()
             let challenge = makeChallenge(verifier)
             let state = makeVerifier()
@@ -246,42 +229,30 @@ final class AuthManager: NSObject {
                 .init(name: "code_challenge_method", value: "S256"),
                 .init(name: "state", value: state),
             ]
+            let authorizeURL = comps.url!
+            // Held separately so logout can cancel the browser even though the
+            // caller's task is not ours to cancel.
+            let authTask = Task { @MainActor in
+                do {
+                    return try await webAuthentication.authenticate(
+                        using: authorizeURL,
+                        callback: .customScheme("neurokaraoke"),
+                        preferredBrowserSession: .ephemeral,
+                        additionalHeaderFields: [:]
+                    )
+                } catch {
+                    throw Self.mappedWebAuthenticationError(error)
+                }
+            }
+            webAuthenticationTask = authTask
             let callbackURL = try await withTaskCancellationHandler {
-                try Task.checkCancellation()
-                return try await withCheckedThrowingContinuation { continuation in
-                    webAuthenticationContinuation = continuation
-                    let session = ASWebAuthenticationSession(
-                        url: comps.url!,
-                        callback: .customScheme("neurokaraoke")
-                    ) { [weak self] url, error in
-                        Task { @MainActor [weak self] in
-                            guard let self, loginGeneration == generation else { return }
-                            if let error {
-                                finishWebAuthentication(.failure(Self.mappedWebAuthenticationError(error)))
-                            } else if let url {
-                                finishWebAuthentication(.success(url))
-                            } else {
-                                finishWebAuthentication(.failure(AuthError.cancelled))
-                            }
-                        }
-                    }
-                    let contextProvider = WebAuthenticationPresentationContextProvider(anchor: presentationAnchor)
-                    session.presentationContextProvider = contextProvider
-                    session.prefersEphemeralWebBrowserSession = true
-                    webAuthenticationContextProvider = contextProvider
-                    webAuthenticationSession = session
-                    if !session.start() {
-                        finishWebAuthentication(.failure(AuthError.invalidCallback))
-                    }
-                }
+                try await authTask.value
             } onCancel: {
-                Task { @MainActor [weak self] in
-                    guard let self, loginGeneration == generation else { return }
-                    cancelWebAuthentication()
-                }
+                authTask.cancel()
             }
             try Task.checkCancellation()
             guard loginGeneration == generation else { return }
+            webAuthenticationTask = nil
             guard
                 let cbComps = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
                 cbComps.queryItems?.first(where: { $0.name == "state" })?.value == state,
@@ -304,8 +275,7 @@ final class AuthManager: NSObject {
             )
         } catch {
             guard loginGeneration == generation else { return }
-            webAuthenticationSession = nil
-            webAuthenticationContextProvider = nil
+            webAuthenticationTask = nil
             isLoading = false
             if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
             if case AuthError.cancelled = error { return }
@@ -313,19 +283,9 @@ final class AuthManager: NSObject {
         }
     }
 
-    /// Complete exactly once, including programmatic cancellation where the
-    /// browser is not required to invoke its user-completion callback.
-    private func finishWebAuthentication(_ result: Result<URL, Error>) {
-        let continuation = webAuthenticationContinuation
-        webAuthenticationContinuation = nil
-        webAuthenticationSession = nil
-        webAuthenticationContextProvider = nil
-        continuation?.resume(with: result)
-    }
-
     private func cancelWebAuthentication() {
-        webAuthenticationSession?.cancel()
-        finishWebAuthentication(.failure(CancellationError()))
+        webAuthenticationTask?.cancel()
+        webAuthenticationTask = nil
     }
 
     private static let requestTimeout: TimeInterval = 15
@@ -589,17 +549,6 @@ final class AuthManager: NSObject {
             }
         }
         return error.localizedDescription
-    }
-
-    private func activePresentationAnchor() -> ASPresentationAnchor? {
-        let scenes = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-        let windows = scenes.flatMap(\.windows)
-        if let window = windows.first(where: \.isKeyWindow) ?? windows.first {
-            return window
-        }
-        guard let scene = scenes.first else { return nil }
-        return ASPresentationAnchor(windowScene: scene)
     }
 
     enum AuthError: Error {

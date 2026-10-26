@@ -8,6 +8,15 @@ import Testing
 @MainActor
 struct SystemIntentPlaybackTests {
     @Test func intentsControlActualCachedAudioAndPublishSnapshots() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = WidgetSnapshotStore(directory: directory)
+        let publisher = WidgetSnapshotPublisher.shared
+        let previousStore = publisher.store
+        publisher.store = store
+        defer {
+            publisher.store = previousStore
+            try? FileManager.default.removeItem(at: directory)
+        }
         let player = AudioPlayerManager.shared
         let previousAI = player.aiEnabled
         player.aiEnabled = false
@@ -23,10 +32,10 @@ struct SystemIntentPlaybackTests {
         #expect(player.isPlaying)
         _ = try await IOSTogglePlaybackIntent().perform()
         #expect(!player.isPlaying)
-        #expect(!WidgetSnapshotStore().readPlayback().isPlaying)
+        #expect(!store.readPlayback().isPlaying)
         _ = try await IOSTogglePlaybackIntent().perform()
         #expect(player.isPlaying)
-        #expect(WidgetSnapshotStore().readPlayback().isPlaying)
+        #expect(store.readPlayback().isPlaying)
         _ = try await IOSNextTrackIntent().perform()
         #expect(player.currentSong?.id == songs[1].id)
         player.seek(to: 0)
@@ -34,7 +43,7 @@ struct SystemIntentPlaybackTests {
         #expect(player.currentSong?.id == songs[0].id)
         _ = try await IOSToggleShuffleIntent().perform()
         #expect(player.isShuffled)
-        #expect(WidgetSnapshotStore().readPlayback().isShuffled)
+        #expect(store.readPlayback().isShuffled)
         _ = try await IOSToggleShuffleIntent().perform()
         #expect(!player.isShuffled)
         #expect(player.queue.map(\.id) == songs.map(\.id))
@@ -42,7 +51,7 @@ struct SystemIntentPlaybackTests {
         for expected in ["one", "all", "off"] {
             _ = try await IOSToggleRepeatIntent().perform()
             #expect(String(describing: player.repeatMode) == expected)
-            #expect(WidgetSnapshotStore().readPlayback().repeatMode == expected)
+            #expect(store.readPlayback().repeatMode == expected)
         }
         let timer = IOSStartSleepTimerIntent()
         timer.duration = .thirty
@@ -59,6 +68,89 @@ struct SystemIntentPlaybackTests {
             _ = try await IOSNextTrackIntent().perform()
             Issue.record("Empty playback unexpectedly accepted Next Track")
         } catch SystemIntentError.noNext { }
+    }
+
+    @Test func repeatLoopsCollectionsAndRepeatsSingleSelections() async throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        player.aiEnabled = false
+        let songs = try (0..<3).map { try cachedSong(index: $0) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.playInOrder(song: songs[0], context: songs)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(player.currentSong?.id == songs[0].id)
+
+        // Each end starts near the end of the song, so a replay that did not
+        // actually start the song over would leave the progress there.
+        func endSong() {
+            player.progress = 0.95
+            player.playNextOrRandom()
+        }
+
+        // Continuous repeat walks the full collection and wraps to its start.
+        player.repeatMode = .all
+        for index in [1, 2, 0, 1, 2, 0] {
+            endSong()
+            #expect(player.currentSong?.id == songs[index].id)
+            #expect(player.progress == 0)
+        }
+        #expect(player.repeatMode == .all)
+
+        // Repeat Once plays it one more time, then switches itself off.
+        player.repeatMode = .one
+        endSong()
+        #expect(player.currentSong?.id == songs[0].id)
+        #expect(player.progress == 0)
+        #expect(player.repeatMode == .off)
+        endSong()
+        #expect(player.currentSong?.id == songs[1].id)
+
+        // Next leaves the song and keeps the mode for the one it lands on.
+        player.repeatMode = .all
+        player.skipToNext()
+        #expect(player.currentSong?.id == songs[2].id)
+        #expect(player.repeatMode == .all)
+        #expect(player.queue.map(\.id) == songs.map(\.id))
+
+        // A direct song selection repeats itself, even with a list available
+        // as normal context. Repeat does not fetch or append autoplay songs.
+        player.play(song: songs[1], context: songs)
+        for _ in 0..<3 {
+            endSong()
+            #expect(player.currentSong?.id == songs[1].id)
+            #expect(player.progress == 0)
+            #expect(player.queue.map(\.id) == songs.map(\.id))
+        }
+
+        // Skipping out of a direct selection can start recommendations while
+        // Repeat All stays on. Exercise the same entry point as the async fetch.
+        for shuffled in [false, true] {
+            if player.isShuffled != shuffled { player.toggleShuffle() }
+            player.playAutoplay(song: songs[0], context: songs)
+            #expect(player.isShuffled == shuffled)
+            let cycle = player.queue
+            #expect(cycle.first?.id == songs[0].id)
+            for expected in cycle.dropFirst() + [cycle[0]] {
+                endSong()
+                #expect(player.currentSong?.id == expected.id)
+                #expect(player.progress == 0)
+                #expect(player.repeatMode == .all)
+                #expect(player.queue == cycle)
+            }
+            if shuffled {
+                player.toggleShuffle()
+                #expect(player.queue == songs)
+            }
+            player.play(song: songs[1], context: songs)
+            endSong()
+            #expect(player.currentSong?.id == songs[1].id)
+        }
+
     }
 
     private func cachedSong(index: Int) throws -> Song {

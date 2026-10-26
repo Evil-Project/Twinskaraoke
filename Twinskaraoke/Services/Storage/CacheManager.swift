@@ -46,17 +46,6 @@ final class CacheManager {
         (AudioPlayerManager.audioCacheDir, LyricsCacheStore.cacheDirectory)
     }
 
-    func enforceAllLimits() {
-        let directories = Self.directories
-        Self.maintenanceQueue.async { [weak self] in
-            guard let self else { return }
-            let image = enforceImageCacheLimitsBlocking()
-            let music = enforceMusicCacheLimitsBlocking(musicDirectory: directories.music, excluding: [])
-            let lyrics = enforceLyricsCacheLimitsBlocking(lyricsDirectory: directories.lyrics)
-            publishSizes((image: image, music: music, lyrics: lyrics))
-        }
-    }
-
     func refreshSizes() {
         sizeRefreshTask?.cancel()
         sizeRefreshTask = Task { @MainActor [weak self] in
@@ -68,14 +57,6 @@ final class CacheManager {
                 guard let self else { return }
                 publishSizes(computeSizesBlocking(directories: directories))
             }
-        }
-    }
-
-    func enforceImageCacheLimits() {
-        Self.maintenanceQueue.async { [weak self] in
-            guard let self else { return }
-            let size = enforceImageCacheLimitsBlocking()
-            publishSizes((image: size, music: nil, lyrics: nil))
         }
     }
 
@@ -101,16 +82,6 @@ final class CacheManager {
         }
     }
 
-    func pruneExpiredEntries() {
-        let directories = Self.directories
-        Self.maintenanceQueue.async { [weak self] in
-            guard let self else { return }
-            let pruned = pruneExpiredEntriesBlocking(directories: directories)
-            DebugLogger.log("Pruned \(pruned) expired cache entries", category: .cache)
-            publishSizes(computeSizesBlocking(directories: directories))
-        }
-    }
-
     func recordAccess(for url: URL) {
         Self.maintenanceQueue.async {
             AudioCacheStore.touch(url)
@@ -120,18 +91,6 @@ final class CacheManager {
         maintenanceQueue.async {
             lastMusicCommitAt = Date()
         }
-    }
-
-    func totalImageCacheSize() -> UInt64 {
-        imageCacheSize
-    }
-
-    func totalMusicCacheSize() -> UInt64 {
-        musicCacheSize
-    }
-
-    func totalLyricsCacheSize() -> UInt64 {
-        lyricsCacheSize
     }
 
     func clearImageCache(completion: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }) {

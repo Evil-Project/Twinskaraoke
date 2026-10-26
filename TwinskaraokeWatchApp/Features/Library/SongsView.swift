@@ -71,14 +71,13 @@ struct SongsView: View {
                         )
                     }
                     .buttonStyle(.watchPressable)
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                     .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
                     .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play this song.")
                 }
             }
         }
         .navigationTitle("Trending")
-        .animation(listAnimation, value: audioManager.currentSong?.id)
-        .animation(playbackAnimation, value: audioManager.isPlaying)
         .animation(listAnimation, value: viewModel.songs.count)
         .animation(playbackAnimation, value: viewModel.isLoading)
         .navigationDestination(isPresented: $showPlayer) {

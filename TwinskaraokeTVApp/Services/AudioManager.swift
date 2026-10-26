@@ -43,15 +43,25 @@ final class AudioManager {
     private var timeObserver: Any?
     private var endTimeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
+    private var mediaServicesResetObserver: AnyCancellable?
     private var remoteCommandTargets: [(command: MPRemoteCommand, target: Any)] = []
     private var playbackRequested = false
     private var shouldResumeAfterInterruption = false
+    /// Where a rebuilt player picks up after a media services reset. Keyed
+    /// by song so a different pick after the reset starts from the top.
+    private var resumeAfterReset: (songID: String, position: Double)?
     private var failedQueueIndices = Set<Int>()
 
     private init() {
         configureAudioSession()
         setupRemoteCommands()
         setupInterruptionHandler()
+        // Its own subscription, made once: `prepareAndPlay` clears
+        // `cancellables`, and a reset can land before anything plays.
+        mediaServicesResetObserver = NotificationCenter.default
+            .publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleMediaServicesReset() }
     }
     var progress: Double {
         guard duration > 0 else { return 0 }
@@ -143,6 +153,11 @@ final class AudioManager {
         let player = AVPlayer(playerItem: playerItem)
         self.player = player
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        if let resume = resumeAfterReset, resume.songID == currentSong?.id {
+            player.seek(to: CMTime(seconds: resume.position, preferredTimescale: 600))
+            currentTime = resume.position
+        }
+        resumeAfterReset = nil
 
         playerItem.publisher(for: \.duration)
             .receive(on: DispatchQueue.main)
@@ -223,6 +238,10 @@ final class AudioManager {
 
     @discardableResult
     private func pausePlayback() -> Bool {
+        // An explicit pause during an interruption overrides the intent to
+        // resume when it ends. The interruption itself pauses the player
+        // directly, so this never clears its own intent.
+        shouldResumeAfterInterruption = false
         guard player != nil || playbackRequested || isLoading else { return false }
         playbackRequested = false
         player?.pause()
@@ -359,35 +378,74 @@ final class AudioManager {
         try? AVAudioSession.sharedInstance().setActive(true)
     }
 
+    /// tvOS 27 deprecates `interruptionNotification` in favor of lifecycle
+    /// notifications: a system-sourced `didBecomeInactiveNotification` begins
+    /// an interruption, and `resumptionRecommendationNotification` ends it.
+    /// Earlier releases only post the legacy notification, so exactly one of
+    /// the two families is observed.
     private func setupInterruptionHandler() {
+        #if compiler(>=6.4)
+        if #available(tvOS 27.0, *) {
+            NotificationCenter.default.publisher(for: AVAudioSession.didBecomeInactiveNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    // The app's own deactivation is not an interruption.
+                    guard let context = note.userInfo?[AVAudioSession.deactivationContextKey]
+                        as? AVAudioSession.DeactivationContext,
+                        context.source == .system
+                    else { return }
+                    self?.audioSessionInterruptionBegan()
+                }
+                .store(in: &cancellables)
+            NotificationCenter.default.publisher(for: AVAudioSession.resumptionRecommendationNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] note in
+                    let context = note.userInfo?[AVAudioSession.resumptionContextKey]
+                        as? AVAudioSession.ResumptionContext
+                    self?.audioSessionInterruptionEnded(shouldResume: context?.recommendation == .shouldResume)
+                }
+                .store(in: &cancellables)
+            return
+        }
+        #endif
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] note in self?.handleInterruption(note) }
+            .sink { [weak self] note in self?.handleLegacyInterruption(note) }
             .store(in: &cancellables)
     }
 
-    private func handleInterruption(_ note: Notification) {
+    private func handleLegacyInterruption(_ note: Notification) {
         guard let info = note.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue)
         else { return }
         switch type {
         case .began:
-            shouldResumeAfterInterruption = playbackRequested
-            if playbackRequested {
-                player?.pause()
-                isPlaying = false
-            }
+            audioSessionInterruptionBegan()
         case .ended:
             guard let optsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt else { return }
             let opts = AVAudioSession.InterruptionOptions(rawValue: optsValue)
-            if opts.contains(.shouldResume), shouldResumeAfterInterruption {
-                resumePlayback()
-            }
-            shouldResumeAfterInterruption = false
+            audioSessionInterruptionEnded(shouldResume: opts.contains(.shouldResume))
         @unknown default:
             break
         }
+    }
+
+    private func audioSessionInterruptionBegan() {
+        // Keep the intent of an earlier interruption still awaiting its end:
+        // a second one finds playback already paused.
+        shouldResumeAfterInterruption = shouldResumeAfterInterruption || playbackRequested
+        if playbackRequested {
+            player?.pause()
+            isPlaying = false
+        }
+    }
+
+    private func audioSessionInterruptionEnded(shouldResume: Bool) {
+        if shouldResume, shouldResumeAfterInterruption {
+            resumePlayback()
+        }
+        shouldResumeAfterInterruption = false
     }
 
     private func setupRemoteCommands() {
@@ -486,6 +544,24 @@ final class AudioManager {
         }
         player?.pause()
         player = nil
+    }
+
+    /// The media server restarted and took the player and the session
+    /// configuration with it. Apple's contract: rebuild both, and don't restart
+    /// playback until the user asks. The next Play rebuilds through
+    /// `resumePlayback`, which seeks the new player back to where this one was.
+    private func handleMediaServicesReset() {
+        configureAudioSession()
+        shouldResumeAfterInterruption = false
+        guard player != nil else { return }
+        if let song = currentSong, currentTime.isFinite, currentTime > 0 {
+            resumeAfterReset = (song.id, currentTime)
+        }
+        cleanupPlayer()
+        playbackRequested = false
+        isPlaying = false
+        isLoading = false
+        updateNowPlayingInfo()
     }
 
     isolated deinit {

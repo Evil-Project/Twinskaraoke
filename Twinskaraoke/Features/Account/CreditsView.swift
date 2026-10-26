@@ -25,7 +25,7 @@ struct CreditsView: View {
     }
 
     private var creditsList: some View {
-        List {
+        InsetGroupedList {
             Section("Site Creation & Management") {
                 creditRow(name: "Soul", detail: "Creator & Developer")
             }
@@ -91,9 +91,6 @@ struct CreditsView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .groupedScreenBackground()
     }
 
     private func creditRow(name: String, detail: String, url: String? = nil) -> some View {

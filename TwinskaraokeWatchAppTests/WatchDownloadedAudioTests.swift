@@ -53,6 +53,26 @@ struct WatchDownloadedAudioTests {
         #expect(!FileManager.default.fileExists(atPath: temp.path))
     }
 
+    @Test("Unauthorized and HTML responses do not enter the audio cache")
+    func refusesServerErrors() throws {
+        let url = URL(string: "https://example.invalid/song.mp3")!
+        let unauthorized = HTTPURLResponse(
+            url: url, statusCode: 401, httpVersion: nil,
+            headerFields: ["Content-Type": "audio/mpeg"]
+        )
+        let loginPage = HTTPURLResponse(
+            url: url, statusCode: 200, httpVersion: nil,
+            headerFields: ["Content-Type": "text/html"]
+        )
+        let audio = HTTPURLResponse(
+            url: url, statusCode: 200, httpVersion: nil,
+            headerFields: ["Content-Type": "audio/mpeg"]
+        )
+        #expect(!AudioManager.acceptsAudioResponse(unauthorized))
+        #expect(!AudioManager.acceptsAudioResponse(loginPage))
+        #expect(AudioManager.acceptsAudioResponse(audio))
+    }
+
     /// URLSession calls back on its own queue, not the main one. If this ever
     /// stops compiling, the store has been pulled back onto the main actor and
     /// the hop that lost the file is back.

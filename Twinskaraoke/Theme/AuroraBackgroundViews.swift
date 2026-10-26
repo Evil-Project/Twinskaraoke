@@ -76,47 +76,6 @@ struct FloatingClouds: View {
         }
     }
 }
-private struct AuroraShimmerOverlay: View {
-    @Environment(\.appReduceEffects) private var reduceEffects
-    @Environment(\.appAnimationsActive) private var animationsActive
-    @State private var animate = false
-
-    var body: some View {
-        LinearGradient(
-            colors: [
-                .white.opacity(0),
-                .white.opacity(0.07),
-                .white.opacity(0),
-            ],
-            startPoint: animate ? .bottomLeading : .topTrailing,
-            endPoint: animate ? .topTrailing : .bottomLeading
-        )
-        .blendMode(.plusLighter)
-        .onAppear {
-            guard shouldAnimate else { return }
-            withOptionalAnimation(
-                Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
-            ) {
-                animate = true
-            }
-        }
-        .onChange(of: shouldAnimate) { _, shouldAnimate in
-            if !shouldAnimate {
-                withOptionalAnimation(nil) { animate = false }
-            } else {
-                withOptionalAnimation(
-                    Animation.easeInOut(duration: 13).repeatForever(autoreverses: true)
-                ) {
-                    animate = true
-                }
-            }
-        }
-    }
-
-    private var shouldAnimate: Bool {
-        animationsActive && !reduceEffects
-    }
-}
 
 struct LinearNonTransparency: View {
     private let scheme: ColorScheme = .dark
@@ -151,10 +110,8 @@ struct NweroAuroraBackdrop: View {
     }
 }
 struct AuroraBackgroundModifier: ViewModifier {
-    @AppStorage("nk.appearance") private var appearanceMode: String = AppearanceMode.dark.rawValue
-
     private var isNwero: Bool {
-        (AppearanceMode(rawValue: appearanceMode) ?? .dark).usesAuroraBackground
+        AppThemeStore.shared.definition.backdrop == .aurora
     }
 
     func body(content: Content) -> some View {

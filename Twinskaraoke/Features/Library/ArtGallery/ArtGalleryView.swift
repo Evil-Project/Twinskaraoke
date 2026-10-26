@@ -73,7 +73,7 @@ struct ArtGalleryView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(viewModel.artists.enumerated()), id: \.element.id) { idx, artist in
                                 NavigationLink {
-                                    ArtistArtsView(artist: artist)
+                                    DeferredView { ArtistArtsView(artist: artist) }
                                 } label: {
                                     ArtistListRow(artist: artist)
                                 }

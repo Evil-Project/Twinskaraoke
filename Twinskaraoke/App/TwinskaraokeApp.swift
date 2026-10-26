@@ -14,21 +14,34 @@ struct TwinskaraokeApp: App {
 
     init() {
         AppPerformance.event("App Initialization")
+        if AppRuntime.isUITestMode,
+           ProcessInfo.processInfo.arguments.contains("-UITestResetRecentlyPlayed")
+        {
+            RecentlyPlayedStore.resetPersistedHistoryForUITesting()
+        }
         ImageCacheConfig.applyLimits()
+        // Written by a "recently added" tracker that nothing ever read back,
+        // and that grew by every playlist id the app fetched.
+        UserDefaults.standard.removeObject(forKey: "nk.recentlyAddedDates.v1")
+        // Mirrors the signed-in session to the paired watch, which has no way
+        // to sign in on its own. No-op on devices that can't pair one.
         WatchSessionPublisher.shared.activate()
-        IOSAppShortcuts.updateAppShortcutParameters()
+        AppThemeStore.shared.apply(AppThemeStore.shared.definition)
         WidgetSnapshotPublisher.shared.start()
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SplashRootView()
                 .auroraBackground()
                 .preferredColorScheme(resolvedColorScheme)
                 .environment(\.locale, Locale(identifier: resolvedLanguage.localeIdentifier))
                 .injectReduceMotion()
                 .injectHaptics()
                 .tint(.appAccent)
+                .onChange(of: appearanceMode) { _, mode in
+                    AppThemeStore.shared.applySelection(mode)
+                }
                 .shimejiSession()
                 .onAppear {
                     DebugLogger.log(
@@ -41,10 +54,17 @@ struct TwinskaraokeApp: App {
                     )
                 }
         }
+        #if canImport(UIKit)
+            // The system relaunches the app to deliver finished offline
+            // downloads; it suspends it again once this returns.
+            .backgroundTask(.urlSession(BackgroundDownloadTransport.identifier)) {
+                await DownloadManager.shared.handleBackgroundEvents()
+            }
+        #endif
     }
 
     private var resolvedColorScheme: ColorScheme? {
-        (AppearanceMode(rawValue: appearanceMode) ?? .system).colorScheme
+        AppThemeStore.shared.definition.colorScheme
     }
 
     private var resolvedLanguage: AppLanguage {

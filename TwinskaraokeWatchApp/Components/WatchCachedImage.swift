@@ -1,11 +1,19 @@
 import SwiftUI
+
+/// In-memory + disk image cache for the watch app (no SDWebImage on this target).
 final class WatchImageCache {
     static let shared = WatchImageCache()
 
     private let memory = NSCache<NSURL, UIImage>()
+    // Dedicated, bounded disk cache instead of the default shared URLCache.
     private let disk = URLCache(memoryCapacity: 8 * 1024 * 1024, diskCapacity: 64 * 1024 * 1024)
+    /// Guards `inFlight` and `failures` (NSCache/URLCache are already thread-safe).
     private let stateLock = NSLock()
+    /// Fetches currently in flight, so a prefetcher and a visible row asking
+    /// for the same URL share one request instead of racing two.
     private var inFlight: [NSURL: Task<UIImage?, Never>] = [:]
+    /// Short-lived negative cache for failed URLs so scrolling does not
+    /// hammer a dead host on every row re-entry.
     private var failures: [NSURL: Date] = [:]
     private static let negativeTTL: TimeInterval = 30
 
@@ -13,6 +21,8 @@ final class WatchImageCache {
         memory.countLimit = 200
         memory.totalCostLimit = 32 * 1024 * 1024
     }
+
+    /// Synchronous memory-cache lookup used to seed views without a placeholder frame.
     func cachedImage(for url: URL) -> UIImage? {
         memory.object(forKey: url as NSURL)
     }
@@ -32,6 +42,7 @@ final class WatchImageCache {
         case .knownFailure:
             return nil
         case .coalesce(let task):
+            // Coalesce with the caller already fetching this URL.
             _ = await task.value
             return memory.object(forKey: key)
         case .start(let task):
@@ -40,11 +51,17 @@ final class WatchImageCache {
             return image
         }
     }
+
+    /// How `image(for:)` should proceed for a URL, decided under the lock.
     private enum FetchPlan {
         case knownFailure
         case coalesce(Task<UIImage?, Never>)
         case start(Task<UIImage?, Never>)
     }
+
+    /// Synchronous critical section (lock is never held across an `await`):
+    /// returns the negative-cache / in-flight state for `key`, registering a
+    /// new fetch task when neither applies.
     private func fetchPlan(for key: NSURL, request: URLRequest) -> FetchPlan {
         stateLock.lock()
         defer { stateLock.unlock() }
@@ -65,6 +82,9 @@ final class WatchImageCache {
         inFlight[key] = task
         return .start(task)
     }
+
+    /// Synchronous critical section: clears the in-flight entry and records
+    /// a short-lived negative-cache entry when the fetch failed.
     private func finishFetch(for key: NSURL, image: UIImage?) {
         stateLock.lock()
         defer { stateLock.unlock() }
@@ -77,7 +97,17 @@ final class WatchImageCache {
         failures[key] = Date()
     }
 
+    /// Whether `url` is inside the negative-cache window (test hook).
+    func isKnownFailure(for url: URL) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard let failedAt = failures[url as NSURL] else { return false }
+        return Date().timeIntervalSince(failedAt) < Self.negativeTTL
+    }
 }
+
+/// Drop-in replacement for AsyncImage that serves repeated loads from WatchImageCache,
+/// avoiding re-fetch/re-decode flicker when rows re-enter the view hierarchy.
 struct WatchCachedImage<Content: View, Placeholder: View>: View {
     let url: URL?
     @ViewBuilder let content: (Image) -> Content
@@ -109,6 +139,8 @@ struct WatchCachedImage<Content: View, Placeholder: View>: View {
                 image = nil
                 return
             }
+            // URL changed: drop the previous artwork, re-seeding from the
+            // memory cache exactly like the initial State value in init.
             image = WatchImageCache.shared.cachedImage(for: url)
             let loaded = await WatchImageCache.shared.image(for: url)
             guard !Task.isCancelled else { return }

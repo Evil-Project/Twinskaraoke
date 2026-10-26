@@ -294,74 +294,6 @@ struct CenteredLoadingView: View {
     }
 }
 
-struct MusicSkeletonShimmer: ViewModifier {
-    var isActive: Bool
-    @Environment(\.appReduceEffects) private var reduceEffects
-    @Environment(\.appAnimationsActive) private var animationsActive
-    private let scrollState = ScrollPerformanceState.shared
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var animationClock = ActiveAnimationClock()
-    @State private var isVisible = false
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                GeometryReader { proxy in
-                    TimelineView(
-                        .animation(
-                            minimumInterval: DisplayRefreshRate.decorativeAnimationInterval,
-                            paused: !effectiveActive
-                        )
-                    ) { context in
-                        let elapsed = animationClock.elapsed(at: context.date)
-                        let phase = elapsed.truncatingRemainder(dividingBy: 1.65) / 1.65
-                        shimmer(width: proxy.size.width, phase: -0.8 + 2.6 * phase)
-                    }
-                    .opacity(effectiveActive ? 1 : 0)
-                    .mask(content)
-                }
-                .clipShape(Rectangle())
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-            .onAppear { isVisible = true }
-            .onDisappear {
-                isVisible = false
-                animationClock.setRunning(false, at: .now)
-            }
-            .onChange(of: effectiveActive, initial: true) { _, running in
-                animationClock.setRunning(running, at: .now)
-            }
-    }
-
-    private var effectiveActive: Bool {
-        isActive && isVisible && scenePhase == .active
-            && !scrollState.isScrolling && !reduceEffects
-    }
-
-    private func shimmer(width: CGFloat, phase: CGFloat) -> some View {
-        LinearGradient(
-            colors: [
-                .clear,
-                .appPlaceholderSheen,
-                .appPlaceholderSheenSoft,
-                .clear,
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(width: max(width * 0.36, 56))
-        .rotationEffect(.degrees(12))
-        .offset(x: width * phase)
-    }
-}
-
-extension View {
-    func musicSkeletonShimmer(active: Bool) -> some View {
-        modifier(MusicSkeletonShimmer(isActive: active))
-    }
-}
-
 enum MusicSkeletonTone {
     case primary, secondary, tertiary, quaternary
 
@@ -404,12 +336,23 @@ struct MusicSkeletonLine: View {
 struct MusicEmptyState: View {
     let title: String
     let message: String
+    /// Drawn in place of the placeholder mark. For surfaces that are not
+    /// library screens — the player, over its artwork-tinted background — where
+    /// the mark's solid grey blocks read as content that is still loading.
+    var systemImage: String?
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 15) {
-            MusicEmptyStateMark()
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 44, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            } else {
+                MusicEmptyStateMark()
+            }
 
             VStack(spacing: 6) {
                 Text(title)

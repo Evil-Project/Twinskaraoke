@@ -10,7 +10,34 @@ final class AppRouter {
     var lyricsRequest = 0
     var requestID = UUID()
     var hasPendingRoute = false
+    private var splashRoutes: [AppRoute] = []
+    private let isSplashBlocking: () -> Bool
+    /// Injects the splash blocking predicate used to defer incoming routes.
+    init(isSplashBlocking: @escaping () -> Bool = { SplashCoordinator.shared.isBlocking }) {
+        self.isSplashBlocking = isSplashBlocking
+    }
+    /// Drains queued routes in order when the walkthrough gate and detail sheet allow it.
+    func resumeAfterSplash() {
+        guard !isSplashBlocking() else { return }
+        while !splashRoutes.isEmpty && detail == nil {
+            apply(splashRoutes.removeFirst())
+        }
+    }
+    /// Clears the current detail so the dismissal observer can resume queued routes.
+    func dismissDetail() {
+        detail = nil
+    }
+    /// Queues navigation during the splash gate or an existing route backlog.
     func open(_ route: AppRoute) {
+        if isSplashBlocking() || !splashRoutes.isEmpty {
+            splashRoutes.append(route)
+            resumeAfterSplash()
+            return
+        }
+        apply(route)
+    }
+    /// Presents the requested app route after navigation blockers have cleared.
+    private func apply(_ route: AppRoute) {
         hasPendingRoute = true
         detail = nil
         switch route {
@@ -41,13 +68,34 @@ struct RoutedDetailView: View {
             else if let playlist { PlaylistDetailView(playlist: playlist) }
             else if let song {
                 VStack(spacing: 20) {
-                    Text(song.title).font(.title).multilineTextAlignment(.center)
-                    Text(song.displayArtist).foregroundStyle(.secondary)
+                    RemoteArtworkImage(
+                        url: song.imageURL,
+                        cornerRadius: AM.Radius.hero,
+                        lowResURL: song.thumbnailURL,
+                        fixedDisplaySize: CGSize(width: 240, height: 240)
+                    )
+                    .frame(width: 240, height: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
+                    .amShadow(AM.Shadow.heroIdle)
+                    .accessibilityHidden(true)
+                    VStack(spacing: 6) {
+                        Text(song.title)
+                            .font(.title2.bold())
+                            .multilineTextAlignment(.center)
+                        Text(song.displayArtist)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                     Button("Play", systemImage: "play.fill") {
                         AudioPlayerManager.shared.playInOrder(song: song, context: [song])
+                        // The player opens underneath this sheet, so close
+                        // the sheet rather than leave it covering the player.
+                        AppRouter.shared.dismissDetail()
                         NowPlayingPresentation.shared.expand()
                     }.buttonStyle(.borderedProminent)
-                }.padding()
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if failed {
                 ContentUnavailableView("Unable to Open", systemImage: "wifi.exclamationmark", description: Text("Check your connection and account, then try again."))
             } else { ProgressView() }
