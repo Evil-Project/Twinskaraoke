@@ -1,7 +1,0 @@
-import SwiftUI
-
-struct ArtGallerySkeletonView: View {
-    var body: some View {
-        CenteredLoadingView(label: String(localized: "Loading art gallery"))
-    }
-}

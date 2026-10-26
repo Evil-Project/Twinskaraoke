@@ -1,0 +1,258 @@
+import SwiftUI
+
+struct AccountView: View {
+    @State private var auth = AuthManager.shared
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var showLoginSheet = false
+    @State private var showQRApprove = false
+    @State private var showSignOutConfirm = false
+    @State private var profile: Profile?
+    @State private var badges: [Badge] = []
+    @State private var uploadLimits: UploadLimits?
+    @State private var levelUpAnnouncement: LevelUpAnnouncement?
+
+    private var usesWideOverview: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    var body: some View {
+        NavigationStack {
+            accountContent
+                .navigationTitle("Account")
+                .navigationBarTitleDisplayMode(.large)
+                .sheet(isPresented: $showLoginSheet) {
+                    LoginSheet(auth: auth)
+                }
+                .sheet(isPresented: $showQRApprove) {
+                    QRApproveView(auth: auth)
+                }
+                .sheet(item: $levelUpAnnouncement) { announcement in
+                    LevelUpSheet(announcement: announcement)
+                        .presentationDetents([.medium])
+                        .presentationBackground(.clear)
+                }
+                .task(id: auth.isLoggedIn) {
+                    if auth.isLoggedIn {
+                        await loadData()
+                        FavoritesManager.shared.reload()
+                    } else {
+                        profile = nil
+                        badges = []
+                        uploadLimits = nil
+                        levelUpAnnouncement = nil
+                        FavoritesManager.shared.clear()
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var accountContent: some View {
+        if usesWideOverview {
+            ZStack(alignment: .top) {
+                ScreenBackgroundFill(style: .grouped)
+                accountList
+                    .frame(maxWidth: 640, maxHeight: .infinity, alignment: .top)
+                    .padding(.horizontal, AM.Spacing.screenMargin)
+                    .accessibilityIdentifier("Account.WideOverview")
+            }
+        } else {
+            accountList
+        }
+    }
+
+    private var accountList: some View {
+        InsetGroupedList {
+            profileSection
+            generalSection
+            if auth.isLoggedIn { signOutSection }
+        }
+        .refreshable {
+            if auth.isLoggedIn {
+                AppHaptic.selection.play()
+                await loadData()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var profileSection: some View {
+        if auth.isLoggedIn {
+            Section {
+                NavigationLink {
+                    ProfileDetailView(
+                        displayName: profile?.displayName ?? auth.currentUsername ?? "",
+                        avatarUrl: profile?.avatarUrl ?? auth.currentAvatar,
+                        profile: profile,
+                        badges: badges,
+                        uploadLimits: uploadLimits
+                    )
+                } label: {
+                    ProfileHeaderRow(
+                        displayName: profile?.displayName ?? auth.currentUsername ?? "",
+                        avatarUrl: profile?.avatarUrl ?? auth.currentAvatar,
+                        level: profile?.level,
+                        levelTitle: profile?.levelTitle,
+                        levelProgress: profile?.levelProgress,
+                        xpToNextLevel: profile?.xpToNextLevel
+                    )
+                }
+                if !unlockedBadges.isEmpty {
+                    UnlockedBadgesRow(
+                        badges: unlockedBadges,
+                        unlockedCount: profile?.unlockedBadges ?? unlockedBadges.count,
+                        totalCount: profile?.totalBadges ?? badges.count
+                    )
+                }
+            }
+        } else {
+            Section {
+                Button {
+                    AppHaptic.selection.play()
+                    showLoginSheet = true
+                } label: {
+                    SignInPromptRow()
+                }
+                .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.82))
+                .accessibilityLabel("Sign In")
+                .accessibilityHint("Opens account sign-in.")
+            }
+        }
+    }
+
+    private var generalSection: some View {
+        Section {
+            if auth.isLoggedIn {
+                Button {
+                    AppHaptic.selection.play()
+                    showQRApprove = true
+                } label: {
+                    Label("Sign in on web", systemImage: "qrcode.viewfinder")
+                }
+                .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.82))
+                .accessibilityLabel("Sign in on web")
+                .accessibilityHint("Shows a QR code to authorize a browser session.")
+            }
+            NavigationLink {
+                SettingsView()
+            } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+            NavigationLink {
+                NotificationsView()
+            } label: {
+                Label("Notifications", systemImage: "bell")
+            }
+            NavigationLink {
+                AboutView()
+            } label: {
+                Label("About", systemImage: "info.circle")
+            }
+        }
+    }
+
+    private var signOutSection: some View {
+        Section {
+            Button(role: .destructive) {
+                AppHaptic.selection.play()
+                showSignOutConfirm = true
+            } label: {
+                HStack {
+                    Spacer()
+                    Text("Sign Out")
+                        .foregroundStyle(Color.appDestructive)
+                    Spacer()
+                }
+            }
+            .alert("Sign out?", isPresented: $showSignOutConfirm) {
+                Button("Cancel", role: .cancel) {}
+                    .tint(.blue)
+                Button("Sign Out", role: .destructive) {
+                    AppHaptic.dismiss.play()
+                    auth.logout()
+                }
+            } message: {
+                Text("You'll need to sign in again to access your library and account features.")
+            }
+            .accessibilityLabel("Sign Out")
+            .accessibilityHint("Asks for confirmation before signing out.")
+        }
+    }
+
+    private var unlockedBadges: [Badge] {
+        badges.filter(\.unlocked)
+    }
+
+    private func loadData() async {
+        guard let token = auth.authToken else { return }
+        async let profileResult = try? AccountRepository.profile(token: token)
+        async let limitsResult = try? AccountRepository.uploadLimits(token: token)
+        if let decoded = await profileResult {
+            guard !Task.isCancelled, auth.authToken == token, auth.isLoggedIn else { return }
+            handleLevelChange(with: decoded.profile)
+            profile = decoded.profile
+            badges = decoded.badges ?? []
+            auth.updateAvatar(decoded.profile.avatarUrl)
+        }
+        if let loadedLimits = await limitsResult {
+            guard !Task.isCancelled, auth.authToken == token, auth.isLoggedIn else { return }
+            uploadLimits = loadedLimits
+        }
+    }
+
+    private func handleLevelChange(with newProfile: Profile) {
+        guard let level = newProfile.level, level > 0 else { return }
+        guard let identity = auth.currentUserId ?? auth.currentUsername, !identity.isEmpty else {
+            return
+        }
+
+        let key = "nk.lastSeenLevel.\(identity)"
+        let defaults = UserDefaults.standard
+
+        if defaults.object(forKey: key) == nil {
+            defaults.set(level, forKey: key)
+            return
+        }
+
+        let previousLevel = defaults.integer(forKey: key)
+        if level > previousLevel {
+            levelUpAnnouncement = LevelUpAnnouncement(
+                previousLevel: previousLevel,
+                currentLevel: level,
+                levelTitle: newProfile.levelTitle
+            )
+        }
+        defaults.set(level, forKey: key)
+    }
+}
+
+private struct SignInPromptRow: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "person.fill")
+                .font(.largeTitle)
+                .foregroundStyle(.tertiary)
+                .frame(width: 64, height: 64)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Sign In")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("Sign in to access your library")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            // No 44pt frame: the whole row is the button, so the chevron is
+            // only a glyph, and its old target width squeezed the subtitle
+            // onto a second line with room to spare.
+            Image(systemName: "chevron.right")
+                .font(AM.Font.chevron)
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Sign In")
+        .accessibilityHint("Sign in to access your library.")
+    }
+}

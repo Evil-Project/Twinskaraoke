@@ -1,0 +1,97 @@
+import Foundation
+import Observation
+@MainActor
+@Observable
+final class UserPlaylistsViewModel {
+    var playlists: [Playlist] = []
+    var isLoading = false
+    var loadError: String?
+
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private let isAuthenticated: @Sendable () -> Bool
+    @ObservationIgnored private let loadPlaylists: @Sendable () async throws -> [Playlist]
+
+    init(
+        isAuthenticated: @escaping @Sendable () -> Bool = { CredentialStore.isAuthenticated },
+        loadPlaylists: @escaping @Sendable () async throws -> [Playlist] = {
+            try await loadWithFallback(companion: { try await WatchLibraryServices.personalPlaylists() }, direct: {
+                try await UserPlaylistRepository.playlists().map { $0.asPlaylist() }
+            })
+        }
+    ) {
+        self.isAuthenticated = isAuthenticated
+        self.loadPlaylists = loadPlaylists
+    }
+
+    /// Account-transition cancellations terminate the request; only transport
+    /// failures or an unavailable companion use independent watch networking.
+    static func loadWithFallback(companion: @Sendable () async throws -> [Playlist]?,
+                                 direct: @Sendable () async throws -> [Playlist]) async throws -> [Playlist] {
+        do {
+            if let playlists = try await companion() { return playlists }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // A reachable phone can still fail to fetch the playlist service.
+        }
+        try Task.checkCancellation()
+        return try await direct()
+    }
+
+    isolated deinit {
+        loadTask?.cancel()
+    }
+
+    func fetch(force: Bool = false) {
+        guard isAuthenticated() else {
+            cancelLoad()
+            playlists = []
+            loadError = nil
+            return
+        }
+        guard !isLoading else { return }
+        guard force || playlists.isEmpty else { return }
+
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        let loader = loadPlaylists
+        isLoading = true
+        loadError = nil
+        loadTask = Task { [weak self] in
+            do {
+                let loaded = try await loader()
+                try Task.checkCancellation()
+                guard let self, self.loadGeneration == generation else { return }
+                self.playlists = loaded
+                self.finishLoad(generation: generation)
+            } catch is CancellationError {
+                self?.finishLoad(generation: generation)
+            } catch {
+                guard let self, self.loadGeneration == generation else { return }
+                self.loadError = error is DecodingError
+                    ? "Your playlists could not be read. Open iPhone, refresh Playlists, then retry."
+                    : "Could not load your playlists. Open iPhone to sync your account, then retry."
+                self.finishLoad(generation: generation)
+            }
+        }
+    }
+    func reset() {
+        cancelLoad()
+        playlists = []
+        loadError = nil
+    }
+
+    private func cancelLoad() {
+        loadGeneration &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
+    private func finishLoad(generation: Int) {
+        guard loadGeneration == generation else { return }
+        loadTask = nil
+        isLoading = false
+    }
+}

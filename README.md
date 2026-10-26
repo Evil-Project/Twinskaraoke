@@ -20,6 +20,50 @@ All credits go to the website creator "Soul". This is a companion app for the we
 > Note: The watchOS app is still 100% in development please be patient with us, thank you!
 
 
+## Source layout
+
+```text
+Twinskaraoke/
+├── Twinskaraoke.xcodeproj
+├── Apps/
+│   ├── iOS/                 # App entry, navigation, screens, components, resources
+│   ├── iPadOS/              # Existing wide-screen components, built by the iOS target
+│   ├── macOS/               # App entry, windows, screens, components, resources
+│   ├── watchOS/             # App entry, navigation, screens, components, resources
+│   └── tvOS/                # App entry, navigation, screens, components, resources
+├── Packages/
+│   ├── Core/                # Foundation, networking, storage, security, auth, logging, configuration
+│   ├── Domain/Models/       # Shared song, playlist, account, lyrics, and radio models
+│   ├── Features/            # Existing account, artwork, home, library, playback, radio, search, etc.
+│   ├── UI/                  # Shared design system, components, themes, animation, haptics
+│   └── Platform/            # Apple integration, CarPlay, Shortcuts, and Watch connectivity
+├── Extensions/
+│   ├── Intents/             # Shared App Intents and entities
+│   └── WidgetExtension/     # iOS widgets, watchOS complications, shared widget code
+├── Resources/              # Localization and the downloadable Shimeji pack
+├── Tests/
+│   ├── UnitTests/           # Existing iOS and watchOS test targets
+│   └── UITests/             # Existing iOS and watchOS UI test targets
+├── Scripts/                # Simulator App Intents signing
+├── docs/                   # Site documentation and validation notes
+└── .github/workflows/      # IPA builds, nightly releases, and documentation deployment
+```
+
+Open `Twinskaraoke.xcodeproj`. `Packages/` organizes existing source code; the Xcode project's synchronized folders still determine target membership. `Apple/` folders contain shared code, and platform folders contain code for that app. The project continues to manage its existing Swift package dependencies; it has no standalone workspace or `Package.swift`.
+
+Small artwork-detail, gallery, playlist, radio-queue, account-content, playback-policy, and intent-entity helpers are grouped into cohesive files. No empty template features or configuration files are included.
+
+The existing scheme names and bundle identifiers are unchanged. For example:
+
+```bash
+xcodebuild build -project Twinskaraoke.xcodeproj -scheme Twinskaraoke \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+
+xcodebuild test -project Twinskaraoke.xcodeproj -scheme Twinskaraoke \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
+  -only-testing:TwinskaraokeTests
+```
+
 ## Features
 
 *  **Native Experience:** Better than the website!
