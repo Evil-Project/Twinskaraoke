@@ -9,8 +9,6 @@
 .claude/
 .codex/
 .omo/
-AGENTS.md
-CLAUDE.md
 
 node_modules/
 .vitepress/cache/
