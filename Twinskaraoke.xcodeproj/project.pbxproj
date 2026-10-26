@@ -14,8 +14,6 @@
 		D0E1CB022FC2000100000003 /* PillarboxPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = D0E1CB012FC2000100000002 /* PillarboxPlayer */; };
 		D0F981D92F94C10A00FD69AB /* Twinskaraoke Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E1820000000000000000000D /* TwinskaraokeWidgets.appex in Embed iOS Widgets */ = {isa = PBXBuildFile; fileRef = E18200000000000000000002 /* TwinskaraokeWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		E18200000000000000000021 /* Packages/Domain/Models/Apple/RadioNowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000020 /* Packages/Domain/Models/Apple/RadioNowPlaying.swift */; };
-		E18200000000000000000023 /* Resources/Localization/Apple/Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E18200000000000000000022 /* Resources/Localization/Apple/Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,463 +116,429 @@
 		D1A000032FAD000100000003 /* Twinskaraoke Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D1A000042FAD000100000004 /* Twinskaraoke Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Twinskaraoke Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E18200000000000000000002 /* TwinskaraokeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = TwinskaraokeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		E18200000000000000000020 /* Packages/Domain/Models/Apple/RadioNowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Packages/Domain/Models/Apple/RadioNowPlaying.swift; sourceTree = SOURCE_ROOT; };
-		E18200000000000000000022 /* Resources/Localization/Apple/Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Resources/Localization/Apple/Localizable.xcstrings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		27A6A9411DA7FC7BDEB1401B /* Exceptions for "macOS" folder in "Twinskaraoke Mac App" target */ = {
+		02F71240C278E87765A42CC2 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				Core/Authentication/iOS,
+				Core/Authentication/macOS,
+				Core/Authentication/tvOS,
+				Core/Authentication/watchOS,
+				Core/Logging/iOS,
+				Core/Storage/iOS,
+				Data/iOS,
+				Features/Account/iOS,
+				Features/Account/tvOS,
+				Features/Artwork/iOS,
+				Features/Artwork/tvOS,
+				Features/Artwork/watchOS,
+				Features/Home,
+				Features/Library/iOS,
+				Features/Library/tvOS,
+				Features/Library/watchOS,
+				Features/Lyrics,
+				Features/Notifications,
+				Features/Playback/iOS,
+				Features/Playback/tvOS,
+				Features/Playback/watchOS,
+				Features/Radio,
+				Features/Search/iOS,
+				Features/Search/tvOS,
+				Features/Search/watchOS,
+				Features/Shimeji,
+				Platform/iOS,
+				Platform/watchOS,
+				UI/Themes/iOS,
 			);
-			target = 5DA46CA312C58DE7DB9D897B /* Twinskaraoke Mac App */;
+			target = 5DA46CA312C58DE7DB9D897B;
 		};
-		3425FF94894B925440C4947D /* Exceptions for "watchOS" folder in "Twinskaraoke Watch App" target */ = {
+		0D53BF622D3BB06FD76A0B4A /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				iOS/Info.plist,
+				macOS,
+				tvOS,
+				watchOS,
 			);
-			target = D0F981D72F94C10A00FD69AB /* Twinskaraoke Watch App */;
+			target = D0F981B42F94C10900FD69AB;
 		};
-		5900F449C440D40CAA69FF26 /* Exceptions for "iOS" folder in "TwinskaraokeWidgets" target */ = {
+		29184E5CDD3162B97F70AD69 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				WidgetExtension/iOS,
+				WidgetExtension/watchOS,
 			);
-			target = E18200000000000000000001 /* TwinskaraokeWidgets */;
+			target = D0F981B42F94C10900FD69AB;
 		};
-		A927E647EF6B64B1E0E55F80 /* Exceptions for "watchOS" folder in "TwinskaraokeWatchWidgets" target */ = {
+		4288EA6D56EBD560833674CD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				WidgetExtension/iOS,
+				WidgetExtension/watchOS,
 			);
-			target = D0BB0000000000000000E003 /* TwinskaraokeWatchWidgets */;
+			target = D0AA0000000000000000E003;
 		};
-		B8D1DDFED41574662A4E7EBD /* Exceptions for "iOS" folder in "Twinskaraoke" target */ = {
+		4BF1867DBB6DA79F8AC9AC64 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				iOS,
+				iPadOS,
+				macOS,
+				tvOS/Info.plist,
+				watchOS,
 			);
-			target = D0F981B42F94C10900FD69AB /* Twinskaraoke */;
+			target = D0AA0000000000000000E003;
 		};
-		EC3A874C62640347990AAE15 /* Exceptions for "tvOS" folder in "Twinskaraoke TV App" target */ = {
+		53F1D2375F60F65BDE9C54B0 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				UITests,
+				UnitTests/watchOS,
 			);
-			target = D0AA0000000000000000E003 /* Twinskaraoke TV App */;
+			target = D0F981C12F94C10A00FD69AB;
+		};
+		7315CF9C181E1799F7820861 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core,
+				Data,
+				Domain/Models/Apple/AccountProfile.swift,
+				Domain/Models/Apple/AccountSessionDescriptor.swift,
+				Domain/Models/Apple/CompanionPlayback.swift,
+				Domain/Models/Apple/LyricsModels.swift,
+				Domain/Models/Apple/Song.swift,
+				Domain/Models/Apple/UITestFixtures.swift,
+				Domain/Models/Apple/UserPlaylist.swift,
+				Features,
+				Platform,
+				UI/Accessibility,
+				UI/Animations,
+				UI/Components,
+				UI/DesignSystem,
+				UI/Themes/iOS,
+			);
+			target = E18200000000000000000001;
+		};
+		813FA7E0CE6F921272A0429B /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetExtension/iOS/Info.plist,
+				WidgetExtension/watchOS,
+			);
+			target = E18200000000000000000001;
+		};
+		824358FE37C6B9726CFC2B7C /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Localization/iOS,
+				Shimeji,
+			);
+			target = D0BB0000000000000000E003;
+		};
+		848361712BB97650C4385E7F /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Localization/iOS,
+				Shimeji,
+			);
+			target = D0AA0000000000000000E003;
+		};
+		862723F28B064F7722AC9C07 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Authentication/iOS,
+				Core/Authentication/macOS,
+				Core/Authentication/tvOS,
+				Core/Authentication/watchOS,
+				Features/Account/macOS,
+				Features/Account/tvOS,
+				Features/Artwork/macOS,
+				Features/Artwork/tvOS,
+				Features/Artwork/watchOS,
+				Features/Home/tvOS,
+				Features/Home/watchOS,
+				Features/Library/macOS,
+				Features/Library/tvOS,
+				Features/Library/watchOS,
+				Features/Playback/macOS,
+				Features/Playback/tvOS,
+				Features/Playback/watchOS,
+				Features/Radio/watchOS,
+				Features/Search/macOS,
+				Features/Search/tvOS,
+				Features/Search/watchOS,
+				Platform/watchOS,
+			);
+			target = D0F981B42F94C10900FD69AB;
+		};
+		883797515766CC2D318DF5DD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				iOS,
+				iPadOS,
+				macOS/Info.plist,
+				tvOS,
+				watchOS,
+			);
+			target = 5DA46CA312C58DE7DB9D897B;
+		};
+		8C1291E22C4D6704B864173E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				iOS,
+				iPadOS,
+				macOS,
+				tvOS,
+				watchOS/Info.plist,
+			);
+			target = D0F981D72F94C10A00FD69AB;
+		};
+		915488A4999445F077A0869C /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Shimeji,
+			);
+			target = D0F981B42F94C10900FD69AB;
+		};
+		9AFBD60DEBDEB1A3D94069A7 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Localization/iOS,
+				Shimeji,
+			);
+			target = D0F981D72F94C10A00FD69AB;
+		};
+		A4EF1EC9BF08A809CE800A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				UITests/iOS,
+				UnitTests,
+			);
+			target = D0F981F02F94C10B00FD69AB;
+		};
+		A5E8B984D31150BD7BBD9FBA /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetExtension/iOS,
+				WidgetExtension/watchOS,
+			);
+			target = 5DA46CA312C58DE7DB9D897B;
+		};
+		B5A71585F0F0DE66F05E2357 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Authentication/iOS,
+				Core/Authentication/macOS,
+				Core/Authentication/tvOS,
+				Core/Authentication/watchOS,
+				Core/Logging/iOS,
+				Core/Storage/iOS,
+				Data/iOS,
+				Features/Account/iOS,
+				Features/Account/macOS,
+				Features/Artwork/iOS,
+				Features/Artwork/macOS,
+				Features/Artwork/watchOS,
+				Features/Home/iOS,
+				Features/Home/watchOS,
+				Features/Library/iOS,
+				Features/Library/macOS,
+				Features/Library/watchOS,
+				Features/Lyrics,
+				Features/Notifications,
+				Features/Playback/iOS,
+				Features/Playback/macOS,
+				Features/Playback/watchOS,
+				Features/Radio,
+				Features/Search/iOS,
+				Features/Search/macOS,
+				Features/Search/watchOS,
+				Features/Shimeji,
+				Platform/iOS,
+				Platform/watchOS,
+				UI/Themes/iOS,
+			);
+			target = D0AA0000000000000000E003;
+		};
+		B8994416686EEAFB2F3D4E3A /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetExtension/iOS,
+				WidgetExtension/watchOS/Info.plist,
+			);
+			target = D0BB0000000000000000E003;
+		};
+		B9557EC63BA4844684BA2023 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Localization/iOS,
+				Shimeji,
+			);
+			target = 5DA46CA312C58DE7DB9D897B;
+		};
+		BB0EB399043DE63DB8056818 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetExtension/iOS,
+				WidgetExtension/watchOS,
+			);
+			target = D0F981D72F94C10A00FD69AB;
+		};
+		C1ADD6DF53AE2FD5AFC907A6 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				UITests/watchOS,
+				UnitTests,
+			);
+			target = D0F981CB2F94C10A00FD69AB;
+		};
+		D3389F9F75C578C41BE49320 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				UITests,
+				UnitTests/iOS,
+			);
+			target = D0F981E62F94C10B00FD69AB;
+		};
+		E9AE5CFD830AE9D9837D46D9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Authentication/iOS,
+				Core/Authentication/macOS,
+				Core/Authentication/tvOS,
+				Core/Authentication/watchOS,
+				Core/Logging/iOS,
+				Core/Storage/iOS,
+				Data/iOS,
+				Features/Account,
+				Features/Artwork/iOS,
+				Features/Artwork/macOS,
+				Features/Artwork/tvOS,
+				Features/Home/iOS,
+				Features/Home/tvOS,
+				Features/Library/iOS,
+				Features/Library/macOS,
+				Features/Library/tvOS,
+				Features/Lyrics,
+				Features/Notifications,
+				Features/Playback/iOS,
+				Features/Playback/macOS,
+				Features/Playback/tvOS,
+				Features/Radio/iOS,
+				Features/Search/iOS,
+				Features/Search/macOS,
+				Features/Search/tvOS,
+				Features/Shimeji,
+				Platform/iOS,
+				UI/Themes/iOS,
+			);
+			target = D0F981D72F94C10A00FD69AB;
+		};
+		FC6B36989F58FF3A6C533729 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Authentication/iOS,
+				Core/Authentication/macOS,
+				Core/Authentication/tvOS,
+				Core/Authentication/watchOS,
+				Core/Logging/iOS,
+				Core/Storage/iOS,
+				Data/iOS,
+				Features/Account,
+				Features/Artwork,
+				Features/Home,
+				Features/Library/iOS,
+				Features/Library/macOS,
+				Features/Library/tvOS,
+				Features/Library/watchOS,
+				Features/Lyrics,
+				Features/Notifications,
+				Features/Playback/iOS,
+				Features/Playback/macOS,
+				Features/Playback/tvOS,
+				Features/Playback/watchOS,
+				Features/Radio,
+				Features/Search,
+				Features/Shimeji,
+				Platform/iOS,
+				Platform/watchOS,
+				UI/Themes/iOS,
+			);
+			target = D0BB0000000000000000E003;
+		};
+		FF74E2E251DE8CEFAF538CDE /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Localization/iOS,
+				Shimeji,
+			);
+			target = E18200000000000000000001;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		067C5E8F05FE4C91438B6F29 /* watchOS */ = {
+		2B50926D3723451E06DFAE58 /* Extensions */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Platform/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		0B35B9C33DE3F89D4B945F7C /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Home/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		0D29CE20A9F34A6FA52BB1CE /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Extensions;
+			sourceTree = "<group>";
 			exceptions = (
-				B8D1DDFED41574662A4E7EBD /* Exceptions for "iOS" folder in "Twinskaraoke" target */,
+				B8994416686EEAFB2F3D4E3A /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				BB0EB399043DE63DB8056818 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				813FA7E0CE6F921272A0429B /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				A5E8B984D31150BD7BBD9FBA /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				29184E5CDD3162B97F70AD69 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				4288EA6D56EBD560833674CD /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
-			name = iOS;
-			path = Apps/iOS;
-			sourceTree = SOURCE_ROOT;
 		};
-		0E9A92C4DF05BE8842D023B2 /* watchOS */ = {
+		85AC3C65477F057027B49465 /* Apps */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Playback/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		1055996751682240277C1B03 /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = macOS;
-			path = Packages/Features/Artwork/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		160B6354CC61BE6CD8EEE4D9 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Search/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		172E2EA273909691424B1BC5 /* Shared */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Shared;
-			path = Extensions/Intents/Shared;
-			sourceTree = SOURCE_ROOT;
-		};
-		1965891C31BE072A69A5018D /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Search/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		19E2326146C7EE510F48007E /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Lyrics/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		1DEAF7D2C835AC6884711F6F /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/UI/Animations/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		1E67E41E92B5201427D958CE /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Account/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		2280A2F6AB4A9A4EB19D561C /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/UI/Components/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		23E091017C63498421B125A4 /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = macOS;
-			path = Packages/Features/Playback/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		2540878FA9C15EDD2181BDFA /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Artwork/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		2552ED125DB1162DEC1CF613 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Artwork/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		2A92FFB24CCBBA429FBFA48F /* iPadOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iPadOS;
-			path = Apps/iPadOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		2B9C855DF955F816B82196BF /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Security/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		2CDE669A79D8825F1E924E6F /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = macOS;
-			path = Packages/Features/Search/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		35E1EA6B61D4B964CEAA77F7 /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = macOS;
-			path = Packages/Features/Account/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		3C18AA44E49EE4A8CFD439DF /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Tests/UITests/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		3D49859EA168CD11DEDA191C /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Home/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		3D571BA28DF048A0E6503C8B /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Logging/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		428863B7B40A86A732FFE85F /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/UI/DesignSystem/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		43FBA53D512F298BC2620E1B /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Artwork/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		481DE525FC462FF31AE5960C /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Foundation/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		4A84955D9296125F6F295A5E /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Playback/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		526DF92D6AE3984C818F7231 /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Apps;
+			sourceTree = "<group>";
 			exceptions = (
-				EC3A874C62640347990AAE15 /* Exceptions for "tvOS" folder in "Twinskaraoke TV App" target */,
+				8C1291E22C4D6704B864173E /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				883797515766CC2D318DF5DD /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				0D53BF622D3BB06FD76A0B4A /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				4BF1867DBB6DA79F8AC9AC64 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
-			name = tvOS;
-			path = Apps/tvOS;
-			sourceTree = SOURCE_ROOT;
 		};
-		5329B36EDF1AB090FB42018E /* tvOS */ = {
+		AE7DD7CC8F59BC1E45C291CD /* Packages */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Library/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		57A1A098C942EED9ADC0212D /* Shared */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Shared;
-			path = Extensions/WidgetExtension/Shared;
-			sourceTree = SOURCE_ROOT;
-		};
-		59DEA1AC3AFC74CFD6AF4C3A /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Library/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		5D9A0985A1AE6DBA715C3A44 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Home/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		6078B1E2B71964CE88CDEBC2 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/UI/Accessibility/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		6A3BBFFF9C39028F503EFC2A /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Core/Storage/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		7128FBF7C45F6C41A80FCCC6 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Search/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		7404A4C191920DB0D72FDC50 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Configuration/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		7F1C931E63AD9A577C5DF2CE /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Storage/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		808521FA4C630E1263C3BA76 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Resources/Localization/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		8452E65D6AD8A0BC5257AE27 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Resources/Localization/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		898A184A904BCFB5C637FE51 /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = macOS;
-			path = Packages/Features/Library/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		8A66A97CA71B9A71AF871B39 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Tests/UnitTests/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		8BBAC782D7551B68A7E27DCE /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/UI/Themes/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		8BDA6B3864267A745ECCD720 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Tests/UnitTests/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		8D1AE61C78B525CED03CE9CB /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Account/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		9D00609F2D3DE32D98710A86 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Notifications/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		A13862F26EBF491CB5A14228 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Library/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		A36DE8D8865A643F8B389310 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Packages;
+			sourceTree = "<group>";
 			exceptions = (
-				A927E647EF6B64B1E0E55F80 /* Exceptions for "watchOS" folder in "TwinskaraokeWatchWidgets" target */,
+				FC6B36989F58FF3A6C533729 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				E9AE5CFD830AE9D9837D46D9 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				7315CF9C181E1799F7820861 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				02F71240C278E87765A42CC2 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				862723F28B064F7722AC9C07 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				B5A71585F0F0DE66F05E2357 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
-			name = watchOS;
-			path = Extensions/WidgetExtension/watchOS;
-			sourceTree = SOURCE_ROOT;
 		};
-		AA37A59F19F60D7F45024732 /* Apple */ = {
+		BFE28E0E97B390217A3D62ED /* Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Platform/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		ABE5D84F52FFC60748998EC7 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Features/Library/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		C0C8FAEDD6518B0EBE1CB14C /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/UI/Themes/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		C80A8BA4546A4E76D53EAEF7 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Tests/UITests/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		C98AF9FCF33BBD1F22B3CFA6 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tests;
+			sourceTree = "<group>";
 			exceptions = (
-				5900F449C440D40CAA69FF26 /* Exceptions for "iOS" folder in "TwinskaraokeWidgets" target */,
+				C1ADD6DF53AE2FD5AFC907A6 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				D3389F9F75C578C41BE49320 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				53F1D2375F60F65BDE9C54B0 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				A4EF1EC9BF08A809CE800A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
-			name = iOS;
-			path = Extensions/WidgetExtension/iOS;
-			sourceTree = SOURCE_ROOT;
 		};
-		CC8E4C4888AD781BF1D7CF0F /* iOS */ = {
+		DF968C0E9CA5ACB43C2D0ACB /* Resources */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Platform/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		D170C9ECE80FAEA1551C3753 /* macOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Resources;
+			sourceTree = "<group>";
 			exceptions = (
-				27A6A9411DA7FC7BDEB1401B /* Exceptions for "macOS" folder in "Twinskaraoke Mac App" target */,
+				824358FE37C6B9726CFC2B7C /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				9AFBD60DEBDEB1A3D94069A7 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				FF74E2E251DE8CEFAF538CDE /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				B9557EC63BA4844684BA2023 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				915488A4999445F077A0869C /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				848361712BB97650C4385E7F /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
 			);
-			name = macOS;
-			path = Apps/macOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		D5AC6905F8BF0A9C6F789C8D /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Authentication/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		D655D7D1F4DF7A377CF705A3 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Core/Networking/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		D701C6C02159F8353606222C /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Core/Logging/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		DC2B03DF8B7A333BDBE2C6CC /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Features/Playback/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		DF7E087F373DC18DCFD86468 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				3425FF94894B925440C4947D /* Exceptions for "watchOS" folder in "Twinskaraoke Watch App" target */,
-			);
-			name = watchOS;
-			path = Apps/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		E83E4D70DBABDD6313F07FA7 /* tvOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = tvOS;
-			path = Packages/Features/Playback/tvOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		E8A8D44FB945CC01C3B600A0 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Radio/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		EBFBE5D4CBD229F0EA133252 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Domain/Models/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		EF75068FD9E59C5DE70EA992 /* watchOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = watchOS;
-			path = Packages/Features/Radio/watchOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		FE102C1EC34991498ADF12DD /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Features/Shimeji/iOS;
-			sourceTree = SOURCE_ROOT;
-		};
-		DE5E4FB646B78F994B00BFA3 /* Apple */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = Apple;
-			path = Packages/Data/Apple;
-			sourceTree = SOURCE_ROOT;
-		};
-		681BA36F8ECCA2D1C6820716 /* iOS */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			name = iOS;
-			path = Packages/Data/iOS;
-			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -656,307 +620,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		02A1027D5E3A8C128477F485 /* Shimeji */ = {
-			isa = PBXGroup;
-			children = (
-				FE102C1EC34991498ADF12DD /* iOS */,
-			);
-			name = Shimeji;
-			sourceTree = "<group>";
-		};
-		04F001D0307BE9DD0022135C /* Widget Shared Resources */ = {
-			isa = PBXGroup;
-			children = (
-				E18200000000000000000020 /* Packages/Domain/Models/Apple/RadioNowPlaying.swift */,
-				E18200000000000000000022 /* Resources/Localization/Apple/Localizable.xcstrings */,
-			);
-			name = "Widget Shared Resources";
-			sourceTree = "<group>";
-		};
-		06A364091367224CCBE7462D /* Search */ = {
-			isa = PBXGroup;
-			children = (
-				7128FBF7C45F6C41A80FCCC6 /* iOS */,
-				2CDE669A79D8825F1E924E6F /* macOS */,
-				1965891C31BE072A69A5018D /* tvOS */,
-				160B6354CC61BE6CD8EEE4D9 /* watchOS */,
-			);
-			name = Search;
-			sourceTree = "<group>";
-		};
-		15A8B1FBBCBB19BEF371A3D0 /* Configuration */ = {
-			isa = PBXGroup;
-			children = (
-				7404A4C191920DB0D72FDC50 /* Apple */,
-			);
-			name = Configuration;
-			sourceTree = "<group>";
-		};
-		19C1117F1279B584E407E60F /* UnitTests */ = {
-			isa = PBXGroup;
-			children = (
-				8A66A97CA71B9A71AF871B39 /* iOS */,
-				8BDA6B3864267A745ECCD720 /* watchOS */,
-			);
-			name = UnitTests;
-			sourceTree = "<group>";
-		};
-		1B304115CBE03AC4C745813F /* Foundation */ = {
-			isa = PBXGroup;
-			children = (
-				481DE525FC462FF31AE5960C /* Apple */,
-			);
-			name = Foundation;
-			sourceTree = "<group>";
-		};
-		1D3F603E9CD07BF80E64EB9E /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-			);
-			name = Components;
-			sourceTree = "<group>";
-		};
-		1D80DEFC068DFF6E0032A2B1 /* Networking */ = {
-			isa = PBXGroup;
-			children = (
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-			);
-			name = Networking;
-			sourceTree = "<group>";
-		};
-		23CC45EF0A145066B83C4E4C /* Lyrics */ = {
-			isa = PBXGroup;
-			children = (
-				19E2326146C7EE510F48007E /* iOS */,
-			);
-			name = Lyrics;
-			sourceTree = "<group>";
-		};
-		26F46C72DE70B1761B88A8C2 /* Features */ = {
-			isa = PBXGroup;
-			children = (
-				5142ADEE519B33157EA4750D /* Account */,
-				3717F19C62DAF0DC6412684B /* Artwork */,
-				E2055E52AFE79E6C2AF64736 /* Home */,
-				835F51A38910F4D78C38AE49 /* Library */,
-				23CC45EF0A145066B83C4E4C /* Lyrics */,
-				A6338190F220BCAEBF49B4CD /* Notifications */,
-				2BF3E6C4BD68AEF45D57ABF7 /* Playback */,
-				E1CB1D91C5A7AB1AC7B7B6A4 /* Radio */,
-				06A364091367224CCBE7462D /* Search */,
-				02A1027D5E3A8C128477F485 /* Shimeji */,
-			);
-			name = Features;
-			sourceTree = "<group>";
-		};
-		284D19E85750D9BB48307C21 /* Themes */ = {
-			isa = PBXGroup;
-			children = (
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				8BBAC782D7551B68A7E27DCE /* iOS */,
-			);
-			name = Themes;
-			sourceTree = "<group>";
-		};
-		2B50926D3723451E06DFAE58 /* Extensions */ = {
-			isa = PBXGroup;
-			children = (
-				B0A4118C958CD977898BB966 /* Intents */,
-				9059074332326D17D119892E /* WidgetExtension */,
-			);
-			name = Extensions;
-			sourceTree = "<group>";
-		};
-		2BF3E6C4BD68AEF45D57ABF7 /* Playback */ = {
-			isa = PBXGroup;
-			children = (
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				4A84955D9296125F6F295A5E /* iOS */,
-				23E091017C63498421B125A4 /* macOS */,
-				E83E4D70DBABDD6313F07FA7 /* tvOS */,
-				0E9A92C4DF05BE8842D023B2 /* watchOS */,
-			);
-			name = Playback;
-			sourceTree = "<group>";
-		};
-		30AD9BE11C196D2140636957 /* Logging */ = {
-			isa = PBXGroup;
-			children = (
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				D701C6C02159F8353606222C /* iOS */,
-			);
-			name = Logging;
-			sourceTree = "<group>";
-		};
-		3717F19C62DAF0DC6412684B /* Artwork */ = {
-			isa = PBXGroup;
-			children = (
-				2552ED125DB1162DEC1CF613 /* iOS */,
-				1055996751682240277C1B03 /* macOS */,
-				2540878FA9C15EDD2181BDFA /* tvOS */,
-				43FBA53D512F298BC2620E1B /* watchOS */,
-			);
-			name = Artwork;
-			sourceTree = "<group>";
-		};
-		5142ADEE519B33157EA4750D /* Account */ = {
-			isa = PBXGroup;
-			children = (
-				8D1AE61C78B525CED03CE9CB /* tvOS */,
-				35E1EA6B61D4B964CEAA77F7 /* macOS */,
-				1E67E41E92B5201427D958CE /* iOS */,
-			);
-			name = Account;
-			sourceTree = "<group>";
-		};
-		65A8A318C3EA3B77CC00D7DA /* UI */ = {
-			isa = PBXGroup;
-			children = (
-				9BD8A12F782B0ACBA5682FB1 /* Accessibility */,
-				EC08DBDFFB141EF849D207D6 /* Animations */,
-				1D3F603E9CD07BF80E64EB9E /* Components */,
-				B5E446284A6775E5994D3722 /* DesignSystem */,
-				284D19E85750D9BB48307C21 /* Themes */,
-			);
-			name = UI;
-			sourceTree = "<group>";
-		};
-		6C0E732DF39CE545F0E255B0 /* Security */ = {
-			isa = PBXGroup;
-			children = (
-				2B9C855DF955F816B82196BF /* Apple */,
-			);
-			name = Security;
-			sourceTree = "<group>";
-		};
-		835F51A38910F4D78C38AE49 /* Library */ = {
-			isa = PBXGroup;
-			children = (
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				A13862F26EBF491CB5A14228 /* iOS */,
-				898A184A904BCFB5C637FE51 /* macOS */,
-				5329B36EDF1AB090FB42018E /* tvOS */,
-				59DEA1AC3AFC74CFD6AF4C3A /* watchOS */,
-			);
-			name = Library;
-			sourceTree = "<group>";
-		};
-		85AC3C65477F057027B49465 /* Apps */ = {
-			isa = PBXGroup;
-			children = (
-				0D29CE20A9F34A6FA52BB1CE /* iOS */,
-				2A92FFB24CCBBA429FBFA48F /* iPadOS */,
-				D170C9ECE80FAEA1551C3753 /* macOS */,
-				526DF92D6AE3984C818F7231 /* tvOS */,
-				DF7E087F373DC18DCFD86468 /* watchOS */,
-			);
-			name = Apps;
-			sourceTree = "<group>";
-		};
-		89467523EDB71ACA7651C8CE /* UITests */ = {
-			isa = PBXGroup;
-			children = (
-				3C18AA44E49EE4A8CFD439DF /* iOS */,
-				C80A8BA4546A4E76D53EAEF7 /* watchOS */,
-			);
-			name = UITests;
-			sourceTree = "<group>";
-		};
 		8C0263F917FCAAD4E520C8CF /* OS X */ = {
 			isa = PBXGroup;
 			children = (
 				6B789992B5FC6B90FC2528F9 /* Cocoa.framework */,
 			);
 			name = "OS X";
-			sourceTree = "<group>";
-		};
-		8FAF0962B454E41044CB1F38 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
-			);
-			name = Models;
-			sourceTree = "<group>";
-		};
-		9059074332326D17D119892E /* WidgetExtension */ = {
-			isa = PBXGroup;
-			children = (
-				57A1A098C942EED9ADC0212D /* Shared */,
-				C98AF9FCF33BBD1F22B3CFA6 /* iOS */,
-				A36DE8D8865A643F8B389310 /* watchOS */,
-			);
-			name = WidgetExtension;
-			sourceTree = "<group>";
-		};
-		9766DB2D3962C951D1AFC6F0 /* Domain */ = {
-			isa = PBXGroup;
-			children = (
-				8FAF0962B454E41044CB1F38 /* Models */,
-			);
-			name = Domain;
-			sourceTree = "<group>";
-		};
-		9BD8A12F782B0ACBA5682FB1 /* Accessibility */ = {
-			isa = PBXGroup;
-			children = (
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-			);
-			name = Accessibility;
-			sourceTree = "<group>";
-		};
-		A2CA71E18C90B46C81CC20FB /* Authentication */ = {
-			isa = PBXGroup;
-			children = (
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-			);
-			name = Authentication;
-			sourceTree = "<group>";
-		};
-		A6338190F220BCAEBF49B4CD /* Notifications */ = {
-			isa = PBXGroup;
-			children = (
-				9D00609F2D3DE32D98710A86 /* iOS */,
-			);
-			name = Notifications;
-			sourceTree = "<group>";
-		};
-		AE7DD7CC8F59BC1E45C291CD /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				109EEFE706484B4FC5357A6B /* Data */,
-				D23758F217C8057407289404 /* Core */,
-				9766DB2D3962C951D1AFC6F0 /* Domain */,
-				26F46C72DE70B1761B88A8C2 /* Features */,
-				E144BB3A5D2B678410DE3917 /* Platform */,
-				65A8A318C3EA3B77CC00D7DA /* UI */,
-			);
-			name = Packages;
-			sourceTree = "<group>";
-		};
-		B0A4118C958CD977898BB966 /* Intents */ = {
-			isa = PBXGroup;
-			children = (
-				172E2EA273909691424B1BC5 /* Shared */,
-			);
-			name = Intents;
-			sourceTree = "<group>";
-		};
-		B5E446284A6775E5994D3722 /* DesignSystem */ = {
-			isa = PBXGroup;
-			children = (
-				428863B7B40A86A732FFE85F /* Apple */,
-			);
-			name = DesignSystem;
-			sourceTree = "<group>";
-		};
-		BFE28E0E97B390217A3D62ED /* Tests */ = {
-			isa = PBXGroup;
-			children = (
-				89467523EDB71ACA7651C8CE /* UITests */,
-				19C1117F1279B584E407E60F /* UnitTests */,
-			);
-			name = Tests;
 			sourceTree = "<group>";
 		};
 		D0DB31F62FA8A3F80089C24C /* Frameworks */ = {
@@ -970,12 +639,11 @@
 		D0F981AC2F94C10900FD69AB = {
 			isa = PBXGroup;
 			children = (
-				D0DB31F62FA8A3F80089C24C /* Frameworks */,
-				D0F981B62F94C10900FD69AB /* Products */,
-				04F001D0307BE9DD0022135C /* Widget Shared Resources */,
 				85AC3C65477F057027B49465 /* Apps */,
 				2B50926D3723451E06DFAE58 /* Extensions */,
+				D0DB31F62FA8A3F80089C24C /* Frameworks */,
 				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				D0F981B62F94C10900FD69AB /* Products */,
 				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 				BFE28E0E97B390217A3D62ED /* Tests */,
 			);
@@ -984,104 +652,18 @@
 		D0F981B62F94C10900FD69AB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D0F981B52F94C10900FD69AB /* Twinskaraoke.app */,
-				E18200000000000000000002 /* TwinskaraokeWidgets.appex */,
-				D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */,
+				33CB3DD4ECD8C15D69EDD6DE /* Twinskaraoke Mac App.app */,
 				D0AA0000000000000000E00A /* Twinskaraoke TV App.app */,
-				D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */,
-				D1A000012FAD000100000001 /* TwinskaraokeTests.xctest */,
-				D1A000022FAD000100000002 /* TwinskaraokeUITests.xctest */,
+				D0F981D82F94C10A00FD69AB /* Twinskaraoke Watch App.app */,
 				D1A000032FAD000100000003 /* Twinskaraoke Watch AppTests.xctest */,
 				D1A000042FAD000100000004 /* Twinskaraoke Watch AppUITests.xctest */,
-				33CB3DD4ECD8C15D69EDD6DE /* Twinskaraoke Mac App.app */,
+				D0F981B52F94C10900FD69AB /* Twinskaraoke.app */,
+				D1A000012FAD000100000001 /* TwinskaraokeTests.xctest */,
+				D1A000022FAD000100000002 /* TwinskaraokeUITests.xctest */,
+				D0BB0000000000000000E00A /* TwinskaraokeWatchWidgets.appex */,
+				E18200000000000000000002 /* TwinskaraokeWidgets.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		D23758F217C8057407289404 /* Core */ = {
-			isa = PBXGroup;
-			children = (
-				A2CA71E18C90B46C81CC20FB /* Authentication */,
-				15A8B1FBBCBB19BEF371A3D0 /* Configuration */,
-				1B304115CBE03AC4C745813F /* Foundation */,
-				30AD9BE11C196D2140636957 /* Logging */,
-				1D80DEFC068DFF6E0032A2B1 /* Networking */,
-				6C0E732DF39CE545F0E255B0 /* Security */,
-				E16E8731BD3F130C5F706AF8 /* Storage */,
-			);
-			name = Core;
-			sourceTree = "<group>";
-		};
-		D5CB93CBC2BF598F7BE5B395 /* Localization */ = {
-			isa = PBXGroup;
-			children = (
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				808521FA4C630E1263C3BA76 /* iOS */,
-			);
-			name = Localization;
-			sourceTree = "<group>";
-		};
-		DF968C0E9CA5ACB43C2D0ACB /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				D5CB93CBC2BF598F7BE5B395 /* Localization */,
-			);
-			name = Resources;
-			sourceTree = "<group>";
-		};
-		E144BB3A5D2B678410DE3917 /* Platform */ = {
-			isa = PBXGroup;
-			children = (
-				067C5E8F05FE4C91438B6F29 /* watchOS */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				CC8E4C4888AD781BF1D7CF0F /* iOS */,
-			);
-			name = Platform;
-			sourceTree = "<group>";
-		};
-		E16E8731BD3F130C5F706AF8 /* Storage */ = {
-			isa = PBXGroup;
-			children = (
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				6A3BBFFF9C39028F503EFC2A /* iOS */,
-			);
-			name = Storage;
-			sourceTree = "<group>";
-		};
-		E1CB1D91C5A7AB1AC7B7B6A4 /* Radio */ = {
-			isa = PBXGroup;
-			children = (
-				E8A8D44FB945CC01C3B600A0 /* iOS */,
-				EF75068FD9E59C5DE70EA992 /* watchOS */,
-			);
-			name = Radio;
-			sourceTree = "<group>";
-		};
-		E2055E52AFE79E6C2AF64736 /* Home */ = {
-			isa = PBXGroup;
-			children = (
-				5D9A0985A1AE6DBA715C3A44 /* iOS */,
-				0B35B9C33DE3F89D4B945F7C /* tvOS */,
-				3D49859EA168CD11DEDA191C /* watchOS */,
-			);
-			name = Home;
-			sourceTree = "<group>";
-		};
-		EC08DBDFFB141EF849D207D6 /* Animations */ = {
-			isa = PBXGroup;
-			children = (
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-			);
-			name = Animations;
-			sourceTree = "<group>";
-		};
-		109EEFE706484B4FC5357A6B /* Data */ = {
-			isa = PBXGroup;
-			name = Data;
-			children = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				681BA36F8ECCA2D1C6820716 /* iOS */,
-			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1100,32 +682,10 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				1055996751682240277C1B03 /* macOS */,
-				172E2EA273909691424B1BC5 /* Shared */,
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-				23E091017C63498421B125A4 /* macOS */,
-				2B9C855DF955F816B82196BF /* Apple */,
-				2CDE669A79D8825F1E924E6F /* macOS */,
-				35E1EA6B61D4B964CEAA77F7 /* macOS */,
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				428863B7B40A86A732FFE85F /* Apple */,
-				481DE525FC462FF31AE5960C /* Apple */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-				7404A4C191920DB0D72FDC50 /* Apple */,
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				898A184A904BCFB5C637FE51 /* macOS */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				D170C9ECE80FAEA1551C3753 /* macOS */,
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
+				85AC3C65477F057027B49465 /* Apps */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = "Twinskaraoke Mac App";
 			productName = "Twinskaraoke Mac App";
@@ -1145,33 +705,10 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				0B35B9C33DE3F89D4B945F7C /* tvOS */,
-				172E2EA273909691424B1BC5 /* Shared */,
-				1965891C31BE072A69A5018D /* tvOS */,
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-				2540878FA9C15EDD2181BDFA /* tvOS */,
-				2B9C855DF955F816B82196BF /* Apple */,
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				428863B7B40A86A732FFE85F /* Apple */,
-				481DE525FC462FF31AE5960C /* Apple */,
-				526DF92D6AE3984C818F7231 /* tvOS */,
-				5329B36EDF1AB090FB42018E /* tvOS */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-				7404A4C191920DB0D72FDC50 /* Apple */,
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				8D1AE61C78B525CED03CE9CB /* tvOS */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				E83E4D70DBABDD6313F07FA7 /* tvOS */,
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
+				85AC3C65477F057027B49465 /* Apps */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = "Twinskaraoke TV App";
 			productName = "Twinskaraoke TV App";
@@ -1191,27 +728,9 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				172E2EA273909691424B1BC5 /* Shared */,
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-				2B9C855DF955F816B82196BF /* Apple */,
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				428863B7B40A86A732FFE85F /* Apple */,
-				481DE525FC462FF31AE5960C /* Apple */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-				7404A4C191920DB0D72FDC50 /* Apple */,
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				A36DE8D8865A643F8B389310 /* watchOS */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = TwinskaraokeWatchWidgets;
 			productName = TwinskaraokeWatchWidgets;
@@ -1235,44 +754,10 @@
 				E1820000000000000000000F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				681BA36F8ECCA2D1C6820716 /* iOS */,
-				0D29CE20A9F34A6FA52BB1CE /* iOS */,
-				172E2EA273909691424B1BC5 /* Shared */,
-				19E2326146C7EE510F48007E /* iOS */,
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-				1E67E41E92B5201427D958CE /* iOS */,
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-				2552ED125DB1162DEC1CF613 /* iOS */,
-				2A92FFB24CCBBA429FBFA48F /* iPadOS */,
-				2B9C855DF955F816B82196BF /* Apple */,
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				428863B7B40A86A732FFE85F /* Apple */,
-				481DE525FC462FF31AE5960C /* Apple */,
-				4A84955D9296125F6F295A5E /* iOS */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				5D9A0985A1AE6DBA715C3A44 /* iOS */,
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-				6A3BBFFF9C39028F503EFC2A /* iOS */,
-				7128FBF7C45F6C41A80FCCC6 /* iOS */,
-				7404A4C191920DB0D72FDC50 /* Apple */,
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				808521FA4C630E1263C3BA76 /* iOS */,
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				8BBAC782D7551B68A7E27DCE /* iOS */,
-				9D00609F2D3DE32D98710A86 /* iOS */,
-				A13862F26EBF491CB5A14228 /* iOS */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				CC8E4C4888AD781BF1D7CF0F /* iOS */,
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-				D701C6C02159F8353606222C /* iOS */,
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				E8A8D44FB945CC01C3B600A0 /* iOS */,
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
-				FE102C1EC34991498ADF12DD /* iOS */,
+				85AC3C65477F057027B49465 /* Apps */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = Twinskaraoke;
 			packageProductDependencies = (
@@ -1298,7 +783,7 @@
 				D1A000162FAD000100000016 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				8A66A97CA71B9A71AF871B39 /* iOS */,
+				BFE28E0E97B390217A3D62ED /* Tests */,
 			);
 			name = TwinskaraokeTests;
 			productName = TwinskaraokeTests;
@@ -1319,7 +804,7 @@
 				D1A000182FAD000100000018 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3C18AA44E49EE4A8CFD439DF /* iOS */,
+				BFE28E0E97B390217A3D62ED /* Tests */,
 			);
 			name = TwinskaraokeUITests;
 			productName = TwinskaraokeUITests;
@@ -1341,34 +826,10 @@
 				D0BB0000000000000000E00D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				DE5E4FB646B78F994B00BFA3 /* Apple */,
-				067C5E8F05FE4C91438B6F29 /* watchOS */,
-				0E9A92C4DF05BE8842D023B2 /* watchOS */,
-				160B6354CC61BE6CD8EEE4D9 /* watchOS */,
-				172E2EA273909691424B1BC5 /* Shared */,
-				1DEAF7D2C835AC6884711F6F /* Apple */,
-				2280A2F6AB4A9A4EB19D561C /* Apple */,
-				2B9C855DF955F816B82196BF /* Apple */,
-				3D49859EA168CD11DEDA191C /* watchOS */,
-				3D571BA28DF048A0E6503C8B /* Apple */,
-				428863B7B40A86A732FFE85F /* Apple */,
-				43FBA53D512F298BC2620E1B /* watchOS */,
-				481DE525FC462FF31AE5960C /* Apple */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				59DEA1AC3AFC74CFD6AF4C3A /* watchOS */,
-				6078B1E2B71964CE88CDEBC2 /* Apple */,
-				7404A4C191920DB0D72FDC50 /* Apple */,
-				7F1C931E63AD9A577C5DF2CE /* Apple */,
-				8452E65D6AD8A0BC5257AE27 /* Apple */,
-				AA37A59F19F60D7F45024732 /* Apple */,
-				ABE5D84F52FFC60748998EC7 /* Apple */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				D5AC6905F8BF0A9C6F789C8D /* Apple */,
-				D655D7D1F4DF7A377CF705A3 /* Apple */,
-				DC2B03DF8B7A333BDBE2C6CC /* Apple */,
-				DF7E087F373DC18DCFD86468 /* watchOS */,
-				EBFBE5D4CBD229F0EA133252 /* Apple */,
-				EF75068FD9E59C5DE70EA992 /* watchOS */,
+				85AC3C65477F057027B49465 /* Apps */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = "Twinskaraoke Watch App";
 			productName = "Twinskaraoke Watch App";
@@ -1389,7 +850,7 @@
 				D1A0001A2FAD00010000001A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				8BDA6B3864267A745ECCD720 /* watchOS */,
+				BFE28E0E97B390217A3D62ED /* Tests */,
 			);
 			name = "Twinskaraoke Watch AppTests";
 			productName = "Twinskaraoke Watch AppTests";
@@ -1410,7 +871,7 @@
 				D1A0001C2FAD00010000001C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				C80A8BA4546A4E76D53EAEF7 /* watchOS */,
+				BFE28E0E97B390217A3D62ED /* Tests */,
 			);
 			name = "Twinskaraoke Watch AppUITests";
 			productName = "Twinskaraoke Watch AppUITests";
@@ -1430,10 +891,9 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				172E2EA273909691424B1BC5 /* Shared */,
-				57A1A098C942EED9ADC0212D /* Shared */,
-				C0C8FAEDD6518B0EBE1CB14C /* Apple */,
-				C98AF9FCF33BBD1F22B3CFA6 /* iOS */,
+				2B50926D3723451E06DFAE58 /* Extensions */,
+				AE7DD7CC8F59BC1E45C291CD /* Packages */,
+				DF968C0E9CA5ACB43C2D0ACB /* Resources */,
 			);
 			name = TwinskaraokeWidgets;
 			productName = TwinskaraokeWidgets;
@@ -1585,7 +1045,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E18200000000000000000023 /* Resources/Localization/Apple/Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1659,7 +1118,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E18200000000000000000021 /* Packages/Domain/Models/Apple/RadioNowPlaying.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
