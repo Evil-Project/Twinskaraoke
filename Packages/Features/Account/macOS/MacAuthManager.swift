@@ -55,15 +55,19 @@ final class MacAuthManager {
     private(set) var uploadLimits: UploadLimits?
     private(set) var isRefreshingProfile = false
     private(set) var profileError: String?
+    /// Bumped by `logout()`. A refresh still in flight from the previous
+    /// session must not clear `isRefreshingProfile` for the next one.
+    @ObservationIgnored private var profileRefreshRevision = 0
 
     /// Fetches profile, badges and upload limits. Mirrors
     /// `TVAuthManager.refreshAccount` — same endpoints, same partial-failure
     /// handling, so one endpoint being down doesn't blank the whole screen.
     func refreshAccount() async {
         guard isLoggedIn, let token = CredentialStore.token, !isRefreshingProfile else { return }
+        let revision = profileRefreshRevision
         isRefreshingProfile = true
         profileError = nil
-        defer { isRefreshingProfile = false }
+        defer { if profileRefreshRevision == revision { isRefreshingProfile = false } }
 
         async let fetchedProfile = try? Self.authorizedData(path: "/api/badge/profile")
         async let fetchedLimits = try? Self.authorizedData(path: "/api/user/upload-limits")
@@ -438,6 +442,11 @@ final class MacAuthManager {
         // A live pairing code outliving sign-out could complete behind the
         // user and silently sign them back in.
         cancelQRSignIn()
+        // Release the refresh guard now: otherwise signing straight back in,
+        // while the old session's refresh is still waiting on the network,
+        // skipped the new account's profile fetch entirely.
+        profileRefreshRevision &+= 1
+        isRefreshingProfile = false
         CredentialStore.deleteToken()
         isLoggedIn = false
         username = nil

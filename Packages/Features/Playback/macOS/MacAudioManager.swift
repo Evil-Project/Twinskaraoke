@@ -55,7 +55,10 @@ final class MacAudioManager {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    private var failedToEndObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
+    private var artworkTask: Task<Void, Never>?
     /// Indices that failed to load, so a broken queue can't spin forever.
     private var failedIndices: Set<Int> = []
     /// Whether playback should begin once the item becomes ready. A pause
@@ -101,13 +104,17 @@ final class MacAudioManager {
             if let song = currentSong { play(song: song, context: queue) }
             return
         }
-        isPlaying ? pause() : resume()
+        // While loading or buffering the button shows the hourglass, and a
+        // click there means "stop", not another resume.
+        let wantsToStop = isPlaying || (isLoading && wantsPlaybackWhenReady)
+        wantsToStop ? pause() : resume()
     }
 
     func pause() {
         wantsPlaybackWhenReady = false
         player?.pause()
         isPlaying = false
+        isLoading = false
         updateNowPlayingPlaybackState()
     }
 
@@ -120,13 +127,8 @@ final class MacAudioManager {
     }
 
     func playNext() {
-        guard !queue.isEmpty else { return }
-        switch playbackMode {
-        case .shuffle:
-            currentIndex = randomIndex(excluding: queue.count > 1 ? currentIndex : nil)
-        case .listLoop, .songLoop:
-            currentIndex = (currentIndex + 1) % queue.count
-        }
+        guard let next = nextPlayableIndex(forward: true) else { return }
+        currentIndex = next
         startCurrent()
     }
 
@@ -138,7 +140,8 @@ final class MacAudioManager {
             seek(to: 0)
             return
         }
-        currentIndex = currentIndex == 0 ? queue.count - 1 : currentIndex - 1
+        guard let previous = nextPlayableIndex(forward: false) else { return }
+        currentIndex = previous
         startCurrent()
     }
 
@@ -208,6 +211,27 @@ final class MacAudioManager {
             }
         }
 
+        // The status observer only covers the initial load. This one keeps the
+        // hourglass honest when a stream stalls mid-song and recovers.
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, self.player === player else { return }
+                switch player.timeControlStatus {
+                case .playing:
+                    self.isLoading = false
+                    self.isPlaying = true
+                case .waitingToPlayAtSpecifiedRate:
+                    self.isLoading = self.wantsPlaybackWhenReady
+                case .paused:
+                    self.isPlaying = false
+                    if item.status == .readyToPlay { self.isLoading = false }
+                @unknown default:
+                    break
+                }
+                self.updateNowPlayingPlaybackState()
+            }
+        }
+
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main
@@ -230,6 +254,21 @@ final class MacAudioManager {
             Task { @MainActor in
                 guard let self, self.player === player else { return }
                 self.handleReachedEnd()
+            }
+        }
+
+        // A stream that drops mid-song posts this instead of a status change;
+        // without it the bar kept showing a playing song that had stopped.
+        failedToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] notification in
+            let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            let message = error?.localizedDescription
+            Task { @MainActor in
+                guard let self, self.player === player else { return }
+                self.handleFailure(message ?? String(localized: "Couldn't play this song."))
             }
         }
     }
@@ -266,13 +305,21 @@ final class MacAudioManager {
         }
     }
 
-    /// Avoid revisiting failed indices while searching for playable audio.
-    private func randomIndex(excluding excluded: Int?) -> Int {
-        let candidates = queue.indices.filter { $0 != excluded && !failedIndices.contains($0) }
-        if let pick = candidates.randomElement() { return pick }
-        // Nothing unplayed left: fall back to any index other than the current
-        // one so the caller's own exhaustion guard can end the walk.
-        return queue.indices.filter { $0 != excluded }.randomElement() ?? currentIndex
+    /// The next index to play in the given direction, skipping tracks that
+    /// already failed in this queue. Nil once nothing playable is left.
+    private func nextPlayableIndex(forward: Bool) -> Int? {
+        guard !queue.isEmpty, failedIndices.count < queue.count else { return nil }
+        if playbackMode == .shuffle {
+            let candidates = queue.indices.filter { $0 != currentIndex && !failedIndices.contains($0) }
+            if let pick = candidates.randomElement() { return pick }
+            return failedIndices.contains(currentIndex) ? nil : currentIndex
+        }
+        for offset in 1 ... queue.count {
+            let step = forward ? offset : -offset
+            let candidate = ((currentIndex + step) % queue.count + queue.count) % queue.count
+            if !failedIndices.contains(candidate) { return candidate }
+        }
+        return nil
     }
 
     private func teardownPlayer() {
@@ -284,8 +331,16 @@ final class MacAudioManager {
             NotificationCenter.default.removeObserver(endObserver)
         }
         endObserver = nil
+        if let failedToEndObserver {
+            NotificationCenter.default.removeObserver(failedToEndObserver)
+        }
+        failedToEndObserver = nil
         statusObservation?.invalidate()
         statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
+        artworkTask?.cancel()
+        artworkTask = nil
         player?.pause()
         player = nil
         isPlaying = false
@@ -344,10 +399,11 @@ final class MacAudioManager {
     }
 
     private func loadNowPlayingArtwork(for song: Song) {
+        artworkTask?.cancel()
         guard let url = song.thumbnailURL else { return }
-        Task { @MainActor in
+        artworkTask = Task { @MainActor in
             guard let image = await MacImageCache.shared.image(for: url),
-                  currentSong?.id == song.id else { return }
+                  !Task.isCancelled, currentSong?.id == song.id else { return }
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
