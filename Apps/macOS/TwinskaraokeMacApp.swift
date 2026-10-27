@@ -20,7 +20,7 @@ struct TwinskaraokeMacApp: App {
             // from a media app. This is the main affordance Catalyst couldn't
             // have given us for free.
             CommandMenu("Playback") {
-                Button(audio.isPlaying ? "Pause" : "Play") {
+                Button(audio.isPlaybackRequested ? "Pause" : "Play") {
                     audio.togglePlayPause()
                 }
                 .keyboardShortcut(.space, modifiers: [])

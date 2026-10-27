@@ -43,4 +43,15 @@ struct AppMotionTests {
         #expect(AppMotion.reduceDecorativeEffects(reduceMotion: false, lowPowerModeEnabled: true))
         #expect(!AppMotion.reduceDecorativeEffects(reduceMotion: false, lowPowerModeEnabled: false))
     }
+
+    @Test("Decorative effects pause once the device runs hot")
+    func decorativeEffectsThermalPolicy() {
+        func reduces(_ state: ProcessInfo.ThermalState) -> Bool {
+            AppMotion.reduceDecorativeEffects(reduceMotion: false, lowPowerModeEnabled: false, thermalState: state)
+        }
+        #expect(!reduces(.nominal))
+        #expect(!reduces(.fair))
+        #expect(reduces(.serious))
+        #expect(reduces(.critical))
+    }
 }

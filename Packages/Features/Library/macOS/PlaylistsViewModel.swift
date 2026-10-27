@@ -9,10 +9,10 @@ final class MacPlaylistsViewModel {
     private(set) var errorMessage: String?
 
     private var hasLoaded = false
-    /// Bumped by `invalidate()`. A response carrying a stale generation is
-    /// discarded rather than assigned — without this, a slow request issued for
-    /// the previous account could land after a switch and show one user's
-    /// private playlists to the next.
+    /// Bumped by `reload()` and `invalidate()`. A response carrying a stale
+    /// generation is discarded rather than assigned — without this, a slow
+    /// request issued for the previous account could land after a switch and
+    /// show one user's private playlists to the next.
     private var generation = 0
 
     func loadIfNeeded() async {
@@ -24,6 +24,9 @@ final class MacPlaylistsViewModel {
     /// playlists used to fall back into this list, which buried the rest of the
     /// sidebar under dozens of rows nobody asked for — they live in Library now.
     func reload() async {
+        // Each reload supersedes the last: a manual refresh racing the
+        // sign-in reload must not let the older response land second.
+        generation &+= 1
         let requestGeneration = generation
         isLoading = true
         errorMessage = nil

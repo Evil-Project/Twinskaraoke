@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 /// In-memory + disk artwork cache for the Mac app.
@@ -13,12 +14,26 @@ final class MacImageCache: @unchecked Sendable {
 
     private let memory = NSCache<NSURL, NSImage>()
     private let disk = URLCache(memoryCapacity: 16 * 1024 * 1024, diskCapacity: 128 * 1024 * 1024)
+    /// Own session so a dead artwork host gives up after 20s instead of the
+    /// shared session's 60, and so responses aren't stored a second time in
+    /// `URLCache.shared` next to `disk`.
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()
     /// Guards `inFlight` and `failures` (NSCache/URLCache are already thread-safe).
     private let stateLock = NSLock()
     private var inFlight: [NSURL: Task<NSImage?, Never>] = [:]
     /// Short-lived negative cache so scrolling doesn't hammer a dead host.
     private var failures: [NSURL: Date] = [:]
     private static let negativeTTL: TimeInterval = 30
+    /// Larger than any real cover; anything bigger is not artwork.
+    private nonisolated static let maximumEncodedBytes = 24 * 1024 * 1024
+    /// Comfortably above the largest tile at 2x, so nothing visibly softens.
+    private nonisolated static let maximumPixelSize = 1_600
 
     private init() {
         memory.countLimit = 400
@@ -36,7 +51,8 @@ final class MacImageCache: @unchecked Sendable {
         if let cached = memory.object(forKey: key) { return cached }
 
         let request = URLRequest(url: url)
-        if let stored = disk.cachedResponse(for: request), let image = NSImage(data: stored.data) {
+        if let stored = disk.cachedResponse(for: request),
+           let image = await Self.decodeOffMain(stored.data) {
             memory.setObject(image, forKey: key, cost: Self.memoryCost(for: image, fallback: stored.data.count))
             return image
         }
@@ -69,10 +85,10 @@ final class MacImageCache: @unchecked Sendable {
         if let task = inFlight[key] {
             return .coalesce(task)
         }
-        let task = Task<NSImage?, Never> { [memory, disk] in
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
+        let task = Task<NSImage?, Never> { [memory, disk, session] in
+            guard let (data, response) = try? await session.data(for: request),
                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-                  let image = NSImage(data: data)
+                  let image = await Self.decodeOffMain(data)
             else { return nil }
             memory.setObject(image, forKey: key, cost: Self.memoryCost(for: image, fallback: data.count))
             disk.storeCachedResponse(CachedURLResponse(response: response, data: data), for: request)
@@ -80,6 +96,30 @@ final class MacImageCache: @unchecked Sendable {
         }
         inFlight[key] = task
         return .start(task)
+    }
+
+    /// `NSImage(data:)` defers decoding to the first draw, which lands on the
+    /// main thread mid-scroll. ImageIO decodes here, off the main actor, and
+    /// caps the size so an oversized upload can't balloon the memory cache.
+    private static func decodeOffMain(_ data: Data) async -> NSImage? {
+        guard data.count <= maximumEncodedBytes else { return nil }
+        return await Task.detached(priority: .utility) {
+            decodedImage(from: data)
+        }.value
+    }
+
+    private nonisolated static func decodedImage(from data: Data) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 
     private static func memoryCost(for image: NSImage, fallback: Int) -> Int {
