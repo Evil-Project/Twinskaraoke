@@ -150,7 +150,7 @@ struct SplashStudioView: View {
                         }.accessibilityIdentifier("SplashStudio.Export")
                     }
                     Section("Publish") {
-                        Text("Replace Twinskaraoke/Resources/SplashScreens/\(model.draft.kind.rawValue).json in the repository with the exported file, then build and ship a new release. Exporting cannot change an installed app’s bundle.")
+                        Text("Replace Apps/iOS/Resources/SplashScreens/\(model.draft.kind.rawValue).json in the repository with the exported file, then build and ship a new release. Exporting cannot change an installed app’s bundle.")
                             .font(.callout).textSelection(.enabled)
                     }
                 }

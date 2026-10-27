@@ -41564,13 +41564,13 @@
     "Repeat this song." : {
       "comment" : "Text returned when the user toggles the repeat mode to repeat the current song."
     },
+    "Replace Apps/iOS/Resources/SplashScreens/%@.json in the repository with the exported file, then build and ship a new release. Exporting cannot change an installed app’s bundle." : {
+
+    },
     "Replace the current draft with bundled content?" : {
 
     },
     "Replace the current install draft with the proposed walkthrough?" : {
-
-    },
-    "Replace Twinskaraoke/Resources/SplashScreens/%@.json in the repository with the exported file, then build and ship a new release. Exporting cannot change an installed app’s bundle." : {
 
     },
     "Requests translated lyrics." : {

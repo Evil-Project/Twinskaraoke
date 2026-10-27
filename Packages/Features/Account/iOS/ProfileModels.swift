@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-// These shapes now live in TwinskaraokeShared/Models/AccountProfile.swift so
+// These shapes now live in Packages/Domain/Models/Apple/AccountProfile.swift so
 // the Mac and tvOS profile screens decode the same payloads as iOS. The local
 // spellings stay as aliases: they are used across the iOS feature code, and the
 // field lists were already identical, so there is nothing to migrate.

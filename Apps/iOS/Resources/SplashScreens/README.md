@@ -38,8 +38,8 @@ test run, and the test gate uses the same mandatory renderer and controls.
 
 ## Exact canonical source files
 
-- `Twinskaraoke/Resources/SplashScreens/install.json`
-- `Twinskaraoke/Resources/SplashScreens/update.json`
+- `Apps/iOS/Resources/SplashScreens/install.json`
+- `Apps/iOS/Resources/SplashScreens/update.json`
 
 Replace the corresponding file with the exported JSON, retain its filename, and
 build a new release. Export cannot modify the bundle of an installed app. No Swift
@@ -188,7 +188,7 @@ focus; their description is stored in the JSON.
 
 ## Proposed install walkthrough
 
-`Twinskaraoke/Resources/SplashScreens/install-proposed.json` is a separate,
+`Apps/iOS/Resources/SplashScreens/install-proposed.json` is a separate,
 self-contained eight-slide proposal. In Install mode choose **Load Proposed
 Install Walkthrough**, confirm replacing the local draft, and preview or edit it.
 It covers browsing/search, playback/lyrics, favorites/downloads, Home Screen
