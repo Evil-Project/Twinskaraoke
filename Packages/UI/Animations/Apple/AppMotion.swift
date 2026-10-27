@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 #if os(iOS)
@@ -81,10 +82,10 @@ extension EnvironmentValues {
         set { self[AppReduceMotionKey.self] = newValue }
     }
 
-    /// Pauses perpetual, decorative effects when either Reduce Motion or Low
-    /// Power Mode is active. Interaction transitions still use
-    /// `appReduceMotion`, so Low Power Mode does not make the interface feel
-    /// abruptly unanimated.
+    /// Pauses perpetual, decorative effects when Reduce Motion or Low Power
+    /// Mode is active, or the device is running hot. Interaction transitions
+    /// still use `appReduceMotion`, so Low Power Mode does not make the
+    /// interface feel abruptly unanimated.
     var appReduceEffects: Bool {
         get { self[AppReduceEffectsKey.self] }
         set { self[AppReduceEffectsKey.self] = newValue }
@@ -109,6 +110,9 @@ private struct ReduceMotionInjector<Content: View>: View {
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+    // Read before subscribing: ProcessInfo only posts thermal changes to
+    // processes that have accessed `thermalState` first.
+    @State private var thermalState = ProcessInfo.processInfo.thermalState
 
     var body: some View {
         let reduceMotion = AppMotion.reduceMotion(
@@ -121,13 +125,22 @@ private struct ReduceMotionInjector<Content: View>: View {
                 \.appReduceEffects,
                 AppMotion.reduceDecorativeEffects(
                     reduceMotion: reduceMotion,
-                    lowPowerModeEnabled: lowPowerModeEnabled
+                    lowPowerModeEnabled: lowPowerModeEnabled,
+                    thermalState: thermalState
                 )
             )
             .onReceive(
                 NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
             ) { _ in
                 lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+            }
+            // The posting thread is undocumented; hop before touching state.
+            .onReceive(
+                NotificationCenter.default
+                    .publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                thermalState = ProcessInfo.processInfo.thermalState
             }
     }
 }
@@ -139,11 +152,14 @@ enum AppMotion {
     respectPreference && systemReduceMotion
   }
 
+  /// `.serious` is where the system itself starts throttling; shedding
+  /// decorative redraws there gives that headroom back to playback and UI.
   static func reduceDecorativeEffects(
     reduceMotion: Bool,
-    lowPowerModeEnabled: Bool
+    lowPowerModeEnabled: Bool,
+    thermalState: ProcessInfo.ThermalState = .nominal
   ) -> Bool {
-    reduceMotion || lowPowerModeEnabled
+    reduceMotion || lowPowerModeEnabled || thermalState == .serious || thermalState == .critical
   }
 
   static func duration(_ seconds: TimeInterval) -> TimeInterval {
