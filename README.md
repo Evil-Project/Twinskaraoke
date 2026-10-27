@@ -20,6 +20,44 @@ All credits go to the website creator "Soul". This is a companion app for the we
 > Note: The watchOS app is still 100% in development please be patient with us, thank you!
 
 
+## Source layout
+
+```text
+Twinskaraoke/
+├── Twinskaraoke.xcodeproj
+├── Apps/
+│   ├── iOS/                 # App entry, navigation, screens, components, resources
+│   ├── iPadOS/              # Wide-screen components, built by the iOS target
+│   ├── macOS/               # App entry, windows, screens, components
+│   ├── watchOS/             # App entry, navigation, screens, components, resources
+│   └── tvOS/                # App entry, navigation, screens, components, resources
+├── Packages/
+│   ├── Core/                # Foundation, networking, storage, security, auth, logging, configuration
+│   ├── Data/                # API client and response caches
+│   ├── Domain/Models/       # Shared song, playlist, account, lyrics and radio models
+│   ├── Features/            # Account, artwork, home, library, playback, radio, search, Shimeji, …
+│   ├── UI/                  # Shared design system, components, themes, animation, haptics
+│   └── Platform/            # CarPlay, Shortcuts, widget snapshots, Watch connectivity
+├── Extensions/
+│   ├── Intents/             # App Intents and entities shared with the widgets
+│   └── WidgetExtension/     # iOS widgets, watchOS complications, shared widget code
+├── Resources/
+│   ├── Localization/        # String catalogs
+│   └── Shimeji/             # Downloadable Shimeji pack (fetched from GitHub, not bundled)
+├── Tests/
+│   ├── UnitTests/           # iOS and watchOS unit test targets
+│   └── UITests/             # iOS and watchOS UI test targets
+├── Scripts/                 # Simulator App Intents signing
+└── docs/                    # Site documentation and validation notes
+```
+
+`Packages/` only organizes source files; there are no Swift packages, and everything still builds from `Twinskaraoke.xcodeproj` with the same schemes and targets. Target membership follows the innermost folder name:
+
+- `Apple/` holds code shared by every app (iOS, watchOS, tvOS, macOS) and the watch widget. `Extensions/*/Shared/` is also built into the iOS widget.
+- `iOS/`, `iPadOS/`, `macOS/`, `tvOS/` and `watchOS/` folders belong to that platform's target only.
+
+Each of these folders is its own synchronized folder in Xcode, so a file added to an existing one joins the right target automatically. A new platform folder has to be added to the project as a folder and assigned to its target. Xcode does not honor folder-level membership exceptions, so a single parent folder cannot be split between targets.
+
 ## Features
 
 *  **Native Experience:** Better than the website!
