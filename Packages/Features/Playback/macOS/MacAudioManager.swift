@@ -85,6 +85,13 @@ final class MacAudioManager {
     var canPlayNext: Bool { !queue.isEmpty && failedIndices.count < queue.count }
     var canPlayPrevious: Bool { !queue.isEmpty && failedIndices.count < queue.count }
 
+    /// Whether the transport's next action is "stop": true while playing, and
+    /// also while loading or stalled with playback still wanted, when
+    /// `isPlaying` is false but the user expects a Pause control.
+    var isPlaybackRequested: Bool {
+        isPlaying || (isLoading && wantsPlaybackWhenReady)
+    }
+
     // MARK: - Transport
 
     func play(song: Song, context: [Song] = []) {
@@ -104,10 +111,7 @@ final class MacAudioManager {
             if let song = currentSong { play(song: song, context: queue) }
             return
         }
-        // While loading or buffering the button shows the hourglass, and a
-        // click there means "stop", not another resume.
-        let wantsToStop = isPlaying || (isLoading && wantsPlaybackWhenReady)
-        wantsToStop ? pause() : resume()
+        isPlaybackRequested ? pause() : resume()
     }
 
     func pause() {
@@ -135,8 +139,9 @@ final class MacAudioManager {
     func playPrevious() {
         guard !queue.isEmpty else { return }
         // Match the platform convention: past ~3s, restart the track instead
-        // of leaving the song.
-        if currentTime > 3 {
+        // of leaving the song — unless it failed, when restarting replays
+        // the failure.
+        if currentTime > 3, !failedIndices.contains(currentIndex) {
             seek(to: 0)
             return
         }
@@ -221,6 +226,9 @@ final class MacAudioManager {
                     self.isLoading = false
                     self.isPlaying = true
                 case .waitingToPlayAtSpecifiedRate:
+                    // Not progressing, so report rate 0 to Now Playing;
+                    // `wantsPlaybackWhenReady` keeps the intent to resume.
+                    self.isPlaying = false
                     self.isLoading = self.wantsPlaybackWhenReady
                 case .paused:
                     self.isPlaying = false
@@ -307,9 +315,11 @@ final class MacAudioManager {
 
     /// The next index to play in the given direction, skipping tracks that
     /// already failed in this queue. Nil once nothing playable is left.
+    /// Shuffle only picks at random going forward; Previous walks back in
+    /// queue order, as it always has.
     private func nextPlayableIndex(forward: Bool) -> Int? {
         guard !queue.isEmpty, failedIndices.count < queue.count else { return nil }
-        if playbackMode == .shuffle {
+        if forward, playbackMode == .shuffle {
             let candidates = queue.indices.filter { $0 != currentIndex && !failedIndices.contains($0) }
             if let pick = candidates.randomElement() { return pick }
             return failedIndices.contains(currentIndex) ? nil : currentIndex

@@ -109,6 +109,7 @@ private struct ReduceMotionInjector<Content: View>: View {
     let content: Content
     @AppStorage("nk.respectReducedMotion") private var respectReducedMotion: Bool = true
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
     // Read before subscribing: ProcessInfo only posts thermal changes to
     // processes that have accessed `thermalState` first.
@@ -140,6 +141,13 @@ private struct ReduceMotionInjector<Content: View>: View {
                     .publisher(for: ProcessInfo.thermalStateDidChangeNotification)
                     .receive(on: DispatchQueue.main)
             ) { _ in
+                thermalState = ProcessInfo.processInfo.thermalState
+            }
+            // Neither notification is queued for a suspended app, so a change
+            // made while in the background would otherwise go unseen.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
                 thermalState = ProcessInfo.processInfo.thermalState
             }
     }

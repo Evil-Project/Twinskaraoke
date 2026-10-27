@@ -23,7 +23,7 @@ struct SongRow: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(.black.opacity(0.45))
                         .frame(width: 36, height: 36)
-                    Image(systemName: isCurrent && audio.isPlaying ? "pause.fill" : "play.fill")
+                    Image(systemName: isCurrent && audio.isPlaybackRequested ? "pause.fill" : "play.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.white)
                 }
