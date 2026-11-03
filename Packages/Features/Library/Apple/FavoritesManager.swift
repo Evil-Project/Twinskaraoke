@@ -290,19 +290,27 @@ final class FavoritesManager {
 
     /// `PUT /api/user/favorites/{songId}` adds, `DELETE` on the same path
     /// removes.
-    ///
+    static func favoriteRequest(
+        songID: String,
+        favorite: Bool,
+        readToken: () throws -> String? = CredentialStore.requestToken
+    ) throws -> URLRequest {
+        var request = try KaraokeAPIClient.request(
+            pathSegments: ["api", "user", "favorites", songID],
+            readToken: readToken
+        )
+        request.httpMethod = favorite ? "PUT" : "DELETE"
+        return request
+    }
+
     /// The PUT is never retried. In 2026-08 the server treated it as a toggle,
     /// so a retry after a lost response would have undone the add. It is meant
     /// to be a plain add now, but nothing is lost by staying cautious. DELETE is
     /// idempotent, so it may retry, and a 404 means the song was already gone,
     /// which is what the caller asked for.
     private static func send(songID: String, favorite: Bool) async -> Bool {
-        guard var req = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "user", "favorites", songID]
-        )
-        else { return false }
+        guard let req = try? favoriteRequest(songID: songID, favorite: favorite) else { return false }
         guard favorite else {
-            req.httpMethod = "DELETE"
             do {
                 _ = try await KaraokeAPIClient.data(for: req)
                 return true
@@ -312,7 +320,6 @@ final class FavoritesManager {
                 return false
             }
         }
-        req.httpMethod = "PUT"
         return (try? await KaraokeAPIClient.data(for: req, allowsRetry: false)) != nil
     }
 }

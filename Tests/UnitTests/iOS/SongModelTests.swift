@@ -519,6 +519,16 @@ struct SongModelTests {
         #expect(body["page"] as? Int == 1)
     }
 
+    @Test("Top 100 asks for the most played songs of all time")
+    func mostPlayedSongsBodySortsByPlayCount() {
+        let body = KaraokeAPIClient.mostPlayedSongsBody(take: 100)
+
+        #expect(body["sortBy"] as? String == "PlayCount")
+        #expect(body["sortDesc"] as? Bool == true)
+        #expect(body["pageSize"] as? Int == 100)
+        #expect(body["search"] as? String == "")
+    }
+
     @Test("Uploaded song metadata request uses the authenticated uploads route")
     func uploadedSongMetadataRequestUsesUploadsRoute() throws {
         let request = try KaraokeAPIClient.uploadedSongsRequest(readToken: { "test-token" })

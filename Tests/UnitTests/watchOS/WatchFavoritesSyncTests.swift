@@ -10,9 +10,9 @@ struct WatchFavoritesSyncTests {
         let song = UITestFixtures.song(id: "starred", title: "Starred", artist: "Artist")
         var server: [Song] = []
         var writes = 0
-        let watch = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, _ in
+        let watch = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, favorite in
             writes += 1
-            server = [song]
+            server = favorite ? [song] : []
             return true
         })
         let phone = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, _ in
@@ -26,6 +26,30 @@ struct WatchFavoritesSyncTests {
         await phone.refreshFromCompanion()
         #expect(phone.isFavorite(song.id))
         #expect(writes == 1)
+    }
+
+    @Test("Unstarring on the watch removes the song for the companion refresh")
+    func unstarSync() async {
+        let song = UITestFixtures.song(id: "starred", title: "Starred", artist: "Artist")
+        var server: [Song] = [song]
+        let watch = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, favorite in
+            server = favorite ? [song] : []
+            return true
+        })
+        let phone = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, _ in
+            Issue.record("Refreshing favorites must not write a toggle")
+            return false
+        })
+        await watch.refreshFromCompanion()
+        await phone.refreshFromCompanion()
+        #expect(watch.isFavorite(song.id))
+        #expect(phone.isFavorite(song.id))
+
+        await watch.toggle(songID: song.id)?.value
+        #expect(!watch.isFavorite(song.id))
+        #expect(server.isEmpty)
+        await phone.refreshFromCompanion()
+        #expect(!phone.isFavorite(song.id))
     }
 
     @Test("Failed star saves restore the previous membership")

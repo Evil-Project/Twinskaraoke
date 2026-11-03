@@ -62,6 +62,19 @@ struct FavoritesLoadCancellationTests {
         #expect(writes.values == [true, false, true, false])
     }
 
+    @Test("Starring sends PUT and unstarring sends DELETE to the song's favorite route")
+    func favoriteRequestsUseMatchingMethods() throws {
+        let add = try FavoritesManager.favoriteRequest(songID: "song-id", favorite: true, readToken: { "test-token" })
+        let remove = try FavoritesManager.favoriteRequest(songID: "song-id", favorite: false, readToken: { "test-token" })
+
+        #expect(add.httpMethod == "PUT")
+        #expect(remove.httpMethod == "DELETE")
+        for request in [add, remove] {
+            #expect(request.url?.path == "/api/user/favorites/song-id")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
+        }
+    }
+
     private func waitUntil(_ condition: () -> Bool) async throws {
         for _ in 0..<200 {
             if condition() { return }

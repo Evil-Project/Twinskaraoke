@@ -672,13 +672,12 @@ nonisolated enum KaraokeAPIClient {
   /// 7- and 30-day windows. Any other `days` value, including the old `"all"`,
   /// either returns the 7-day list or nothing at all.
   static func mostPlayedSongs(take: Int = 100) async throws -> [Song] {
-    let data = try await songSearchData(
-      query: "",
-      pageSize: take,
-      sortBy: SongSort.playCount,
-      sortDescending: true
-    )
+    let data = try await songSearchData(body: mostPlayedSongsBody(take: take))
     return try decodeSongSearchResults(from: data)
+  }
+
+  static func mostPlayedSongsBody(take: Int) -> [String: Any] {
+    songSearchBody(query: "", pageSize: take, sortBy: SongSort.playCount, sortDescending: true)
   }
 
   /// `sortBy` values `POST /api/songs` recognises. They are case-sensitive,
@@ -720,13 +719,16 @@ nonisolated enum KaraokeAPIClient {
     sortBy: String? = nil,
     sortDescending: Bool? = nil
   ) async throws -> Data {
-    let body = songSearchBody(
+    try await songSearchData(body: songSearchBody(
       query: query,
       page: page,
       pageSize: pageSize,
       sortBy: sortBy,
       sortDescending: sortDescending
-    )
+    ))
+  }
+
+  private static func songSearchData(body: [String: Any]) async throws -> Data {
     let request = try jsonRequest(
       path: "/api/songs",
       body: body
