@@ -317,13 +317,11 @@ nonisolated enum KaraokeAPIClient {
   private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
   private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
+  /// Only `days` of 7 and 30 return data; the results are precomputed for
+  /// those two windows. For an all-time chart use `mostPlayedSongs`.
   static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
-    try await trendingSongs(days: String(days), take: take)
-  }
-
-  static func trendingSongs(days: String, take: Int? = nil) async throws -> [Song] {
     var queryItems = [
-      URLQueryItem(name: "days", value: days),
+      URLQueryItem(name: "days", value: String(days)),
     ]
     if let take {
       queryItems.append(URLQueryItem(name: "take", value: String(take)))
@@ -534,7 +532,7 @@ nonisolated enum KaraokeAPIClient {
     let data = try await songSearchData(
       query: "",
       pageSize: pageSize,
-      sortBy: "CreatedAt",
+      sortBy: SongSort.karaokeDate,
       sortDescending: true
     )
     let decoded = try decodeSongSearchResults(from: data)
@@ -668,13 +666,39 @@ nonisolated enum KaraokeAPIClient {
     throw APIError.decodeFailed
   }
 
-  private static func songSearchData(
+  /// The most played songs of all time, by total play count.
+  ///
+  /// `/api/explore/trendings` cannot answer this: it only has precomputed
+  /// 7- and 30-day windows. Any other `days` value, including the old `"all"`,
+  /// either returns the 7-day list or nothing at all.
+  static func mostPlayedSongs(take: Int = 100) async throws -> [Song] {
+    let data = try await songSearchData(
+      query: "",
+      pageSize: take,
+      sortBy: SongSort.playCount,
+      sortDescending: true
+    )
+    return try decodeSongSearchResults(from: data)
+  }
+
+  /// `sortBy` values `POST /api/songs` recognises. They are case-sensitive,
+  /// and an unknown value is silently ignored, falling back to newest first,
+  /// so a typo still returns a plausible list.
+  enum SongSort {
+    static let karaokeDate = "KaraokeDate"
+    static let playCount = "PlayCount"
+  }
+
+  /// Body for `POST /api/songs`. The descending flag is `sortDesc` in this
+  /// body, unlike the `sortDescending` query parameter on the playlist and
+  /// artist routes. The server ignores a `sortDescending` key here.
+  static func songSearchBody(
     query: String,
     page: Int = 1,
     pageSize: Int,
     sortBy: String? = nil,
     sortDescending: Bool? = nil
-  ) async throws -> Data {
+  ) -> [String: Any] {
     var body: [String: Any] = [
       "page": max(1, page),
       "pageSize": pageSize,
@@ -684,8 +708,25 @@ nonisolated enum KaraokeAPIClient {
       body["sortBy"] = sortBy
     }
     if let sortDescending {
-      body["sortDescending"] = sortDescending
+      body["sortDesc"] = sortDescending
     }
+    return body
+  }
+
+  private static func songSearchData(
+    query: String,
+    page: Int = 1,
+    pageSize: Int,
+    sortBy: String? = nil,
+    sortDescending: Bool? = nil
+  ) async throws -> Data {
+    let body = songSearchBody(
+      query: query,
+      page: page,
+      pageSize: pageSize,
+      sortBy: sortBy,
+      sortDescending: sortDescending
+    )
     let request = try jsonRequest(
       path: "/api/songs",
       body: body

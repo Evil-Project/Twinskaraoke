@@ -10,12 +10,12 @@ struct WatchFavoritesSyncTests {
         let song = UITestFixtures.song(id: "starred", title: "Starred", artist: "Artist")
         var server: [Song] = []
         var writes = 0
-        let watch = FavoritesManager(authenticated: { true }, fetchSongs: { server }, toggleSong: { _ in
+        let watch = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, _ in
             writes += 1
             server = [song]
             return true
         })
-        let phone = FavoritesManager(authenticated: { true }, fetchSongs: { server }, toggleSong: { _ in
+        let phone = FavoritesManager(authenticated: { true }, fetchSongs: { server }, setFavorite: { _, _ in
             Issue.record("Refreshing favorites must not write a toggle")
             return false
         })
@@ -30,7 +30,7 @@ struct WatchFavoritesSyncTests {
 
     @Test("Failed star saves restore the previous membership")
     func failedSave() async {
-        let manager = FavoritesManager(authenticated: { true }, fetchSongs: { [] }, toggleSong: { _ in false })
+        let manager = FavoritesManager(authenticated: { true }, fetchSongs: { [] }, setFavorite: { _, _ in false })
         await manager.toggle(songID: "song")?.value
         #expect(!manager.isFavorite("song"))
     }
@@ -38,7 +38,7 @@ struct WatchFavoritesSyncTests {
     @Test("An account clear during an old save cannot add the old account's favorite")
     func accountChangesDuringSave() async {
         let reference = ManagerReference()
-        let manager = FavoritesManager(authenticated: { true }, fetchSongs: { [] }, toggleSong: { _ in
+        let manager = FavoritesManager(authenticated: { true }, fetchSongs: { [] }, setFavorite: { _, _ in
             reference.manager?.clear()
             return true
         })

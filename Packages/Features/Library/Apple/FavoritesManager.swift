@@ -20,14 +20,17 @@ final class FavoritesManager {
     private(set) var isAvailable: Bool
     @ObservationIgnored private let authenticated: @MainActor () -> Bool
     @ObservationIgnored private let fetchSongs: @MainActor () async throws -> [Song]
-    @ObservationIgnored private let toggleSong: @MainActor (String) async -> Bool
+    /// Writes one song's membership: `true` adds it, `false` removes it.
+    @ObservationIgnored private let setFavorite: @MainActor (String, Bool) async -> Bool
 
     init(authenticated: @escaping @MainActor () -> Bool = { CredentialStore.isAuthenticated },
          fetchSongs: @escaping @MainActor () async throws -> [Song] = { try await KaraokeAPIClient.favoriteSongs() },
-         toggleSong: @escaping @MainActor (String) async -> Bool = { await FavoritesManager.sendToggle(songID: $0) }) {
+         setFavorite: @escaping @MainActor (String, Bool) async -> Bool = {
+             await FavoritesManager.send(songID: $0, favorite: $1)
+         }) {
         self.authenticated = authenticated
         self.fetchSongs = fetchSongs
-        self.toggleSong = toggleSong
+        self.setFavorite = setFavorite
         isAvailable = authenticated()
     }
     private var inFlight: Set<String> = []
@@ -109,7 +112,7 @@ final class FavoritesManager {
         }
         let generation = stateGeneration
         return Task {
-            let ok = await toggleSong(songID)
+            let ok = await setFavorite(songID, !wasFavorite)
             if ok {
                 // Serialize invalidation ahead of the reload below: a racing
                 // load()/reload() must not read the pre-toggle list from the
@@ -215,16 +218,15 @@ final class FavoritesManager {
         return true
     }
 
-    /// Adds without flipping. Safe to call on a song already favourited, which
-    /// `toggle` is not — see the note on `remove`.
+    /// Adds without flipping. Safe to call on a song already favourited.
     func add(songID: String) async -> Bool {
         guard authenticated() else { return false }
         // Refuses to overlap another mutation for the same song, exactly as
         // `toggle` does. Both halves of the check below are unsafe while one is
         // in flight: a removal leaves the ID in `favoriteIDs` until it lands, so
-        // the fast path would report success for a song about to disappear —
-        // and skipping the fast path is worse, because `send` is a PUT that
-        // *flips* membership and would remove the song rather than add it.
+        // the fast path would report success for a song about to disappear.
+        // The fast path also keeps a PUT from reaching a song that is already
+        // a favorite; see `send` for why that matters.
         // Reporting failure lets the caller show it and retry.
         guard !inFlight.contains(songID) else { return false }
         guard !favoriteIDs.contains(songID) else { return true }
@@ -232,7 +234,7 @@ final class FavoritesManager {
         let generation = beginMutation(songID)
         defer { endMutation(songID, generation: generation) }
 
-        guard await toggleSong(songID) else { return false }
+        guard await setFavorite(songID, true) else { return false }
         // Invalidated before the generation check, matching `toggle`: if
         // `clear()` lands mid-request the cache still holds the pre-mutation
         // list, and a later load would read it as current.
@@ -243,35 +245,18 @@ final class FavoritesManager {
         return true
     }
 
-    /// Unconditional removal, deliberately not routed through `toggle`.
-    ///
-    /// `toggle` sends PUT, which *flips* membership. For a multi-select delete
-    /// that is the wrong verb twice over: `data(for:)` retries idempotent
-    /// requests, so a lost response would re-add the song, and a song already
-    /// gone would come back rather than stay removed. DELETE on the same path
-    /// is unambiguous, and a 404 means the caller already got what it asked for.
+    /// Unconditional removal for multi-select delete. Unlike `toggle` it
+    /// doesn't depend on the current star state, so a song already gone stays
+    /// gone.
     func remove(songID: String) async -> Bool {
         guard authenticated() else { return false }
         // Same non-overlap rule as `add` and `toggle`; see `add`.
         guard !inFlight.contains(songID) else { return false }
-        guard var req = try? KaraokeAPIClient.request(
-            pathSegments: ["api", "user", "favorites", songID]
-        ) else { return false }
-        req.httpMethod = "DELETE"
 
         let generation = beginMutation(songID)
         defer { endMutation(songID, generation: generation) }
 
-        let ok: Bool
-        do {
-            _ = try await KaraokeAPIClient.data(for: req)
-            ok = true
-        } catch KaraokeAPIClient.APIError.httpStatus(404) {
-            ok = true
-        } catch {
-            ok = false
-        }
-        guard ok else { return false }
+        guard await setFavorite(songID, false) else { return false }
         // Before the generation check, for the reason given in `add`.
         await KaraokeAPIClient.invalidateFavoriteSongs()
         guard stateGeneration == generation else { return false }
@@ -303,14 +288,31 @@ final class FavoritesManager {
         scheduleReloadAfterMutationsIfNeeded()
     }
 
-    private static func sendToggle(songID: String) async -> Bool {
+    /// `PUT /api/user/favorites/{songId}` adds, `DELETE` on the same path
+    /// removes.
+    ///
+    /// The PUT is never retried. In 2026-08 the server treated it as a toggle,
+    /// so a retry after a lost response would have undone the add. It is meant
+    /// to be a plain add now, but nothing is lost by staying cautious. DELETE is
+    /// idempotent, so it may retry, and a 404 means the song was already gone,
+    /// which is what the caller asked for.
+    private static func send(songID: String, favorite: Bool) async -> Bool {
         guard var req = try? KaraokeAPIClient.request(
             pathSegments: ["api", "user", "favorites", songID]
         )
         else { return false }
+        guard favorite else {
+            req.httpMethod = "DELETE"
+            do {
+                _ = try await KaraokeAPIClient.data(for: req)
+                return true
+            } catch KaraokeAPIClient.APIError.httpStatus(404) {
+                return true
+            } catch {
+                return false
+            }
+        }
         req.httpMethod = "PUT"
-        // This endpoint flips membership, so repeating a successful write
-        // after a lost response would undo the user's change.
         return (try? await KaraokeAPIClient.data(for: req, allowsRetry: false)) != nil
     }
 }

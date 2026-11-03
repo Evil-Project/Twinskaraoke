@@ -3863,7 +3863,8 @@ final class AudioPlayerManager {
             }
             guard let req = try? KaraokeAPIClient.request(
                 path: "/api/explore/trendings",
-                queryItems: [URLQueryItem(name: "days", value: "all")]
+                // 30 is the widest window the server precomputes.
+                queryItems: [URLQueryItem(name: "days", value: "30")]
             ),
                   let data = try? await KaraokeAPIClient.data(for: req)
             else { return }

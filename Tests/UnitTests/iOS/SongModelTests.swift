@@ -503,6 +503,22 @@ struct SongModelTests {
         #expect(try JSONDecoder().decode([String].self, from: body) == ["first-id", "second-id"])
     }
 
+    @Test("Song search body uses the sortDesc key the server reads")
+    func songSearchBodyUsesSortDesc() {
+        let body = KaraokeAPIClient.songSearchBody(
+            query: "",
+            page: 0,
+            pageSize: 24,
+            sortBy: KaraokeAPIClient.SongSort.karaokeDate,
+            sortDescending: true
+        )
+
+        #expect(body["sortDesc"] as? Bool == true)
+        #expect(body["sortDescending"] == nil)
+        #expect(body["sortBy"] as? String == "KaraokeDate")
+        #expect(body["page"] as? Int == 1)
+    }
+
     @Test("Uploaded song metadata request uses the authenticated uploads route")
     func uploadedSongMetadataRequestUsesUploadsRoute() throws {
         let request = try KaraokeAPIClient.uploadedSongsRequest(readToken: { "test-token" })

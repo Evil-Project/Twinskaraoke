@@ -205,7 +205,7 @@ final class TopChartViewModel {
         // still owns `requestToken`.
         refreshTracker.track(Task { [weak self] in
             guard let self else { return }
-            async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
+            async let allTime = try? KaraokeAPIClient.mostPlayedSongs(take: 100)
             async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
             let allTimeSongs = await allTime ?? []
             let weeklySongs = await weekly ?? []
