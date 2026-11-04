@@ -23,6 +23,7 @@ struct PlayCountReporterTests {
         let request = try PlayCountReporter.request(songID: "song-1", playlistID: "playlist-1", readToken: { nil })
         let items = URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false)?.queryItems
 
+        #expect(request.httpMethod == "PUT")
         #expect(request.url?.path == "/api/songs/playCount/song-1")
         #expect(items == [URLQueryItem(name: "playlistId", value: "playlist-1")])
     }
@@ -36,6 +37,16 @@ struct PlayCountReporterTests {
         #expect(reporter.playlistID(for: "b") == "playlist-1")
         // Added with Play Next or Play Last: not part of the playlist.
         #expect(reporter.playlistID(for: "c") == nil)
+    }
+
+    @Test("A playlist song queued again with Play Next or Play Last no longer counts toward it")
+    func songQueuedSeparately() {
+        let reporter = PlayCountReporter()
+        reporter.queueStarted(fromPlaylist: "playlist-1", songs: [song("a"), song("b")])
+        reporter.songQueuedSeparately("b")
+
+        #expect(reporter.playlistID(for: "a") == "playlist-1")
+        #expect(reporter.playlistID(for: "b") == nil)
     }
 
     @Test("A queue started outside a playlist clears it")

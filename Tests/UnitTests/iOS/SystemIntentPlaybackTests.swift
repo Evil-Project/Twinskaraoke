@@ -185,6 +185,20 @@ struct SystemIntentPlaybackTests {
         player.skipToNext()
         #expect(try await reports.next() == Report(songID: outsider.id, playlistID: nil))
 
+        // Picking a playlist song from Up Next keeps the playlist.
+        player.skipToQueuedSong(songs[2])
+        #expect(try await reports.next() == Report(songID: songs[2].id, playlistID: "playlist-1"))
+
+        // A playlist song queued again with Play Last is a separate addition.
+        player.playLast(song: songs[0])
+        player.skipToQueuedSong(songs[0])
+        #expect(try await reports.next() == Report(songID: songs[0].id, playlistID: nil))
+
+        // An empty shuffle starts nothing, so the playlist stays.
+        player.playShuffled(from: [], playlistID: "playlist-x")
+        player.skipToQueuedSong(songs[1])
+        #expect(try await reports.next() == Report(songID: songs[1].id, playlistID: "playlist-1"))
+
         // Shuffling a playlist keeps its ID; a queue from anywhere else drops it.
         player.playShuffled(from: songs, playlistID: "playlist-2")
         #expect(try await reports.next()?.playlistID == "playlist-2")

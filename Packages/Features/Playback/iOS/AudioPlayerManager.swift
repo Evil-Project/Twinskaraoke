@@ -1572,7 +1572,7 @@ final class AudioPlayerManager {
     }
 
     func play(song: Song, context: [Song] = [], playlistID: String? = nil) {
-        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
+        if phoneAudioAllowed { playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context) }
         queueState.selectSingleSong()
         play(song: song, context: context, resetTransitionVolume: true)
     }
@@ -1728,6 +1728,7 @@ final class AudioPlayerManager {
         }
 
         queueState.insertNext(song, after: current)
+        playCountReporter.songQueuedSeparately(song.id)
         nextSongChanged()
     }
 
@@ -1744,6 +1745,7 @@ final class AudioPlayerManager {
 
         let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         queueState.insertLast(song, after: current)
+        playCountReporter.songQueuedSeparately(song.id)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
         // the last song, and only then is the prepared work stale.
@@ -2327,8 +2329,8 @@ final class AudioPlayerManager {
     }
 
     func playInOrder(song: Song, context: [Song], playlistID: String? = nil) {
-        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
         queueState.beginInOrder(context: context)
         play(song: song, context: context, resetTransitionVolume: true)
     }
@@ -2341,13 +2343,13 @@ final class AudioPlayerManager {
     }
 
     func playShuffled(from songs: [Song], playlistID: String? = nil) {
-        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: songs)
         if !phoneAudioAllowed {
             let shuffled = songs.shuffled()
             if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
             return
         }
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: songs)
         // The state already contains the shuffled queue and its original
         // ordering. Passing that queue back as a context would shuffle it a
         // second time and overwrite the restoration order.
@@ -2361,8 +2363,9 @@ final class AudioPlayerManager {
     /// included, and overwrote the order turning shuffle off restores with the
     /// shuffled one. The songs skipped over stay behind the new current song,
     /// where Previous reaches them.
-    func skipToQueuedSong(_ song: Song) {
-        play(song: song)
+    func skipToQueuedSong(_ song: Song) { // play(song:), keeping the queue's playlist for play counts
+        queueState.selectSingleSong()
+        play(song: song, resetTransitionVolume: true)
     }
 
     func toggleAutoplay() {

@@ -33,6 +33,12 @@ final class PlayCountReporter {
         }
     }
 
+    /// A song added with Play Next or Play Last is its own addition, even if
+    /// the playlist contains it, so its plays no longer count toward it.
+    func songQueuedSeparately(_ songID: String) {
+        playlistSongIDs.remove(songID)
+    }
+
     /// The playlist a play of `songID` counts toward. A song added to the
     /// queue with Play Next or Play Last isn't part of it.
     func playlistID(for songID: String) -> String? {
