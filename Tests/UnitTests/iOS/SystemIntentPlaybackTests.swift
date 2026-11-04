@@ -4,10 +4,32 @@ import Foundation
 import Testing
 @testable import Twinskaraoke
 
+/// Whether this machine can play audio at all. VMs and some CI runners have no
+/// audio output device: `AVAudioEngine` can't start (error -10851), so a test
+/// that needs real playback can't pass there. Only that error means "no
+/// device"; any other failure to start returns true, so the test runs and
+/// shows it. Starting the engine is the only reliable probe: without a device
+/// the output node can't even be configured, and the audio session still
+/// reports a built-in speaker.
+nonisolated private let audioOutputAvailable: Bool = {
+    let engine = AVAudioEngine()
+    _ = engine.mainMixerNode
+    do {
+        try engine.start()
+        engine.stop()
+        return true
+    } catch let error as NSError where error.code == -10851 {
+        return false
+    } catch {
+        return true
+    }
+}()
+
 @Suite("System intent playback", .serialized)
 @MainActor
 struct SystemIntentPlaybackTests {
-    @Test func intentsControlActualCachedAudioAndPublishSnapshots() async throws {
+    @Test(.enabled(if: audioOutputAvailable, "Needs an audio output device, and this machine has none."))
+    func intentsControlActualCachedAudioAndPublishSnapshots() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = WidgetSnapshotStore(directory: directory)
         let publisher = WidgetSnapshotPublisher.shared
