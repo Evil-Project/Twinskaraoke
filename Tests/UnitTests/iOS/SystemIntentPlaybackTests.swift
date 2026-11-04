@@ -230,6 +230,34 @@ struct SystemIntentPlaybackTests {
         #expect(try await reports.next() == Report(songID: songs[0].id, playlistID: nil))
     }
 
+    @Test func aCacheRetryIsNotCountedAsASecondPlay() async throws {
+        let player = AudioPlayerManager.shared
+        let reporter = player.playCountReporter
+        let previousAI = player.aiEnabled
+        let previousSend = reporter.send
+        let previousReadToken = reporter.readToken
+        player.aiEnabled = false
+        let reports = ReportLog()
+        reporter.send = { request in await reports.append(request) }
+        reporter.readToken = { nil }
+        let song = try cachedSong(index: 0)
+        defer {
+            player.pauseIfPlaying()
+            player.aiEnabled = previousAI
+            reporter.send = previousSend
+            reporter.readToken = previousReadToken
+            AudioCacheStore.removeSongCache(for: song.id)
+        }
+
+        player.play(song: song, context: [song])
+        #expect(try await reports.next() == Report(songID: song.id, playlistID: nil))
+        // The engine fails on the cached file: the player deletes the cache and
+        // retries from the network. That is the same play, not a new one.
+        player.avEngine.onPlaybackError?(URLError(.cannotDecodeContentData))
+        try await Task.sleep(for: .seconds(1))
+        #expect(await reports.total == 1)
+    }
+
     private func cachedSong(index: Int) throws -> Song {
         let id = "system-intent-test-\(UUID().uuidString)-\(index)"
         _ = AudioCacheStore.ensureSongDirectory(for: id)
@@ -254,7 +282,7 @@ private struct Report: Equatable, Sendable {
 private actor ReportLog {
     private var reports: [Report] = []
     private var read = 0
-    private var last: Report?
+    var total: Int { reports.count }
 
     func append(_ request: URLRequest) {
         guard let url = request.url else { return }
@@ -263,19 +291,12 @@ private actor ReportLog {
         reports.append(Report(songID: url.lastPathComponent, playlistID: playlistID))
     }
 
-    /// The next report, waiting up to two seconds for it. A repeat of the
-    /// previous report is skipped: without an audio device the cached file
-    /// fails to load, and the player's retry from the network reports the same
-    /// play again.
+    /// The next report, waiting up to two seconds for it.
     func next() async throws -> Report? {
         for _ in 0..<200 {
-            while read < reports.count {
-                let report = reports[read]
+            if read < reports.count {
                 read += 1
-                if report != last {
-                    last = report
-                    return report
-                }
+                return reports[read - 1]
             }
             try await Task.sleep(for: .milliseconds(10))
         }
