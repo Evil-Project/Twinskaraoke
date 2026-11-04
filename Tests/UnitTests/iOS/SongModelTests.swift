@@ -521,12 +521,21 @@ struct SongModelTests {
 
     @Test("Top 100 asks for the most played songs of all time")
     func mostPlayedSongsBodySortsByPlayCount() {
-        let body = KaraokeAPIClient.mostPlayedSongsBody(take: 100)
+        let body = KaraokeAPIClient.mostPlayedSongsBody(pageSize: 120)
 
         #expect(body["sortBy"] as? String == "PlayCount")
         #expect(body["sortDesc"] as? Bool == true)
-        #expect(body["pageSize"] as? Int == 100)
+        #expect(body["pageSize"] as? Int == 120)
         #expect(body["search"] as? String == "")
+    }
+
+    @Test("Temporary stream audio placeholders are left out of charts and shelves")
+    func streamPlaceholdersAreDropped() {
+        let placeholder = UITestFixtures.song(id: "temp", title: "Dracula (Temporary Stream Audio)", artist: "Artist")
+        let song = UITestFixtures.song(id: "real", title: "Dracula", artist: "Artist")
+
+        #expect(KaraokeAPIClient.droppingStreamPlaceholders([placeholder, song]).map(\.id) == ["real"])
+        #expect(KaraokeAPIClient.droppingStreamPlaceholders([placeholder]).map(\.id) == ["temp"])
     }
 
     @Test("Uploaded song metadata request uses the authenticated uploads route")

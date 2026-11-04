@@ -536,10 +536,17 @@ nonisolated enum KaraokeAPIClient {
       sortDescending: true
     )
     let decoded = try decodeSongSearchResults(from: data)
-    let filtered = decoded.filter {
+    return Array(droppingStreamPlaceholders(decoded).prefix(take))
+  }
+
+  /// Songs published right after a karaoke stream carry temporary audio and a
+  /// "Temporary Stream Audio" title until a better upload replaces them.
+  /// Charts and shelves leave them out, unless nothing else is left.
+  static func droppingStreamPlaceholders(_ songs: [Song]) -> [Song] {
+    let filtered = songs.filter {
       !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
     }
-    return Array((filtered.isEmpty ? decoded : filtered).prefix(take))
+    return filtered.isEmpty ? songs : filtered
   }
 
   static func fetchSong(id: String) async throws -> Song {
@@ -672,12 +679,14 @@ nonisolated enum KaraokeAPIClient {
   /// 7- and 30-day windows. Any other `days` value, including the old `"all"`,
   /// either returns the 7-day list or nothing at all.
   static func mostPlayedSongs(take: Int = 100) async throws -> [Song] {
-    let data = try await songSearchData(body: mostPlayedSongsBody(take: take))
-    return try decodeSongSearchResults(from: data)
+    // A few spare rows so the chart stays full after placeholders are dropped.
+    let data = try await songSearchData(body: mostPlayedSongsBody(pageSize: take + 20))
+    let decoded = try decodeSongSearchResults(from: data)
+    return Array(droppingStreamPlaceholders(decoded).prefix(take))
   }
 
-  static func mostPlayedSongsBody(take: Int) -> [String: Any] {
-    songSearchBody(query: "", pageSize: take, sortBy: SongSort.playCount, sortDescending: true)
+  static func mostPlayedSongsBody(pageSize: Int) -> [String: Any] {
+    songSearchBody(query: "", pageSize: pageSize, sortBy: SongSort.playCount, sortDescending: true)
   }
 
   /// `sortBy` values `POST /api/songs` recognises. They are case-sensitive,
