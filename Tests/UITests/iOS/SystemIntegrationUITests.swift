@@ -60,5 +60,4 @@ final class SystemIntegrationUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
-
 }

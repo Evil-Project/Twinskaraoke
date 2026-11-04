@@ -179,7 +179,6 @@ struct PlaylistDetailView: View {
         )
     }
 
-
     var body: some View {
         detailContent
             // A cover, not a push. Pushed, the editor's bottom bar sits behind
@@ -310,18 +309,18 @@ struct PlaylistDetailView: View {
                 )
                 .id(Self.contentAnchor)
             }
-                .padding(.bottom, 16)
-                // Row changes (e.g. unfavouriting) used to animate via the
-                // `filteredSongs` swap; now that the list is derived, the
-                // animation attaches to the value instead. Same 300-row
-                // guard: animating a large structural swap stalls the main
-                // thread.
-                .animation(
-                    reduceMotion || displayedSongs.count >= 300
-                        ? nil
-                        : AppMotion.quick,
-                    value: displayedSongs
-                )
+            .padding(.bottom, 16)
+            // Row changes (e.g. unfavouriting) used to animate via the
+            // `filteredSongs` swap; now that the list is derived, the
+            // animation attaches to the value instead. Same 300-row
+            // guard: animating a large structural swap stalls the main
+            // thread.
+            .animation(
+                reduceMotion || displayedSongs.count >= 300
+                    ? nil
+                    : AppMotion.quick,
+                value: displayedSongs
+            )
         }
         // Measure the viewport, not the laid-out content. The former
         // `onGeometryChange` lived on the content VStack; because its first
@@ -670,7 +669,7 @@ struct PlaylistDetailView: View {
                 isWideOverview: true,
                 rowHorizontalPadding: 0
             )
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: 1120, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .top)

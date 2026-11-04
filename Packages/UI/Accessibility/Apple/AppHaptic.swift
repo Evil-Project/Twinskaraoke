@@ -11,24 +11,24 @@ import SwiftUI
 /// Whether haptics should fire, combining the user's in-app preference with
 /// the hardware's ability to play them.  Mirrors `AppMotion.reduceMotion`.
 enum AppHaptics {
-  static let storageKey = "nk.hapticsEnabled"
-  static let strengthStorageKey = "nk.hapticStrength"
+    static let storageKey = "nk.hapticsEnabled"
+    static let strengthStorageKey = "nk.hapticStrength"
 
-  /// Read straight from `UserDefaults` rather than `@AppStorage` because
-  /// `AppHaptic.play()` is called from plain model code and gesture callbacks,
-  /// not only from `View` bodies.  Absent key means "on" — `bool(forKey:)`
-  /// would report `false` for a preference the user has never touched.
-  static var isEnabled: Bool {
-    guard UserDefaults.standard.object(forKey: storageKey) != nil else { return true }
-    return UserDefaults.standard.bool(forKey: storageKey)
-  }
+    /// Read straight from `UserDefaults` rather than `@AppStorage` because
+    /// `AppHaptic.play()` is called from plain model code and gesture callbacks,
+    /// not only from `View` bodies.  Absent key means "on" — `bool(forKey:)`
+    /// would report `false` for a preference the user has never touched.
+    static var isEnabled: Bool {
+        guard UserDefaults.standard.object(forKey: storageKey) != nil else { return true }
+        return UserDefaults.standard.bool(forKey: storageKey)
+    }
 
-  static var strength: AppHapticStrength {
-    guard let raw = UserDefaults.standard.string(forKey: strengthStorageKey),
-          let strength = AppHapticStrength(rawValue: raw)
-    else { return .default }
-    return strength
-  }
+    static var strength: AppHapticStrength {
+        guard let raw = UserDefaults.standard.string(forKey: strengthStorageKey),
+              let strength = AppHapticStrength(rawValue: raw)
+        else { return .default }
+        return strength
+    }
 }
 
 /// A global weight applied on top of every role.  The role decides the
@@ -36,134 +36,134 @@ enum AppHaptics {
 /// how hard it lands.  Roles keep their relative ordering at every level, so
 /// raising the baseline never collapses two roles into the same sensation.
 enum AppHapticStrength: String, CaseIterable, Identifiable, Sendable {
-  case light
-  case medium
-  case strong
-  case heavy
+    case light
+    case medium
+    case strong
+    case heavy
 
-  /// `medium` sits where `strong` used to before the scale was rebalanced: full
-  /// intensity on every role and real impacts for taps, which is already firmer
-  /// than most iOS apps ship. `strong` and `heavy` now genuinely earn their
-  /// names via CoreHaptics, so they are opt-in rather than the starting point.
-  static let `default`: AppHapticStrength = .medium
+    /// `medium` sits where `strong` used to before the scale was rebalanced: full
+    /// intensity on every role and real impacts for taps, which is already firmer
+    /// than most iOS apps ship. `strong` and `heavy` now genuinely earn their
+    /// names via CoreHaptics, so they are opt-in rather than the starting point.
+    static let `default`: AppHapticStrength = .medium
 
-  var id: String { rawValue }
+    var id: String { rawValue }
 
-  var label: String {
-    switch self {
-    case .light: "Light"
-    case .medium: "Medium"
-    case .strong: "Strong"
-    case .heavy: "Heavy"
+    var label: String {
+        switch self {
+        case .light: "Light"
+        case .medium: "Medium"
+        case .strong: "Strong"
+        case .heavy: "Heavy"
+        }
     }
-  }
 
-  /// Scales role intensity on the UIKit path.  Capped at 1.0 by the generators,
-  /// which is precisely why the top two levels leave that path entirely.
-  var intensityScale: CGFloat {
-    switch self {
-    case .light: 0.78
-    case .medium: 1.0
-    case .strong, .heavy: 1.0
+    /// Scales role intensity on the UIKit path.  Capped at 1.0 by the generators,
+    /// which is precisely why the top two levels leave that path entirely.
+    var intensityScale: CGFloat {
+        switch self {
+        case .light: 0.78
+        case .medium: 1.0
+        case .strong, .heavy: 1.0
+        }
     }
-  }
 
-  /// `UIImpactFeedbackGenerator` tops out at `.heavy` @ 1.0, and several roles
-  /// already sit there — so the top two levels render through CoreHaptics
-  /// instead, where intensity, sharpness and duration are continuous.  That is
-  /// the only way to go past the canned ceiling *and* keep roles separable;
-  /// stacking more roles onto five discrete rungs just collides them.
-  var usesCoreHapticsImpacts: Bool { self == .strong || self == .heavy }
+    /// `UIImpactFeedbackGenerator` tops out at `.heavy` @ 1.0, and several roles
+    /// already sit there — so the top two levels render through CoreHaptics
+    /// instead, where intensity, sharpness and duration are continuous.  That is
+    /// the only way to go past the canned ceiling *and* keep roles separable;
+    /// stacking more roles onto five discrete rungs just collides them.
+    var usesCoreHapticsImpacts: Bool { self == .strong || self == .heavy }
 
-  /// Length multiplier for the continuous layer stacked under each transient.
-  /// A transient alone is a click; adding sustain under it is what reads as
-  /// weight, and it is where `heavy` gets its extra punch once intensity is
-  /// already pinned at maximum.
-  var bodyScale: Double {
-    switch self {
-    case .light, .medium: 0
-    case .strong: 1.0
-    case .heavy: 1.75
+    /// Length multiplier for the continuous layer stacked under each transient.
+    /// A transient alone is a click; adding sustain under it is what reads as
+    /// weight, and it is where `heavy` gets its extra punch once intensity is
+    /// already pinned at maximum.
+    var bodyScale: Double {
+        switch self {
+        case .light, .medium: 0
+        case .strong: 1.0
+        case .heavy: 1.75
+        }
     }
-  }
 
-  /// Only the gentlest level keeps the plain selection tick.  It has no
-  /// intensity control, so it is the one texture that cannot be cranked.
-  var usesImpactForSelection: Bool { self != .light }
+    /// Only the gentlest level keeps the plain selection tick.  It has no
+    /// intensity control, so it is the one texture that cannot be cranked.
+    var usesImpactForSelection: Bool { self != .light }
 
-  /// How far up the canned-generator ladder to climb.  This is the *fallback*
-  /// path for the top two levels — hardware without CoreHaptics, or an engine
-  /// that failed to start — so it still has to get heavier with the baseline.
-  /// `heavy` deliberately stops at the same boost as `strong`.  Five rungs
-  /// cannot hold six roles apart once they are pushed harder than this — they
-  /// pile against the top and collide.  Heavy earns its extra weight from
-  /// `bodyScale` on the CoreHaptics path, so the canned fallback simply tops
-  /// out rather than smearing roles together.
-  var rungBoost: Int {
-    switch self {
-    case .light, .medium: 0
-    case .strong, .heavy: 1
+    /// How far up the canned-generator ladder to climb.  This is the *fallback*
+    /// path for the top two levels — hardware without CoreHaptics, or an engine
+    /// that failed to start — so it still has to get heavier with the baseline.
+    /// `heavy` deliberately stops at the same boost as `strong`.  Five rungs
+    /// cannot hold six roles apart once they are pushed harder than this — they
+    /// pile against the top and collide.  Heavy earns its extra weight from
+    /// `bodyScale` on the CoreHaptics path, so the canned fallback simply tops
+    /// out rather than smearing roles together.
+    var rungBoost: Int {
+        switch self {
+        case .light, .medium: 0
+        case .strong, .heavy: 1
+        }
     }
-  }
 }
 
 // MARK: - Haptics EnvironmentKey
 
 struct AppHapticsEnabledKey: EnvironmentKey {
-  static let defaultValue: Bool = true
+    static let defaultValue: Bool = true
 }
 
 extension EnvironmentValues {
-  /// Whether haptics are switched on for this view tree.  Read this when a
-  /// view needs to *branch* on the preference (e.g. to skip arming a
-  /// generator); firing through `AppHaptic` already honours it.
-  var appHapticsEnabled: Bool {
-    get { self[AppHapticsEnabledKey.self] }
-    set { self[AppHapticsEnabledKey.self] = newValue }
-  }
+    /// Whether haptics are switched on for this view tree.  Read this when a
+    /// view needs to *branch* on the preference (e.g. to skip arming a
+    /// generator); firing through `AppHaptic` already honours it.
+    var appHapticsEnabled: Bool {
+        get { self[AppHapticsEnabledKey.self] }
+        set { self[AppHapticsEnabledKey.self] = newValue }
+    }
 }
 
 extension View {
-  /// Injects the haptics preference into the environment and keeps the haptic
-  /// engine's lifecycle tied to the scene.  Apply once at the root, next to
-  /// `injectReduceMotion()`.
-  func injectHaptics() -> some View {
-    HapticsInjector(content: self)
-  }
-
-  /// Plays a flip whenever a bound `Bool` changes — for `Toggle`s built on a
-  /// plain binding, which SwiftUI gives no action hook of their own.
-  ///
-  /// Switching something on is a commit; switching it off is the gentler
-  /// counterpart, matching how the rest of the app treats forward versus back.
-  /// Do **not** add this to a `Toggle` whose binding already plays a haptic in
-  /// its setter, or the flip fires twice.
-  func toggleHaptic(_ value: Bool) -> some View {
-    onChange(of: value) { _, isOn in
-      (isOn ? AppHaptic.commit : AppHaptic.dismiss).play()
+    /// Injects the haptics preference into the environment and keeps the haptic
+    /// engine's lifecycle tied to the scene.  Apply once at the root, next to
+    /// `injectReduceMotion()`.
+    func injectHaptics() -> some View {
+        HapticsInjector(content: self)
     }
-  }
 
-  /// Plays a tick whenever a picker's selection changes.  `Picker` has no
-  /// action closure, and its rows are system-drawn, so the bound value is the
-  /// only place a change surfaces.
-  func selectionHaptic<T: Equatable>(_ value: T) -> some View {
-    onChange(of: value) { _, _ in AppHaptic.selection.play() }
-  }
+    /// Plays a flip whenever a bound `Bool` changes — for `Toggle`s built on a
+    /// plain binding, which SwiftUI gives no action hook of their own.
+    ///
+    /// Switching something on is a commit; switching it off is the gentler
+    /// counterpart, matching how the rest of the app treats forward versus back.
+    /// Do **not** add this to a `Toggle` whose binding already plays a haptic in
+    /// its setter, or the flip fires twice.
+    func toggleHaptic(_ value: Bool) -> some View {
+        onChange(of: value) { _, isOn in
+            (isOn ? AppHaptic.commit : AppHaptic.dismiss).play()
+        }
+    }
+
+    /// Plays a tick whenever a picker's selection changes.  `Picker` has no
+    /// action closure, and its rows are system-drawn, so the bound value is the
+    /// only place a change surfaces.
+    func selectionHaptic<T: Equatable>(_ value: T) -> some View {
+        onChange(of: value) { _, _ in AppHaptic.selection.play() }
+    }
 }
 
 // Generic over Content for the same reason `ReduceMotionInjector` is: this
 // wraps the root of the view tree, and an AnyView there erases the static type
 // SwiftUI relies on to diff the whole app structurally.
 private struct HapticsInjector<Content: View>: View {
-  let content: Content
-  @AppStorage(AppHaptics.storageKey) private var hapticsEnabled: Bool = true
-  @Environment(\.scenePhase) private var scenePhase
+    let content: Content
+    @AppStorage(AppHaptics.storageKey) private var hapticsEnabled: Bool = true
+    @Environment(\.scenePhase) private var scenePhase
 
-  var body: some View {
-    content
-      .environment(\.appHapticsEnabled, hapticsEnabled)
-      .onChange(of: scenePhase) { _, phase in
+    var body: some View {
+        content
+            .environment(\.appHapticsEnabled, hapticsEnabled)
+            .onChange(of: scenePhase) { _, phase in
         #if os(iOS)
           switch phase {
           case .active:
@@ -174,8 +174,8 @@ private struct HapticsInjector<Content: View>: View {
             break
           }
         #endif
-      }
-  }
+            }
+    }
 }
 
 // MARK: - AppHaptic
@@ -184,60 +184,60 @@ private struct HapticsInjector<Content: View>: View {
 /// Pick by **role**, not by texture-per-callsite — the texture behind a role
 /// can be retuned here once and every call site inherits it.
 enum AppHaptic {
-  /// Discrete selection moved: row tap, tab change, segment switch, filter
-  /// applied, picker step.  The most common case by far.
-  case selection
+    /// Discrete selection moved: row tap, tab change, segment switch, filter
+    /// applied, picker step.  The most common case by far.
+    case selection
 
-  /// A continuous drag crossed a notch: scrub detents, reorder steps, zoom
-  /// stops.  Rate-limited, so a fast drag *ticks* instead of buzzing.
-  case detent
+    /// A continuous drag crossed a notch: scrub detents, reorder steps, zoom
+    /// stops.  Rate-limited, so a fast drag *ticks* instead of buzzing.
+    case detent
 
-  /// A control was physically picked up: drag begins, long-press arms, a
-  /// sheet grabs its handle.  Soft, so it reads as contact rather than a click.
-  case grab
+    /// A control was physically picked up: drag begins, long-press arms, a
+    /// sheet grabs its handle.  Soft, so it reads as contact rather than a click.
+    case grab
 
-  /// A control committed to its action: primary button, play/pause, send.
-  case commit
+    /// A control committed to its action: primary button, play/pause, send.
+    case commit
 
-  /// The gentle counterpart to `commit` — a surface closed, an action
-  /// cancelled, a setting switched off.  Backing out should never feel as
-  /// weighty as going forward.
-  case dismiss
+    /// The gentle counterpart to `commit` — a surface closed, an action
+    /// cancelled, a setting switched off.  Backing out should never feel as
+    /// weighty as going forward.
+    case dismiss
 
-  /// Travel stopped against a limit: scrub end-stop, list edge, cap reached.
-  /// Rigid, so it reads as hitting something solid.
-  case boundary
+    /// Travel stopped against a limit: scrub end-stop, list edge, cap reached.
+    /// Rigid, so it reads as hitting something solid.
+    case boundary
 
-  /// The work finished and the result is good.
-  case success
+    /// The work finished and the result is good.
+    case success
 
-  /// The work finished but something needs attention.
-  case warning
+    /// The work finished but something needs attention.
+    case warning
 
-  /// The work failed.
-  case error
+    /// The work failed.
+    case error
 
-  /// A rare, earned moment — a custom CoreHaptics texture rather than a canned
-  /// system thump.  Reserve it; overuse is what makes haptics feel cheap.
-  case celebrate
+    /// A rare, earned moment — a custom CoreHaptics texture rather than a canned
+    /// system thump.  Reserve it; overuse is what makes haptics feel cheap.
+    case celebrate
 
-  func play() {
+    func play() {
     #if os(iOS)
       guard AppHaptics.isEnabled else { return }
       HapticEngine.shared.play(self)
     #endif
-  }
+    }
 
-  /// Warms the generator this role uses so the *next* `play()` fires without
-  /// the ~100ms spin-up latency.  Call at the start of a gesture — on
-  /// `onLongPressGesture`'s `onPressingChanged`, or the first tick of a drag.
-  /// Free to call repeatedly; the system coalesces it.
-  func prepare() {
+    /// Warms the generator this role uses so the *next* `play()` fires without
+    /// the ~100ms spin-up latency.  Call at the start of a gesture — on
+    /// `onLongPressGesture`'s `onPressingChanged`, or the first tick of a drag.
+    /// Free to call repeatedly; the system coalesces it.
+    func prepare() {
     #if os(iOS)
       guard AppHaptics.isEnabled else { return }
       HapticEngine.shared.prepare(self)
     #endif
-  }
+    }
 }
 
 #if os(iOS)
@@ -418,11 +418,11 @@ enum AppHaptic {
     private func coreProfile(for haptic: AppHaptic) -> (intensity: Float, sharpness: Float, body: TimeInterval)? {
       switch haptic {
       case .selection: (0.85, 0.55, 0.012)
-      case .grab: (0.85, 0.20, 0.045)  // dull and swelling — a pickup, not a click
+      case .grab: (0.85, 0.20, 0.045) // dull and swelling — a pickup, not a click
       case .dismiss: (0.90, 0.45, 0.020)
       case .commit: (1.00, 0.70, 0.045)
-      case .detent: (1.00, 1.00, 0)  // maximum sharpness, never any sustain
-      case .boundary: (1.00, 0.35, 0.075)  // long and dull — a solid wall
+      case .detent: (1.00, 1.00, 0) // maximum sharpness, never any sustain
+      case .boundary: (1.00, 0.35, 0.075) // long and dull — a solid wall
       default: nil
       }
     }
@@ -512,16 +512,16 @@ enum AppHaptic {
       let cap: Int
       switch haptic {
       case .grab:
-        baseRung = 0; trim = 1.0; cap = 4  // soft — a swell, not a click
+        baseRung = 0; trim = 1.0; cap = 4 // soft — a swell, not a click
       case .selection:
-        baseRung = 1; trim = 0.85; cap = 4  // light, and the lightest thing here
+        baseRung = 1; trim = 0.85; cap = 4 // light, and the lightest thing here
       case .dismiss:
-        baseRung = 1; trim = 1.0; cap = 4  // light, but weightier than a plain tap
+        baseRung = 1; trim = 1.0; cap = 4 // light, but weightier than a plain tap
       case .commit:
         // Capped below `heavy` so `boundary` keeps the top rung to itself:
         // hitting a limit should be the weightiest thing in the app, and
         // without this the two collide at the heaviest baseline.
-        baseRung = 2; trim = 1.0; cap = 3  // medium
+        baseRung = 2; trim = 1.0; cap = 3 // medium
       case .detent:
         // Capped at rigid on purpose.  Sharpness *is* a tick's identity, and a
         // scrub firing ~15 heavy impacts a second would be unusable — so
@@ -533,7 +533,7 @@ enum AppHaptic {
         // from being literally the same event.
         baseRung = 3; trim = 0.9; cap = 3
       case .boundary:
-        baseRung = 4; trim = 1.0; cap = 4  // heavy — a limit must feel unlike a notch
+        baseRung = 4; trim = 1.0; cap = 4 // heavy — a limit must feel unlike a notch
       default:
         baseRung = 2; trim = 1.0; cap = 4
       }

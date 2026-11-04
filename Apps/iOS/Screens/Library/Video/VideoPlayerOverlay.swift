@@ -164,4 +164,3 @@ private extension View {
             .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
     }
 }
-

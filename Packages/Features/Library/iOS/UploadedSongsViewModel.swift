@@ -298,5 +298,4 @@ actor UploadedSongDurationResolver {
             return nil
         }
     }
-
 }

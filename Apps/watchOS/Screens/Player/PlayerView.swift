@@ -282,7 +282,7 @@ struct PlayerView: View {
                             .onChanged { value in
                                 guard canScrub else { return }
                                 scrubPosition = WatchPlaybackPosition.time(at: value.location.x,
-                                    width: geometry.size.width, duration: audioManager.duration)
+                                                                           width: geometry.size.width, duration: audioManager.duration)
                             }
                             .onEnded { _ in
                                 if let scrubPosition { audioManager.seek(to: scrubPosition) }
@@ -303,7 +303,6 @@ struct PlayerView: View {
                         @unknown default: break
                         }
                     }
-
                 }
 
                 // Anything the artwork's ceiling left over lands here, so the
@@ -445,7 +444,6 @@ struct PlayerView: View {
                         .accessibilityLabel("Options")
                         .accessibilityHint("Download, favorites, and sleep timer")
                         .accessibilityIdentifier("WatchPlayer.options")
-
                     }
                 }
             }
@@ -466,7 +464,7 @@ struct PlayerView: View {
 
     private var systemVolumeControl: some View {
         WatchSystemVolumeControl(owner: WatchAuthManager.shared.output,
-            isFocused: page == .nowPlaying && !showOutputOptions && !showSongOptions)
+                                 isFocused: page == .nowPlaying && !showOutputOptions && !showSongOptions)
             .id(WatchAuthManager.shared.output)
             .frame(width: 40, height: 40)
             .scaleEffect(0.65)
@@ -537,7 +535,6 @@ struct PlayerView: View {
     private var canScrub: Bool {
         !audioManager.isRadioMode && audioManager.duration > 0
     }
-
 }
 
 nonisolated enum WatchPlaybackPosition {

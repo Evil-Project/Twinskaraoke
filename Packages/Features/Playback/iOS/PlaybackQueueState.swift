@@ -226,7 +226,6 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     }
 }
 
-
 nonisolated struct PlaybackSessionSnapshot: Codable {
     var version = 1
     let song: Song

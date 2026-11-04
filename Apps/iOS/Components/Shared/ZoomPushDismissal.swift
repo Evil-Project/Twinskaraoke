@@ -279,7 +279,7 @@ final class NavigationDismissalSuppression {
 
     private func collect(from view: UIView, into found: inout [UIGestureRecognizer]) {
         for recogniser in view.gestureRecognizers ?? []
-        where recogniser.isEnabled && Self.isDismissalDriver(recogniser) {
+            where recogniser.isEnabled && Self.isDismissalDriver(recogniser) {
             found.append(recogniser)
         }
         for subview in view.subviews {

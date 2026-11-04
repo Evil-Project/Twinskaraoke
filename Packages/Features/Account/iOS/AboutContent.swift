@@ -2,10 +2,10 @@ import Foundation
 
 enum AboutContent {
     static let intro = """
-    Neuro & Evil Karaoke Web Player is a fan-made project created by Soul. \
-    It is a community platform dedicated to preserving and enjoying songs covered \
-    by Neuro and Evil, along with related fan content.
-    """
+        Neuro & Evil Karaoke Web Player is a fan-made project created by Soul. \
+        It is a community platform dedicated to preserving and enjoying songs covered \
+        by Neuro and Evil, along with related fan content.
+        """
 
     static let unofficialNotice =
         "This website is unofficial and is not affiliated with any official Vedal AI entities."

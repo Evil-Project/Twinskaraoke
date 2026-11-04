@@ -6,8 +6,7 @@ import SwiftUI
 #endif
 
 enum DisplayRefreshRate {
-
-  static var maximumFramesPerSecond: Int {
+    static var maximumFramesPerSecond: Int {
     #if os(iOS)
       let sceneMaximum = UIApplication.shared.connectedScenes
         .compactMap { ($0 as? UIWindowScene)?.screen.maximumFramesPerSecond }
@@ -16,19 +15,19 @@ enum DisplayRefreshRate {
     #else
       return 60
     #endif
-  }
+    }
 
-  /// Full display rate — 120Hz on ProMotion — for small always-moving elements
-  /// (spinners, bouncing dots) whose choppiness is visible next to smooth scrolling.
-  static var lightweightAnimationInterval: TimeInterval {
-    1.0 / Double(maximumFramesPerSecond)
-  }
+    /// Full display rate — 120Hz on ProMotion — for small always-moving elements
+    /// (spinners, bouncing dots) whose choppiness is visible next to smooth scrolling.
+    static var lightweightAnimationInterval: TimeInterval {
+        1.0 / Double(maximumFramesPerSecond)
+    }
 
-  /// Decorative ambience (equalizer bars). 60fps reads as fluid; full display
-  /// rate would spend battery on motion nobody tracks closely.
-  static var decorativeAnimationInterval: TimeInterval {
-    1.0 / 60.0
-  }
+    /// Decorative ambience (equalizer bars). 60fps reads as fluid; full display
+    /// rate would spend battery on motion nobody tracks closely.
+    static var decorativeAnimationInterval: TimeInterval {
+        1.0 / 60.0
+    }
 }
 
 // MARK: - Active animation clock
@@ -156,57 +155,57 @@ private struct ReduceMotionInjector<Content: View>: View {
 // MARK: - AppMotion
 
 enum AppMotion {
-  static func reduceMotion(systemReduceMotion: Bool, respectPreference: Bool) -> Bool {
-    respectPreference && systemReduceMotion
-  }
+    static func reduceMotion(systemReduceMotion: Bool, respectPreference: Bool) -> Bool {
+        respectPreference && systemReduceMotion
+    }
 
-  /// `.serious` is where the system itself starts throttling; shedding
-  /// decorative redraws there gives that headroom back to playback and UI.
-  static func reduceDecorativeEffects(
-    reduceMotion: Bool,
-    lowPowerModeEnabled: Bool,
-    thermalState: ProcessInfo.ThermalState = .nominal
-  ) -> Bool {
-    reduceMotion || lowPowerModeEnabled || thermalState == .serious || thermalState == .critical
-  }
+    /// `.serious` is where the system itself starts throttling; shedding
+    /// decorative redraws there gives that headroom back to playback and UI.
+    static func reduceDecorativeEffects(
+        reduceMotion: Bool,
+        lowPowerModeEnabled: Bool,
+        thermalState: ProcessInfo.ThermalState = .nominal
+    ) -> Bool {
+        reduceMotion || lowPowerModeEnabled || thermalState == .serious || thermalState == .critical
+    }
 
-  static func duration(_ seconds: TimeInterval) -> TimeInterval {
-    max(0, seconds)
-  }
+    static func duration(_ seconds: TimeInterval) -> TimeInterval {
+        max(0, seconds)
+    }
 
-  static func easeInOut(duration seconds: TimeInterval) -> Animation {
-    .easeInOut(duration: duration(seconds))
-  }
+    static func easeInOut(duration seconds: TimeInterval) -> Animation {
+        .easeInOut(duration: duration(seconds))
+    }
 
-  static func easeOut(duration seconds: TimeInterval) -> Animation {
-    .easeOut(duration: duration(seconds))
-  }
+    static func easeOut(duration seconds: TimeInterval) -> Animation {
+        .easeOut(duration: duration(seconds))
+    }
 
-  static func linear(duration seconds: TimeInterval) -> Animation {
-    .linear(duration: duration(seconds))
-  }
+    static func linear(duration seconds: TimeInterval) -> Animation {
+        .linear(duration: duration(seconds))
+    }
 
-  static func spring(response: TimeInterval, dampingFraction: Double) -> Animation {
-    .spring(response: duration(response), dampingFraction: dampingFraction)
-  }
+    static func spring(response: TimeInterval, dampingFraction: Double) -> Animation {
+        .spring(response: duration(response), dampingFraction: dampingFraction)
+    }
 
-  // MARK: - Semantic motion scale
+    // MARK: - Semantic motion scale
 
-  // One shared physics family so every interaction feels tuned by the same hand.
-  // Pick by role, not by taste-per-callsite:
+    // One shared physics family so every interaction feels tuned by the same hand.
+    // Pick by role, not by taste-per-callsite:
 
-  /// Small state flips: icons, badges, toggles, selection feedback.
-  static var snap: Animation { spring(response: 0.22, dampingFraction: 0.88) }
+    /// Small state flips: icons, badges, toggles, selection feedback.
+    static var snap: Animation { spring(response: 0.22, dampingFraction: 0.88) }
 
-  /// The workhorse: row/list changes, control state, chrome reveals.
-  static var quick: Animation { spring(response: 0.32, dampingFraction: 0.85) }
+    /// The workhorse: row/list changes, control state, chrome reveals.
+    static var quick: Animation { spring(response: 0.32, dampingFraction: 0.85) }
 
-  /// Content-level moves: section reflows, layout swaps, sheets' inner content.
-  static var standard: Animation { spring(response: 0.42, dampingFraction: 0.84) }
+    /// Content-level moves: section reflows, layout swaps, sheets' inner content.
+    static var standard: Animation { spring(response: 0.42, dampingFraction: 0.84) }
 
-  /// Large surfaces: hero artwork, full-screen layout shifts, lyric scrolling.
-  static var gentle: Animation { spring(response: 0.58, dampingFraction: 0.85) }
+    /// Large surfaces: hero artwork, full-screen layout shifts, lyric scrolling.
+    static var gentle: Animation { spring(response: 0.58, dampingFraction: 0.85) }
 
-  /// Deliberately bouncy celebratory moments.
-  static var playful: Animation { spring(response: 0.34, dampingFraction: 0.7) }
+    /// Deliberately bouncy celebratory moments.
+    static var playful: Animation { spring(response: 0.34, dampingFraction: 0.7) }
 }

@@ -52,7 +52,7 @@ final class WatchAuthManager: NSObject {
     private(set) var changingOutput = false
     var output: CompanionPlayback.Owner { lease?.owner ?? .phone }
     private var relinquishedLease = CompanionPlayback.decode(CompanionPlayback.Lease.self,
-        from: UserDefaults.standard.data(forKey: "nk.watch.relinquishedLease"))
+                                                             from: UserDefaults.standard.data(forKey: "nk.watch.relinquishedLease"))
     var canPlayLocally: Bool { lease?.allowsAudio(on: .watch, relinquished: relinquishedLease) == true && !changingOutput }
     private var localPublishTask: Task<Void, Never>?
     private var lastPositionPublish = Date.distantPast
@@ -83,15 +83,15 @@ final class WatchAuthManager: NSObject {
     func activate() {
         guard WCSession.isSupported(), WCSession.default.delegate == nil else { return }
         if output == .watch, var saved = CompanionPlayback.decode(
-            CompanionPlayback.Snapshot.self, from: defaults.data(forKey: "nk.watch.localPlayback")
-        ), lease?.accepts(saved) == true,
+               CompanionPlayback.Snapshot.self, from: defaults.data(forKey: "nk.watch.localPlayback")
+           ), lease?.accepts(saved) == true,
            saved.belongsToAccount(generation: defaults.integer(forKey: Key.generation), phoneInstanceID: phoneInstanceID) {
             saved.isPlaying = false
             playbackSnapshot = saved
             AudioManager.shared.applyCompanionSnapshot(saved)
         }
         expiredSessionObserver = NotificationCenter.default.addObserver(forName: .karaokeSessionExpired,
-            object: nil, queue: .main) { @Sendable [weak self] note in
+                                                                        object: nil, queue: .main) { @Sendable [weak self] note in
             let expiredToken = note.userInfo?["requestToken"] as? String
             Task { @MainActor [weak self] in
                 guard let self, let token = CredentialStore.token, token == expiredToken,
@@ -106,7 +106,7 @@ final class WatchAuthManager: NSObject {
             }
         }
         favoritesObserver = NotificationCenter.default.addObserver(forName: FavoritesManager.didSave,
-            object: nil, queue: .main) { [weak self] _ in
+                                                                   object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let userID = self.userID, self.linkState == .signedIn,
                       WCSession.default.isReachable else { return }
@@ -131,11 +131,11 @@ final class WatchAuthManager: NSObject {
         do {
             data = try await withCheckedThrowingContinuation { continuation in
                 session.sendMessage([WatchSessionLink.MessageKey.kind: WatchSessionLink.MessageKind.fetchPlaylists,
-                    "generation": generation, "userID": identity ?? "",
-                    WatchSessionLink.ContextKey.phoneInstanceID: instanceID ?? ""], replyHandler: { @Sendable reply in
-                    if let data = reply["playlists"] as? Data { continuation.resume(returning: data) }
-                    else { continuation.resume(throwing: KaraokeAPIClient.APIError.invalidResponse) }
-                }, errorHandler: { @Sendable error in continuation.resume(throwing: error) })
+                                     "generation": generation, "userID": identity ?? "",
+                                     WatchSessionLink.ContextKey.phoneInstanceID: instanceID ?? ""], replyHandler: { @Sendable reply in
+                        if let data = reply["playlists"] as? Data { continuation.resume(returning: data) }
+                        else { continuation.resume(throwing: KaraokeAPIClient.APIError.invalidResponse) }
+                    }, errorHandler: { @Sendable error in continuation.resume(throwing: error) })
             }
         } catch {
             guard userID == identity, phoneInstanceID == instanceID, linkState == .signedIn,
@@ -364,7 +364,7 @@ final class WatchAuthManager: NSObject {
         }
         guard snapshot.supersedes(playbackSnapshot) else { return }
         let nextLease = CompanionPlayback.Lease(sessionID: snapshot.sessionID,
-                                               owner: snapshot.owner, epoch: snapshot.ownershipEpoch)
+                                                owner: snapshot.owner, epoch: snapshot.ownershipEpoch)
         lease = nextLease
         CompanionPlayback.saveLease(nextLease)
         playbackSnapshot = snapshot
@@ -616,7 +616,7 @@ extension WatchAuthManager: WCSessionDelegate {
                     from: context[CompanionPlayback.contextKey] as? Data
                 ) { self?.applyPlayback(snapshot) }
                 if let requested = CompanionPlayback.decode(CompanionPlayback.Lease.self,
-                    from: context[CompanionPlayback.takeoverRequestKey] as? Data) {
+                                                            from: context[CompanionPlayback.takeoverRequestKey] as? Data) {
                     self?.applyTakeoverRequest(requested)
                 }
             }
@@ -646,7 +646,7 @@ extension WatchAuthManager: WCSessionDelegate {
             from: context[CompanionPlayback.contextKey] as? Data
         )
         let requested = CompanionPlayback.decode(CompanionPlayback.Lease.self,
-            from: context[CompanionPlayback.takeoverRequestKey] as? Data)
+                                                 from: context[CompanionPlayback.takeoverRequestKey] as? Data)
         Task { @MainActor [weak self] in
             if let descriptor { self?.apply(descriptor) }
             if let snapshot { self?.applyPlayback(snapshot) }
@@ -672,13 +672,12 @@ extension WatchAuthManager: WCSessionDelegate {
     nonisolated func session(_: WCSession, didReceiveMessage message: [String: Any],
                              replyHandler: @escaping ([String: Any]) -> Void) {
         guard let command = CompanionPlayback.decode(CompanionPlayback.Command.self,
-            from: message[CompanionPlayback.messageDataKey] as? Data) else {
+                                                     from: message[CompanionPlayback.messageDataKey] as? Data) else {
             replyHandler([:]); return
         }
         let reply = WatchPlaybackReply(replyHandler)
         Task { @MainActor [weak self] in reply.send(self?.handlePhoneCommand(command) ?? [:]) }
     }
-
 }
 
 private nonisolated final class WatchPlaybackReply: @unchecked Sendable {

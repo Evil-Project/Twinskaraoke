@@ -130,7 +130,6 @@ struct WatchAudioManagerQueueTests {
     }
 }
 
-
 @MainActor
 @Suite("Watch audio cache eviction")
 struct WatchAudioCacheEvictionTests {

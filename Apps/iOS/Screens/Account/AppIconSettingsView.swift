@@ -84,5 +84,4 @@ struct AppIconSettingsView: View {
         }
         .accessibilityHidden(true)
     }
-
 }

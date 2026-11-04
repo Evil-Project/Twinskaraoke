@@ -22,9 +22,9 @@ struct WatchSessionLinkTests {
     func tokenInstallBoundary() {
         let descriptor = WatchSessionLink.Descriptor(isSignedIn: true, userID: "same", generation: 1, phoneInstanceID: "new-install")
         #expect(!WatchSessionLink.tokenRequestMatches(generation: 1, userID: "same", descriptor: descriptor,
-                                                     currentGeneration: 1, phoneInstanceID: "old-install"))
+                                                      currentGeneration: 1, phoneInstanceID: "old-install"))
         #expect(WatchSessionLink.tokenRequestMatches(generation: 1, userID: "same", descriptor: descriptor,
-                                                    currentGeneration: 1, phoneInstanceID: "new-install"))
+                                                     currentGeneration: 1, phoneInstanceID: "new-install"))
     }
 
     @Test("A delayed token pull cannot obtain a different account's credentials")

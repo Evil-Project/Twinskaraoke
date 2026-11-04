@@ -43,21 +43,21 @@ struct DownloadManagerTests {
         try Data([1, 2, 3]).write(to: audio)
         let modified = try audio.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         let entry = DownloadManager.ValidDownloadCacheEntry(source: "https://example.com/song.mp3?token=old",
-            expectedDuration: 180, modifiedAt: modified, byteCount: 3)
+                                                            expectedDuration: 180, modifiedAt: modified, byteCount: 3)
         let restored = try JSONDecoder().decode(DownloadManager.ValidDownloadCacheEntry.self,
-            from: JSONEncoder().encode(entry))
+                                                from: JSONEncoder().encode(entry))
         #expect(DownloadManager.validationMatches(restored, audioURL: audio,
-            source: "https://example.com/song.mp3?token=new", expectedDuration: 180))
+                                                  source: "https://example.com/song.mp3?token=new", expectedDuration: 180))
         #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
-            source: "https://example.com/other.mp3", expectedDuration: 180))
+                                                   source: "https://example.com/other.mp3", expectedDuration: 180))
         #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
-            source: restored.source, expectedDuration: 200))
+                                                   source: restored.source, expectedDuration: 200))
         try Data([1, 2, 3, 4]).write(to: audio)
         #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
-            source: restored.source, expectedDuration: 180))
+                                                   source: restored.source, expectedDuration: 180))
         try FileManager.default.removeItem(at: audio)
         #expect(!DownloadManager.validationMatches(restored, audioURL: audio,
-            source: restored.source, expectedDuration: 180))
+                                                   source: restored.source, expectedDuration: 180))
     }
 
     @Test("Cancelled promotion discards only its own files", arguments: [false, true])

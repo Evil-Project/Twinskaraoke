@@ -25,7 +25,6 @@ struct SearchView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom))
     }
 
-
     private func usesWideCanvas(availableWidth: CGFloat) -> Bool {
         AM.Layout.usesWideCanvas(
             horizontalSizeClass: horizontalSizeClass,
@@ -470,13 +469,13 @@ private struct BrowseCategoriesView: View {
             _ = await (genres, topChart, playlists)
         }
         .onChange(of: scenePhase) { _, phase in
-                guard phase == .active else { return }
-                publicPlaylistsVM.loadIfNeeded()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
-                publicPlaylistsVM.loadIfNeeded()
-            }
-            .onAppear {
+            guard phase == .active else { return }
+            publicPlaylistsVM.loadIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            publicPlaylistsVM.loadIfNeeded()
+        }
+        .onAppear {
             genresVM.loadIfNeeded()
             topChartVM.loadIfNeeded()
             publicPlaylistsVM.loadIfNeeded()
@@ -756,7 +755,6 @@ struct SearchCategorySongCollectionView: View {
         reduceMotion ? nil : AppMotion.quick
     }
 
-
     init(title: String, query: String) {
         self.title = title
         self.query = query
@@ -892,7 +890,6 @@ private struct SearchRecoveryStateView: View {
         reduceMotion ? nil : AppMotion.standard
     }
 
-
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {
             PulsingMusicEmptyStateMark()
@@ -951,7 +948,6 @@ private struct SearchRecoveryStateView: View {
         }
     }
 }
-
 
 private struct SearchCategoryLoadingView: View {
     let title: String

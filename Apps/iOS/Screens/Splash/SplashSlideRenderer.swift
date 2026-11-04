@@ -275,10 +275,10 @@ struct SplashSlideRenderer: View {
                             }
                             .contentShape(Rectangle())
                             .modifier(SplashCanvasEditing(select: select.map { action in { action(item) } },
-                                move: move.map { action in { dx, dy in action(item, dx, dy) } },
-                                width: width, height: canvasBaseHeight,
-                                resize: resize.map { action in { dx, dy, height in action(item, dx, dy, height) } },
-                                selected: selected == item, finish: finish.map { action in { action(item) } }, grid: style.gridSnapping == true))
+                                                          move: move.map { action in { dx, dy in action(item, dx, dy) } },
+                                                          width: width, height: canvasBaseHeight,
+                                                          resize: resize.map { action in { dx, dy, height in action(item, dx, dy, height) } },
+                                                          selected: selected == item, finish: finish.map { action in { action(item) } }, grid: style.gridSnapping == true))
                             .modifier(SplashCanvasContainerAccessibility(editing: move != nil, identifier: "SplashCanvas.\(item.id)"))
                             .position(x: centerX(placement, itemWidth: itemWidth), y: max((heights[item.id] ?? 0) / 2, canvasBaseHeight * placement.y))
                             .zIndex(selected == item ? 1 : 0)
@@ -342,7 +342,7 @@ struct SplashSlideRenderer: View {
         case .feature(let id):
             if let feature = slide.features?.first(where: { $0.id == id }) {
                 SplashMockFeatureView(feature: feature, editing: move != nil, boxWidth: style.freeform ? width : nil,
-                    minimumHeight: style.freeform ? feature.placement.height.map { canvasBaseHeight * $0 } : nil).id(feature.id)
+                                      minimumHeight: style.freeform ? feature.placement.height.map { canvasBaseHeight * $0 } : nil).id(feature.id)
             }
         case .demonstration:
             if let demo = slide.demonstration { SplashDemonstrationView(demo: demo, editing: move != nil, minimumHeight: style.freeform ? style.demoPlacement.height.map { canvasBaseHeight * $0 } : nil) }

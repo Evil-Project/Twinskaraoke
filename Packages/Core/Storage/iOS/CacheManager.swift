@@ -434,11 +434,11 @@ final class CacheManager {
         var count = 0
         for case let fileURL as URL in enumerator {
             guard let values = try? fileURL.resourceValues(
-                forKeys: [.contentModificationDateKey, .isRegularFileKey]
-            ),
-                values.isRegularFile == true,
-                let modified = values.contentModificationDate,
-                modified < cutoff
+                      forKeys: [.contentModificationDateKey, .isRegularFileKey]
+                  ),
+                  values.isRegularFile == true,
+                  let modified = values.contentModificationDate,
+                  modified < cutoff
             else { continue }
             do {
                 try fm.removeItem(at: fileURL)
@@ -495,10 +495,10 @@ final class CacheManager {
         var files: [(url: URL, date: Date)] = []
         for case let fileURL as URL in enumerator {
             guard let values = try? fileURL.resourceValues(
-                forKeys: [.contentModificationDateKey, .isRegularFileKey]
-            ),
-                values.isRegularFile == true,
-                let modified = values.contentModificationDate
+                      forKeys: [.contentModificationDateKey, .isRegularFileKey]
+                  ),
+                  values.isRegularFile == true,
+                  let modified = values.contentModificationDate
             else { continue }
             files.append((url: fileURL, date: modified))
         }

@@ -113,9 +113,9 @@ final class WidgetSnapshotPublisher {
     private func playlist(_ playlist: Playlist) -> WidgetPlaylist {
         let covers = coverURLs(for: playlist)
         return WidgetPlaylist(id: playlist.id, name: playlist.name, songCount: playlist.songCount,
-                       isPersonal: playlist.isPersonal || playlist.isFavorites,
-                       artworkFilename: covers.first.map { WidgetArtworkStore.filename(for: $0.absoluteString) },
-                       artworkFilenames: covers.map { WidgetArtworkStore.filename(for: $0.absoluteString) })
+                              isPersonal: playlist.isPersonal || playlist.isFavorites,
+                              artworkFilename: covers.first.map { WidgetArtworkStore.filename(for: $0.absoluteString) },
+                              artworkFilenames: covers.map { WidgetArtworkStore.filename(for: $0.absoluteString) })
     }
     private func snapshots() -> (PlaybackWidgetSnapshot, LibraryWidgetSnapshot) {
         let player = AudioPlayerManager.shared
@@ -201,7 +201,7 @@ final class WidgetSnapshotPublisher {
             player.queue.dropFirst(index + 1).prefix(3).compactMap(\.thumbnailURL)
         } ?? []
         let urls = ([player.currentSong?.thumbnailURL].compactMap { $0 } + upcomingArtwork
-                    + playlists.filter { accountAvailable || (!$0.isPersonal && !$0.isFavorites) }.prefix(32).flatMap(coverURLs))
+            + playlists.filter { accountAvailable || (!$0.isPersonal && !$0.isFavorites) }.prefix(32).flatMap(coverURLs))
         let keys = Set(urls.map(\.absoluteString))
         guard keys != lastArtworkKeys else { return }
         lastArtworkKeys = keys

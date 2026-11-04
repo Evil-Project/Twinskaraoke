@@ -95,7 +95,6 @@ final class AppThemeStore {
             DebugLogger.log("Widget theme unavailable: \(error.localizedDescription)", category: .cache)
         }
     }
-
 }
 
 extension Color {

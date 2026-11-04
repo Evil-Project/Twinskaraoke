@@ -101,8 +101,8 @@ struct WatchDownloadsTests {
         defer { server.listener.cancel() }
         let partial = UITestFixtures.song(id: "resolve", title: "Song", artist: "Artist", duration: 1)
         let full = Song(id: partial.id, title: partial.title, duration: 1,
-            absolutePath: "http://127.0.0.1:\(port)/audio.wav", cloudflareID: nil,
-            coverArt: nil, originalArtists: nil, coverArtists: nil, userUploaded: nil, oss: nil)
+                        absolutePath: "http://127.0.0.1:\(port)/audio.wav", cloudflareID: nil,
+                        coverArt: nil, originalArtists: nil, coverArtists: nil, userUploaded: nil, oss: nil)
         let downloads = WatchDownloads(directory: root, sessionConfiguration: config, loadSong: { _ in full })
         downloads.download(partial)
         let end = Date().addingTimeInterval(10)

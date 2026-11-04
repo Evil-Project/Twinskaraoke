@@ -206,7 +206,6 @@ struct SearchLifecycleTests {
     }
 }
 
-
 @Suite("Visible genre cache lifetime")
 @MainActor
 struct GenreCacheLifetimeTests {

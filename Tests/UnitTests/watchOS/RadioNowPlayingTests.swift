@@ -7,33 +7,33 @@ struct RadioNowPlayingTests {
     /// Shape taken from the live station endpoint, which is snake_cased while
     /// the Swift properties are not.
     private let payload = Data("""
-    {
-      "station": {
-        "name": "Twinskaraoke Radio",
-        "description": "Neuro 21",
-        "listen_url": "https://radio.twinskaraoke.com/listen/neuro_21/radio.mp3"
-      },
-      "listeners": { "total": 42, "unique": 24 },
-      "now_playing": {
-        "song": {
-          "id": "hash-abc",
-          "art": "https://example.invalid/art.jpg",
-          "text": "Hero - Mili",
-          "artist": "Mili",
-          "title": "Hero",
-          "custom_fields": { "songId": "catalog-123" }
+        {
+          "station": {
+            "name": "Twinskaraoke Radio",
+            "description": "Neuro 21",
+            "listen_url": "https://radio.twinskaraoke.com/listen/neuro_21/radio.mp3"
+          },
+          "listeners": { "total": 42, "unique": 24 },
+          "now_playing": {
+            "song": {
+              "id": "hash-abc",
+              "art": "https://example.invalid/art.jpg",
+              "text": "Hero - Mili",
+              "artist": "Mili",
+              "title": "Hero",
+              "custom_fields": { "songId": "catalog-123" }
+            }
+          },
+          "playing_next": {
+            "song": { "id": "hash-def", "art": null, "text": "Next - Someone",
+                      "artist": "Someone", "title": "Next", "custom_fields": null }
+          },
+          "song_history": [
+            { "song": { "id": "hash-ghi", "art": null, "text": "Past - Nobody",
+                        "artist": "Nobody", "title": "Past", "custom_fields": null } }
+          ]
         }
-      },
-      "playing_next": {
-        "song": { "id": "hash-def", "art": null, "text": "Next - Someone",
-                  "artist": "Someone", "title": "Next", "custom_fields": null }
-      },
-      "song_history": [
-        { "song": { "id": "hash-ghi", "art": null, "text": "Past - Nobody",
-                    "artist": "Nobody", "title": "Past", "custom_fields": null } }
-      ]
-    }
-    """.utf8)
+        """.utf8)
 
     @Test("Station metadata decodes from the live wire format")
     func decodesWireFormat() throws {
@@ -71,9 +71,9 @@ struct RadioNowPlayingTests {
     @Test("Missing optional sections decode rather than throw")
     func toleratesMissingSections() throws {
         let minimal = Data("""
-        { "station": { "name": "S", "description": null,
-                       "listen_url": "https://example.invalid/s.mp3" } }
-        """.utf8)
+            { "station": { "name": "S", "description": null,
+                           "listen_url": "https://example.invalid/s.mp3" } }
+            """.utf8)
 
         let decoded = try JSONDecoder().decode(RadioNowPlaying.self, from: minimal)
 

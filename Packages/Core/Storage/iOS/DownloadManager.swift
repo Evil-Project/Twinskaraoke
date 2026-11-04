@@ -557,7 +557,7 @@ final class DownloadManager {
     private func prewarmValidationCache(for songs: [Song]) {
         let batchGeneration = validationBatchGeneration
         let generations = Dictionary(songs.map { ($0.id, cancellationGenerations[$0.id, default: 0]) },
-            uniquingKeysWith: { _, new in new })
+                                     uniquingKeysWith: { _, new in new })
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let entries = self.validateDownloadsForCachePrewarm(songs)
@@ -1061,9 +1061,9 @@ final class DownloadManager {
             writeMetadata(for: song)
             downloadedMetadata[songID] = song
             cacheValidDownload(songID: songID,
-                audioURL: files(for: songID, sourceURL: song.audioURL).audio,
-                source: song.audioURL?.absoluteString,
-                expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil)
+                               audioURL: files(for: songID, sourceURL: song.audioURL).audio,
+                               source: song.audioURL?.absoluteString,
+                               expectedDuration: song.duration > 0 ? TimeInterval(song.duration) : nil)
             completedInCurrentQueue += 1
             // A downloaded song should never need the network again — but the
             // audio was the only thing being persisted, so its artwork was
@@ -1351,7 +1351,7 @@ final class DownloadManager {
         var hadFailures = false
         do {
             let entries = try fm.contentsOfDirectory(at: cacheDir,
-                includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
+                                                     includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
             for entry in entries {
                 do {
                     guard try entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
@@ -1369,14 +1369,14 @@ final class DownloadManager {
                     // Discover committed audio without opening a decoder. A startup probe
                     // cannot establish corruption, and must never remove a user's download.
                     let audioFiles = try fm.contentsOfDirectory(at: entry,
-                        includingPropertiesForKeys: [.isRegularFileKey]).filter { candidate in
-                            guard candidate.lastPathComponent.hasPrefix("main."),
-                                  !candidate.lastPathComponent.contains(".promoting-"),
-                                  !candidate.lastPathComponent.contains(".partial."),
-                                  AudioCacheStore.supportedMainAudioExtensions.contains(candidate.pathExtension.lowercased())
-                            else { return false }
-                            return try candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
-                        }
+                                                                includingPropertiesForKeys: [.isRegularFileKey]).filter { candidate in
+                        guard candidate.lastPathComponent.hasPrefix("main."),
+                              !candidate.lastPathComponent.contains(".promoting-"),
+                              !candidate.lastPathComponent.contains(".partial."),
+                              AudioCacheStore.supportedMainAudioExtensions.contains(candidate.pathExtension.lowercased())
+                        else { return false }
+                        return try candidate.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+                    }
                     guard !audioFiles.isEmpty else { continue }
                     ids.insert(song.id)
                     metadataByID[song.id] = song
@@ -1390,7 +1390,7 @@ final class DownloadManager {
             DebugLogger.log("Download enumeration \(cacheDir.path): \(error)", category: .cache)
         }
         return StartupScanResult(hadFailures: hadFailures, validIDs: ids,
-            metadata: metadataByID)
+                                 metadata: metadataByID)
     }
 
     nonisolated static func removePromotionStagingFiles(
@@ -1427,8 +1427,8 @@ final class DownloadManager {
             downloadedMetadata[songID] = song
         }
         let missingIDs = Self.restorationMissingIDs(starting: restorationStartingIDs,
-            discovered: scan.validIDs, changed: changedDuringRestoration,
-            inProgress: inProgress, hadFailures: scan.hadFailures)
+                                                    discovered: scan.validIDs, changed: changedDuringRestoration,
+                                                    inProgress: inProgress, hadFailures: scan.hadFailures)
         for songID in missingIDs {
             downloadedMetadata.removeValue(forKey: songID)
             validDownloadCache.removeValue(forKey: songID)
@@ -1616,7 +1616,7 @@ final class DownloadManager {
     }
 
     nonisolated static func validationMatches(_ cached: ValidDownloadCacheEntry, audioURL: URL,
-        source: String?, expectedDuration: TimeInterval?) -> Bool {
+                                              source: String?, expectedDuration: TimeInterval?) -> Bool {
         let sameSource = cached.source == source || (cached.source != nil && source != nil
             && sameAudioResource(cached.source!, source!))
         guard sameSource, cached.expectedDuration == expectedDuration,
@@ -1651,9 +1651,9 @@ final class DownloadManager {
         let resolvedSourceURL = entry.source.flatMap(URL.init(string:)) ?? song.audioURL
         let audio = files(for: song.id, sourceURL: resolvedSourceURL).audio
         guard Self.validationMatches(entry, audioURL: audio, source: entry.source,
-            expectedDuration: entry.expectedDuration) else { return nil }
+                                     expectedDuration: entry.expectedDuration) else { return nil }
         cacheValidDownload(songID: song.id, audioURL: audio, source: entry.source,
-            expectedDuration: entry.expectedDuration)
+                           expectedDuration: entry.expectedDuration)
         downloadedMetadata[song.id] = song
         updatePublishedState { $0.downloadedIDs.insert(song.id) }
         DebugLogger.log("Downloaded playback resolved: \(song.id), elapsed=\(started.duration(to: .now))", category: .playback)

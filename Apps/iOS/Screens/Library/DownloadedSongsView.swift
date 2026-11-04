@@ -16,7 +16,6 @@ struct DownloadedSongsView: View {
     @State private var showsCollapsedTitle = false
     @State private var showRemoveAllConfirmation = false
 
-
     var body: some View {
         GeometryReader { geo in
             let viewportSize = sanitizedViewportSize(geo.size)
@@ -320,7 +319,6 @@ private struct DownloadedEmptyStateView: View {
     let onRefresh: () -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
-
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {

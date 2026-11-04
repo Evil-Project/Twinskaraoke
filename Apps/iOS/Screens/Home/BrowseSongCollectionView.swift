@@ -15,7 +15,6 @@ struct BrowseSongCollectionView: View {
         )
     }
 
-
     init(title: String, songs: [Song]) {
         self.title = title
         self.songs = songs

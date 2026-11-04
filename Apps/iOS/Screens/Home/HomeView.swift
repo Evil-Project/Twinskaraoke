@@ -11,7 +11,6 @@ struct HomeView: View {
         reduceMotion ? nil : AppMotion.standard
     }
 
-
     var body: some View {
         NavigationStack {
             GeometryReader { proxy in
@@ -93,7 +92,6 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             topPicksShelf()
                 .shelfEntrance(index: 0)
-                
 
             if !recentlyPlayed.playlists.isEmpty {
                 PlaylistCarousel(title: String(localized: "Recently Played"), playlists: recentlyPlayed.playlists)
@@ -108,7 +106,7 @@ struct HomeView: View {
 
             latestSingleSection()
                 .shelfEntrance(index: 3)
-            
+
             if !viewModel.newReleases.isEmpty {
                 HomeSongSection(title: String(localized: "New Releases"), songs: viewModel.newReleases)
                     .shelfEntrance(index: 4)
