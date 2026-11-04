@@ -78,6 +78,8 @@ Target membership follows the innermost folder name:
   `FullScreenPlayerView.swift`, `SearchView.swift` or `ContentView.swift`.
   Extract a new type into its own file instead. Files over ~600 lines are
   split when a PR touches them substantially (in a separate refactor PR).
+  `Scripts/check-file-growth.sh` (run by `verify.sh` and CI) warns when a
+  Swift file over 600 lines gets longer.
 - No new third-party dependencies without asking. Current ones:
   SDWebImageSwiftUI, swift-spleeter, pillarbox-apple.
 - Formatting is owned by SwiftFormat (`.swiftformat`) and linting by
