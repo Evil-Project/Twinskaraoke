@@ -25,7 +25,10 @@ side.
 5. **Verify.** Run `Scripts/verify.sh` (or `/verify` in Claude Code). For UI
    changes, run the app yourself and take screenshots.
 6. **Open the PR** with the template filled in (`/pr` in Claude Code). CI must
-   be green.
+   be green. If you or your agent open it from the command line, use
+   `gh pr create --body-file` with a filled-in copy of
+   `.github/pull_request_template.md`; `--fill` and `--body` skip the
+   template (details in `AGENTS.md` → "Pull requests").
 7. **Review.** The AI review bot comments first; fix or answer every finding.
    Then one teammate approves. Code owners are requested automatically for
    playback, navigation, the Xcode project and CI.

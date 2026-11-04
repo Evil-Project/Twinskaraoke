@@ -1,0 +1,106 @@
+name: PR template
+
+# Fails when a PR description doesn't follow .github/pull_request_template.md.
+# Agents often open PRs with `gh pr create --fill/--body` or the API, which
+# skip the template. Reruns when the description is edited. The required
+# sections are read from the template, so the check follows template changes.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: PR template
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout template
+        uses: actions/checkout@v7
+        with:
+          # The base branch's template, so a PR can't relax the rules it is
+          # checked against by editing the template.
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/pull_request_template.md
+          sparse-checkout-cone-mode: false
+      - name: Check the description uses the template
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+
+          # Sections that need something the author wrote, not just the template's
+          # placeholder. Platforms affected and Checklist are checkbox lists, where
+          # leaving every box unticked can be the right answer.
+          NEEDS_TEXT = ("## What and why", "## How it was tested", "## Screenshots / recording", "## AI assistance")
+          ISSUE_REF = re.compile(r"(?i)\b(closes|fixes|resolves|part of)\s+#\d+")
+          FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+
+          def sections(text):
+              """(heading, lines) pairs in order. HTML comments are removed first, and
+              headings inside fenced code blocks don't count, because GitHub renders
+              neither as a heading."""
+              text = re.sub(r"<!--.*?-->", "", text.replace("\r\n", "\n"), flags=re.S)
+              parts, fence = [], None
+              for line in text.split("\n"):
+                  run = FENCE.match(line)
+                  if fence:
+                      # A fence closes only on the same character, at least as long,
+                      # with nothing after it.
+                      if run and run.group(1)[0] == fence[0] and len(run.group(1)) >= len(fence) and not run.group(2).strip():
+                          fence = None
+                  elif run and not (run.group(1)[0] == "`" and "`" in run.group(2)):
+                      fence = run.group(1)
+                  elif line.startswith("## "):
+                      parts.append((line.strip(), []))
+                      continue
+                  if parts:
+                      parts[-1][1].append(line)
+              return parts
+
+          def normalize(lines):
+              return [re.sub(r"^- \[[ xX]\]", "- [ ]", line.strip()) for line in lines if line.strip()]
+
+          template = open(".github/pull_request_template.md", encoding="utf-8").read()
+          body = os.environ.get("PR_BODY") or ""
+          tsec, bsec = dict(sections(template)), sections(body)
+          required = list(tsec)  # headings, in template order
+          found = [h for h, _ in bsec if h in tsec]
+          content = {h: lines for h, lines in bsec}
+          errors = []
+
+          repeated = [h for h in required if found.count(h) > 1]
+          missing = [h for h in required if h not in found]
+          if repeated:
+              errors.append("Repeated template sections: " + ", ".join(repeated))
+          if missing:
+              errors.append("Missing template sections: " + ", ".join(missing))
+          elif not repeated and found != required:
+              errors.append("Template sections are out of order.")
+
+          for name in NEEDS_TEXT:
+              if name not in tsec or name not in content or name in repeated:
+                  continue
+              placeholder = normalize(tsec[name])
+              own = [l for l in normalize(content[name]) if l not in placeholder]
+              if name == "## What and why":
+                  # "Closes #12" alone links the issue but doesn't say what changed.
+                  own = [l for l in own if ISSUE_REF.sub("", l).strip(" .,;:-")]
+              if not own:
+                  errors.append(f'"{name[3:]}" has nothing written in it yet.')
+
+          what = "\n".join(content.get("## What and why", []))
+          if "## What and why" in content and not ISSUE_REF.search(what):
+              print("::warning title=No linked issue::Add 'Closes #<issue>' (or 'Part of #<issue>') under \"What and why\".")
+
+          for error in errors:
+              print(f"::error title=PR template::{error}")
+          if errors:
+              print("Use .github/pull_request_template.md as the PR body; see 'Pull requests' in AGENTS.md.")
+              raise SystemExit(1)
+          print("PR description follows the template.")
+          PY
