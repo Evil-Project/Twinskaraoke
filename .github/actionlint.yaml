@@ -1,0 +1,6 @@
+# GitHub-hosted labels newer than actionlint's built-in list. Listed here so
+# actionlint (and CodeRabbit's actionlint check) accept them.
+self-hosted-runner:
+  labels:
+    - xcode-27
+    - xcode-27-xlarge
