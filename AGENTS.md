@@ -25,7 +25,11 @@ with approachable concurrency, deployment target iOS 26.5.
    feature or a fix.
 4. Bug fix = a failing regression test first, then the fix.
 5. Run `Scripts/verify.sh` before you say a task is done. It must pass. If
-   you could not run it (no macOS/Xcode), say so explicitly.
+   SwiftFormat or SwiftLint is missing, run `Scripts/install-tools.sh` first.
+   It installs Homebrew when it's missing; if it can't (Homebrew needs an
+   administrator account), stop and ask the user to install Homebrew from
+   https://brew.sh. If you could not run `verify.sh` (no macOS/Xcode), say so
+   explicitly.
 6. Open the PR with the body built from `.github/pull_request_template.md`
    (see "Pull requests" below).
 7. When a reviewer corrects the same kind of mistake twice, add a rule here.
@@ -99,6 +103,7 @@ Target membership follows the innermost folder name:
 ## Commands
 
 ```sh
+Scripts/install-tools.sh     # install swiftformat, swiftlint, xcbeautify (and Homebrew if missing)
 Scripts/verify.sh            # format check, lint, build all schemes, unit tests
 Scripts/verify.sh --quick    # format check, lint, build iOS only
 git diff --name-only --diff-filter=d origin/main... -- '*.swift' | xargs swiftformat

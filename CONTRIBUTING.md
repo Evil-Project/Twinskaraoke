@@ -39,7 +39,7 @@ side.
 ## Setup
 
 ```sh
-brew install swiftformat swiftlint xcbeautify
+Scripts/install-tools.sh   # SwiftFormat, SwiftLint and xcbeautify via Homebrew (installs Homebrew if missing)
 ```
 
 Open `Twinskaraoke.xcodeproj` and see [Build from Source](docs/build-from-source.md)

@@ -8,8 +8,8 @@
 #                                of the iOS app only
 #   Scripts/verify.sh --lint     format check and lint only (works on Linux)
 #
-# Needs: Xcode (macOS), swiftformat and swiftlint (brew install swiftformat
-# swiftlint). xcbeautify is used for shorter logs when installed.
+# Needs: Xcode (macOS), swiftformat and swiftlint (Scripts/install-tools.sh
+# installs them). xcbeautify is used for shorter logs when installed.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -56,7 +56,7 @@ if [[ ! -f .swiftformat ]]; then
 elif command -v swiftformat >/dev/null 2>&1; then
   if swiftformat --lint . ; then pass "Formatting"; else fail "Formatting — run swiftformat on the files you changed (see AGENTS.md)"; fi
 else
-  fail "swiftformat not installed (brew install swiftformat)"
+  fail "swiftformat not installed (run Scripts/install-tools.sh)"
 fi
 
 # --- Lint -------------------------------------------------------------------
@@ -68,7 +68,7 @@ elif command -v swiftlint >/dev/null 2>&1; then
   [[ -f .swiftlint-baseline.json ]] && baseline_args=(--baseline .swiftlint-baseline.json)
   if swiftlint lint --quiet "${baseline_args[@]}"; then pass "Lint"; else fail "Lint — run: swiftlint --fix, then fix the rest"; fi
 else
-  fail "swiftlint not installed (brew install swiftlint)"
+  fail "swiftlint not installed (run Scripts/install-tools.sh)"
 fi
 
 if [[ "$mode" == "lint" ]]; then
