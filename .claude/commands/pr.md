@@ -16,12 +16,14 @@ Prepare and open a pull request for the current branch.
 4. Read the whole diff once more and fix leftovers: debug code, `print`,
    commented-out code, unlocalized strings, TODOs without an issue.
 5. Build the description from the team template, following "Pull requests"
-   in `AGENTS.md`: copy `.github/pull_request_template.md` to
-   `"${TMPDIR:-/tmp}/pr-body.md"`, fill in every section (link issue $ARGUMENTS with
-   "Closes #…", name the AI tool under "AI assistance", tick only checklist
-   items that are true), and show it to me before opening the PR.
+   in `AGENTS.md`: create a body file with
+   `mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX"`, copy
+   `.github/pull_request_template.md` into it, fill in every section (link
+   issue $ARGUMENTS with "Closes #…", name the AI tool under "AI assistance",
+   tick only checklist items that are true), and show it to me before opening
+   the PR. Use that same file in steps 6 and 7.
 6. Push the branch and open the PR with
-   `gh pr create --base main --title "…" --body-file "${TMPDIR:-/tmp}/pr-body.md"`.
+   `gh pr create --base <parent branch if stacked, else main> --title "…" --body-file <body file>`.
    Don't use `--fill` or `--body`: they skip the template.
 7. Check the opened PR's description (`gh pr view --json body`) matches the
    filled-in template, then print the PR URL.

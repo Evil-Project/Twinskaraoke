@@ -119,8 +119,10 @@ Every PR description is the filled-in team template,
 `gh pr create --fill`, `gh pr create --body "…"`, the GitHub API and agent
 "create PR" tools all skip it. So:
 
-1. Copy the template to a temporary file outside the repo, e.g.
-   `cp .github/pull_request_template.md "${TMPDIR:-/tmp}/pr-body.md"`.
+1. Copy the template to a new temporary file outside the repo. Use a fresh
+   file for every PR, so agents working in parallel don't overwrite each
+   other's: `mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX"` prints its path; copy
+   `.github/pull_request_template.md` there and use that path below.
 2. Fill in every section in that file. Keep all headings and their order, and
    delete the `<!-- … -->` hints once a section has its content.
    - **What and why**: one or two sentences, then `Closes #<issue>` (or
@@ -131,23 +133,28 @@ Every PR description is the filled-in team template,
    - **Platforms affected**: tick each platform the change can affect,
      including all four apps for code in an `Apple/` folder.
    - **Screenshots / recording**: required for UI changes. If you can't
-     produce them, write that the author must add them before review.
+     produce them, write that the author must add them before review. Without
+     UI changes, write "No UI changes."
    - **AI assistance**: the tool(s) that wrote the code.
    - **Checklist**: tick only items that are true. Leave the others unticked
      and explain any open item in one line under it.
 3. Open the PR with that file:
-   `gh pr create --base main --title "<what changes, imperative>" --body-file "${TMPDIR:-/tmp}/pr-body.md"`
-   (`--base` is the parent branch for a stacked PR). Other tools: pass the
-   same file contents as the PR body.
+   `gh pr create --base main --title "<what changes, imperative>" --body-file <body file>`.
+   For a stacked PR, `--base` is the parent branch. Once the parent merges,
+   retarget the stacked PR with `gh pr edit <number> --base main` before
+   merging it: merging into the parent's branch after the parent has landed
+   leaves the change off `main`. Other tools: pass the same file contents as
+   the PR body.
 4. Read the PR on GitHub afterwards. If the description isn't the filled-in
-   template, fix it with `gh pr edit <number> --body-file "${TMPDIR:-/tmp}/pr-body.md"`.
+   template, fix it with `gh pr edit <number> --body-file <body file>`.
 
 Never open a PR with an empty, one-line or free-form description, and never
 commit the filled-in body file. The "PR template" CI check fails when a
-section is missing or out of order, or when "What and why" or "How it was
-tested" still only holds the template text; edit the description and the
-check reruns. The author is responsible for every line, including generated
-ones.
+section is missing, repeated or out of order, or when "What and why", "How it
+was tested", "Screenshots / recording" or "AI assistance" has nothing the
+author wrote (an issue link alone doesn't count for "What and why"). It reads
+the template from the base branch. Edit the description and the check reruns.
+The author is responsible for every line, including generated ones.
 
 ## Never
 

@@ -20,6 +20,9 @@ jobs:
       - name: Checkout template
         uses: actions/checkout@v7
         with:
+          # The base branch's template, so a PR can't relax the rules it is
+          # checked against by editing the template.
+          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
           sparse-checkout: .github/pull_request_template.md
           sparse-checkout-cone-mode: false
@@ -30,42 +33,68 @@ jobs:
           python3 - <<'PY'
           import os, re
 
-          def normalize(text):
-              text = re.sub(r"<!--.*?-->", "", text.replace("\r\n", "\n"), flags=re.S)
-              return [re.sub(r"^- \[[ xX]\]", "- [ ]", line.strip()) for line in text.splitlines()]
+          # Sections that need something the author wrote, not just the template's
+          # placeholder. Platforms affected and Checklist are checkbox lists, where
+          # leaving every box unticked can be the right answer.
+          NEEDS_TEXT = ("## What and why", "## How it was tested", "## Screenshots / recording", "## AI assistance")
+          ISSUE_REF = re.compile(r"(?i)\b(closes|fixes|resolves|part of)\s+#\d+")
+          FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
           def sections(text):
-              parts, name = {}, None
-              for line in text.replace("\r\n", "\n").splitlines():
-                  if line.startswith("## "):
-                      name = line.strip()
-                      parts[name] = []
-                  elif name:
-                      parts[name].append(line)
-              return {k: "\n".join(v) for k, v in parts.items()}
+              """(heading, lines) pairs in order. HTML comments are removed first, and
+              headings inside fenced code blocks don't count, because GitHub renders
+              neither as a heading."""
+              text = re.sub(r"<!--.*?-->", "", text.replace("\r\n", "\n"), flags=re.S)
+              parts, fence = [], None
+              for line in text.split("\n"):
+                  run = FENCE.match(line)
+                  if fence:
+                      # A fence closes only on the same character, at least as long,
+                      # with nothing after it.
+                      if run and run.group(1)[0] == fence[0] and len(run.group(1)) >= len(fence) and not run.group(2).strip():
+                          fence = None
+                  elif run and not (run.group(1)[0] == "`" and "`" in run.group(2)):
+                      fence = run.group(1)
+                  elif line.startswith("## "):
+                      parts.append((line.strip(), []))
+                      continue
+                  if parts:
+                      parts[-1][1].append(line)
+              return parts
+
+          def normalize(lines):
+              return [re.sub(r"^- \[[ xX]\]", "- [ ]", line.strip()) for line in lines if line.strip()]
 
           template = open(".github/pull_request_template.md", encoding="utf-8").read()
           body = os.environ.get("PR_BODY") or ""
-          tsec, bsec = sections(template), sections(body)
+          tsec, bsec = dict(sections(template)), sections(body)
           required = list(tsec)  # headings, in template order
+          found = [h for h, _ in bsec if h in tsec]
+          content = {h: lines for h, lines in bsec}
           errors = []
 
-          missing = [h for h in required if h not in bsec]
+          repeated = [h for h in required if found.count(h) > 1]
+          missing = [h for h in required if h not in found]
+          if repeated:
+              errors.append("Repeated template sections: " + ", ".join(repeated))
           if missing:
               errors.append("Missing template sections: " + ", ".join(missing))
-          elif [h for h in bsec if h in tsec] != required:
+          elif not repeated and found != required:
               errors.append("Template sections are out of order.")
 
-          # Sections that must contain something the author wrote, not just
-          # the template's placeholder text.
-          for name in ("## What and why", "## How it was tested"):
-              if name in bsec and name in tsec:
-                  own = [l for l in normalize(bsec[name]) if l and l not in normalize(tsec[name])]
-                  if not own:
-                      errors.append(f'"{name[3:]}" still only has the template text.')
+          for name in NEEDS_TEXT:
+              if name not in tsec or name not in content or name in repeated:
+                  continue
+              placeholder = normalize(tsec[name])
+              own = [l for l in normalize(content[name]) if l not in placeholder]
+              if name == "## What and why":
+                  # "Closes #12" alone links the issue but doesn't say what changed.
+                  own = [l for l in own if ISSUE_REF.sub("", l).strip(" .,;:-")]
+              if not own:
+                  errors.append(f'"{name[3:]}" has nothing written in it yet.')
 
-          what = "\n".join(normalize(bsec.get("## What and why", "")))
-          if "## What and why" in bsec and not re.search(r"(?i)\b(closes|fixes|resolves|part of)\s+#\d+", what):
+          what = "\n".join(content.get("## What and why", []))
+          if "## What and why" in content and not ISSUE_REF.search(what):
               print("::warning title=No linked issue::Add 'Closes #<issue>' (or 'Part of #<issue>') under \"What and why\".")
 
           for error in errors:
