@@ -51,6 +51,8 @@ final class ArtGalleryViewModel {
     @ObservationIgnored private let store: GalleryCatalogStore
     @ObservationIgnored private let download: @Sendable () async throws -> Data
     @ObservationIgnored private let refreshTracker = RefreshTracker()
+    @ObservationIgnored private var shownSnapshotID: UUID?
+    @ObservationIgnored private var forceAfterCurrentLoad = false
 
     init(
         store: GalleryCatalogStore = .shared,
@@ -63,10 +65,15 @@ final class ArtGalleryViewModel {
     /// Shows the saved catalogue, and downloads a new one when there is none,
     /// when it's older than `GalleryCatalogStore.maxAge`, or when `force` is set.
     func fetch(force: Bool = false) {
-        guard !isLoading else { return }
+        guard !isLoading else {
+            // A pull-to-refresh while a load that only used the cache is
+            // running still needs a download; it runs when that load ends.
+            if force { forceAfterCurrentLoad = true }
+            return
+        }
         isLoading = true
         refreshTracker.track(Task { [weak self] in
-            await self?.performLoad(force: force)
+            await self?.performLoads(force: force)
         })
     }
 
@@ -86,25 +93,38 @@ final class ArtGalleryViewModel {
         await load(force: true)
     }
 
+    private func performLoads(force: Bool) async {
+        await performLoad(force: force)
+        while forceAfterCurrentLoad {
+            forceAfterCurrentLoad = false
+            await performLoad(force: true)
+        }
+        isLoading = false
+    }
+
     private func performLoad(force: Bool) async {
-        defer { isLoading = false }
         if let cached = await store.cached() {
-            if artists.isEmpty {
-                artists = cached.artists
-            }
+            show(cached)
             if !force, store.isCurrent(cached) {
                 loadFailed = false
                 return
             }
         }
         do {
-            let data = try await download()
-            artists = try await store.update(from: data)
+            show(try await store.refresh(using: download))
             loadFailed = false
         } catch {
             // A failed refresh keeps whatever is already on screen.
             loadFailed = artists.isEmpty
         }
+    }
+
+    /// Shows a catalogue unless it is already the one on screen, so a gallery
+    /// that stays open picks up one another screen saved.
+    private func show(_ snapshot: GalleryCatalogStore.Snapshot) {
+        guard snapshot.id != shownSnapshotID else { return }
+        artists = snapshot.artists
+        shownSnapshotID = snapshot.id
     }
 
     nonisolated static func downloadCatalog() async throws -> Data {

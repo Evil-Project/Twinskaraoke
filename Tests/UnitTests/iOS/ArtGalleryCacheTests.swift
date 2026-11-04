@@ -27,10 +27,13 @@ struct ArtGalleryCacheTests {
     @Test("A second visit in the same session doesn't download again")
     func secondVisitUsesMemory() async {
         let downloads = Downloads(catalog([("a", 2)]))
-        let store = store(directory(), at: start)
+        let folder = directory()
+        let store = store(folder, at: start)
 
         let first = ArtGalleryViewModel(store: store, download: { try await downloads.next() })
         await first.load()
+        // Without the saved file, only the memory copy can serve the next visit.
+        try? FileManager.default.removeItem(at: folder)
         let second = ArtGalleryViewModel(store: store, download: { try await downloads.next() })
         await second.load()
 
@@ -102,6 +105,49 @@ struct ArtGalleryCacheTests {
         #expect(viewModel.loadFailed)
     }
 
+    @Test("Galleries loading at the same time share one download")
+    func concurrentLoadsShareDownload() async {
+        let downloads = Downloads(catalog([("a", 2)]), delay: .milliseconds(200))
+        let store = store(directory(), at: start)
+        let first = ArtGalleryViewModel(store: store, download: { try await downloads.next() })
+        let second = ArtGalleryViewModel(store: store, download: { try await downloads.next() })
+
+        async let one: Void = first.load()
+        async let two: Void = second.load()
+        _ = await (one, two)
+
+        #expect(await downloads.requests == 1)
+        #expect(first.artists.map(\.id) == ["a"])
+        #expect(second.artists.map(\.id) == ["a"])
+    }
+
+    @Test("Pull to refresh during a load that used the cache still downloads")
+    func refreshDuringCachedLoad() async {
+        let downloads = Downloads(catalog([("a", 2)]))
+        let store = store(directory(), at: start)
+        await ArtGalleryViewModel(store: store, download: { try await downloads.next() }).load()
+
+        let viewModel = ArtGalleryViewModel(store: store, download: { try await downloads.next() })
+        viewModel.fetch()
+        await viewModel.refreshGallery()
+
+        #expect(await downloads.requests == 2)
+    }
+
+    @Test("A gallery already on screen picks up a newer catalogue")
+    func openGalleryPicksUpNewerCatalogue() async {
+        let store = store(directory(), at: start)
+        let seed = Downloads(catalog([("a", 2)]))
+        let open = ArtGalleryViewModel(store: store, download: { try await seed.next() })
+        await open.load()
+
+        let newer = Downloads(catalog([("b", 3), ("a", 2)]))
+        await ArtGalleryViewModel(store: store, download: { try await newer.next() }).refreshGallery()
+        await open.load()
+
+        #expect(open.artists.map(\.id) == ["b", "a"])
+    }
+
     @Test("Artists without artwork are left out, most artworks first")
     func filtersAndSorts() async {
         let downloads = Downloads(catalog([("few", 1), ("none", 0), ("many", 5)]))
@@ -117,12 +163,21 @@ struct ArtGalleryCacheTests {
 private actor Downloads {
     private(set) var requests = 0
     private let data: Data?
+    private let delay: Duration
 
-    init(_ data: Data) { self.data = data }
-    init(failing: Bool) { data = nil }
+    init(_ data: Data, delay: Duration = .zero) {
+        self.data = data
+        self.delay = delay
+    }
 
-    func next() throws -> Data {
+    init(failing: Bool) {
+        data = nil
+        delay = .zero
+    }
+
+    func next() async throws -> Data {
         requests += 1
+        try await Task.sleep(for: delay)
         guard let data else { throw URLError(.notConnectedToInternet) }
         return data
     }
