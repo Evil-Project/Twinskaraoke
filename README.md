@@ -47,7 +47,7 @@ Twinskaraoke/
 ├── Tests/
 │   ├── UnitTests/           # iOS and watchOS unit test targets
 │   └── UITests/             # iOS and watchOS UI test targets
-├── Scripts/                 # verify.sh (local CI checks), simulator App Intents signing
+├── Scripts/                 # verify.sh (local CI checks), install-tools.sh, simulator App Intents signing
 └── docs/                    # Site documentation and validation notes
 ```
 
