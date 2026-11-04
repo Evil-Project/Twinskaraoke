@@ -317,13 +317,11 @@ nonisolated enum KaraokeAPIClient {
   private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
   private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
+  /// Only `days` of 7 and 30 return data; the results are precomputed for
+  /// those two windows. For an all-time chart use `mostPlayedSongs`.
   static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
-    try await trendingSongs(days: String(days), take: take)
-  }
-
-  static func trendingSongs(days: String, take: Int? = nil) async throws -> [Song] {
     var queryItems = [
-      URLQueryItem(name: "days", value: days),
+      URLQueryItem(name: "days", value: String(days)),
     ]
     if let take {
       queryItems.append(URLQueryItem(name: "take", value: String(take)))
@@ -534,14 +532,21 @@ nonisolated enum KaraokeAPIClient {
     let data = try await songSearchData(
       query: "",
       pageSize: pageSize,
-      sortBy: "CreatedAt",
+      sortBy: SongSort.karaokeDate,
       sortDescending: true
     )
     let decoded = try decodeSongSearchResults(from: data)
-    let filtered = decoded.filter {
+    return Array(droppingStreamPlaceholders(decoded).prefix(take))
+  }
+
+  /// Songs published right after a karaoke stream carry temporary audio and a
+  /// "Temporary Stream Audio" title until a better upload replaces them.
+  /// Charts and shelves leave them out, unless nothing else is left.
+  static func droppingStreamPlaceholders(_ songs: [Song]) -> [Song] {
+    let filtered = songs.filter {
       !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
     }
-    return Array((filtered.isEmpty ? decoded : filtered).prefix(take))
+    return filtered.isEmpty ? songs : filtered
   }
 
   static func fetchSong(id: String) async throws -> Song {
@@ -668,13 +673,40 @@ nonisolated enum KaraokeAPIClient {
     throw APIError.decodeFailed
   }
 
-  private static func songSearchData(
+  /// The most played songs of all time, by total play count.
+  ///
+  /// `/api/explore/trendings` cannot answer this: it only has precomputed
+  /// 7- and 30-day windows. Any other `days` value, including the old `"all"`,
+  /// either returns the 7-day list or nothing at all.
+  static func mostPlayedSongs(take: Int = 100) async throws -> [Song] {
+    // A few spare rows so the chart stays full after placeholders are dropped.
+    let data = try await songSearchData(body: mostPlayedSongsBody(pageSize: take + 20))
+    let decoded = try decodeSongSearchResults(from: data)
+    return Array(droppingStreamPlaceholders(decoded).prefix(take))
+  }
+
+  static func mostPlayedSongsBody(pageSize: Int) -> [String: Any] {
+    songSearchBody(query: "", pageSize: pageSize, sortBy: SongSort.playCount, sortDescending: true)
+  }
+
+  /// `sortBy` values `POST /api/songs` recognises. They are case-sensitive,
+  /// and an unknown value is silently ignored, falling back to newest first,
+  /// so a typo still returns a plausible list.
+  enum SongSort {
+    static let karaokeDate = "KaraokeDate"
+    static let playCount = "PlayCount"
+  }
+
+  /// Body for `POST /api/songs`. The descending flag is `sortDesc` in this
+  /// body, unlike the `sortDescending` query parameter on the playlist and
+  /// artist routes. The server ignores a `sortDescending` key here.
+  static func songSearchBody(
     query: String,
     page: Int = 1,
     pageSize: Int,
     sortBy: String? = nil,
     sortDescending: Bool? = nil
-  ) async throws -> Data {
+  ) -> [String: Any] {
     var body: [String: Any] = [
       "page": max(1, page),
       "pageSize": pageSize,
@@ -684,8 +716,28 @@ nonisolated enum KaraokeAPIClient {
       body["sortBy"] = sortBy
     }
     if let sortDescending {
-      body["sortDescending"] = sortDescending
+      body["sortDesc"] = sortDescending
     }
+    return body
+  }
+
+  private static func songSearchData(
+    query: String,
+    page: Int = 1,
+    pageSize: Int,
+    sortBy: String? = nil,
+    sortDescending: Bool? = nil
+  ) async throws -> Data {
+    try await songSearchData(body: songSearchBody(
+      query: query,
+      page: page,
+      pageSize: pageSize,
+      sortBy: sortBy,
+      sortDescending: sortDescending
+    ))
+  }
+
+  private static func songSearchData(body: [String: Any]) async throws -> Data {
     let request = try jsonRequest(
       path: "/api/songs",
       body: body

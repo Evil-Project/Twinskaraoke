@@ -503,6 +503,41 @@ struct SongModelTests {
         #expect(try JSONDecoder().decode([String].self, from: body) == ["first-id", "second-id"])
     }
 
+    @Test("Song search body uses the sortDesc key the server reads")
+    func songSearchBodyUsesSortDesc() {
+        let body = KaraokeAPIClient.songSearchBody(
+            query: "",
+            page: 0,
+            pageSize: 24,
+            sortBy: KaraokeAPIClient.SongSort.karaokeDate,
+            sortDescending: true
+        )
+
+        #expect(body["sortDesc"] as? Bool == true)
+        #expect(body["sortDescending"] == nil)
+        #expect(body["sortBy"] as? String == "KaraokeDate")
+        #expect(body["page"] as? Int == 1)
+    }
+
+    @Test("Top 100 asks for the most played songs of all time")
+    func mostPlayedSongsBodySortsByPlayCount() {
+        let body = KaraokeAPIClient.mostPlayedSongsBody(pageSize: 120)
+
+        #expect(body["sortBy"] as? String == "PlayCount")
+        #expect(body["sortDesc"] as? Bool == true)
+        #expect(body["pageSize"] as? Int == 120)
+        #expect(body["search"] as? String == "")
+    }
+
+    @Test("Temporary stream audio placeholders are left out of charts and shelves")
+    func streamPlaceholdersAreDropped() {
+        let placeholder = UITestFixtures.song(id: "temp", title: "Dracula (Temporary Stream Audio)", artist: "Artist")
+        let song = UITestFixtures.song(id: "real", title: "Dracula", artist: "Artist")
+
+        #expect(KaraokeAPIClient.droppingStreamPlaceholders([placeholder, song]).map(\.id) == ["real"])
+        #expect(KaraokeAPIClient.droppingStreamPlaceholders([placeholder]).map(\.id) == ["temp"])
+    }
+
     @Test("Uploaded song metadata request uses the authenticated uploads route")
     func uploadedSongMetadataRequestUsesUploadsRoute() throws {
         let request = try KaraokeAPIClient.uploadedSongsRequest(readToken: { "test-token" })

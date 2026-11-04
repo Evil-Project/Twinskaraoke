@@ -207,13 +207,13 @@ final class LibrarySongsViewModel {
         request.httpMethod = "POST"
         request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "page": page,
-            "pageSize": pageSize,
-            "search": "",
-            "sortBy": "CreatedAt",
-            "sortDescending": true,
-        ])
+        request.httpBody = try? JSONSerialization.data(withJSONObject: KaraokeAPIClient.songSearchBody(
+            query: "",
+            page: page,
+            pageSize: pageSize,
+            sortBy: KaraokeAPIClient.SongSort.karaokeDate,
+            sortDescending: true
+        ))
 
         // Routed through KaraokeAPIClient.data so 401s trigger the
         // session-expired flow and transient failures get retried.

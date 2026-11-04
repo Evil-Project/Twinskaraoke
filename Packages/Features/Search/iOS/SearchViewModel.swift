@@ -205,12 +205,18 @@ final class TopChartViewModel {
         // still owns `requestToken`.
         refreshTracker.track(Task { [weak self] in
             guard let self else { return }
-            async let allTime = try? KaraokeAPIClient.trendingSongs(days: "all")
+            async let allTime = try? KaraokeAPIClient.mostPlayedSongs(take: 100)
             async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
-            let allTimeSongs = await allTime ?? []
+            let allTimeSongs = await allTime
             let weeklySongs = await weekly ?? []
             guard token == requestToken else { return }
-            songs = allTimeSongs
+            // A failed fetch keeps the last chart instead of emptying it, and
+            // lets the next visit try again.
+            if let allTimeSongs {
+                songs = allTimeSongs
+            } else {
+                hasLoaded = false
+            }
             weeklyTrending = weeklySongs
         }, cancellingPrevious: true)
     }
