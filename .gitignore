@@ -12,11 +12,14 @@
 # =========================
 # AI Assistants & Agents
 # =========================
-.claude/
+# AGENTS.md, CLAUDE.md and .claude/commands are shared team context and
+# are committed. Keep personal agent settings and notes out of git:
+CLAUDE.local.md
+AGENTS.local.md
+.claude/settings.local.json
+.claude/worktrees/
 .codex/
 .omo/
-AGENTS.md
-CLAUDE.md
 
 # =========================
 # Node.js & Web / Docs Cache
