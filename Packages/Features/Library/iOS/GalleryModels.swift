@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct GalleryArtist: Codable, Identifiable, Equatable {
+nonisolated struct GalleryArtist: Codable, Identifiable, Equatable, Sendable {
     let id: String
     let name: String
     let socialLink: String?
@@ -9,7 +9,7 @@ struct GalleryArtist: Codable, Identifiable, Equatable {
     let arts: [GalleryArt]?
 }
 
-struct GalleryArt: Codable, Identifiable, Equatable {
+nonisolated struct GalleryArt: Codable, Identifiable, Equatable, Sendable {
     let id: String
     let fileName: String?
     let description: String?
@@ -48,48 +48,90 @@ final class ArtGalleryViewModel {
     var artists: [GalleryArtist] = []
     var isLoading = false
     var loadFailed = false
-    private var hasLoaded = false
+    @ObservationIgnored private let store: GalleryCatalogStore
+    @ObservationIgnored private let download: @Sendable () async throws -> Data
     @ObservationIgnored private let refreshTracker = RefreshTracker()
+    @ObservationIgnored private var shownSnapshotID: UUID?
+    @ObservationIgnored private var forceAfterCurrentLoad = false
 
-    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
-    /// until the gallery has actually finished loading.
+    init(
+        store: GalleryCatalogStore = .shared,
+        download: @escaping @Sendable () async throws -> Data = { try await ArtGalleryViewModel.downloadCatalog() }
+    ) {
+        self.store = store
+        self.download = download
+    }
+
+    /// Shows the saved catalogue, and downloads a new one when there is none,
+    /// when it's older than `GalleryCatalogStore.maxAge`, or when `force` is set.
+    func fetch(force: Bool = false) {
+        guard !isLoading else {
+            // A pull-to-refresh while a load that only used the cache is
+            // running still needs a download; it runs when that load ends.
+            if force { forceAfterCurrentLoad = true }
+            return
+        }
+        isLoading = true
+        refreshTracker.track(Task { [weak self] in
+            await self?.performLoads(force: force)
+        })
+    }
+
+    /// `fetch`, then waits until the load has finished.
     ///
-    /// No `cancellingPrevious`: `fetch` bails while a load is already running,
-    /// so a second refresh never starts a competing task — it just waits on the
-    /// one in flight.
-    func refreshGallery() async {
-        fetch(force: true)
+    /// No `cancellingPrevious` in `fetch`: it bails while a load is already
+    /// running, so a second call never starts a competing task — it just
+    /// waits on the one in flight.
+    func load(force: Bool = false) async {
+        fetch(force: force)
         await refreshTracker.wait()
     }
 
-    func fetch(force: Bool = false) {
-        guard !isLoading else { return }
-        guard force || !hasLoaded else { return }
-        guard let request = try? KaraokeAPIClient.request(
+    /// Awaitable reload for pull-to-refresh; keeps the refresh spinner alive
+    /// until the gallery has actually finished loading.
+    func refreshGallery() async {
+        await load(force: true)
+    }
+
+    private func performLoads(force: Bool) async {
+        await performLoad(force: force)
+        while forceAfterCurrentLoad {
+            forceAfterCurrentLoad = false
+            await performLoad(force: true)
+        }
+        isLoading = false
+    }
+
+    private func performLoad(force: Bool) async {
+        if let cached = await store.cached() {
+            show(cached)
+            if !force, store.isCurrent(cached) {
+                loadFailed = false
+                return
+            }
+        }
+        do {
+            show(try await store.refresh(using: download))
+            loadFailed = false
+        } catch {
+            // A failed refresh keeps whatever is already on screen.
+            loadFailed = artists.isEmpty
+        }
+    }
+
+    /// Shows a catalogue unless it is already the one on screen, so a gallery
+    /// that stays open picks up one another screen saved.
+    private func show(_ snapshot: GalleryCatalogStore.Snapshot) {
+        guard snapshot.id != shownSnapshotID else { return }
+        artists = snapshot.artists
+        shownSnapshotID = snapshot.id
+    }
+
+    nonisolated static func downloadCatalog() async throws -> Data {
+        let request = try KaraokeAPIClient.request(
             path: "/api/media/artists",
             queryItems: [URLQueryItem(name: "loadArts", value: "true")]
-        ) else { return }
-        loadFailed = false
-        isLoading = true
-        refreshTracker.track(Task { [weak self] in
-            let data = try? await KaraokeAPIClient.data(for: request)
-            let filtered = data.flatMap { data -> [GalleryArtist]? in
-                guard let decoded = try? JSONDecoder().decode([GalleryArtist].self, from: data) else {
-                    return nil
-                }
-                return decoded
-                    .filter { ($0.arts?.count ?? 0) > 0 }
-                    .sorted { ($0.arts?.count ?? 0) > ($1.arts?.count ?? 0) }
-            }
-            guard let self else { return }
-            if let filtered {
-                artists = filtered
-                hasLoaded = true
-                loadFailed = false
-            } else {
-                loadFailed = artists.isEmpty
-            }
-            isLoading = false
-        })
+        )
+        return try await KaraokeAPIClient.data(for: request)
     }
 }
