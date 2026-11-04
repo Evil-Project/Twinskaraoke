@@ -1,0 +1,87 @@
+# SwiftLint config — https://github.com/realm/SwiftLint
+#
+# CI runs: swiftlint lint --baseline .swiftlint-baseline.json
+# Errors fail the PR. Warnings show up as annotations on the diff.
+# Existing violations are recorded in .swiftlint-baseline.json, so only new
+# code is checked. Never regenerate the baseline to hide new violations; fix
+# them or add a scoped `// swiftlint:disable:next <rule> — reason`.
+
+included:
+  - Apps
+  - Packages
+  - Extensions
+  - Tests
+
+excluded:
+  - build
+  - DerivedData
+
+# Whitespace and brace layout are owned by SwiftFormat (.swiftformat).
+disabled_rules:
+  - trailing_comma
+  - opening_brace
+  - statement_position
+  - switch_case_alignment
+  - identifier_name
+  - type_name
+  - nesting
+  - large_tuple
+  - todo
+
+opt_in_rules:
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - empty_count
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - force_unwrapping
+  - last_where
+  - private_swiftui_state
+  - reduce_into
+  - sorted_first_last
+  - toggle_bool
+  - unowned_variable_capture
+  - yoda_condition
+
+line_length:
+  warning: 160
+  error: 250
+  ignores_urls: true
+  ignores_comments: true
+  ignores_interpolated_strings: true
+
+# Size limits are warnings: they flag files and types that keep growing
+# (see "Large files" in AGENTS.md) without blocking a small fix inside one.
+file_length:
+  warning: 600
+  error: 100000
+type_body_length:
+  warning: 400
+  error: 100000
+function_body_length:
+  warning: 80
+  error: 100000
+cyclomatic_complexity:
+  warning: 15
+  error: 1000
+  ignores_case_statements: true
+
+force_cast: error
+force_try: error
+private_swiftui_state: error
+fatal_error_message: error
+
+custom_rules:
+  no_print:
+    name: "No print"
+    regex: '\bprint\('
+    excluded: "Tests/"
+    message: "Use DebugLogger.log(...) instead of print."
+    severity: error
+  unchecked_sendable:
+    name: "Unchecked concurrency escape hatch"
+    regex: '@unchecked Sendable|nonisolated\(unsafe\)'
+    message: "Explain in a comment why this is safe, or use a real Sendable/actor-isolated type."
+    severity: warning

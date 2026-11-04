@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit review settings. Project rules live in AGENTS.md; CodeRabbit
+# reads it as coding guidelines (knowledge_base.code_guidelines).
+language: en-US
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  # Off on purpose: when on, CodeRabbit also *approves* PRs, and a bot
+  # approval could satisfy the "1 approval" branch-protection rule that is
+  # meant for a human. Findings still show as review comments.
+  auto_approvals:
+    enabled: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!.swiftlint-baseline.json"
+    - "!**/*.xcstrings"
+    - "!**/*.xcassets/**"
+    - "!**/*.mlmodelc/**"
+    - "!readmeimages/**"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "**/*.swift"
+      instructions: |
+        Review against AGENTS.md. Flag: new `@unchecked Sendable`,
+        `nonisolated(unsafe)` or `MainActor.assumeIsolated` without a
+        justifying comment; blocking I/O or network on the main actor;
+        `ObservableObject` in new code instead of `@Observable`;
+        hard-coded user-facing strings that bypass localization;
+        hard-coded colors/fonts instead of Packages/UI; `print` instead of
+        DebugLogger; dead code, debug leftovers and commented-out code.
+    - path: "**/Apple/**"
+      instructions: |
+        Code in Apple/ folders builds into the iOS, watchOS, tvOS and macOS
+        apps. Check that APIs are available on all four, or are guarded,
+        and suggest moving platform-specific code into the platform folder.
+    - path: "Packages/Features/Playback/**"
+      instructions: |
+        Highest-risk area; see Packages/Features/Playback/AGENTS.md. Check
+        audio session activation and interruption/route-change handling,
+        resume intent after interruptions, main-actor isolation, timer and
+        observer lifetimes (retain cycles, leaks), and that persisted
+        formats (RepeatMode raw values, session snapshots, Watch sync) stay
+        backward compatible. Require a regression test for behavior changes.
+        Flag any growth of AudioPlayerManager.swift and suggest extracting
+        a focused type.
+    - path: "Tests/**"
+      instructions: |
+        Tests must be deterministic: no real network, no sleeps where an
+        expectation or waitUntil helper exists. Flag tests that were
+        weakened, skipped or deleted to make a change pass.
+    - path: ".github/workflows/**"
+      instructions: |
+        Check least-privilege `permissions`, pinned action versions, that
+        secrets are not exposed to pull_request runs from forks, and that
+        nothing pushes to main.
+    - path: "**/*.pbxproj"
+      instructions: |
+        Most source changes need no project edit (synchronized folders).
+        Flag unexpected changes to signing, team IDs, bundle IDs,
+        deployment targets or build settings.
+  pre_merge_checks:
+    title:
+      mode: warning
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    docstrings:
+      mode: "off"
+    custom_checks:
+      - name: "Focused PR size"
+        mode: warning
+        instructions: |
+          Pass if the PR changes at most about 400 lines, ignoring
+          .swiftlint-baseline.json, *.xcstrings and pure formatting changes,
+          or if the description explains why it can't be split. Fail if it
+          mixes unrelated concerns (for example a refactor plus a feature).
+      - name: "Tests for behavior changes"
+        mode: warning
+        instructions: |
+          Pass if the PR only changes docs, config, UI layout or formatting,
+          or if every bug fix or behavior change in playback, queue,
+          downloads, sessions, sync or launch restoration comes with a new
+          or updated test under Tests/. Otherwise fail and name the change
+          that lacks a test.
+  tools:
+    swiftlint:
+      enabled: true
+      config_file: .swiftlint.yml
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "**/AGENTS.md"
+      - "CONTRIBUTING.md"
+
+chat:
+  auto_reply: true

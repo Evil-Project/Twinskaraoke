@@ -1,8 +1,9 @@
 name: iOS 27 compatibility
 
+# Manual: needs the `xcode-27` runner. It used to run on pushes to
+# fix/ios-27-launch-restoration only, a branch that no longer exists.
+# The same UI smoke tests now run on every PR in tests.yml.
 on:
-  push:
-    branches: [fix/ios-27-launch-restoration]
   workflow_dispatch:
 
 permissions:

@@ -110,3 +110,64 @@ jobs:
             -destination "platform=watchOS Simulator,id=$udid" \
             -only-testing:'Twinskaraoke Watch AppTests' \
             CODE_SIGNING_ALLOWED=NO
+
+  ios-ui-smoke:
+    name: iOS UI Smoke Tests
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Force Latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ inputs.xcode-version || 'latest' }}
+
+      - name: Run navigation and playback UI tests
+        run: |
+          # The same smoke set the iOS 27 compatibility workflow runs: app
+          # launch, adaptive shell, drill-down navigation, playback gestures,
+          # session restore and settings persistence. Same UDID resolution as
+          # the iOS job above.
+          set -o pipefail
+          udid=$(xcrun simctl list devices available -j | ruby -rjson -e '
+            devices = JSON.parse(STDIN.read)["devices"]
+            devices.keys.sort_by { |runtime| runtime.scan(/\d+/).map(&:to_i) }.reverse_each do |runtime|
+              match = devices[runtime].find { |d| d["isAvailable"] && d["name"].start_with?("iPhone") }
+              if match
+                puts match["udid"]
+                break
+              end
+            end
+          ')
+          test -n "$udid"
+          echo "Using simulator UDID: $udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcodebuild test \
+            -project Twinskaraoke.xcodeproj \
+            -skipPackagePluginValidation \
+            -scheme "Twinskaraoke" \
+            -destination "platform=iOS Simulator,id=$udid" \
+            -parallel-testing-enabled NO \
+            -collect-test-diagnostics never \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAppLaunches \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testAdaptiveMusicShellShowsSidebarOrTabs \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testLibraryAndSearchDrillDownNavigation \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSwipingBackFromPlaylistDetailStartsNoPlayback \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testNativePlaybackSliderDoesNotDismissPlayer \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testPlaybackSessionRestoresPausedAfterRelaunch \
+            -only-testing:TwinskaraokeUITests/TwinskaraokeUITests/testSettingsPersistAutoplayAndEnforceTransitionChoice \
+            -resultBundlePath "$RUNNER_TEMP/ios-ui-smoke.xcresult" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Preserve UI test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ui-smoke
+          path: ${{ runner.temp }}/ios-ui-smoke.xcresult
+          if-no-files-found: warn
