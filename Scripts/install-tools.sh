@@ -7,7 +7,7 @@
 #
 #   Scripts/install-tools.sh           install missing tools, then list versions
 #   Scripts/install-tools.sh --check   list versions only; exit 1 if a required
-#                                      tool is missing
+#                                      tool is missing or Xcode isn't selected
 #
 # CI pins exact SwiftFormat and SwiftLint versions in
 # .github/workflows/lint.yml. Homebrew installs the latest release, so this
@@ -29,16 +29,24 @@ optional=(xcbeautify)
 
 installed() { command -v "$1" >/dev/null 2>&1; }
 
-# The version CI pins for a tool, read from lint.yml; empty if none.
+brew_on_path_at_start=false
+installed brew && brew_on_path_at_start=true
+
+# The version CI uses for a tool, read from lint.yml; empty if none.
+# SwiftFormat is downloaded at SWIFTFORMAT_VERSION, while SwiftLint runs in a
+# container whose image tag is the version actually used.
 pinned_version() {
-  local key
+  local workflow=.github/workflows/lint.yml
   case "$1" in
-    swiftformat) key=SWIFTFORMAT_VERSION ;;
-    swiftlint) key=SWIFTLINT_VERSION ;;
-    *) return 0 ;;
+    swiftformat)
+      sed -n "s/^[[:space:]]*SWIFTFORMAT_VERSION:[[:space:]]*//p" "$workflow" 2>/dev/null |
+        head -n 1 | tr -d "\"'[:space:]"
+      ;;
+    swiftlint)
+      sed -n "s|.*image:[[:space:]]*ghcr.io/realm/swiftlint:\([0-9][0-9.]*\).*|\1|p" "$workflow" 2>/dev/null |
+        head -n 1
+      ;;
   esac
-  sed -n "s/^[[:space:]]*$key:[[:space:]]*//p" .github/workflows/lint.yml 2>/dev/null |
-    head -n 1 | tr -d "\"'[:space:]"
 }
 
 local_version() {
@@ -53,7 +61,7 @@ local_version() {
 find_brew() {
   installed brew && return 0
   local candidate
-  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+  for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
     if [[ -x "$candidate" ]]; then
       eval "$("$candidate" shellenv)"
       return 0
@@ -62,28 +70,45 @@ find_brew() {
   return 1
 }
 
-# Runs the official installer from https://brew.sh. It needs an administrator
-# account; NONINTERACTIVE makes it fail instead of waiting for input.
+# Runs the official installer from https://brew.sh, fetched over HTTPS only
+# and with time limits so a stalled download fails instead of hanging. It
+# needs an administrator account; NONINTERACTIVE makes it fail instead of
+# waiting for input.
 install_homebrew() {
   echo "Homebrew is not installed. Installing it from https://brew.sh ..."
   local installer
-  installer="$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+  if ! installer="$(curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 300 \
+      https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    echo "Couldn't download the Homebrew installer." >&2
+    return 1
+  fi
   NONINTERACTIVE=1 /bin/bash -c "$installer" || return 1
   find_brew
 }
 
 if ! $check_only; then
-  missing=()
-  for tool in "${required[@]}" "${optional[@]}"; do
-    installed "$tool" || missing+=("$tool")
-  done
-  if ((${#missing[@]})); then
+  missing_required=()
+  missing_optional=()
+  for tool in "${required[@]}"; do installed "$tool" || missing_required+=("$tool"); done
+  for tool in "${optional[@]}"; do installed "$tool" || missing_optional+=("$tool"); done
+  if ((${#missing_required[@]})); then
+    # Required tools need Homebrew, installing it first if necessary.
     if ! find_brew && ! install_homebrew; then
-      echo "Couldn't install Homebrew automatically (it needs an administrator account)." >&2
-      echo "Install it from https://brew.sh, then run Scripts/install-tools.sh again." >&2
+      echo "Couldn't install Homebrew automatically; see the output above. It needs an" >&2
+      echo "administrator account and a network connection. Install it from https://brew.sh," >&2
+      echo "then run Scripts/install-tools.sh again." >&2
       exit 1
     fi
-    brew install "${missing[@]}"
+    # ${array[@]+"${array[@]}"} expands to nothing for an empty array; plain
+    # "${array[@]}" aborts under set -u in macOS's bash 3.2.
+    brew install "${missing_required[@]}" ${missing_optional[@]+"${missing_optional[@]}"}
+  elif ((${#missing_optional[@]})); then
+    # Optional tools only if Homebrew is already there; verify.sh works without them.
+    if find_brew; then
+      brew install "${missing_optional[@]}"
+    else
+      echo "- Skipping ${missing_optional[*]}: it needs Homebrew and is optional."
+    fi
   fi
 fi
 
@@ -107,15 +132,27 @@ for tool in "${required[@]}" "${optional[@]}"; do
   fi
 done
 
+# Homebrew's bin directory was only added to this script's PATH. Without it in
+# the shell profile, verify.sh can't find the tools afterwards.
+if ! $brew_on_path_at_start && installed brew; then
+  shellenv="eval \"\$($(command -v brew) shellenv)\""
+  echo "! Homebrew isn't on your shell's PATH. Add it, then open a new terminal:"
+  echo "    echo '$shellenv' >> ~/.zprofile"
+fi
+
 # SwiftLint loads SourceKit from the selected Xcode and crashes with only the
-# Command Line Tools selected; verify.sh's xcodebuild needs Xcode too.
-developer_dir="${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || true)}"
-if [[ "$developer_dir" == *.app/Contents/Developer ]]; then
-  echo "✓ Xcode selected ($developer_dir)"
-else
-  echo "✗ Xcode isn't selected (developer directory: ${developer_dir:-none})."
-  echo "  SwiftLint and verify.sh need it. Run: sudo xcode-select -s /Applications/Xcode.app"
-  echo "  or: export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer"
-  status=1
+# Command Line Tools selected; verify.sh's xcodebuild needs Xcode too. On
+# Linux only `verify.sh --lint` runs, so there is nothing to check.
+if [[ "$(uname -s)" == Darwin ]]; then
+  developer_dir="${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || true)}"
+  developer_dir="${developer_dir%/}"
+  if [[ "$developer_dir" == *.app/Contents/Developer && -d "$developer_dir" ]]; then
+    echo "✓ Xcode selected ($developer_dir)"
+  else
+    echo "✗ Xcode isn't selected (developer directory: ${developer_dir:-none})."
+    echo "  SwiftLint and verify.sh need it. Run: sudo xcode-select -s /Applications/Xcode.app"
+    echo "  or: export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer"
+    status=1
+  fi
 fi
 exit "$status"
