@@ -397,7 +397,7 @@ final class AudioPlayerManager {
     /// `loadedEngine`, so drawing the player for a restored song, or stopping
     /// the radio, never builds it.
     @ObservationIgnored private var loadedEngine: AVEnginePlayback?
-    private var avEngine: AVEnginePlayback {
+    var avEngine: AVEnginePlayback { // Internal so tests can raise its callbacks.
         if let loadedEngine { return loadedEngine }
         let engine = makeEngine()
         loadedEngine = engine
@@ -763,12 +763,7 @@ final class AudioPlayerManager {
                 )
                 AudioCacheStore.removeSongCache(for: song.id)
                 currentPlaybackURL = nil
-                play(
-                    song: song,
-                    context: [],
-                    resetTransitionVolume: true,
-                    preserveCacheRecoveryState: true
-                )
+                play(song: song, context: [], resetTransitionVolume: true, preserveCacheRecoveryState: true, reportsPlayCount: false)
                 return
             }
             setPlaybackState(
