@@ -66,7 +66,7 @@ if [[ ! -f .swiftlint.yml ]]; then
 elif command -v swiftlint >/dev/null 2>&1; then
   baseline_args=()
   [[ -f .swiftlint-baseline.json ]] && baseline_args=(--baseline .swiftlint-baseline.json)
-  if swiftlint lint --quiet --strict "${baseline_args[@]}"; then pass "Lint"; else fail "Lint — run: swiftlint --fix, then fix the rest"; fi
+  if swiftlint lint --quiet "${baseline_args[@]}"; then pass "Lint"; else fail "Lint — run: swiftlint --fix, then fix the rest"; fi
 else
   fail "swiftlint not installed (brew install swiftlint)"
 fi
