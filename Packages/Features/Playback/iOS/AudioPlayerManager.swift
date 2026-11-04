@@ -404,6 +404,7 @@ final class AudioPlayerManager {
         return engine
     }
     private let transitionCoordinator = TransitionCoordinator()
+    @ObservationIgnored let playCountReporter = PlayCountReporter()
     private var radioPlayer: AVPlayer?
     private var streamPlayer: AVPlayer?
     private var streamEndObserver: NSObjectProtocol?
@@ -1570,13 +1571,15 @@ final class AudioPlayerManager {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    func play(song: Song, context: [Song] = []) {
+    func play(song: Song, context: [Song] = [], playlistID: String? = nil) {
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
         queueState.selectSingleSong()
         play(song: song, context: context, resetTransitionVolume: true)
     }
 
     /// Starts recommendations as a collection so Repeat All advances and wraps.
     func playAutoplay(song: Song, context: [Song]) {
+        playCountReporter.queueStarted(fromPlaylist: nil, songs: context)
         queueState.beginAutoplay(context: context, current: song)
         play(song: song, resetTransitionVolume: true)
     }
@@ -1625,7 +1628,7 @@ final class AudioPlayerManager {
         VocalSeparator.shared.cancelBackgroundAnalysis()
         VocalSeparator.shared.cleanupRealtimeTemp()
         if reportsPlayCount {
-            reportPlayCount(for: song.id)
+            playCountReporter.report(songID: song.id)
         }
         enrichSongMetadataIfNeeded(for: song)
         if previousSongID != song.id {
@@ -2323,7 +2326,8 @@ final class AudioPlayerManager {
         queueState.toggleShuffle(current: currentSong)
     }
 
-    func playInOrder(song: Song, context: [Song]) {
+    func playInOrder(song: Song, context: [Song], playlistID: String? = nil) {
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
         queueState.beginInOrder(context: context)
         play(song: song, context: context, resetTransitionVolume: true)
@@ -2331,11 +2335,13 @@ final class AudioPlayerManager {
 
     func playCompanion(song: Song, context: [Song], shuffled: Bool) {
         if !shuffled { playInOrder(song: song, context: context); return }
+        playCountReporter.queueStarted(fromPlaylist: nil, songs: context)
         _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
         play(song: song, resetTransitionVolume: true)
     }
 
-    func playShuffled(from songs: [Song]) {
+    func playShuffled(from songs: [Song], playlistID: String? = nil) {
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: songs)
         if !phoneAudioAllowed {
             let shuffled = songs.shuffled()
             if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
@@ -3836,18 +3842,6 @@ final class AudioPlayerManager {
         }
     }
 
-    private func reportPlayCount(for songID: String) {
-        Task {
-            guard var req = try? KaraokeAPIClient.request(
-                pathSegments: ["api", "songs", "playCount", songID]
-            ) else { return }
-            req.httpMethod = "PUT"
-            // Fire and forget: the result is discarded, so a retry only costs
-            // requests. One skipped song used to cost 3 of these.
-            let _ = try? await KaraokeAPIClient.data(for: req, allowsRetry: false)
-        }
-    }
-
     private func enrichSongMetadataIfNeeded(for song: Song) {
         guard !song.hasArtistMetadata else { return }
         guard enrichmentAttemptedSongIDs.insert(song.id).inserted else { return }
@@ -4020,7 +4014,7 @@ final class AudioPlayerManager {
         let song = plan.nextSong
         currentPlaybackURL = plan.nextFileURL
         CacheManager.shared.recordAccess(for: plan.nextFileURL)
-        reportPlayCount(for: song.id)
+        playCountReporter.report(songID: song.id)
         enrichSongMetadataIfNeeded(for: song)
         deferredAIEffect = nil
         preparedStemSongID = nil
