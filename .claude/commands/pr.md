@@ -15,8 +15,13 @@ Prepare and open a pull request for the current branch.
 3. Make sure `Scripts/verify.sh` passed in this session; if not, run it.
 4. Read the whole diff once more and fix leftovers: debug code, `print`,
    commented-out code, unlocalized strings, TODOs without an issue.
-5. Push the branch and open the PR with `gh pr create`, filling in every
-   section of `.github/pull_request_template.md`. Link issue $ARGUMENTS with
-   "Closes #…". Under "AI assistance" name the tool used. Tick only the
-   checklist items that are actually true.
-6. Print the PR URL.
+5. Build the description from the team template, following "Pull requests"
+   in `AGENTS.md`: copy `.github/pull_request_template.md` to
+   `"${TMPDIR:-/tmp}/pr-body.md"`, fill in every section (link issue $ARGUMENTS with
+   "Closes #…", name the AI tool under "AI assistance", tick only checklist
+   items that are true), and show it to me before opening the PR.
+6. Push the branch and open the PR with
+   `gh pr create --base main --title "…" --body-file "${TMPDIR:-/tmp}/pr-body.md"`.
+   Don't use `--fill` or `--body`: they skip the template.
+7. Check the opened PR's description (`gh pr view --json body`) matches the
+   filled-in template, then print the PR URL.

@@ -1,0 +1,77 @@
+name: PR template
+
+# Fails when a PR description doesn't follow .github/pull_request_template.md.
+# Agents often open PRs with `gh pr create --fill/--body` or the API, which
+# skip the template. Reruns when the description is edited. The required
+# sections are read from the template, so the check follows template changes.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: PR template
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout template
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/pull_request_template.md
+          sparse-checkout-cone-mode: false
+      - name: Check the description uses the template
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+
+          def normalize(text):
+              text = re.sub(r"<!--.*?-->", "", text.replace("\r\n", "\n"), flags=re.S)
+              return [re.sub(r"^- \[[ xX]\]", "- [ ]", line.strip()) for line in text.splitlines()]
+
+          def sections(text):
+              parts, name = {}, None
+              for line in text.replace("\r\n", "\n").splitlines():
+                  if line.startswith("## "):
+                      name = line.strip()
+                      parts[name] = []
+                  elif name:
+                      parts[name].append(line)
+              return {k: "\n".join(v) for k, v in parts.items()}
+
+          template = open(".github/pull_request_template.md", encoding="utf-8").read()
+          body = os.environ.get("PR_BODY") or ""
+          tsec, bsec = sections(template), sections(body)
+          required = list(tsec)  # headings, in template order
+          errors = []
+
+          missing = [h for h in required if h not in bsec]
+          if missing:
+              errors.append("Missing template sections: " + ", ".join(missing))
+          elif [h for h in bsec if h in tsec] != required:
+              errors.append("Template sections are out of order.")
+
+          # Sections that must contain something the author wrote, not just
+          # the template's placeholder text.
+          for name in ("## What and why", "## How it was tested"):
+              if name in bsec and name in tsec:
+                  own = [l for l in normalize(bsec[name]) if l and l not in normalize(tsec[name])]
+                  if not own:
+                      errors.append(f'"{name[3:]}" still only has the template text.')
+
+          what = "\n".join(normalize(bsec.get("## What and why", "")))
+          if "## What and why" in bsec and not re.search(r"(?i)\b(closes|fixes|resolves|part of)\s+#\d+", what):
+              print("::warning title=No linked issue::Add 'Closes #<issue>' (or 'Part of #<issue>') under \"What and why\".")
+
+          for error in errors:
+              print(f"::error title=PR template::{error}")
+          if errors:
+              print("Use .github/pull_request_template.md as the PR body; see 'Pull requests' in AGENTS.md.")
+              raise SystemExit(1)
+          print("PR description follows the template.")
+          PY

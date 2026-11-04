@@ -26,7 +26,9 @@ with approachable concurrency, deployment target iOS 26.5.
 4. Bug fix = a failing regression test first, then the fix.
 5. Run `Scripts/verify.sh` before you say a task is done. It must pass. If
    you could not run it (no macOS/Xcode), say so explicitly.
-6. When a reviewer corrects the same kind of mistake twice, add a rule here.
+6. Open the PR with the body built from `.github/pull_request_template.md`
+   (see "Pull requests" below).
+7. When a reviewer corrects the same kind of mistake twice, add a rule here.
 
 ## Where code goes
 
@@ -112,10 +114,40 @@ Schemes: `Twinskaraoke`, `Twinskaraoke Mac App`, `Twinskaraoke TV App`,
 
 ## Pull requests
 
-- Fill in the PR template, link the issue, attach screenshots or a recording
-  for UI changes on each affected platform.
-- Mention which AI tool wrote the code. The author is responsible for every
-  line, including generated ones.
+Every PR description is the filled-in team template,
+`.github/pull_request_template.md`. GitHub only pre-fills it in the web UI;
+`gh pr create --fill`, `gh pr create --body "…"`, the GitHub API and agent
+"create PR" tools all skip it. So:
+
+1. Copy the template to a temporary file outside the repo, e.g.
+   `cp .github/pull_request_template.md "${TMPDIR:-/tmp}/pr-body.md"`.
+2. Fill in every section in that file. Keep all headings and their order, and
+   delete the `<!-- … -->` hints once a section has its content.
+   - **What and why**: one or two sentences, then `Closes #<issue>` (or
+     `Part of #<issue>` for one PR of a split).
+   - **How it was tested**: the tests you added or changed and what you
+     checked by hand. If you couldn't run `Scripts/verify.sh` (no macOS or
+     Xcode), say so here.
+   - **Platforms affected**: tick each platform the change can affect,
+     including all four apps for code in an `Apple/` folder.
+   - **Screenshots / recording**: required for UI changes. If you can't
+     produce them, write that the author must add them before review.
+   - **AI assistance**: the tool(s) that wrote the code.
+   - **Checklist**: tick only items that are true. Leave the others unticked
+     and explain any open item in one line under it.
+3. Open the PR with that file:
+   `gh pr create --base main --title "<what changes, imperative>" --body-file "${TMPDIR:-/tmp}/pr-body.md"`
+   (`--base` is the parent branch for a stacked PR). Other tools: pass the
+   same file contents as the PR body.
+4. Read the PR on GitHub afterwards. If the description isn't the filled-in
+   template, fix it with `gh pr edit <number> --body-file "${TMPDIR:-/tmp}/pr-body.md"`.
+
+Never open a PR with an empty, one-line or free-form description, and never
+commit the filled-in body file. The "PR template" CI check fails when a
+section is missing or out of order, or when "What and why" or "How it was
+tested" still only holds the template text; edit the description and the
+check reruns. The author is responsible for every line, including generated
+ones.
 
 ## Never
 
