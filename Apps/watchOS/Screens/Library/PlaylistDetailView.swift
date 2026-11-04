@@ -90,7 +90,7 @@ struct PlaylistDetailView: View {
                             )
                         }
                         .buttonStyle(.watchPressable)
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) { WatchDownloadMenu(song: song) }
                         .accessibilityLabel(isCurrent && audioManager.isPlaying ? "Pause \(song.title)" : song.title)
                         .accessibilityValue(accessibilityValue(for: song, offset: offset, isCurrent: isCurrent))
                         .accessibilityHint(isCurrent ? "Double tap to open the current song." : "Double tap to play from \(playlistName).")
@@ -304,7 +304,6 @@ private struct WatchPlaylistHeaderButton: View {
         .accessibilityLabel(title)
     }
 }
-
 
 private struct PlaylistSongRowItem: Identifiable {
     let id: String

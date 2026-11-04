@@ -19,8 +19,8 @@ struct QueueRow: View {
                             cornerRadius: AM.Radius.thumb,
                             lowResURL: song.thumbnailURL
                         )
-                            .frame(width: 50, height: 50)
-                            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
+                        .frame(width: 50, height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                         if isPlayingNext {
                             Text("NEXT")
                                 .font(AM.Font.badge)

@@ -75,8 +75,8 @@ struct PlayerClosingGeometryTests {
                      CGRect(x: 8, y: 1000, width: 300, height: 58)] {
             let base = transition()
             let flight = PlayerClosingGeometry.Transition(canvas: base.canvas, surface: base.surface,
-                artwork: base.artwork, pill: pill,
-                thumbnail: CGRect(x: pill.minX + 12, y: pill.midY - 15, width: 30, height: 30))
+                                                          artwork: base.artwork, pill: pill,
+                                                          thumbnail: CGRect(x: pill.minX + 12, y: pill.midY - 15, width: 30, height: 30))
             let end = PlayerClosingGeometry.frame(flight, phase: 1)
             #expect(end.surface == pill)
             #expect(end.artwork == flight.thumbnail)

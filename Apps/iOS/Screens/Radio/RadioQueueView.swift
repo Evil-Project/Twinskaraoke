@@ -214,7 +214,6 @@ struct RadioQueueView: View {
         reduceMotion ? nil : AppMotion.spring(response: response, dampingFraction: 0.84)
     }
 
-
     private var heroTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98))
     }

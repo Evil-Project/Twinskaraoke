@@ -147,7 +147,6 @@ struct RadioView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
     }
 
-
     @ViewBuilder
     private func radioOverview(availableWidth: CGFloat) -> some View {
         if AM.Layout.usesWideCanvas(

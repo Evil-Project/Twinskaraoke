@@ -318,7 +318,7 @@ final class NowPlayingPresentation {
 // MARK: - Safe-area handoff
 
 private struct PlayerSafeAreaInsetsKey: EnvironmentKey {
-    static let defaultValue: EdgeInsets?  = nil
+    static let defaultValue: EdgeInsets? = nil
 }
 
 extension EnvironmentValues {

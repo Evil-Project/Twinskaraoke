@@ -65,7 +65,6 @@ struct LibraryView: View {
         horizontalSizeClass == .compact
     }
 
-
     var body: some View {
         let recentlyAddedSongs = Array(recentSongsViewModel.songs.prefix(12))
         let pinned = pinnedPlaylists
@@ -77,8 +76,8 @@ struct LibraryView: View {
                         pinned: pinned,
                         availableWidth: proxy.size.width
                     )
-                        .padding(.top, AM.Spacing.s)
-                        .padding(.bottom, AM.Spacing.l)
+                    .padding(.top, AM.Spacing.s)
+                    .padding(.bottom, AM.Spacing.l)
                 }
                 .scrollIndicators(.hidden)
                 .smoothScrolling()
@@ -684,7 +683,6 @@ struct PlaylistsGridScreen: View {
     @State private var searchText = ""
     let cols = AM.Layout.playlistGridColumns
 
-
     /// Observed, unlike the keychain: a sign-in or sign-out while this screen
     /// is on the stack shows or hides New Playlist straight away.
     private var isLoggedIn: Bool {
@@ -804,9 +802,9 @@ struct PlaylistGridCell: View {
                     fallbackText: prefersDetailCount ? nil : String(localized: "Playlist"),
                     prefersDetailCount: prefersDetailCount
                 )
-                    .font(AM.Font.tileCaption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                .font(AM.Font.tileCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
         }
         .frame(width: width, alignment: .leading)

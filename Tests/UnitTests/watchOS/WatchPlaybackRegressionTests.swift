@@ -65,7 +65,7 @@ struct WatchPlaybackRegressionTests {
         var partial = Playlist(id: "mine", name: "Mix", songCount: 1, mosaicMedia: nil, songListDTOs: nil)
         partial.isPersonal = true
         let full = Playlist(id: "mine", name: "Mix", songCount: 1,
-            mosaicMedia: [Media(absolutePath: "https://example.com/already-resized.jpg")], songListDTOs: nil)
+                            mosaicMedia: [Media(absolutePath: "https://example.com/already-resized.jpg")], songListDTOs: nil)
         let loader = WatchPlaylistCoverLoader(loadDetail: { _ in full })
         await loader.load(partial)
         #expect(loader.urls.first?.absoluteString == "https://example.com/already-resized.jpg")

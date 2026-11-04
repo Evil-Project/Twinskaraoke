@@ -24,7 +24,6 @@ struct CreatePlaylistSheet: View {
         !trimmedName.isEmpty && !isSaving
     }
 
-
     var body: some View {
         NavigationStack {
             ScrollView {

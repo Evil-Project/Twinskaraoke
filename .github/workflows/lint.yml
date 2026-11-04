@@ -1,0 +1,83 @@
+name: Lint
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SWIFTFORMAT_VERSION: 0.64.5
+  SWIFTLINT_VERSION: 0.65.1
+
+jobs:
+  swiftformat:
+    name: SwiftFormat
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install SwiftFormat
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/swiftformat.zip" \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat_linux.zip"
+          unzip -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat"
+          install -m 0755 "$RUNNER_TEMP/swiftformat/swiftformat_linux" /usr/local/bin/swiftformat
+          swiftformat --version
+      - name: Check formatting
+        run: |
+          # Fails with one annotation per unformatted line. Fix locally with:
+          #   swiftformat .
+          swiftformat --lint --reporter github-actions-log .
+
+  swiftlint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: ghcr.io/realm/swiftlint:0.65.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Lint
+        run: |
+          # Errors fail the job; warnings are annotations. Existing
+          # violations are in .swiftlint-baseline.json.
+          swiftlint version
+          swiftlint lint --quiet --reporter github-actions-logging \
+            --baseline .swiftlint-baseline.json
+
+  pr-size:
+    name: PR size
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Warn on large PRs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Advisory only. Generated and data files don't count.
+          changed=$(git diff --numstat "$BASE_SHA"...HEAD -- . \
+            ':(exclude).swiftlint-baseline.json' ':(exclude)*.xcstrings' \
+            ':(exclude)*.pbxproj' ':(exclude)package-lock.json' \
+            | awk '$1 != "-" { n += $1 + $2 } END { print n + 0 }')
+          echo "Changed lines (excluding generated files): $changed"
+          if [ "$changed" -gt 400 ]; then
+            echo "::warning title=Large PR::$changed changed lines. Consider splitting into focused PRs (see CONTRIBUTING.md), or explain in the description why it can't be split."
+          fi

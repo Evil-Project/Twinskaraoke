@@ -150,7 +150,6 @@ struct SystemIntentPlaybackTests {
             endSong()
             #expect(player.currentSong?.id == songs[1].id)
         }
-
     }
 
     private func cachedSong(index: Int) throws -> Song {

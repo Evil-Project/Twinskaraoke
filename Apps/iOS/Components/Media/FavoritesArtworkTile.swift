@@ -123,7 +123,7 @@ struct PlaylistMosaicArtwork: View {
                             cornerRadius: 0,
                             fixedDisplaySize: CGSize(width: cell, height: cell)
                         )
-                            .frame(width: cell, height: cell)
+                        .frame(width: cell, height: cell)
                     } else {
                         PlaylistPlaceholderArtwork(seed: "\(index)-\(urls.count)")
                             .frame(width: cell, height: cell)

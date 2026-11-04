@@ -108,10 +108,10 @@ final class PlaylistsViewModel {
             do {
                 let loaded = try await KaraokeAPIClient.restoringRequest {
                     try await KaraokeAPIClient.playlists(
-                    startIndex: 0,
-                    pageSize: 25,
-                    isSetlist: false,
-                    sortDescending: false
+                        startIndex: 0,
+                        pageSize: 25,
+                        isSetlist: false,
+                        sortDescending: false
                     )
                 }
                 playlists = loaded

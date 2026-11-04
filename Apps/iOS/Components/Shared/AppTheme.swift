@@ -86,7 +86,6 @@ nonisolated extension Color {
     static let appPlaceholderSheenSoft = adaptive(.appPlaceholderSheenSoft)
     static let appToolbarPillBackground = adaptive(.appToolbarPillBackground)
     static let appToolbarAvatarBackground = adaptive(.appToolbarAvatarBackground)
-
 }
 
 enum AM {

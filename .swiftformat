@@ -1,0 +1,19 @@
+# SwiftFormat config — https://github.com/nicklockwood/SwiftFormat
+# Deliberately conservative: whitespace and spacing changes that
+# can't alter behavior. Add rules in their own PR, together with the
+# reformat they cause.
+
+--swiftversion 6.0
+--minversion 0.64.5
+--exclude node_modules,docs,build,DerivedData,.build
+
+--disable all
+--enable indent,trailingSpace,consecutiveBlankLines,consecutiveSpaces,blankLinesAtStartOfScope,blankLinesAtEndOfScope,linebreakAtEndOfFile,linebreaks,spaceAroundBraces,spaceAroundBrackets,spaceAroundParens,spaceAroundComments,spaceInsideBraces,spaceInsideBrackets,spaceInsideParens,spaceInsideComments,spaceAroundGenerics,spaceInsideGenerics,elseOnSameLine,semicolons,leadingDelimiters,todos
+
+--indent 4
+--indentcase false
+--ifdef preserve
+--trimwhitespace always
+--linebreaks lf
+--semicolons inline-only
+--indentstrings true

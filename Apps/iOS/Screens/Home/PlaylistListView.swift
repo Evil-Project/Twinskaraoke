@@ -22,7 +22,6 @@ struct PlaylistListView: View {
         return loader.matches(for: query, in: allPlaylists)
     }
 
-
     var body: some View {
         ScrollView {
             if displayedPlaylists.isEmpty, !trimmedQuery.isEmpty, loader.isSearching {

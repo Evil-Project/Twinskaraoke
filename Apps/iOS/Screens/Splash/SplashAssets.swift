@@ -92,10 +92,10 @@ struct SplashBackgroundControls: View {
     @Binding var message: String?
     var body: some View {
         SplashImageControls(data: $slide.backgroundImageData,
-            description: Binding(get: { slide.backgroundImageDescription ?? "Background artwork" }, set: { slide.backgroundImageDescription = $0 }),
-            cornerRadius: .constant(0), message: $message, assetLabel: "Choose Background Asset") {
-                if slide.backgroundImageDescription == nil { slide.backgroundImageDescription = "Background artwork" }
-            }
+                            description: Binding(get: { slide.backgroundImageDescription ?? "Background artwork" }, set: { slide.backgroundImageDescription = $0 }),
+                            cornerRadius: .constant(0), message: $message, assetLabel: "Choose Background Asset") {
+            if slide.backgroundImageDescription == nil { slide.backgroundImageDescription = "Background artwork" }
+        }
         Picker("Background Image Fit", selection: Binding(get: { slide.backgroundImageFit ?? .fill }, set: { slide.backgroundImageFit = $0 })) {
             ForEach(SplashBackgroundFit.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
         }

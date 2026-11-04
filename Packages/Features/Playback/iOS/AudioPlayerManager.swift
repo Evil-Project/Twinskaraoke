@@ -871,8 +871,8 @@ final class AudioPlayerManager {
         guard phoneAudioAllowed else { return }
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode, let song = currentSong else { return }
         PlaybackSessionStore.save(PlaybackSessionSnapshot(song: song, queue: queueState,
-            position: preferredStreamResumeTime(for: song) ?? playbackTime,
-            repeatMode: repeatMode, wasPlaying: isPlaying))
+                                                          position: preferredStreamResumeTime(for: song) ?? playbackTime,
+                                                          repeatMode: repeatMode, wasPlaying: isPlaying))
     }
 
     private func restorePlaybackSession() {
@@ -1594,7 +1594,7 @@ final class AudioPlayerManager {
         sessionPersistenceReady = true
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.play(song: song, context: context, resetTransitionVolume: resetTransitionVolume,
-                preserveCacheRecoveryState: preserveCacheRecoveryState, reportsPlayCount: reportsPlayCount)
+                       preserveCacheRecoveryState: preserveCacheRecoveryState, reportsPlayCount: reportsPlayCount)
         }, replacingPending: true) else { return }
 
         cancelAutoplayRequest()
@@ -2009,8 +2009,8 @@ final class AudioPlayerManager {
                 startPlayingFile(fileURL, startAt: max(0, state.position))
             } else if let url = song.audioURL {
                 startStreamPlayback(url: url, songID: song.id,
-                    expectedDuration: song.duration > 0 ? Double(song.duration) : nil,
-                    startAt: max(0, state.position))
+                                    expectedDuration: song.duration > 0 ? Double(song.duration) : nil,
+                                    startAt: max(0, state.position))
             } else {
                 companionFailure("Choose the song or station again to start playback.")
                 return false
@@ -2714,7 +2714,7 @@ final class AudioPlayerManager {
     }
 
     static func resolvePlaybackFile(download: () async throws -> URL?,
-        remoteCache: () async throws -> URL) async throws -> URL {
+                                    remoteCache: () async throws -> URL) async throws -> URL {
         let local = try await download()
         try Task.checkCancellation()
         if let local {
@@ -3716,14 +3716,14 @@ final class AudioPlayerManager {
     private func containsChinese(_ text: String) -> Bool {
         text.unicodeScalars.contains { scalar in
             (0x3400...0x4DBF).contains(scalar.value) ||
-            (0x4E00...0x9FFF).contains(scalar.value) ||
-            (0xF900...0xFAFF).contains(scalar.value) ||
-            (0x20000...0x2A6DF).contains(scalar.value) ||
-            (0x2A700...0x2B73F).contains(scalar.value) ||
-            (0x2B740...0x2B81F).contains(scalar.value) ||
-            (0x2B820...0x2CEAF).contains(scalar.value) ||
-            (0x2F800...0x2FA1F).contains(scalar.value) ||
-            (0x3100...0x312F).contains(scalar.value)
+                (0x4E00...0x9FFF).contains(scalar.value) ||
+                (0xF900...0xFAFF).contains(scalar.value) ||
+                (0x20000...0x2A6DF).contains(scalar.value) ||
+                (0x2A700...0x2B73F).contains(scalar.value) ||
+                (0x2B740...0x2B81F).contains(scalar.value) ||
+                (0x2B820...0x2CEAF).contains(scalar.value) ||
+                (0x2F800...0x2FA1F).contains(scalar.value) ||
+                (0x3100...0x312F).contains(scalar.value)
         }
     }
 
@@ -3862,10 +3862,10 @@ final class AudioPlayerManager {
                 return
             }
             guard let req = try? KaraokeAPIClient.request(
-                path: "/api/explore/trendings",
-                // 30 is the widest window the server precomputes.
-                queryItems: [URLQueryItem(name: "days", value: "30")]
-            ),
+                      path: "/api/explore/trendings",
+                      // 30 is the widest window the server precomputes.
+                      queryItems: [URLQueryItem(name: "days", value: "30")]
+                  ),
                   let data = try? await KaraokeAPIClient.data(for: req)
             else { return }
             self.applyEnrichedMetadata(from: data, songID: songID)

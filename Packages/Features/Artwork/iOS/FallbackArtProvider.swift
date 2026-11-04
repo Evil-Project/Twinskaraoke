@@ -140,8 +140,8 @@ final nonisolated class FallbackArtProvider: @unchecked Sendable {
 
                 let urlWithQuality =
                     ArtworkURLBuilder.variantURL(from: baseURL, variant: .card)
-                    ?? URL(string: "\(item.url)/width=480,quality=85,format=webp")
-                    ?? baseURL
+                        ?? URL(string: "\(item.url)/width=480,quality=85,format=webp")
+                        ?? baseURL
 
                 let fallbackItem = FallbackArtItem(
                     url: urlWithQuality,
@@ -190,7 +190,6 @@ final nonisolated class FallbackArtProvider: @unchecked Sendable {
             }
         }.resume()
     }
-
 }
 
 private nonisolated struct FallbackArtItem: Codable {

@@ -857,7 +857,7 @@ final class VocalSeparator {
             // published as one transaction and the old pair can be restored if
             // either move fails.
             for (_, destination) in moves
-            where fileManager.fileExists(atPath: destination.path) {
+                where fileManager.fileExists(atPath: destination.path) {
                 let backup = destination.deletingLastPathComponent()
                     .appendingPathComponent(
                         ".\(destination.lastPathComponent).\(transactionID).backup"
@@ -879,7 +879,7 @@ final class VocalSeparator {
                 try? fileManager.removeItem(at: destination)
             }
             for (destination, backup) in backups.reversed()
-            where fileManager.fileExists(atPath: backup.path) {
+                where fileManager.fileExists(atPath: backup.path) {
                 try? fileManager.removeItem(at: destination)
                 try? fileManager.moveItem(at: backup, to: destination)
             }

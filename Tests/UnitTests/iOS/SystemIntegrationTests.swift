@@ -166,5 +166,4 @@ struct SystemIntegrationTests {
         #expect(PlaylistEntity(WidgetPlaylist(id: "__downloads__", name: "Downloads")).route == .playlist("__downloads__"))
         #expect(PlaylistEntity(WidgetPlaylist(id: "__radio__", name: "Radio")).route == .radio)
     }
-
 }

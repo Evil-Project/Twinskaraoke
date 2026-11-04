@@ -20,19 +20,19 @@ struct SplashCanvasEditor: View {
                 GeometryReader { proxy in
                     ScrollView {
                         SplashSlideRenderer(slide: slide, viewport: proxy.size, selected: selected,
-                            select: { selected = $0 }, move: { item, dx, dy in
-                                var placement = slide.placement(for: item)
-                                placement.move(dx: dx, dy: dy)
-                                slide.setPlacement(placement, for: item)
-                            }, resize: { item, dx, dy, height in
-                                var placement = slide.placement(for: item)
-                                placement.resize(dx: dx, dy: dy, measuredHeight: height)
-                                slide.setPlacement(placement, for: item)
-                            }, finish: { item in
-                                guard slide.resolvedDesign.gridSnapping == true else { return }
-                                var placement = slide.placement(for: item); placement.snapToGrid()
-                                slide.setPlacement(placement, for: item)
-                            })
+                                            select: { selected = $0 }, move: { item, dx, dy in
+                                                var placement = slide.placement(for: item)
+                                                placement.move(dx: dx, dy: dy)
+                                                slide.setPlacement(placement, for: item)
+                                            }, resize: { item, dx, dy, height in
+                                                var placement = slide.placement(for: item)
+                                                placement.resize(dx: dx, dy: dy, measuredHeight: height)
+                                                slide.setPlacement(placement, for: item)
+                                            }, finish: { item in
+                                                guard slide.resolvedDesign.gridSnapping == true else { return }
+                                                var placement = slide.placement(for: item); placement.snapToGrid()
+                                                slide.setPlacement(placement, for: item)
+                                            })
                     }
                 }
                 .clipped().contentShape(Rectangle())

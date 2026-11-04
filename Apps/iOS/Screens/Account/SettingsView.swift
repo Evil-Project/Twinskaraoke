@@ -202,8 +202,8 @@ struct SettingsView: View {
             Text("Haptics")
         } footer: {
             Text(LocalizedStringKey(hapticsEnabled
-                ? "Taps, swipes and controls answer back with a vibration. Strength sets how hard they land — each control keeps its own character at every level."
-                : "Taps, swipes and controls answer back with a vibration."))
+                    ? "Taps, swipes and controls answer back with a vibration. Strength sets how hard they land — each control keeps its own character at every level."
+                    : "Taps, swipes and controls answer back with a vibration."))
         }
     }
 
@@ -913,8 +913,8 @@ struct NotificationsView: View {
                 }
             } footer: {
                 Text(LocalizedStringKey(notifications.permissionDenied
-                    ? "Notifications are disabled in system settings. Allow notifications there to receive download updates."
-                    : "Notify when downloads finish while the app is in the background."))
+                        ? "Notifications are disabled in system settings. Allow notifications there to receive download updates."
+                        : "Notify when downloads finish while the app is in the background."))
             }
         }
     }

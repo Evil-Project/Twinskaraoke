@@ -203,7 +203,6 @@ struct RemoteArtworkImage: View {
         let height = size.height.isFinite ? max(size.height, 1) : 1
         return CGSize(width: width, height: height)
     }
-
 }
 
 @Observable

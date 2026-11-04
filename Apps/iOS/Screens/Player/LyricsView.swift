@@ -335,7 +335,6 @@ private struct LyricLineRow: View, Equatable {
         if distance <= 2 { return 1.0 }
         return max(0.5, 1.0 - Double(distance - 2) * 0.1)
     }
-
 }
 
 private struct LyricGlow: ViewModifier {
@@ -435,5 +434,4 @@ private struct IntroDots: View {
         .opacity(isActive ? 1.0 : 0.3)
         .animation(reduceMotion ? nil : AppMotion.easeInOut(duration: 0.4), value: isActive)
     }
-
 }

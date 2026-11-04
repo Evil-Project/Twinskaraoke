@@ -42,7 +42,7 @@ nonisolated enum QRSignIn {
         static func status(_ sessionId: String) throws -> String {
             guard !sessionId.isEmpty, sessionId != ".", sessionId != "..",
                   let escaped = sessionId.addingPercentEncoding(
-                    withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+                      withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
                   )
             else { throw ServiceError.invalidResponse }
             return "\(StorageHost.api)/api/auth/qr-session/\(escaped)"
