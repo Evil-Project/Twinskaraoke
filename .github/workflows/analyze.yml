@@ -15,7 +15,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze ${{ matrix.scheme }}
-    runs-on: macos-latest
+    runs-on: xcode-27  # GitHub's Xcode 27 image (macOS 27)
     strategy:
       fail-fast: false
       matrix:

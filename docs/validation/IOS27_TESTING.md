@@ -52,7 +52,7 @@ The URL-encoding security test now injects an absent credential instead of readi
 - Confirm sidecar/backup/staging files and directories alone never appear as downloaded songs.
 - Verify watch account and audio-cache flows with the companion privacy manifest included.
 - Test cache regeneration and downloads after stopping playback, backgrounding/locking, and relaunching. Downloads now use a persistent background URLSession and an atomic pending queue. Start several transfers, background/lock, allow a system termination (not a user force-quit), and relaunch. Verify completion, cancellation, and no duplicate downloads. User force-quit follows system restrictions.
-- Record both Xcode and simulator/device OS build. CI labels Xcode `27A266a` plus simulator `24A435` as the audited RC pair. Other successful builds are explicitly labeled preliminary; their toolchain version alone no longer fails CI.
+- Record both Xcode and simulator/device OS build. Since November 2026 the regular Tests and Analyze workflows run on GitHub's `xcode-27` image against the newest iOS 27 / watchOS 27 simulator runtime (`Scripts/ci-simulator.sh`); the separate iOS 27 compatibility workflow was removed.
 
 - With asynchronous activation, test immediate Play/Pause, selecting a second song while activation is pending, phone-call interruption/resume, media-services reset, and AirPlay/Bluetooth route changes. Playback must wait for activation and late callbacks must not undo Pause.
 
