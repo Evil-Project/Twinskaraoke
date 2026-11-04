@@ -27,6 +27,12 @@ disabled_rules:
   - nesting
   - large_tuple
   - todo
+  # Their messages contain the current count, so the baseline can't match
+  # them once a file changes: every edit re-reported them, even one that made
+  # the file shorter. Scripts/check-file-growth.sh warns when a long file
+  # grows instead.
+  - file_length
+  - type_body_length
 
 opt_in_rules:
   - contains_over_filter_count
@@ -52,14 +58,8 @@ line_length:
   ignores_comments: true
   ignores_interpolated_strings: true
 
-# Size limits are warnings: they flag files and types that keep growing
-# (see "Large files" in AGENTS.md) without blocking a small fix inside one.
-file_length:
-  warning: 600
-  error: 100000
-type_body_length:
-  warning: 400
-  error: 100000
+# Size limits are warnings: they flag long functions without blocking a small
+# fix inside one. File growth is checked by Scripts/check-file-growth.sh.
 function_body_length:
   warning: 80
   error: 100000

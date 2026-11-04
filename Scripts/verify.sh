@@ -71,6 +71,11 @@ else
   fail "swiftlint not installed (brew install swiftlint)"
 fi
 
+# --- Large files ------------------------------------------------------------
+# Advisory: warns when a Swift file over 600 lines grows, never fails.
+step "Large files"
+Scripts/check-file-growth.sh || echo "Large file check could not run."
+
 if [[ "$mode" == "lint" ]]; then
   :
 elif ! command -v xcodebuild >/dev/null 2>&1; then
