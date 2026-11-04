@@ -38,7 +38,7 @@ jobs:
       - name: Run iOS Tests
         run: |
           # Newest iOS $IOS_MAJOR.x iPhone simulator; see Scripts/ci-simulator.sh.
-          udid=$(Scripts/ci-simulator.sh iOS "$IOS_MAJOR" iPhone)
+          udid=$(Scripts/ci-simulator.sh iOS "$IOS_MAJOR" iPhone 'Duo|Fold')
           test -n "$udid"
           echo "Using simulator UDID: $udid"
           # Wait for a usable simulator before launching the test host. Keep
@@ -118,7 +118,7 @@ jobs:
           # Smoke set: app launch, adaptive shell, drill-down navigation,
           # playback gestures, session restore and settings persistence.
           set -o pipefail
-          udid=$(Scripts/ci-simulator.sh iOS "$IOS_MAJOR" iPhone)
+          udid=$(Scripts/ci-simulator.sh iOS "$IOS_MAJOR" iPhone 'Duo|Fold')
           test -n "$udid"
           echo "Using simulator UDID: $udid"
           xcrun simctl bootstatus "$udid" -b
