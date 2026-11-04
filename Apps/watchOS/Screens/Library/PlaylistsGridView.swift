@@ -389,6 +389,6 @@ struct WatchPlaylistCard: View {
         WatchCachedImage(url: url) { image in
             image.resizable().scaledToFill().frame(width: side, height: side).clipped()
         } placeholder: { Color.clear }
-        .frame(width: side, height: side)
+            .frame(width: side, height: side)
     }
 }

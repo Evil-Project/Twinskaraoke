@@ -281,7 +281,7 @@ import UIKit
         let developer = MemorySplashStore()
         let original = real.value
         let c = SplashCoordinator(store: real, install: .placeholder(.install), update: .placeholder(.update),
-                                 developerSelection: { .update }, developerStore: developer)
+                                  developerSelection: { .update }, developerStore: developer)
         c.foreground()
         #expect(c.isDeveloperTesting && c.active?.kind == .update)
         finish(c)
@@ -312,7 +312,7 @@ import UIKit
     @Test func realInstallStillPrecedesForcedDeveloperUpdate() {
         let real = MemorySplashStore(); let developer = MemorySplashStore()
         let c = SplashCoordinator(store: real, install: .placeholder(.install), update: .placeholder(.update),
-                                 developerSelection: { .update }, developerStore: developer)
+                                  developerSelection: { .update }, developerStore: developer)
         c.foreground(); #expect(c.active?.kind == .install && !c.isDeveloperTesting)
         finish(c); #expect(c.active?.kind == .update && c.isDeveloperTesting && real.value.installCompleted)
         finish(c); #expect(!c.isBlocking && real.value.completedUpdateIDs.isEmpty)
@@ -322,7 +322,7 @@ import UIKit
         let real = MemorySplashStore(); real.value.installCompleted = true
         let developer = MemorySplashStore()
         let c = SplashCoordinator(store: real, install: .placeholder(.install), update: .placeholder(.update),
-                                 developerSelection: { .update }, developerStore: developer)
+                                  developerSelection: { .update }, developerStore: developer)
         c.foreground(); c.next(); developer.failWrite = true; c.complete()
         #expect(c.isBlocking && c.isDeveloperTesting && c.errorMessage != nil)
         #expect(real.value.installCompleted && real.value.completedUpdateIDs.isEmpty && real.saves == 0)
@@ -531,5 +531,4 @@ import UIKit
         let reopened = coordinator(other, update: disabled); reopened.foreground()
         #expect(!reopened.isBlocking)
     }
-
 }

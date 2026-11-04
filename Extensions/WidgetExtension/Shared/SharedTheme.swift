@@ -44,7 +44,6 @@ nonisolated enum AppearanceMode: String, CaseIterable, Codable, Sendable {
     }
 }
 
-
 /// Concrete sRGB values cross the process boundary; SwiftUI Color never does.
 nonisolated struct ThemeRGBA: Codable, Equatable, Sendable {
     var red: Double

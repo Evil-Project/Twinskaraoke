@@ -57,7 +57,6 @@ final class PublicPlaylistsViewModel {
         self.loadPage = loadPage
     }
 
-
     func loadIfNeeded() {
         guard !hasLoaded, !isLoadingMore else { return }
         if AppRuntime.isUITestMode {

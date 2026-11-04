@@ -97,8 +97,8 @@ struct LaunchRestorationTests {
     @MainActor @Test func playbackPreservesDownloadWhenOnlySignatureChanges() throws {
         let manager = DownloadManager.shared
         let song = Song(id: "signature-test-\(UUID().uuidString)", title: "Saved", duration: 0,
-            absolutePath: "https://example.com/song.mp3?token=new", cloudflareID: nil,
-            coverArt: nil, originalArtists: nil, coverArtists: nil, userUploaded: false)
+                        absolutePath: "https://example.com/song.mp3?token=new", cloudflareID: nil,
+                        coverArt: nil, originalArtists: nil, coverArtists: nil, userUploaded: false)
         let audio = manager.localURL(for: song.id)
         let directory = audio.deletingLastPathComponent()
         let source = directory.appendingPathComponent("main.source")

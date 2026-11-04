@@ -296,8 +296,8 @@ struct SongModelTests {
     func songDecodesOssField() {
         useGlobalStorageRegion()
         let json = """
-        {"id":"s1","title":"T","duration":5,"absolutePath":null,"oss":"audio/test.mp3","userUploaded":true}
-        """.data(using: .utf8)!
+            {"id":"s1","title":"T","duration":5,"absolutePath":null,"oss":"audio/test.mp3","userUploaded":true}
+            """.data(using: .utf8)!
         let song = try? JSONDecoder().decode(Song.self, from: json)
         #expect(song != nil)
         #expect(song?.oss == "audio/test.mp3")
@@ -307,17 +307,17 @@ struct SongModelTests {
     @Test("Song decodes flexible metadata used by uploaded YouTube songs")
     func songDecodesFlexibleUploadedMetadata() throws {
         let json = """
-        {
-          "id": "youtube-1",
-          "title": "Imported Song",
-          "duration": "213.8",
-          "absolutePath": "youtube/Imported Song.mp3",
-          "cloudflareId": "artwork-id",
-          "originalArtists": [{"name": "Original Artist"}],
-          "coverArtists": "Uploader",
-          "userUploaded": 1
-        }
-        """.data(using: .utf8)!
+            {
+              "id": "youtube-1",
+              "title": "Imported Song",
+              "duration": "213.8",
+              "absolutePath": "youtube/Imported Song.mp3",
+              "cloudflareId": "artwork-id",
+              "originalArtists": [{"name": "Original Artist"}],
+              "coverArtists": "Uploader",
+              "userUploaded": 1
+            }
+            """.data(using: .utf8)!
 
         let song = try JSONDecoder().decode(Song.self, from: json)
 
@@ -331,15 +331,15 @@ struct SongModelTests {
     @Test("Song uses artwork identifier nested inside coverArt")
     func songUsesNestedCoverArtworkIdentifier() throws {
         let json = """
-        {
-          "id": "favorite-upload",
-          "title": "Uploaded Favorite",
-          "duration": 180,
-          "absolutePath": "uploads/favorite.m4a",
-          "coverArt": {"cloudflareId": "nested-artwork-id"},
-          "userUploaded": true
-        }
-        """.data(using: .utf8)!
+            {
+              "id": "favorite-upload",
+              "title": "Uploaded Favorite",
+              "duration": 180,
+              "absolutePath": "uploads/favorite.m4a",
+              "coverArt": {"cloudflareId": "nested-artwork-id"},
+              "userUploaded": true
+            }
+            """.data(using: .utf8)!
 
         let song = try JSONDecoder().decode(Song.self, from: json)
 
@@ -355,21 +355,21 @@ struct SongModelTests {
     @Test("Favorite responses decode uploaded songs wrapped in an envelope")
     func favoriteEnvelopeDecodesUploadedSong() throws {
         let json = """
-        {
-          "items": [
             {
-              "song": {
-                "id": "favorite-upload",
-                "title": "Uploaded Favorite",
-                "duration": 123.4,
-                "absolutePath": null,
-                "oss": "uploads/Uploaded Favorite.mp3",
-                "userUploaded": "true"
-              }
+              "items": [
+                {
+                  "song": {
+                    "id": "favorite-upload",
+                    "title": "Uploaded Favorite",
+                    "duration": 123.4,
+                    "absolutePath": null,
+                    "oss": "uploads/Uploaded Favorite.mp3",
+                    "userUploaded": "true"
+                  }
+                }
+              ]
             }
-          ]
-        }
-        """.data(using: .utf8)!
+            """.data(using: .utf8)!
 
         let songs = try #require(SongPayloadDecoder.decodeSongs(from: json))
 
@@ -728,24 +728,24 @@ struct SongModelTests {
     @Test("Playlist detail skips malformed songs instead of failing the playlist")
     func playlistDetailSkipsMalformedSong() throws {
         let json = """
-        {
-          "id": "playlist-1",
-          "name": "Uploads",
-          "songListDTOs": [
             {
-              "id": "youtube-1",
-              "title": "YouTube Upload",
-              "duration": "180",
-              "absolutePath": "youtube/song.mp3",
-              "originalArtists": [{"artistName": "Artist"}],
-              "userUploaded": true
-            },
-            {
-              "title": "Missing ID"
+              "id": "playlist-1",
+              "name": "Uploads",
+              "songListDTOs": [
+                {
+                  "id": "youtube-1",
+                  "title": "YouTube Upload",
+                  "duration": "180",
+                  "absolutePath": "youtube/song.mp3",
+                  "originalArtists": [{"artistName": "Artist"}],
+                  "userUploaded": true
+                },
+                {
+                  "title": "Missing ID"
+                }
+              ]
             }
-          ]
-        }
-        """.data(using: .utf8)!
+            """.data(using: .utf8)!
 
         let playlist = try JSONDecoder().decode(PlaylistDetail.self, from: json)
 
@@ -755,17 +755,17 @@ struct SongModelTests {
     @Test("Playlist summaries prefer the declared song count")
     func playlistSummaryPrefersDeclaredSongCount() throws {
         let json = """
-        {
-          "id": "playlist-count",
-          "name": "Bangers",
-          "songCount": 2,
-          "songListDTOs": [
-            {"id": "song-1", "title": "One"},
-            {"id": "song-2", "title": "Two"},
-            {"id": "song-3", "title": "Three"}
-          ]
-        }
-        """.data(using: .utf8)!
+            {
+              "id": "playlist-count",
+              "name": "Bangers",
+              "songCount": 2,
+              "songListDTOs": [
+                {"id": "song-1", "title": "One"},
+                {"id": "song-2", "title": "Two"},
+                {"id": "song-3", "title": "Three"}
+              ]
+            }
+            """.data(using: .utf8)!
 
         let item = try JSONDecoder().decode(PlaylistListItem.self, from: json)
 
@@ -775,16 +775,16 @@ struct SongModelTests {
     @Test("Playlist summaries fall back to the embedded song count")
     func playlistSummaryFallsBackToEmbeddedSongCount() throws {
         let json = """
-        {
-          "id": "playlist-fallback-count",
-          "name": "Bangers",
-          "songCount": 0,
-          "songListDTOs": [
-            {"id": "song-1", "title": "One"},
-            {"id": "song-2", "title": "Two"}
-          ]
-        }
-        """.data(using: .utf8)!
+            {
+              "id": "playlist-fallback-count",
+              "name": "Bangers",
+              "songCount": 0,
+              "songListDTOs": [
+                {"id": "song-1", "title": "One"},
+                {"id": "song-2", "title": "Two"}
+              ]
+            }
+            """.data(using: .utf8)!
 
         let item = try JSONDecoder().decode(PlaylistListItem.self, from: json)
 
@@ -1119,13 +1119,13 @@ struct SongModelTests {
         // FlexibleArtistList trims whitespace-only artists, so a blank entry
         // decodes to a non-nil empty array and must not surface as "".
         let json = """
-        {
-          "id": "song-blank-artist",
-          "title": "Test Song",
-          "duration": 180,
-          "coverArtists": ["   "]
-        }
-        """.data(using: .utf8)!
+            {
+              "id": "song-blank-artist",
+              "title": "Test Song",
+              "duration": 180,
+              "coverArtists": ["   "]
+            }
+            """.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(Song.self, from: json)
         #expect(decoded.artistName == "Unknown Artist")
 

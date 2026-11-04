@@ -38,7 +38,7 @@ private struct SplashNoticeModifier: ViewModifier {
     /// Identifies save/export success messages for the floating notice style.
     private func isSuccess(_ value: String) -> Bool {
         ["Draft saved locally.", "Imported into the draft.", "Image resized and embedded.", "Test image exported.", "Bundled asset embedded."].contains(value)
-        || value.hasPrefix("Export succeeded.")
+            || value.hasPrefix("Export succeeded.")
     }
 }
 extension View {
@@ -106,9 +106,9 @@ enum SplashImageCompressor {
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceThumbnailMaxPixelSize: dimension,
-                kCGImageSourceCreateThumbnailWithTransform: true
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: dimension,
+                  kCGImageSourceCreateThumbnailWithTransform: true
               ] as CFDictionary),
               let result = UIImage(cgImage: image).jpegData(compressionQuality: quality)
         else { throw SplashError(message: "Unable to decode this image.") }

@@ -126,5 +126,4 @@ struct PlayerClosingSettlement: AnimatableModifier {
             .offset(x: surface.minX, y: surface.minY)
             .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
     }
-
 }

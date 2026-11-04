@@ -5,7 +5,6 @@ struct RandomSongsView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-
     private var coverURLs: [URL] {
         Playlist.songArtworkURLs(viewModel.songs, limit: 4)
     }

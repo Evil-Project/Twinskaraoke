@@ -176,8 +176,8 @@ final class RadioController {
                 metadata.playingNext?.song.art,
             ].compactMap { $0.flatMap(URL.init(string:)) }
             + (metadata.songHistory ?? [])
-                .prefix(8)
-                .compactMap { $0.song.art.flatMap(URL.init(string:)) }
+            .prefix(8)
+            .compactMap { $0.song.art.flatMap(URL.init(string:)) }
         ArtworkPrefetcher.shared.prefetch(urls: urls, limit: 10, reason: "radio metadata")
     }
 

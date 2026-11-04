@@ -55,7 +55,7 @@ struct WatchDownloadsView: View {
             Section {
                 if downloads.entries.isEmpty {
                     WatchEmptyState(systemImage: "arrow.down.circle", title: "No Downloads",
-                        message: "Swipe right on a song, or open its player’s Options, then choose Download to Watch.")
+                                    message: "Swipe right on a song, or open its player’s Options, then choose Download to Watch.")
                 }
                 ForEach(downloads.entries) { entry in
                     VStack(alignment: .leading, spacing: 5) {

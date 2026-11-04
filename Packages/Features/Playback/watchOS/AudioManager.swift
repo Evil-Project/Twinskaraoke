@@ -218,13 +218,13 @@ class AudioManager {
 
     func localSnapshot(lease: CompanionPlayback.Lease, revision: Int) -> CompanionPlayback.Snapshot {
         CompanionPlayback.Snapshot(sessionID: lease.sessionID, revision: revision, owner: .watch,
-            song: currentSong, queue: queue, isPlaying: isPlaying,
-            isRadio: isRadioMode, radioArtworkURL: radioArtworkURL,
-            position: currentTime.isFinite ? currentTime : 0, duration: duration.isFinite ? duration : 0,
-            isShuffled: isShuffleOn,
-            repeatSetting: playbackMode == .one ? .one : (playbackMode == .all ? .all : .off),
-            error: playbackError, updatedAt: Date(), ownershipEpoch: lease.epoch, radioStreamURL: radioStreamURL,
-            sleepDeadline: sleepTimer.deadline, sleepAtEndOfSong: sleepTimer.endsWithCurrentSong)
+                                   song: currentSong, queue: queue, isPlaying: isPlaying,
+                                   isRadio: isRadioMode, radioArtworkURL: radioArtworkURL,
+                                   position: currentTime.isFinite ? currentTime : 0, duration: duration.isFinite ? duration : 0,
+                                   isShuffled: isShuffleOn,
+                                   repeatSetting: playbackMode == .one ? .one : (playbackMode == .all ? .all : .off),
+                                   error: playbackError, updatedAt: Date(), ownershipEpoch: lease.epoch, radioStreamURL: radioStreamURL,
+                                   sleepDeadline: sleepTimer.deadline, sleepAtEndOfSong: sleepTimer.endsWithCurrentSong)
     }
 
     func applyRemoteCommand(_ command: CompanionPlayback.Command) {

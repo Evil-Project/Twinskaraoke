@@ -262,8 +262,8 @@ struct QueueView: View {
                     cornerRadius: AM.Radius.thumb,
                     lowResURL: current.thumbnailURL
                 )
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Now Playing")
                         .font(AM.Font.badge)

@@ -131,14 +131,11 @@ nonisolated struct SplashContent: Codable, Equatable {
         } catch let error as SplashError { throw error }
         catch let DecodingError.keyNotFound(key, context) {
             throw SplashError(message: "Missing JSON field: \((context.codingPath + [key]).map(\.stringValue).joined(separator: ".")).")
-        }
-        catch let DecodingError.dataCorrupted(context) {
+        } catch let DecodingError.dataCorrupted(context) {
             throw SplashError(message: "Invalid JSON at \(context.codingPath.map(\.stringValue).joined(separator: ".")): \(context.debugDescription)")
-        }
-        catch let DecodingError.typeMismatch(_, context) {
+        } catch let DecodingError.typeMismatch(_, context) {
             throw SplashError(message: "Wrong JSON value type at \(context.codingPath.map(\.stringValue).joined(separator: ".")).")
-        }
-        catch { throw SplashError(message: "Invalid walkthrough JSON: \(error.localizedDescription)") }
+        } catch { throw SplashError(message: "Invalid walkthrough JSON: \(error.localizedDescription)") }
     }
     var fingerprint: String {
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
@@ -165,8 +162,8 @@ enum SplashBundleLoader {
     static func url(for kind: SplashKind, bundle: Bundle = .main) -> URL? {
         // Synchronized Xcode groups currently flatten JSON resources. Also support preserved folders.
         bundle.url(forResource: kind.rawValue, withExtension: "json", subdirectory: "SplashScreens")
-        ?? bundle.url(forResource: kind.rawValue, withExtension: "json", subdirectory: "Resources/SplashScreens")
-        ?? bundle.url(forResource: kind.rawValue, withExtension: "json")
+            ?? bundle.url(forResource: kind.rawValue, withExtension: "json", subdirectory: "Resources/SplashScreens")
+            ?? bundle.url(forResource: kind.rawValue, withExtension: "json")
     }
     /// Loads and validates bundled content for the requested walkthrough kind.
     static func load(_ kind: SplashKind, bundle: Bundle = .main) throws -> SplashContent {

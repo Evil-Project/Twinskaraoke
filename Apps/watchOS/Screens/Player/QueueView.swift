@@ -393,7 +393,6 @@ private struct WatchQueueProgressRing: View {
     }
 }
 
-
 private struct QueuedSongRowItem: Identifiable {
     let id: String
     let offset: Int

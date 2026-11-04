@@ -181,7 +181,7 @@ private struct WideSongHeroCard: View {
                 contentMode: .fill,
                 lowResURL: song.thumbnailURL
             )
-                .allowsHitTesting(false)
+            .allowsHitTesting(false)
         } else if let playlist {
             PlaylistArtwork(playlist: playlist, cornerRadius: 0)
                 .allowsHitTesting(false)

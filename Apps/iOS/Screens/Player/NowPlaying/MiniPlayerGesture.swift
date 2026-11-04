@@ -79,7 +79,7 @@ struct MiniPlayerGesture: UIViewRepresentable {
             case .ended:
                 if contact.isDragging {
                     let opens = PlayerDismissMetrics.shouldOpen(translation: contact.translation,
-                        predictedTranslation: contact.projectedTranslation, height: contact.height)
+                                                                predictedTranslation: contact.projectedTranslation, height: contact.height)
                     presentation.endDrag(dismissing: !opens, from: .miniPlayer)
                 } else {
                     presentation.expand()

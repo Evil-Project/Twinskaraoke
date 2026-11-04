@@ -65,8 +65,8 @@ struct WatchPersonalPlaylistRoutingTests {
     func detailHydratesPlayableMetadata() async throws {
         let fallback = makeSong(id: "song-1")
         let hydrated = Song(id: fallback.id, title: fallback.title, duration: 180,
-            absolutePath: "https://example.invalid/audio.mp3", cloudflareID: nil, coverArt: nil,
-            originalArtists: nil, coverArtists: nil, userUploaded: nil)
+                            absolutePath: "https://example.invalid/audio.mp3", cloudflareID: nil, coverArt: nil,
+                            originalArtists: nil, coverArtists: nil, userUploaded: nil)
         let model = PlaylistDetailViewModel(playlistID: "mine", fallbackSongs: [fallback], loadSongs: { _ in [hydrated] })
         #expect(model.songs.first?.audioURL == nil)
         model.fetchSongs()

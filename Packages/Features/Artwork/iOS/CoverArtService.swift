@@ -32,8 +32,8 @@ nonisolated enum CoverArtService {
         var request = URLRequest(url: apiURL)
         GuestIdentity.applyIfNeeded(to: &request)
         guard let data = try? await URLSession.shared.data(for: request).0,
-            let item = try? JSONDecoder().decode(RandomYuriArtItem.self, from: data),
-            let baseURL = URL(string: item.url)
+              let item = try? JSONDecoder().decode(RandomYuriArtItem.self, from: data),
+              let baseURL = URL(string: item.url)
         else { return nil }
         let imageURL = ArtworkURLBuilder.variantURL(from: baseURL, variant: .hero) ?? baseURL
         return RandomArt(imageURL: imageURL, artistCredit: item.artistCredit)
@@ -45,9 +45,9 @@ nonisolated enum CoverArtService {
             pathSegments: ["api", "songs", songID]
         ) else { return nil }
         guard let data = try? await URLSession.shared.data(for: request).0,
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let coverArt = json["coverArt"] as? [String: Any],
-            let artist = coverArt["artist"] as? [String: Any]
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let coverArt = json["coverArt"] as? [String: Any],
+              let artist = coverArt["artist"] as? [String: Any]
         else { return nil }
         return ArtistCredit(
             name: artist["name"] as? String,

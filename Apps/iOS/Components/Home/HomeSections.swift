@@ -62,7 +62,6 @@ struct PlaylistCarousel: View {
             labelAllowance: labelAllowance
         ))
     }
-
 }
 
 struct HomeSongSection: View {
@@ -115,7 +114,6 @@ struct HomeSongSection: View {
             labelAllowance: labelAllowance
         ))
     }
-
 }
 
 struct WideSongListPanel: View {
@@ -167,9 +165,9 @@ struct LatestSingleSection: View {
                         cornerRadius: AM.Radius.card,
                         lowResURL: song.rowImageURL
                     )
-                        .frame(width: 92, height: 92)
-                        .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-                        .amShadow(AM.Shadow.card)
+                    .frame(width: 92, height: 92)
+                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
+                    .amShadow(AM.Shadow.card)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(song.title)
                             .font(.headline)

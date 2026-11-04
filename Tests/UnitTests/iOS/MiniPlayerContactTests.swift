@@ -12,8 +12,8 @@ struct MiniPlayerContactTests {
         contact.finish(at: CGPoint(x: 100, y: 794), time: 2)
         #expect(contact.projectedTranslation == -6)
         #expect(!PlayerDismissMetrics.shouldOpen(translation: contact.translation,
-                                                   predictedTranslation: contact.projectedTranslation,
-                                                   height: contact.height))
+                                                 predictedTranslation: contact.projectedTranslation,
+                                                 height: contact.height))
     }
 
     @Test func coordinatesStayAnchoredToOriginalTouch() {
@@ -59,8 +59,8 @@ struct MiniPlayerContactTests {
         _ = contact.move(to: CGPoint(x: 100, y: 770), time: 1.05)
         contact.finish(at: CGPoint(x: 100, y: 770), time: 1.06)
         #expect(PlayerDismissMetrics.shouldOpen(translation: contact.translation,
-                                               predictedTranslation: contact.projectedTranslation,
-                                               height: contact.height))
+                                                predictedTranslation: contact.projectedTranslation,
+                                                height: contact.height))
     }
 
     @Test func holdingShortFlickDiscardsVelocity() {
@@ -70,8 +70,8 @@ struct MiniPlayerContactTests {
         contact.finish(at: CGPoint(x: 100, y: 770), time: 0.3)
         #expect(contact.projectedTranslation == -30)
         #expect(!PlayerDismissMetrics.shouldOpen(translation: contact.translation,
-                                                predictedTranslation: contact.projectedTranslation,
-                                                height: contact.height))
+                                                 predictedTranslation: contact.projectedTranslation,
+                                                 height: contact.height))
     }
 
     @Test func initialSidewaysJitterCanResolveUpwards() {

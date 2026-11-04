@@ -5,7 +5,6 @@ struct ArtistsView: View {
     @State private var viewModel = ArtistsViewModel()
     @State private var searchText = ""
 
-
     private var isQueryEmpty: Bool {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -171,7 +170,6 @@ struct ArtistDetailView: View {
     private var songs: [Song] {
         current.songListDTOs ?? []
     }
-
 
     var body: some View {
         GeometryReader { geo in
@@ -367,7 +365,6 @@ private struct ArtistDetailStateView: View {
     let onRefresh: () -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
-
 
     var body: some View {
         VStack(spacing: AM.Spacing.xl) {

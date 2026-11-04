@@ -17,7 +17,6 @@ struct ArtistArtsView: View {
         arts.reduce(0) { $0 + ($1.upvotes ?? 0) }
     }
 
-
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {

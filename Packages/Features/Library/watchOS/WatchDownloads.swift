@@ -117,7 +117,7 @@ final class WatchDownloads: NSObject {
     /// Includes orphaned audio and staging files that still occupy storage.
     var storageBytes: Int64 {
         let files = (try? FileManager.default.contentsOfDirectory(at: storageDirectory,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey])) ?? []
+                                                                  includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey])) ?? []
         return files.reduce(0) { total, file in
             guard file.lastPathComponent != "manifest.json",
                   (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return total }
@@ -207,7 +207,7 @@ final class WatchDownloads: NSObject {
         removeAll()
         error = nil
         let files = (try? FileManager.default.contentsOfDirectory(at: storageDirectory,
-            includingPropertiesForKeys: nil)) ?? []
+                                                                  includingPropertiesForKeys: nil)) ?? []
         for file in files where file.lastPathComponent != "manifest.json" {
             do { try FileManager.default.removeItem(at: file) }
             catch { self.error = "Some watch audio couldn't be removed. Try clearing again." }
@@ -338,7 +338,7 @@ final class WatchDownloads: NSObject {
 
 extension WatchDownloads: URLSessionDownloadDelegate {
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                               didFinishDownloadingTo location: URL) {
+                                didFinishDownloadingTo location: URL) {
         let id = downloadTask.taskDescription ?? ""
         let suffix = Self.audioExtension(mimeType: downloadTask.response?.mimeType, url: downloadTask.response?.url)
         let staged = storageDirectory.appendingPathComponent("staging-" + UUID().uuidString + "." + suffix)
@@ -357,8 +357,8 @@ extension WatchDownloads: URLSessionDownloadDelegate {
     }
 
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                               didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                               totalBytesExpectedToWrite: Int64) {
+                                didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
+                                totalBytesExpectedToWrite: Int64) {
         let id = downloadTask.taskDescription ?? ""
         Task { @MainActor [weak self] in
             guard let self, let index = self.entries.firstIndex(where: { $0.transferID.uuidString == id }) else { return }
