@@ -185,7 +185,6 @@ final class PublicPlaylistsViewModel {
 @Observable
 final class TopChartViewModel {
     var songs: [Song] = []
-    var weeklyTrending: [Song] = []
     private var hasLoaded = false
     private var requestToken = 0
     @ObservationIgnored private let refreshTracker = RefreshTracker()
@@ -204,10 +203,7 @@ final class TopChartViewModel {
         // still owns `requestToken`.
         refreshTracker.track(Task { [weak self] in
             guard let self else { return }
-            async let allTime = try? KaraokeAPIClient.mostPlayedSongs(take: 100)
-            async let weekly = try? KaraokeAPIClient.trendingSongs(take: 20)
-            let allTimeSongs = await allTime
-            let weeklySongs = await weekly ?? []
+            let allTimeSongs = try? await KaraokeAPIClient.mostPlayedSongs(take: 100)
             guard token == requestToken else { return }
             // A failed fetch keeps the last chart instead of emptying it, and
             // lets the next visit try again.
@@ -216,7 +212,6 @@ final class TopChartViewModel {
             } else {
                 hasLoaded = false
             }
-            weeklyTrending = weeklySongs
         }, cancellingPrevious: true)
     }
 
@@ -234,7 +229,6 @@ final class TopChartViewModel {
 
     private func applyUITestFixture() {
         songs = Self.uiTestFixtureSongs
-        weeklyTrending = Array(Self.uiTestFixtureSongs.prefix(2))
     }
 
     private static var uiTestFixtureSongs: [Song] {
