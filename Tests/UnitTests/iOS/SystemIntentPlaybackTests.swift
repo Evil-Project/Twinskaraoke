@@ -174,6 +174,62 @@ struct SystemIntentPlaybackTests {
         }
     }
 
+    @Test func playsFromAPlaylistReportThatPlaylist() async throws {
+        let player = AudioPlayerManager.shared
+        let reporter = player.playCountReporter
+        let previousAI = player.aiEnabled
+        let previousSend = reporter.send
+        let previousReadToken = reporter.readToken
+        player.aiEnabled = false
+        let reports = ReportLog()
+        reporter.send = { request in await reports.append(request) }
+        reporter.readToken = { nil }
+        let songs = try (0..<3).map { try cachedSong(index: $0) }
+        let outsider = try cachedSong(index: 3)
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            reporter.send = previousSend
+            reporter.readToken = previousReadToken
+            for song in songs + [outsider] { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+
+        // The playlist's songs carry its ID, including the next one in the queue.
+        player.repeatMode = .off
+        player.playInOrder(song: songs[0], context: songs, playlistID: "playlist-1")
+        #expect(try await reports.next() == Report(songID: songs[0].id, playlistID: "playlist-1"))
+        player.skipToNext()
+        #expect(try await reports.next() == Report(songID: songs[1].id, playlistID: "playlist-1"))
+
+        // A song added with Play Next isn't part of the playlist.
+        player.playNext(song: outsider)
+        player.skipToNext()
+        #expect(try await reports.next() == Report(songID: outsider.id, playlistID: nil))
+
+        // Picking a playlist song from Up Next keeps the playlist.
+        player.skipToQueuedSong(songs[2])
+        #expect(try await reports.next() == Report(songID: songs[2].id, playlistID: "playlist-1"))
+
+        // A playlist song queued again with Play Last is a separate addition.
+        player.playLast(song: songs[0])
+        player.skipToQueuedSong(songs[0])
+        #expect(try await reports.next() == Report(songID: songs[0].id, playlistID: nil))
+
+        // An empty shuffle starts nothing, so the playlist stays.
+        player.playShuffled(from: [], playlistID: "playlist-x")
+        player.skipToQueuedSong(songs[1])
+        #expect(try await reports.next() == Report(songID: songs[1].id, playlistID: "playlist-1"))
+
+        // Shuffling a playlist keeps its ID; a queue from anywhere else drops it.
+        player.playShuffled(from: songs, playlistID: "playlist-2")
+        #expect(try await reports.next()?.playlistID == "playlist-2")
+        player.play(song: songs[2], context: songs)
+        #expect(try await reports.next() == Report(songID: songs[2].id, playlistID: nil))
+        player.playAutoplay(song: songs[0], context: songs)
+        #expect(try await reports.next() == Report(songID: songs[0].id, playlistID: nil))
+    }
+
     private func cachedSong(index: Int) throws -> Song {
         let id = "system-intent-test-\(UUID().uuidString)-\(index)"
         _ = AudioCacheStore.ensureSongDirectory(for: id)
@@ -185,5 +241,44 @@ struct SystemIntentPlaybackTests {
         memset(buffer.floatChannelData![0], 0, Int(buffer.frameLength) * MemoryLayout<Float>.size)
         for _ in 0..<60 { try file.write(from: buffer) }
         return Song(id: id, title: "Widget Test \(index + 1)", duration: 60, absolutePath: nil, cloudflareID: nil, coverArt: nil, originalArtists: ["Simulator"], coverArtists: nil, userUploaded: true)
+    }
+}
+
+private struct Report: Equatable, Sendable {
+    let songID: String
+    let playlistID: String?
+}
+
+/// Collects the play-count requests the player sends, so the test can wait
+/// for each one instead of sleeping.
+private actor ReportLog {
+    private var reports: [Report] = []
+    private var read = 0
+    private var last: Report?
+
+    func append(_ request: URLRequest) {
+        guard let url = request.url else { return }
+        let playlistID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "playlistId" }?.value
+        reports.append(Report(songID: url.lastPathComponent, playlistID: playlistID))
+    }
+
+    /// The next report, waiting up to two seconds for it. A repeat of the
+    /// previous report is skipped: without an audio device the cached file
+    /// fails to load, and the player's retry from the network reports the same
+    /// play again.
+    func next() async throws -> Report? {
+        for _ in 0..<200 {
+            while read < reports.count {
+                let report = reports[read]
+                read += 1
+                if report != last {
+                    last = report
+                    return report
+                }
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return nil
     }
 }

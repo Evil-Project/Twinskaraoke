@@ -404,6 +404,7 @@ final class AudioPlayerManager {
         return engine
     }
     private let transitionCoordinator = TransitionCoordinator()
+    @ObservationIgnored let playCountReporter = PlayCountReporter()
     private var radioPlayer: AVPlayer?
     private var streamPlayer: AVPlayer?
     private var streamEndObserver: NSObjectProtocol?
@@ -1570,13 +1571,15 @@ final class AudioPlayerManager {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    func play(song: Song, context: [Song] = []) {
+    func play(song: Song, context: [Song] = [], playlistID: String? = nil) {
+        if phoneAudioAllowed { playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context) }
         queueState.selectSingleSong()
         play(song: song, context: context, resetTransitionVolume: true)
     }
 
     /// Starts recommendations as a collection so Repeat All advances and wraps.
     func playAutoplay(song: Song, context: [Song]) {
+        playCountReporter.queueStarted(fromPlaylist: nil, songs: context)
         queueState.beginAutoplay(context: context, current: song)
         play(song: song, resetTransitionVolume: true)
     }
@@ -1625,7 +1628,7 @@ final class AudioPlayerManager {
         VocalSeparator.shared.cancelBackgroundAnalysis()
         VocalSeparator.shared.cleanupRealtimeTemp()
         if reportsPlayCount {
-            reportPlayCount(for: song.id)
+            playCountReporter.report(songID: song.id)
         }
         enrichSongMetadataIfNeeded(for: song)
         if previousSongID != song.id {
@@ -1725,6 +1728,7 @@ final class AudioPlayerManager {
         }
 
         queueState.insertNext(song, after: current)
+        playCountReporter.songQueuedSeparately(song.id)
         nextSongChanged()
     }
 
@@ -1741,6 +1745,7 @@ final class AudioPlayerManager {
 
         let nextBefore = queueState.advance(after: current, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         queueState.insertLast(song, after: current)
+        playCountReporter.songQueuedSeparately(song.id)
         // Appending usually leaves the song after this one alone, and with it
         // any crossfade already prepared into it. It changes only when this was
         // the last song, and only then is the prepared work stale.
@@ -2323,25 +2328,28 @@ final class AudioPlayerManager {
         queueState.toggleShuffle(current: currentSong)
     }
 
-    func playInOrder(song: Song, context: [Song]) {
+    func playInOrder(song: Song, context: [Song], playlistID: String? = nil) {
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context, shuffleEnabled: false) { return }
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: context)
         queueState.beginInOrder(context: context)
         play(song: song, context: context, resetTransitionVolume: true)
     }
 
     func playCompanion(song: Song, context: [Song], shuffled: Bool) {
         if !shuffled { playInOrder(song: song, context: context); return }
+        playCountReporter.queueStarted(fromPlaylist: nil, songs: context)
         _ = queueState.beginShuffled(songs: context, selecting: { _ in song })
         play(song: song, resetTransitionVolume: true)
     }
 
-    func playShuffled(from songs: [Song]) {
+    func playShuffled(from songs: [Song], playlistID: String? = nil) {
         if !phoneAudioAllowed {
             let shuffled = songs.shuffled()
             if let song = shuffled.first { WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: shuffled, shuffleEnabled: true) }
             return
         }
         guard let pick = queueState.beginShuffled(songs: songs) else { return }
+        playCountReporter.queueStarted(fromPlaylist: playlistID, songs: songs)
         // The state already contains the shuffled queue and its original
         // ordering. Passing that queue back as a context would shuffle it a
         // second time and overwrite the restoration order.
@@ -2355,8 +2363,9 @@ final class AudioPlayerManager {
     /// included, and overwrote the order turning shuffle off restores with the
     /// shuffled one. The songs skipped over stay behind the new current song,
     /// where Previous reaches them.
-    func skipToQueuedSong(_ song: Song) {
-        play(song: song)
+    func skipToQueuedSong(_ song: Song) { // play(song:), keeping the queue's playlist for play counts
+        queueState.selectSingleSong()
+        play(song: song, resetTransitionVolume: true)
     }
 
     func toggleAutoplay() {
@@ -3836,18 +3845,6 @@ final class AudioPlayerManager {
         }
     }
 
-    private func reportPlayCount(for songID: String) {
-        Task {
-            guard var req = try? KaraokeAPIClient.request(
-                pathSegments: ["api", "songs", "playCount", songID]
-            ) else { return }
-            req.httpMethod = "PUT"
-            // Fire and forget: the result is discarded, so a retry only costs
-            // requests. One skipped song used to cost 3 of these.
-            let _ = try? await KaraokeAPIClient.data(for: req, allowsRetry: false)
-        }
-    }
-
     private func enrichSongMetadataIfNeeded(for song: Song) {
         guard !song.hasArtistMetadata else { return }
         guard enrichmentAttemptedSongIDs.insert(song.id).inserted else { return }
@@ -4020,7 +4017,7 @@ final class AudioPlayerManager {
         let song = plan.nextSong
         currentPlaybackURL = plan.nextFileURL
         CacheManager.shared.recordAccess(for: plan.nextFileURL)
-        reportPlayCount(for: song.id)
+        playCountReporter.report(songID: song.id)
         enrichSongMetadataIfNeeded(for: song)
         deferredAIEffect = nil
         preparedStemSongID = nil
