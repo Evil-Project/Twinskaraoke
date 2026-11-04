@@ -1,0 +1,20 @@
+# Code owners are requested automatically as reviewers on PRs that touch
+# these paths. Add yourself next to areas you own; later lines win.
+
+# Playback, audio and sync — the most regression-prone code
+/Packages/Features/Playback/            @Mag1cByt3s
+/Packages/Core/Storage/                 @Mag1cByt3s
+/Packages/Platform/iOS/WatchSessionPublisher.swift  @Mag1cByt3s
+
+# App shell and navigation (frequent merge conflicts)
+/Apps/iOS/Navigation/                   @Mag1cByt3s
+
+# Project, CI and team rules
+/Twinskaraoke.xcodeproj/                @Mag1cByt3s
+/.github/                               @Mag1cByt3s
+/Scripts/                               @Mag1cByt3s
+/AGENTS.md                              @Mag1cByt3s
+/CLAUDE.md                              @Mag1cByt3s
+/.claude/                               @Mag1cByt3s
+/.swiftformat                           @Mag1cByt3s
+/.swiftlint.yml                         @Mag1cByt3s

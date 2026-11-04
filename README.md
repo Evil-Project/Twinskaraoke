@@ -47,7 +47,7 @@ Twinskaraoke/
 ├── Tests/
 │   ├── UnitTests/           # iOS and watchOS unit test targets
 │   └── UITests/             # iOS and watchOS UI test targets
-├── Scripts/                 # Simulator App Intents signing
+├── Scripts/                 # verify.sh (local CI checks), simulator App Intents signing
 └── docs/                    # Site documentation and validation notes
 ```
 
@@ -403,6 +403,12 @@ Because you are installing this using a free, personal Apple ID, the app certifi
 After 7 days, the app will crash immediately when you try to open it. **You do not need to delete the app.** To fix this, simply plug your phone back into your Mac, open this Xcode project, and click the Play (▶) button again to refresh the 7-day timer. All of your saved data inside the app will remain perfectly intact.
 
 </details>
+
+---
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. If you work with an AI coding assistant, it picks up the project rules from [AGENTS.md](AGENTS.md).
 
 ---
 
