@@ -77,7 +77,6 @@ custom_rules:
   no_print:
     name: "No print"
     regex: '\bprint\('
-    excluded: "Tests/"
     message: "Use DebugLogger.log(...) instead of print."
     severity: error
   unchecked_sendable:

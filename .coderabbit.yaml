@@ -17,6 +17,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Also review stacked PRs whose base is another feature branch.
+    base_branches:
+      - ".*"
   path_filters:
     - "!.swiftlint-baseline.json"
     - "!**/*.xcstrings"
