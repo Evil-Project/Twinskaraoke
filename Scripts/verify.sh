@@ -2,9 +2,10 @@
 # Runs the same checks as CI, so humans and AI agents can verify a change
 # before opening a PR.
 #
-#   Scripts/verify.sh            format check, lint, build all 4 schemes,
-#                                iOS + watchOS unit tests
-#   Scripts/verify.sh --quick    format check, lint, build the iOS app only
+#   Scripts/verify.sh            format check, lint, Release build + analyze
+#                                of all 4 schemes, iOS + watchOS unit tests
+#   Scripts/verify.sh --quick    format check, lint, Release build + analyze
+#                                of the iOS app only
 #   Scripts/verify.sh --lint     format check and lint only (works on Linux)
 #
 # Needs: Xcode (macOS), swiftformat and swiftlint (brew install swiftformat
@@ -18,7 +19,7 @@ case "${1:-}" in
   --quick) mode="quick" ;;
   --lint) mode="lint" ;;
   "") ;;
-  -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
   *) echo "Unknown option: $1 (use --quick, --lint or --help)" >&2; exit 2 ;;
 esac
 
@@ -53,7 +54,7 @@ step "SwiftFormat (lint mode)"
 if [[ ! -f .swiftformat ]]; then
   echo "No .swiftformat config yet — skipped."
 elif command -v swiftformat >/dev/null 2>&1; then
-  if swiftformat --lint . ; then pass "Formatting"; else fail "Formatting — run: swiftformat ."; fi
+  if swiftformat --lint . ; then pass "Formatting"; else fail "Formatting — run swiftformat on the files you changed (see AGENTS.md)"; fi
 else
   fail "swiftformat not installed (brew install swiftformat)"
 fi
@@ -88,8 +89,10 @@ else
   fi
   for entry in "${builds[@]}"; do
     scheme="${entry%%|*}"; destination="${entry#*|}"
-    step "Build $scheme"
-    if xcodebuild build "${common_flags[@]}" -scheme "$scheme" -destination "$destination" 2>&1 | pretty; then
+    step "Build and analyze $scheme (Release)"
+    # Same as analyze.yml: Release configuration plus the static analyzer.
+    if xcodebuild build analyze "${common_flags[@]}" -configuration Release \
+        -scheme "$scheme" -destination "$destination" 2>&1 | pretty; then
       pass "Build $scheme"
     else
       fail "Build $scheme"
@@ -103,8 +106,9 @@ else
     if [[ -z "$udid" ]]; then
       fail "No iPhone simulator available"
     else
-      xcrun simctl bootstatus "$udid" -b >/dev/null
-      if xcodebuild test "${common_flags[@]}" -scheme Twinskaraoke \
+      if ! xcrun simctl bootstatus "$udid" -b >/dev/null; then
+        fail "iPhone simulator $udid did not boot"
+      elif xcodebuild test "${common_flags[@]}" -scheme Twinskaraoke \
           -destination "platform=iOS Simulator,id=$udid" \
           -only-testing:TwinskaraokeTests -parallel-testing-enabled NO 2>&1 | pretty; then
         pass "iOS unit tests"

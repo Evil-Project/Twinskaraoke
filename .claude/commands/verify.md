@@ -5,7 +5,9 @@ argument-hint: "[--quick | --lint]"
 
 Run `Scripts/verify.sh $ARGUMENTS` from the repository root.
 
-- If formatting fails, run `swiftformat .` on the files you changed and rerun.
+- If formatting fails, format only the Swift files your branch changed and
+  rerun:
+  `git diff --name-only --diff-filter=d origin/main... -- '*.swift' | xargs swiftformat`
 - If SwiftLint fails, run `swiftlint --fix`, then fix the remaining findings in
   code you changed. Don't add `swiftlint:disable` without a reason in the same
   comment, and never regenerate `.swiftlint-baseline.json` to hide new issues.

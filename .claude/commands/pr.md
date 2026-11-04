@@ -5,7 +5,10 @@ argument-hint: "[issue number]"
 
 Prepare and open a pull request for the current branch.
 
-1. Refuse if the current branch is `main`. Rebase on `origin/main` if behind.
+1. Refuse if the current branch is `main`. Run `git status`: if there are
+   uncommitted or untracked changes that belong to this work, commit them
+   first; if some don't belong, stop and ask. Rebase on `origin/main` if
+   behind.
 2. Check the size: `git diff --stat origin/main...HEAD`. If over ~400 changed
    lines or mixing concerns (refactor + feature, formatting + logic), stop and
    propose a split instead.
