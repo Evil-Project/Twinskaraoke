@@ -64,6 +64,27 @@ Target membership follows the innermost folder name:
   Do not edit `project.pbxproj` unless the task is explicitly about the
   project (new folder, new target, build settings).
 
+## Backend API
+
+Official API documentation: https://docs.neurokaraoke.com. `docs/api/` holds
+a copy of its specs and a Markdown reference generated from them.
+
+- Before calling, adding or changing an API request, read
+  `docs/api/README.md`: every endpoint of the Neuro & Evil Karaoke REST API,
+  the listen-along and radio-chat HTTP and WebSocket APIs and the radio, with
+  hosts and auth. Then open only the file for the area you work on (for
+  example `docs/api/rest/songs.md`). Don't guess endpoints, parameters, field
+  names or types, and don't take them from memory.
+- The complete raw specs are in `docs/api/specs/`; query them with `jq`, e.g.
+  `jq '.paths["/api/songs"]' docs/api/specs/rest.openapi.json`.
+- The Markdown in `docs/api/` is generated. Never edit it by hand. Refresh it
+  with `Scripts/update-api-docs.py` in its own PR. If the API behaves
+  differently from the docs, run `Scripts/update-api-docs.py --check` and say
+  so in the PR.
+- Requests go through `Packages/Data/Apple/KaraokeAPIClient.swift`; hosts
+  (including the China mirrors) are in
+  `Packages/Core/Configuration/Apple/StorageHost.swift`.
+
 ## Code rules
 
 - Observable state: `@MainActor @Observable final class` (not

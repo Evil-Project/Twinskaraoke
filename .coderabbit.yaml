@@ -22,6 +22,8 @@ reviews:
       - ".*"
   path_filters:
     - "!.swiftlint-baseline.json"
+    # Generated from docs/api/specs; review the spec changes instead.
+    - "!docs/api/**/*.md"
     - "!**/*.xcstrings"
     - "!**/*.xcassets/**"
     - "!**/*.mlmodelc/**"
@@ -62,6 +64,14 @@ reviews:
         Check least-privilege `permissions`, pinned action versions, that
         secrets are not exposed to pull_request runs from forks, and that
         nothing pushes to main.
+    - path: "docs/api/specs/**"
+      instructions: |
+        Official API specs copied from docs.neurokaraoke.com by
+        Scripts/update-api-docs.py. Don't review style. Point out breaking
+        changes for the app: removed or renamed endpoints, fields or
+        WebSocket messages, changed types, nullability, required fields or
+        auth. For each, name the code in Packages/Data/Apple/KaraokeAPIClient.swift
+        or elsewhere that uses it.
     - path: "**/*.pbxproj"
       instructions: |
         Most source changes need no project edit (synchronized folders).

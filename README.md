@@ -410,6 +410,8 @@ After 7 days, the app will crash immediately when you try to open it. **You do n
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. If you work with an AI coding assistant, it picks up the project rules from [AGENTS.md](AGENTS.md).
 
+The app talks to the Neuro & Evil Karaoke API, documented at **[docs.neurokaraoke.com](https://docs.neurokaraoke.com)**. A copy of its specs and a Markdown reference generated from them live in [docs/api](docs/api/README.md) (refresh with `Scripts/update-api-docs.py`).
+
 ---
 
 ## Art Credits
