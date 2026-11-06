@@ -1,0 +1,1339 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Listen along (WebSocket)",
+    "version": "v1",
+    "description": "Listen along provides shared listening rooms: one host controls playback and the queue, and all listeners stay synchronized.\n\nEach room is a Cloudflare Durable Object. After the WebSocket connects, the server sends a `RoomState` snapshot. Subsequent updates are incremental JSON messages.\n\nAll messages, in both directions, use this envelope:\n\n```json\n{ \"type\": \"Play\", \"payload\": null }\n```\n\n**Keepalive:** send `{ \"type\": \"Ping\" }` approximately every 30 seconds. The server replies with `{ \"type\": \"Pong\" }`. Connections idle for 3 minutes are closed.\n\n**Permissions:** the host and co-hosts control playback and the queue. Other listeners can chat, and can add songs or use song commands when the room allows it. Messages the sender is not permitted to send are ignored.\n\nWebSocket requests cannot be sent from this page. Example using the browser console:\n\n```js\nconst ws = new WebSocket(\"wss://listen-along.neurokaraoke.com/ws?inviteCode=ABC123&guestId=\" + crypto.randomUUID());\nws.onmessage = e => console.log(JSON.parse(e.data));\n```"
+  },
+  "defaultContentType": "application/json",
+  "servers": {
+    "production": {
+      "host": "listen-along.neurokaraoke.com",
+      "protocol": "wss",
+      "description": "Listen along worker."
+    }
+  },
+  "channels": {
+    "room": {
+      "address": "/ws",
+      "title": "A listen along room",
+      "description": "Specify exactly one of:\n\n- `action=create` to create a room (requires a token. Guests cannot host)\n- `roomId` to join a room returned by `/rooms/public`\n- `inviteCode` to join via an invite link\n\nIdentify the caller with `token` (the neurokaraoke.com `authToken`) or, for guests, `guestId` (any UUID). `displayName`, `avatarUrl`, `frameTheme` and `level` are shown in the listener list.\n\nWhen creating a room, the following are also accepted: `roomName`, `isPublic` (default true), `allowListenerAddSongs`, `allowListenerSongCommands`, `allowDuplicateSongs`, `listenerAddSongCooldownSeconds` and `autoRemovePlayedSongs`.",
+      "bindings": {
+        "ws": {
+          "method": "GET",
+          "query": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "description": "Possible values: `create`"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "inviteCode": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string",
+                "description": "Bearer token from neurokaraoke.com. Omit to connect as a guest."
+              },
+              "guestId": {
+                "type": "string",
+                "description": "Any UUID. Reuse the same value to keep a stable guest identity."
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "avatarUrl": {
+                "type": "string"
+              },
+              "frameTheme": {
+                "type": "integer"
+              },
+              "level": {
+                "type": "integer"
+              },
+              "roomName": {
+                "type": "string"
+              },
+              "isPublic": {
+                "type": "boolean",
+                "default": true
+              },
+              "allowListenerAddSongs": {
+                "type": "boolean",
+                "default": false
+              },
+              "allowListenerSongCommands": {
+                "type": "boolean",
+                "default": false
+              },
+              "allowDuplicateSongs": {
+                "type": "boolean",
+                "default": false
+              },
+              "listenerAddSongCooldownSeconds": {
+                "type": "integer",
+                "default": 0
+              },
+              "autoRemovePlayedSongs": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "messages": {
+        "Ping": {
+          "$ref": "#/components/messages/Ping"
+        },
+        "Play": {
+          "$ref": "#/components/messages/Play"
+        },
+        "Pause": {
+          "$ref": "#/components/messages/Pause"
+        },
+        "Seek": {
+          "$ref": "#/components/messages/Seek"
+        },
+        "SkipNext": {
+          "$ref": "#/components/messages/SkipNext"
+        },
+        "SkipPrevious": {
+          "$ref": "#/components/messages/SkipPrevious"
+        },
+        "PlaySongAt": {
+          "$ref": "#/components/messages/PlaySongAt"
+        },
+        "ReportPosition": {
+          "$ref": "#/components/messages/ReportPosition"
+        },
+        "AddSong": {
+          "$ref": "#/components/messages/AddSong"
+        },
+        "RemoveSong": {
+          "$ref": "#/components/messages/RemoveSong"
+        },
+        "ReorderQueue": {
+          "$ref": "#/components/messages/ReorderQueue"
+        },
+        "ShuffleQueue": {
+          "$ref": "#/components/messages/ShuffleQueue"
+        },
+        "SetRepeatMode": {
+          "$ref": "#/components/messages/SetRepeatMode"
+        },
+        "ListenerAddSong": {
+          "$ref": "#/components/messages/ListenerAddSong"
+        },
+        "SendMessage": {
+          "$ref": "#/components/messages/SendMessage"
+        },
+        "KickUser": {
+          "$ref": "#/components/messages/KickUser"
+        },
+        "CloseRoom": {
+          "$ref": "#/components/messages/CloseRoom"
+        },
+        "Pong": {
+          "$ref": "#/components/messages/Pong"
+        },
+        "RoomState": {
+          "$ref": "#/components/messages/RoomState"
+        },
+        "PlaybackSync": {
+          "$ref": "#/components/messages/PlaybackSync"
+        },
+        "QueueUpdated": {
+          "$ref": "#/components/messages/QueueUpdated"
+        },
+        "RepeatModeChanged": {
+          "$ref": "#/components/messages/RepeatModeChanged"
+        },
+        "ListenerJoined": {
+          "$ref": "#/components/messages/ListenerJoined"
+        },
+        "ListenerLeft": {
+          "$ref": "#/components/messages/ListenerLeft"
+        },
+        "ListenerCount": {
+          "$ref": "#/components/messages/ListenerCount"
+        },
+        "CoHostsUpdated": {
+          "$ref": "#/components/messages/CoHostsUpdated"
+        },
+        "RoomSettingsUpdated": {
+          "$ref": "#/components/messages/RoomSettingsUpdated"
+        },
+        "ReceiveMessage": {
+          "$ref": "#/components/messages/ReceiveMessage"
+        },
+        "ReceiveMessageHistory": {
+          "$ref": "#/components/messages/ReceiveMessageHistory"
+        },
+        "MessageDeleted": {
+          "$ref": "#/components/messages/MessageDeleted"
+        },
+        "SongSuggestion": {
+          "$ref": "#/components/messages/SongSuggestion"
+        },
+        "Kicked": {
+          "$ref": "#/components/messages/Kicked"
+        },
+        "RoomClosed": {
+          "$ref": "#/components/messages/RoomClosed"
+        },
+        "Error": {
+          "$ref": "#/components/messages/Error"
+        }
+      }
+    }
+  },
+  "operations": {
+    "sendKeepAlive": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Keep the connection alive",
+      "summary": "Send a Ping approximately every 30 seconds.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/Ping"
+        }
+      ]
+    },
+    "sendPlayback": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Control playback",
+      "summary": "Restricted to the host and co-hosts. Each change is followed by a PlaybackSync broadcast.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/Play"
+        },
+        {
+          "$ref": "#/channels/room/messages/Pause"
+        },
+        {
+          "$ref": "#/channels/room/messages/Seek"
+        },
+        {
+          "$ref": "#/channels/room/messages/SkipNext"
+        },
+        {
+          "$ref": "#/channels/room/messages/SkipPrevious"
+        },
+        {
+          "$ref": "#/channels/room/messages/PlaySongAt"
+        },
+        {
+          "$ref": "#/channels/room/messages/ReportPosition"
+        }
+      ]
+    },
+    "sendQueue": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Change the queue",
+      "summary": "Host and co-hosts can send all of these. Listeners can only send ListenerAddSong, and only when the room allows it.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/AddSong"
+        },
+        {
+          "$ref": "#/channels/room/messages/RemoveSong"
+        },
+        {
+          "$ref": "#/channels/room/messages/ReorderQueue"
+        },
+        {
+          "$ref": "#/channels/room/messages/ShuffleQueue"
+        },
+        {
+          "$ref": "#/channels/room/messages/SetRepeatMode"
+        },
+        {
+          "$ref": "#/channels/room/messages/ListenerAddSong"
+        }
+      ]
+    },
+    "sendChat": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Chat",
+      "summary": "Available to all connected users.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/SendMessage"
+        }
+      ]
+    },
+    "sendRoomControl": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Manage the room",
+      "summary": "Restricted to the host.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/KickUser"
+        },
+        {
+          "$ref": "#/channels/room/messages/CloseRoom"
+        }
+      ]
+    },
+    "receiveRoom": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/room"
+      },
+      "title": "Room updates",
+      "summary": "Messages pushed by the server.",
+      "messages": [
+        {
+          "$ref": "#/channels/room/messages/Pong"
+        },
+        {
+          "$ref": "#/channels/room/messages/RoomState"
+        },
+        {
+          "$ref": "#/channels/room/messages/PlaybackSync"
+        },
+        {
+          "$ref": "#/channels/room/messages/QueueUpdated"
+        },
+        {
+          "$ref": "#/channels/room/messages/RepeatModeChanged"
+        },
+        {
+          "$ref": "#/channels/room/messages/ListenerJoined"
+        },
+        {
+          "$ref": "#/channels/room/messages/ListenerLeft"
+        },
+        {
+          "$ref": "#/channels/room/messages/ListenerCount"
+        },
+        {
+          "$ref": "#/channels/room/messages/CoHostsUpdated"
+        },
+        {
+          "$ref": "#/channels/room/messages/RoomSettingsUpdated"
+        },
+        {
+          "$ref": "#/channels/room/messages/ReceiveMessage"
+        },
+        {
+          "$ref": "#/channels/room/messages/ReceiveMessageHistory"
+        },
+        {
+          "$ref": "#/channels/room/messages/MessageDeleted"
+        },
+        {
+          "$ref": "#/channels/room/messages/SongSuggestion"
+        },
+        {
+          "$ref": "#/channels/room/messages/Kicked"
+        },
+        {
+          "$ref": "#/channels/room/messages/RoomClosed"
+        },
+        {
+          "$ref": "#/channels/room/messages/Error"
+        }
+      ]
+    }
+  },
+  "components": {
+    "messages": {
+      "Ping": {
+        "name": "Ping",
+        "title": "Ping",
+        "summary": "Keepalive request.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Ping"
+            }
+          }
+        }
+      },
+      "Pong": {
+        "name": "Pong",
+        "title": "Pong",
+        "summary": "Keepalive response.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Pong"
+            }
+          }
+        }
+      },
+      "Play": {
+        "name": "Play",
+        "title": "Play",
+        "summary": "Resume playback.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Play"
+            }
+          }
+        }
+      },
+      "Pause": {
+        "name": "Pause",
+        "title": "Pause",
+        "summary": "Pause playback.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Pause"
+            }
+          }
+        }
+      },
+      "Seek": {
+        "name": "Seek",
+        "title": "Seek",
+        "summary": "Seek within the current song.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Seek"
+            },
+            "payload": {
+              "type": "number",
+              "description": "Position in seconds."
+            }
+          }
+        },
+        "examples": [
+          {
+            "payload": {
+              "type": "Seek",
+              "payload": 42.5
+            }
+          }
+        ]
+      },
+      "SkipNext": {
+        "name": "SkipNext",
+        "title": "SkipNext",
+        "summary": "Advance to the next song in the queue.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SkipNext"
+            }
+          }
+        }
+      },
+      "SkipPrevious": {
+        "name": "SkipPrevious",
+        "title": "SkipPrevious",
+        "summary": "Restart the current song, or move to the previous song if playback is near the start.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SkipPrevious"
+            }
+          }
+        }
+      },
+      "PlaySongAt": {
+        "name": "PlaySongAt",
+        "title": "PlaySongAt",
+        "summary": "Start playback at a specific queue item.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "PlaySongAt"
+            },
+            "payload": {
+              "description": "Queue item reference: a `queueItemId` (or `songId`) string, or an object containing either field.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "queueItemId": {
+                      "type": "string"
+                    },
+                    "songId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "ReportPosition": {
+        "name": "ReportPosition",
+        "title": "ReportPosition",
+        "summary": "Host playback heartbeat, sent every few seconds to keep listeners synchronized.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReportPosition"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "positionSeconds": {
+                  "type": "number"
+                },
+                "isPlaying": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "payload": {
+              "type": "ReportPosition",
+              "payload": {
+                "positionSeconds": 61.2,
+                "isPlaying": true
+              }
+            }
+          }
+        ]
+      },
+      "AddSong": {
+        "name": "AddSong",
+        "title": "AddSong",
+        "summary": "Appends a song to the queue. Ignored if the song is already queued, unless duplicates are allowed.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "AddSong"
+            },
+            "payload": {
+              "type": "object",
+              "description": "Queue item. `queueItemId` and `addedBy` are assigned by the server.",
+              "required": [
+                "songId"
+              ],
+              "properties": {
+                "queueItemId": {
+                  "type": "string"
+                },
+                "songId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "string"
+                },
+                "audioUrl": {
+                  "type": "string"
+                },
+                "hlsUrl": {
+                  "type": "string"
+                },
+                "coverUrl": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "Duration in seconds."
+                },
+                "addedBy": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RemoveSong": {
+        "name": "RemoveSong",
+        "title": "RemoveSong",
+        "summary": "Removes a song from the queue.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RemoveSong"
+            },
+            "payload": {
+              "description": "Queue item reference: a `queueItemId` (or `songId`) string, or an object containing either field.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "queueItemId": {
+                      "type": "string"
+                    },
+                    "songId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "ReorderQueue": {
+        "name": "ReorderQueue",
+        "title": "ReorderQueue",
+        "summary": "Moves a queue item to a new position.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReorderQueue"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "queueItemId": {
+                  "type": "string"
+                },
+                "songId": {
+                  "type": "string"
+                },
+                "newOrder": {
+                  "type": "integer",
+                  "description": "Zero-based target index."
+                }
+              },
+              "required": [
+                "newOrder"
+              ]
+            }
+          }
+        },
+        "examples": [
+          {
+            "payload": {
+              "type": "ReorderQueue",
+              "payload": {
+                "queueItemId": "q_123",
+                "newOrder": 0
+              }
+            }
+          }
+        ]
+      },
+      "ShuffleQueue": {
+        "name": "ShuffleQueue",
+        "title": "ShuffleQueue",
+        "summary": "Shuffles the remaining queue items.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ShuffleQueue"
+            }
+          }
+        }
+      },
+      "SetRepeatMode": {
+        "name": "SetRepeatMode",
+        "title": "SetRepeatMode",
+        "summary": "Sets the repeat mode.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SetRepeatMode"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Possible values: `Off`, `All`, `One`"
+            }
+          }
+        }
+      },
+      "ListenerAddSong": {
+        "name": "ListenerAddSong",
+        "title": "ListenerAddSong",
+        "summary": "AddSong variant for listeners. Requires the room's listener-add permission and is subject to the room's cooldown.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ListenerAddSong"
+            },
+            "payload": {
+              "type": "object",
+              "description": "Queue item. `queueItemId` and `addedBy` are assigned by the server.",
+              "required": [
+                "songId"
+              ],
+              "properties": {
+                "queueItemId": {
+                  "type": "string"
+                },
+                "songId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "string"
+                },
+                "audioUrl": {
+                  "type": "string"
+                },
+                "hlsUrl": {
+                  "type": "string"
+                },
+                "coverUrl": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "Duration in seconds."
+                },
+                "addedBy": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SendMessage": {
+        "name": "SendMessage",
+        "title": "SendMessage",
+        "summary": "Sends a chat message (max 500 characters). The payload is either a string or an object with `content` and an optional `replyToId`.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SendMessage"
+            },
+            "payload": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "replyToId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "examples": [
+          {
+            "payload": {
+              "type": "SendMessage",
+              "payload": {
+                "content": "this song slaps",
+                "replyToId": null
+              }
+            }
+          }
+        ]
+      },
+      "KickUser": {
+        "name": "KickUser",
+        "title": "KickUser",
+        "summary": "Removes a user from the room.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "KickUser"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Target user ID."
+            }
+          }
+        }
+      },
+      "CloseRoom": {
+        "name": "CloseRoom",
+        "title": "CloseRoom",
+        "summary": "Closes the room and disconnects all users.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "CloseRoom"
+            }
+          }
+        }
+      },
+      "RoomState": {
+        "name": "RoomState",
+        "title": "RoomState",
+        "summary": "Full room snapshot, sent once immediately after connecting.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RoomState"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "room": {
+                  "type": "object",
+                  "description": "Same structure as the items returned by `GET /rooms/public`."
+                },
+                "queue": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "description": "Queue item. `queueItemId` and `addedBy` are assigned by the server.",
+                    "required": [
+                      "songId"
+                    ],
+                    "properties": {
+                      "queueItemId": {
+                        "type": "string"
+                      },
+                      "songId": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "artists": {
+                        "type": "string"
+                      },
+                      "audioUrl": {
+                        "type": "string"
+                      },
+                      "hlsUrl": {
+                        "type": "string"
+                      },
+                      "coverUrl": {
+                        "type": "string"
+                      },
+                      "duration": {
+                        "type": "number",
+                        "description": "Duration in seconds."
+                      },
+                      "addedBy": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "listeners": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      },
+                      "frameTheme": {
+                        "type": "integer"
+                      },
+                      "level": {
+                        "type": "integer"
+                      },
+                      "isHost": {
+                        "type": "boolean"
+                      },
+                      "isCoHost": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                },
+                "nowPlaying": {
+                  "type": "object",
+                  "properties": {
+                    "queueItemId": {
+                      "type": "string"
+                    },
+                    "songId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "artists": {
+                      "type": "string"
+                    },
+                    "audioUrl": {
+                      "type": "string"
+                    },
+                    "hlsUrl": {
+                      "type": "string"
+                    },
+                    "coverUrl": {
+                      "type": "string"
+                    },
+                    "positionSeconds": {
+                      "type": "number"
+                    },
+                    "durationSeconds": {
+                      "type": "number"
+                    },
+                    "isPlaying": {
+                      "type": "boolean"
+                    },
+                    "serverTimestampMs": {
+                      "type": "integer",
+                      "description": "Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position."
+                    }
+                  }
+                },
+                "repeatMode": {
+                  "type": "string",
+                  "description": "Possible values: `Off`, `All`, `One`"
+                }
+              }
+            }
+          }
+        }
+      },
+      "PlaybackSync": {
+        "name": "PlaybackSync",
+        "title": "PlaybackSync",
+        "summary": "Current song and playback position. Sent after every playback change and periodically during playback.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "PlaybackSync"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "queueItemId": {
+                  "type": "string"
+                },
+                "songId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "string"
+                },
+                "audioUrl": {
+                  "type": "string"
+                },
+                "hlsUrl": {
+                  "type": "string"
+                },
+                "coverUrl": {
+                  "type": "string"
+                },
+                "positionSeconds": {
+                  "type": "number"
+                },
+                "durationSeconds": {
+                  "type": "number"
+                },
+                "isPlaying": {
+                  "type": "boolean"
+                },
+                "serverTimestampMs": {
+                  "type": "integer",
+                  "description": "Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position."
+                }
+              }
+            }
+          }
+        }
+      },
+      "QueueUpdated": {
+        "name": "QueueUpdated",
+        "title": "QueueUpdated",
+        "summary": "Full queue, sent on every change. Replaces the client's copy.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "QueueUpdated"
+            },
+            "payload": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "Queue item. `queueItemId` and `addedBy` are assigned by the server.",
+                "required": [
+                  "songId"
+                ],
+                "properties": {
+                  "queueItemId": {
+                    "type": "string"
+                  },
+                  "songId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "artists": {
+                    "type": "string"
+                  },
+                  "audioUrl": {
+                    "type": "string"
+                  },
+                  "hlsUrl": {
+                    "type": "string"
+                  },
+                  "coverUrl": {
+                    "type": "string"
+                  },
+                  "duration": {
+                    "type": "number",
+                    "description": "Duration in seconds."
+                  },
+                  "addedBy": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RepeatModeChanged": {
+        "name": "RepeatModeChanged",
+        "title": "RepeatModeChanged",
+        "summary": "Repeat mode changed.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RepeatModeChanged"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Possible values: `Off`, `All`, `One`"
+            }
+          }
+        }
+      },
+      "ListenerJoined": {
+        "name": "ListenerJoined",
+        "title": "ListenerJoined",
+        "summary": "A user joined the room.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ListenerJoined"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "avatarUrl": {
+                  "type": "string"
+                },
+                "frameTheme": {
+                  "type": "integer"
+                },
+                "level": {
+                  "type": "integer"
+                },
+                "isHost": {
+                  "type": "boolean"
+                },
+                "isCoHost": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ListenerLeft": {
+        "name": "ListenerLeft",
+        "title": "ListenerLeft",
+        "summary": "A user left the room.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ListenerLeft"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Target user ID."
+            }
+          }
+        }
+      },
+      "ListenerCount": {
+        "name": "ListenerCount",
+        "title": "ListenerCount",
+        "summary": "Current number of connections in the room.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ListenerCount"
+            },
+            "payload": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "CoHostsUpdated": {
+        "name": "CoHostsUpdated",
+        "title": "CoHostsUpdated",
+        "summary": "Co-host list changed.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "CoHostsUpdated"
+            },
+            "payload": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "User IDs of the current co-hosts."
+            }
+          }
+        }
+      },
+      "RoomSettingsUpdated": {
+        "name": "RoomSettingsUpdated",
+        "title": "RoomSettingsUpdated",
+        "summary": "Room settings changed (name, visibility, listener permissions).",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RoomSettingsUpdated"
+            },
+            "payload": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "ReceiveMessage": {
+        "name": "ReceiveMessage",
+        "title": "ReceiveMessage",
+        "summary": "New chat message.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReceiveMessage"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "avatarUrl": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "replyToId": {
+                  "type": "string"
+                },
+                "isBot": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReceiveMessageHistory": {
+        "name": "ReceiveMessageHistory",
+        "title": "ReceiveMessageHistory",
+        "summary": "Recent chat history, sent on connect.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReceiveMessageHistory"
+            },
+            "payload": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "avatarUrl": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "replyToId": {
+                    "type": "string"
+                  },
+                  "isBot": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "MessageDeleted": {
+        "name": "MessageDeleted",
+        "title": "MessageDeleted",
+        "summary": "A chat message was deleted.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "MessageDeleted"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Message ID."
+            }
+          }
+        }
+      },
+      "SongSuggestion": {
+        "name": "SongSuggestion",
+        "title": "SongSuggestion",
+        "summary": "Song results from the room bot in response to chat commands such as search or recommend.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SongSuggestion"
+            },
+            "payload": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "Kicked": {
+        "name": "Kicked",
+        "title": "Kicked",
+        "summary": "Sent to a user who was removed. The connection closes immediately afterwards.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Kicked"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Reason for removal."
+            }
+          }
+        }
+      },
+      "RoomClosed": {
+        "name": "RoomClosed",
+        "title": "RoomClosed",
+        "summary": "The room was closed. All connections are terminated.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "RoomClosed"
+            }
+          }
+        }
+      },
+      "Error": {
+        "name": "Error",
+        "title": "Error",
+        "summary": "The previous client message was rejected.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Error"
+            },
+            "payload": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

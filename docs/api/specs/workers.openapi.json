@@ -1,0 +1,454 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Listen along & radio chat (HTTP)",
+    "version": "v1",
+    "description": "Listen along and radio chat run as Cloudflare Workers, separate from the main API. Most of their functionality uses WebSockets. See the WebSocket documents in the document selector.\n\nThis document covers their read-only HTTP endpoints."
+  },
+  "servers": [
+    {
+      "url": "https://listen-along.neurokaraoke.com",
+      "description": "Listen along worker."
+    },
+    {
+      "url": "https://radio-chat.neurokaraoke.com",
+      "description": "Radio chat worker."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Listen along",
+      "description": "Shared listening rooms with a synchronized playback queue."
+    },
+    {
+      "name": "Radio chat",
+      "description": "Chat for the 24/7 radio stream."
+    }
+  ],
+  "paths": {
+    "/rooms/public": {
+      "servers": [
+        {
+          "url": "https://listen-along.neurokaraoke.com"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Listen along"
+        ],
+        "summary": "List public rooms",
+        "description": "Returns all open public rooms, ordered by listener count (descending), then creation time. Rooms with no updates for one hour are removed automatically.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "roomId": {
+                        "type": "string",
+                        "description": "Value to pass as `roomId` when connecting to the WebSocket."
+                      },
+                      "roomName": {
+                        "type": "string"
+                      },
+                      "inviteCode": {
+                        "type": "string"
+                      },
+                      "isPublic": {
+                        "type": "boolean"
+                      },
+                      "allowListenerAddSongs": {
+                        "type": "boolean"
+                      },
+                      "allowListenerSongCommands": {
+                        "type": "boolean"
+                      },
+                      "allowDuplicateSongs": {
+                        "type": "boolean"
+                      },
+                      "listenerAddSongCooldownSeconds": {
+                        "type": "integer"
+                      },
+                      "autoRemovePlayedSongs": {
+                        "type": "boolean"
+                      },
+                      "hostUserId": {
+                        "type": "string"
+                      },
+                      "hostDisplayName": {
+                        "type": "string"
+                      },
+                      "hostAvatarUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "listenerCount": {
+                        "type": "integer"
+                      },
+                      "maxListeners": {
+                        "type": "integer"
+                      },
+                      "nowPlaying": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "queueItemId": {
+                            "type": "string"
+                          },
+                          "songId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "artists": {
+                            "type": "string"
+                          },
+                          "audioUrl": {
+                            "type": "string"
+                          },
+                          "hlsUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "coverUrl": {
+                            "type": "string"
+                          },
+                          "positionSeconds": {
+                            "type": "number"
+                          },
+                          "durationSeconds": {
+                            "type": "number"
+                          },
+                          "isPlaying": {
+                            "type": "boolean"
+                          },
+                          "serverTimestampMs": {
+                            "type": "integer",
+                            "description": "Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position."
+                          }
+                        }
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/mine": {
+      "servers": [
+        {
+          "url": "https://listen-along.neurokaraoke.com"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Listen along"
+        ],
+        "summary": "List rooms hosted by a user",
+        "description": "Returns all rooms, public and private, hosted by the user given in `userId`. Returns an empty array when `userId` is missing.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "roomId": {
+                        "type": "string",
+                        "description": "Value to pass as `roomId` when connecting to the WebSocket."
+                      },
+                      "roomName": {
+                        "type": "string"
+                      },
+                      "inviteCode": {
+                        "type": "string"
+                      },
+                      "isPublic": {
+                        "type": "boolean"
+                      },
+                      "allowListenerAddSongs": {
+                        "type": "boolean"
+                      },
+                      "allowListenerSongCommands": {
+                        "type": "boolean"
+                      },
+                      "allowDuplicateSongs": {
+                        "type": "boolean"
+                      },
+                      "listenerAddSongCooldownSeconds": {
+                        "type": "integer"
+                      },
+                      "autoRemovePlayedSongs": {
+                        "type": "boolean"
+                      },
+                      "hostUserId": {
+                        "type": "string"
+                      },
+                      "hostDisplayName": {
+                        "type": "string"
+                      },
+                      "hostAvatarUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "listenerCount": {
+                        "type": "integer"
+                      },
+                      "maxListeners": {
+                        "type": "integer"
+                      },
+                      "nowPlaying": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "queueItemId": {
+                            "type": "string"
+                          },
+                          "songId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "artists": {
+                            "type": "string"
+                          },
+                          "audioUrl": {
+                            "type": "string"
+                          },
+                          "hlsUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "coverUrl": {
+                            "type": "string"
+                          },
+                          "positionSeconds": {
+                            "type": "number"
+                          },
+                          "durationSeconds": {
+                            "type": "number"
+                          },
+                          "isPlaying": {
+                            "type": "boolean"
+                          },
+                          "serverTimestampMs": {
+                            "type": "integer",
+                            "description": "Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position."
+                          }
+                        }
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/info": {
+      "servers": [
+        {
+          "url": "https://listen-along.neurokaraoke.com"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Listen along"
+        ],
+        "summary": "Look up a room by invite code",
+        "description": "Returns room details for an invite code. Used to generate link previews for invite URLs.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Invite code from the room link."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roomId": {
+                      "type": "string",
+                      "description": "Value to pass as `roomId` when connecting to the WebSocket."
+                    },
+                    "roomName": {
+                      "type": "string"
+                    },
+                    "inviteCode": {
+                      "type": "string"
+                    },
+                    "isPublic": {
+                      "type": "boolean"
+                    },
+                    "allowListenerAddSongs": {
+                      "type": "boolean"
+                    },
+                    "allowListenerSongCommands": {
+                      "type": "boolean"
+                    },
+                    "allowDuplicateSongs": {
+                      "type": "boolean"
+                    },
+                    "listenerAddSongCooldownSeconds": {
+                      "type": "integer"
+                    },
+                    "autoRemovePlayedSongs": {
+                      "type": "boolean"
+                    },
+                    "hostUserId": {
+                      "type": "string"
+                    },
+                    "hostDisplayName": {
+                      "type": "string"
+                    },
+                    "hostAvatarUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "listenerCount": {
+                      "type": "integer"
+                    },
+                    "maxListeners": {
+                      "type": "integer"
+                    },
+                    "nowPlaying": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "queueItemId": {
+                          "type": "string"
+                        },
+                        "songId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "artists": {
+                          "type": "string"
+                        },
+                        "audioUrl": {
+                          "type": "string"
+                        },
+                        "hlsUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "coverUrl": {
+                          "type": "string"
+                        },
+                        "positionSeconds": {
+                          "type": "number"
+                        },
+                        "durationSeconds": {
+                          "type": "number"
+                        },
+                        "isPlaying": {
+                          "type": "boolean"
+                        },
+                        "serverTimestampMs": {
+                          "type": "integer",
+                          "description": "Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position."
+                        }
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The `code` parameter is missing."
+          },
+          "404": {
+            "description": "No open room matches the invite code."
+          }
+        }
+      }
+    },
+    "/nowplaying": {
+      "servers": [
+        {
+          "url": "https://radio-chat.neurokaraoke.com"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Radio chat"
+        ],
+        "summary": "Get the radio's current song",
+        "description": "Returns the song currently playing on the radio and upcoming songs.",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "en",
+              "description": "Possible values: `en`, `ja`, `zh`"
+            },
+            "description": "Language room to query. All rooms report the same stream."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK. Returns an empty object if no now-playing data has been received yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

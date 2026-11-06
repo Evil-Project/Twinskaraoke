@@ -1,0 +1,326 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Radio (AzuraCast)",
+    "version": "v1",
+    "description": "The Neuro 21 Station radio runs on AzuraCast, so some public AzuraCast endpoints are also available. They need no API key. Always use `neuro_21` as the station ID.\n\n## Streams\n\n| Format | URL |\n| --- | --- |\n| MP3 320 kbps | `https://radio.twinskaraoke.com/listen/neuro_21/radio.mp3` |\n| Opus 128 kbps | `https://radio.twinskaraoke.com/listen/neuro_21/radio.ogg` |\n| HLS | `https://radio.twinskaraoke.com/hls/neuro_21/live.m3u8` |\n\n### HTTP only\n\n`radio.twinskaraoke.com` is proxied by Cloudflare, so it requires HTTPS. If your player only supports HTTP (some games do), use `direct-radio.twinskaraoke.com` with the same paths.\n\n| Format | URL |\n| --- | --- |\n| MP3 320 kbps | `http://direct-radio.twinskaraoke.com/listen/neuro_21/radio.mp3` |\n| Opus 128 kbps | `http://direct-radio.twinskaraoke.com/listen/neuro_21/radio.ogg` |\n| HLS | `http://direct-radio.twinskaraoke.com/hls/neuro_21/live.m3u8` |\n\nNow playing data updates every few seconds. Poll no more than once every 15 seconds."
+  },
+  "servers": [
+    {
+      "url": "https://radio.twinskaraoke.com",
+      "description": "AzuraCast"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Now playing",
+      "description": "The current song, the next song and recent history."
+    },
+    {
+      "name": "Song requests",
+      "description": "Songs listeners can request, and submitting a request."
+    }
+  ],
+  "components": {
+    "parameters": {
+      "StationId": {
+        "name": "station_id",
+        "in": "path",
+        "required": true,
+        "description": "Always `neuro_21`.",
+        "schema": {
+          "type": "string",
+          "default": "neuro_21"
+        }
+      }
+    },
+    "schemas": {
+      "Song": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "AzuraCast song hash."
+          },
+          "text": {
+            "type": "string",
+            "description": "`Artist - Title`."
+          },
+          "artist": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "album": {
+            "type": "string"
+          },
+          "art": {
+            "type": "string",
+            "description": "Cover art URL."
+          },
+          "custom_fields": {
+            "type": "object",
+            "description": "`songId` is the song's ID in the main API, usable with `GET /api/songs/{id}`.",
+            "properties": {
+              "songId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PlayedSong": {
+        "type": "object",
+        "properties": {
+          "sh_id": {
+            "type": "integer",
+            "description": "History entry ID."
+          },
+          "played_at": {
+            "type": "integer",
+            "description": "Unix timestamp in seconds."
+          },
+          "duration": {
+            "type": "integer",
+            "description": "Length in seconds."
+          },
+          "playlist": {
+            "type": "string",
+            "description": "The rotation playlist the song came from."
+          },
+          "is_request": {
+            "type": "boolean",
+            "description": "Whether a listener requested the song."
+          },
+          "elapsed": {
+            "type": "integer",
+            "description": "Seconds played so far. Only on `now_playing`."
+          },
+          "remaining": {
+            "type": "integer",
+            "description": "Seconds left. Only on `now_playing`."
+          },
+          "song": {
+            "$ref": "#/components/schemas/Song"
+          }
+        }
+      },
+      "Station": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shortcode": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "listen_url": {
+            "type": "string",
+            "description": "MP3 stream URL."
+          },
+          "hls_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "HLS stream URL."
+          },
+          "public_player_url": {
+            "type": "string"
+          },
+          "requests_enabled": {
+            "type": "boolean"
+          },
+          "is_public": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/nowplaying/{station_id}": {
+      "get": {
+        "tags": [
+          "Now playing"
+        ],
+        "summary": "Get now playing",
+        "description": "Returns the current song with elapsed and remaining time, the next song, the last few songs played and listener counts.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "station": {
+                      "$ref": "#/components/schemas/Station"
+                    },
+                    "listeners": {
+                      "type": "object",
+                      "properties": {
+                        "current": {
+                          "type": "integer"
+                        },
+                        "unique": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "now_playing": {
+                      "$ref": "#/components/schemas/PlayedSong"
+                    },
+                    "playing_next": {
+                      "$ref": "#/components/schemas/PlayedSong"
+                    },
+                    "song_history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PlayedSong"
+                      }
+                    },
+                    "is_online": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/station/{station_id}/requests": {
+      "get": {
+        "tags": [
+          "Song requests"
+        ],
+        "summary": "List requestable songs",
+        "description": "Returns a page of songs that can be requested. Use `request_id` from a row to submit a request.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StationId"
+          },
+          {
+            "name": "current",
+            "in": "query",
+            "description": "Page number, starting at 1.",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "rowCount",
+            "in": "query",
+            "description": "Rows per page.",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            }
+          },
+          {
+            "name": "searchPhrase",
+            "in": "query",
+            "description": "Filters by title or artist.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "total_pages": {
+                      "type": "integer"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "request_id": {
+                            "type": "string"
+                          },
+                          "request_url": {
+                            "type": "string",
+                            "description": "Path to POST to for this song."
+                          },
+                          "song": {
+                            "$ref": "#/components/schemas/Song"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/station/{station_id}/request/{request_id}": {
+      "post": {
+        "tags": [
+          "Song requests"
+        ],
+        "summary": "Request a song",
+        "description": "Adds a song to the request queue. AzuraCast limits how often one listener can request and refuses songs that played recently. Both return an error message.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/StationId"
+          },
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "description": "`request_id` from the requestable songs list.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request was accepted."
+          },
+          "400": {
+            "description": "The request was refused. The body explains why."
+          }
+        }
+      }
+    }
+  }
+}

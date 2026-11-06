@@ -1,0 +1,646 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Radio chat (WebSocket)",
+    "version": "v1",
+    "description": "Chat for the 24/7 radio stream, implemented as a Cloudflare Worker with one room per language (`en`, `ja`, `zh`).\n\nAll messages, in both directions, use this envelope:\n\n```json\n{ \"type\": \"SendMessage\", \"payload\": \"hello\" }\n```\n\n**Keepalive:** send `{ \"type\": \"Ping\" }` approximately every 30 seconds. The server replies with `Pong`. Connections idle for 3 minutes are closed.\n\n**Guests** can connect and receive all messages, but can only send emote-only messages.\n\n**Moderation:** messages are checked by automated moderation. Violating messages are deleted and the sender is timed out. Timeouts increase with repeated violations.\n\nWebSocket requests cannot be sent from this page. Example using the browser console:\n\n```js\nconst ws = new WebSocket(\"wss://radio-chat.neurokaraoke.com/ws?lang=en&guestId=\" + crypto.randomUUID());\nws.onmessage = e => console.log(JSON.parse(e.data));\n```"
+  },
+  "defaultContentType": "application/json",
+  "servers": {
+    "production": {
+      "host": "radio-chat.neurokaraoke.com",
+      "protocol": "wss",
+      "description": "Radio chat worker."
+    }
+  },
+  "channels": {
+    "chat": {
+      "address": "/ws",
+      "title": "Radio chat room",
+      "description": "Select a room with `lang` (default `en`). Identify the caller with `token` (the neurokaraoke.com `authToken`) or, for guests, `guestId` (any UUID). `displayName`, `avatarUrl`, `frameTheme` and `level` are attached to the caller's messages.",
+      "bindings": {
+        "ws": {
+          "method": "GET",
+          "query": {
+            "type": "object",
+            "properties": {
+              "lang": {
+                "type": "string",
+                "default": "en",
+                "description": "Possible values: `en`, `ja`, `zh`"
+              },
+              "token": {
+                "type": "string",
+                "description": "Bearer token from neurokaraoke.com. Omit to connect as a guest."
+              },
+              "guestId": {
+                "type": "string",
+                "description": "Any UUID. Reuse the same value to keep a stable guest display name."
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "avatarUrl": {
+                "type": "string"
+              },
+              "frameTheme": {
+                "type": "integer"
+              },
+              "level": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "messages": {
+        "Ping": {
+          "$ref": "#/components/messages/Ping"
+        },
+        "SendMessage": {
+          "$ref": "#/components/messages/SendMessage"
+        },
+        "DeleteMessage": {
+          "$ref": "#/components/messages/DeleteMessage"
+        },
+        "LoadMoreHistory": {
+          "$ref": "#/components/messages/LoadMoreHistory"
+        },
+        "Pong": {
+          "$ref": "#/components/messages/Pong"
+        },
+        "ReceiveMessageHistory": {
+          "$ref": "#/components/messages/ReceiveMessageHistory"
+        },
+        "MoreMessageHistory": {
+          "$ref": "#/components/messages/MoreMessageHistory"
+        },
+        "ReceiveMessage": {
+          "$ref": "#/components/messages/ReceiveMessage"
+        },
+        "MessageDeleted": {
+          "$ref": "#/components/messages/MessageDeleted"
+        },
+        "MessagesPurged": {
+          "$ref": "#/components/messages/MessagesPurged"
+        },
+        "UserTimedOut": {
+          "$ref": "#/components/messages/UserTimedOut"
+        },
+        "UserCount": {
+          "$ref": "#/components/messages/UserCount"
+        },
+        "NowPlayingChanged": {
+          "$ref": "#/components/messages/NowPlayingChanged"
+        },
+        "Error": {
+          "$ref": "#/components/messages/Error"
+        }
+      }
+    }
+  },
+  "operations": {
+    "sendKeepAlive": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/chat"
+      },
+      "title": "Keep the connection alive",
+      "summary": "Send a Ping approximately every 30 seconds.",
+      "messages": [
+        {
+          "$ref": "#/channels/chat/messages/Ping"
+        }
+      ]
+    },
+    "sendChat": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/chat"
+      },
+      "title": "Chat",
+      "summary": "Send and delete messages, and load older history.",
+      "messages": [
+        {
+          "$ref": "#/channels/chat/messages/SendMessage"
+        },
+        {
+          "$ref": "#/channels/chat/messages/DeleteMessage"
+        },
+        {
+          "$ref": "#/channels/chat/messages/LoadMoreHistory"
+        }
+      ]
+    },
+    "receiveChat": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/chat"
+      },
+      "title": "Chat updates",
+      "summary": "Messages pushed by the server.",
+      "messages": [
+        {
+          "$ref": "#/channels/chat/messages/Pong"
+        },
+        {
+          "$ref": "#/channels/chat/messages/ReceiveMessageHistory"
+        },
+        {
+          "$ref": "#/channels/chat/messages/MoreMessageHistory"
+        },
+        {
+          "$ref": "#/channels/chat/messages/ReceiveMessage"
+        },
+        {
+          "$ref": "#/channels/chat/messages/MessageDeleted"
+        },
+        {
+          "$ref": "#/channels/chat/messages/MessagesPurged"
+        },
+        {
+          "$ref": "#/channels/chat/messages/UserTimedOut"
+        },
+        {
+          "$ref": "#/channels/chat/messages/UserCount"
+        },
+        {
+          "$ref": "#/channels/chat/messages/NowPlayingChanged"
+        },
+        {
+          "$ref": "#/channels/chat/messages/Error"
+        }
+      ]
+    }
+  },
+  "components": {
+    "messages": {
+      "Ping": {
+        "name": "Ping",
+        "title": "Ping",
+        "summary": "Keepalive request.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Ping"
+            }
+          }
+        }
+      },
+      "Pong": {
+        "name": "Pong",
+        "title": "Pong",
+        "summary": "Keepalive response.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Pong"
+            }
+          }
+        }
+      },
+      "SendMessage": {
+        "name": "SendMessage",
+        "title": "SendMessage",
+        "summary": "Sends a chat message (max 300 characters). The payload is either a string or an object with `content` and an optional `replyToId`.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "SendMessage"
+            },
+            "payload": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "replyToId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "examples": [
+          {
+            "name": "Plain",
+            "payload": {
+              "type": "SendMessage",
+              "payload": "this song is a banger"
+            }
+          },
+          {
+            "name": "Reply",
+            "payload": {
+              "type": "SendMessage",
+              "payload": {
+                "content": "real",
+                "replyToId": "6f1c..."
+              }
+            }
+          }
+        ]
+      },
+      "DeleteMessage": {
+        "name": "DeleteMessage",
+        "title": "DeleteMessage",
+        "summary": "Deletes one of the caller's messages. Returns an Error if the caller does not own the message.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "DeleteMessage"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Message ID."
+            }
+          }
+        }
+      },
+      "LoadMoreHistory": {
+        "name": "LoadMoreHistory",
+        "title": "LoadMoreHistory",
+        "summary": "Requests older messages. The payload is the number of messages the client already has. The server returns up to 50 messages preceding them.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "LoadMoreHistory"
+            },
+            "payload": {
+              "type": "integer"
+            }
+          }
+        },
+        "examples": [
+          {
+            "payload": {
+              "type": "LoadMoreHistory",
+              "payload": 50
+            }
+          }
+        ]
+      },
+      "ReceiveMessageHistory": {
+        "name": "ReceiveMessageHistory",
+        "title": "ReceiveMessageHistory",
+        "summary": "The 50 most recent messages, sent on connect.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReceiveMessageHistory"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "messages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "description": "For guests, the value is `guest-<guestId>`."
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      },
+                      "frameTheme": {
+                        "type": "integer"
+                      },
+                      "userLevel": {
+                        "type": "integer"
+                      },
+                      "isAdmin": {
+                        "type": "boolean"
+                      },
+                      "isMod": {
+                        "type": "boolean"
+                      },
+                      "isStaff": {
+                        "type": "boolean"
+                      },
+                      "isDeveloper": {
+                        "type": "boolean"
+                      },
+                      "isGuest": {
+                        "type": "boolean"
+                      },
+                      "isBot": {
+                        "type": "boolean"
+                      },
+                      "isDeleted": {
+                        "type": "boolean"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "replyToId": {
+                        "type": "string"
+                      },
+                      "replyToContent": {
+                        "type": "string",
+                        "description": "First 80 characters of the referenced message."
+                      }
+                    }
+                  }
+                },
+                "hasMore": {
+                  "type": "boolean",
+                  "description": "Whether older messages are available via LoadMoreHistory."
+                },
+                "totalCount": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "MoreMessageHistory": {
+        "name": "MoreMessageHistory",
+        "title": "MoreMessageHistory",
+        "summary": "Response to LoadMoreHistory.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "MoreMessageHistory"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "messages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "description": "For guests, the value is `guest-<guestId>`."
+                      },
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      },
+                      "frameTheme": {
+                        "type": "integer"
+                      },
+                      "userLevel": {
+                        "type": "integer"
+                      },
+                      "isAdmin": {
+                        "type": "boolean"
+                      },
+                      "isMod": {
+                        "type": "boolean"
+                      },
+                      "isStaff": {
+                        "type": "boolean"
+                      },
+                      "isDeveloper": {
+                        "type": "boolean"
+                      },
+                      "isGuest": {
+                        "type": "boolean"
+                      },
+                      "isBot": {
+                        "type": "boolean"
+                      },
+                      "isDeleted": {
+                        "type": "boolean"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "replyToId": {
+                        "type": "string"
+                      },
+                      "replyToContent": {
+                        "type": "string",
+                        "description": "First 80 characters of the referenced message."
+                      }
+                    }
+                  }
+                },
+                "hasMore": {
+                  "type": "boolean",
+                  "description": "Whether older messages are available via LoadMoreHistory."
+                },
+                "totalCount": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ReceiveMessage": {
+        "name": "ReceiveMessage",
+        "title": "ReceiveMessage",
+        "summary": "New chat message, including the caller's own.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ReceiveMessage"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string",
+                  "description": "For guests, the value is `guest-<guestId>`."
+                },
+                "displayName": {
+                  "type": "string"
+                },
+                "avatarUrl": {
+                  "type": "string"
+                },
+                "frameTheme": {
+                  "type": "integer"
+                },
+                "userLevel": {
+                  "type": "integer"
+                },
+                "isAdmin": {
+                  "type": "boolean"
+                },
+                "isMod": {
+                  "type": "boolean"
+                },
+                "isStaff": {
+                  "type": "boolean"
+                },
+                "isDeveloper": {
+                  "type": "boolean"
+                },
+                "isGuest": {
+                  "type": "boolean"
+                },
+                "isBot": {
+                  "type": "boolean"
+                },
+                "isDeleted": {
+                  "type": "boolean"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "replyToId": {
+                  "type": "string"
+                },
+                "replyToContent": {
+                  "type": "string",
+                  "description": "First 80 characters of the referenced message."
+                }
+              }
+            }
+          }
+        }
+      },
+      "MessageDeleted": {
+        "name": "MessageDeleted",
+        "title": "MessageDeleted",
+        "summary": "A message was deleted by its author, a moderator or automated moderation.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "MessageDeleted"
+            },
+            "payload": {
+              "type": "string",
+              "description": "Message ID."
+            }
+          }
+        }
+      },
+      "MessagesPurged": {
+        "name": "MessagesPurged",
+        "title": "MessagesPurged",
+        "summary": "All messages were purged. Clients should clear their message list.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "MessagesPurged"
+            }
+          }
+        }
+      },
+      "UserTimedOut": {
+        "name": "UserTimedOut",
+        "title": "UserTimedOut",
+        "summary": "A user was timed out. Messages from that user are rejected until the timeout expires.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UserTimedOut"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string"
+                },
+                "remainingSeconds": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "UserCount": {
+        "name": "UserCount",
+        "title": "UserCount",
+        "summary": "Current number of connections in the room.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "UserCount"
+            },
+            "payload": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "NowPlayingChanged": {
+        "name": "NowPlayingChanged",
+        "title": "NowPlayingChanged",
+        "summary": "The radio started a new song. Same payload as `GET /nowplaying`. Also sent once on connect.",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "NowPlayingChanged"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "Error": {
+        "name": "Error",
+        "title": "Error",
+        "summary": "The previous client message was rejected (for example, deleting another user's message).",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "Error"
+            },
+            "payload": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

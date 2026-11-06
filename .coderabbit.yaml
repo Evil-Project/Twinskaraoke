@@ -22,6 +22,7 @@ reviews:
       - ".*"
   path_filters:
     - "!.swiftlint-baseline.json"
+    - "!docs/api/**"
     - "!**/*.xcstrings"
     - "!**/*.xcassets/**"
     - "!**/*.mlmodelc/**"

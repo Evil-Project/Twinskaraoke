@@ -45,6 +45,13 @@ Scripts/install-tools.sh   # SwiftFormat, SwiftLint and xcbeautify via Homebrew 
 Open `Twinskaraoke.xcodeproj` and see [Build from Source](docs/build-from-source.md)
 for signing.
 
+## API
+
+The backend is documented at [docs.neurokaraoke.com](https://docs.neurokaraoke.com).
+[`docs/api/`](docs/api/README.md) has a copy of the specs and a generated
+Markdown reference, which is what AI agents read. After the API changes, run
+`Scripts/update-api-docs.py` and open a PR with the result.
+
 ## AI tools
 
 - `AGENTS.md` is the single source of project rules. Claude Code reads it via

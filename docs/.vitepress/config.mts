@@ -5,6 +5,10 @@ export default defineConfig({
   title: "Twinskaraoke",
   description: "iOS, iPadOS, tvOS and Apple Watch client of www.twinskaraoke.com",
 
+  // docs/api is the generated API reference for agents (Scripts/update-api-docs.py),
+  // not part of the website.
+  srcExclude: ['api/**'],
+
   locales: {
     root: {
       label: 'English',
