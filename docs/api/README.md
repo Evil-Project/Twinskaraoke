@@ -44,7 +44,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
   `specs/` when it matters.
 - `// …` comments carry the spec's description plus defaults, min/max, length limits, regex
   patterns and read-only flags.
-- `{ …same as `x` above }` repeats the shape of field `x` shown earlier for the same endpoint.
+- ``{ …same as `x` above }`` repeats the shape of field `x` shown earlier for the same endpoint.
 
 ## About the Neuro & Evil Karaoke API
 

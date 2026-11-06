@@ -469,7 +469,7 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         "  `specs/` when it matters.",
         "- `// …` comments carry the spec's description plus defaults, min/max, length limits, regex",
         "  patterns and read-only flags.",
-        "- `{ …same as `x` above }` repeats the shape of field `x` shown earlier for the same endpoint.",
+        "- ``{ …same as `x` above }`` repeats the shape of field `x` shown earlier for the same endpoint.",
         "",
     ]
     for slug_name, rows in rest_rows.items():
