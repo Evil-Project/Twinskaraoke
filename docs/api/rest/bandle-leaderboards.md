@@ -15,42 +15,42 @@ Returns today's top players. `limit` defaults to 100. `mode` selects the challen
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 100 |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  date: date-time
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  songId: string | null
-  songTitle: string | null
-  totalPlayers: int
-  totalPlaysIncludingGuests: int
-  totalWins: int
-  totalLosses: int
-  winRate: double  // read-only
-  lossRate: double  // read-only
-  entries: {
-    userId: string | null
-    username: string | null
-    userAvatarUrl: string | null
-    rank: int
-    score: int
-    badge: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    date: date-time
-    attemptNumber: int
-    timeSpent: date-span
-    completedAt: date-time
-    isPerfect: bool
+  date?: date-time
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  songId?: string | null
+  songTitle?: string | null
+  totalPlayers?: int
+  totalPlaysIncludingGuests?: int
+  totalWins?: int
+  totalLosses?: int
+  winRate?: double  // read-only
+  lossRate?: double  // read-only
+  entries?: {
+    userId?: string | null
+    username?: string | null
+    userAvatarUrl?: string | null
+    rank?: int
+    score?: int
+    badge?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    date?: date-time
+    attemptNumber?: int
+    timeSpent?: date-span
+    completedAt?: date-time
+    isPerfect?: bool
   }[] | null
-  lastUpdated: date-time
-  averageAttempt: double
-  perfectScoreCount: int
-  attemptDistribution: { [key: string]: int } | null
-  isInvalid: bool
-  invalidationMessage: string | null
+  lastUpdated?: date-time
+  averageAttempt?: double
+  perfectScoreCount?: int
+  attemptDistribution?: { [key: string]: int } | null
+  isInvalid?: bool
+  invalidationMessage?: string | null
 }
 ```
 
@@ -65,35 +65,35 @@ Returns the top players for the current week. `limit` defaults to 100. `mode` se
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 100 |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  weekStartDate: date-time
-  weekEndDate: date-time
-  weekNumber: int
-  year: int
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  totalPlayers: int
-  entries: {
-    userId: string | null
-    username: string | null
-    userAvatarUrl: string | null
-    rank: int
-    score: int
-    badge: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    gamesPlayed: int
-    gamesWon: int
-    totalScore: int
-    averageAttempt: double
-    perfectScores: int
-    weeklyStreak: int
-    winRate: double
+  weekStartDate?: date-time
+  weekEndDate?: date-time
+  weekNumber?: int
+  year?: int
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  totalPlayers?: int
+  entries?: {
+    userId?: string | null
+    username?: string | null
+    userAvatarUrl?: string | null
+    rank?: int
+    score?: int
+    badge?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    gamesPlayed?: int
+    gamesWon?: int
+    totalScore?: int
+    averageAttempt?: double
+    perfectScores?: int
+    weeklyStreak?: int
+    winRate?: double
   }[] | null
-  lastUpdated: date-time
+  lastUpdated?: date-time
 }
 ```
 
@@ -108,35 +108,35 @@ Returns the top players for the current month. `limit` defaults to 100. `mode` s
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 100 |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  month: int
-  year: int
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  monthName: string | null
-  totalPlayers: int
-  entries: {
-    userId: string | null
-    username: string | null
-    userAvatarUrl: string | null
-    rank: int
-    score: int
-    badge: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    gamesPlayed: int
-    gamesWon: int
-    totalScore: int
-    averageAttempt: double
-    perfectScores: int
-    monthlyStreak: int
-    daysActive: int
-    winRate: double
+  month?: int
+  year?: int
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  monthName?: string | null
+  totalPlayers?: int
+  entries?: {
+    userId?: string | null
+    username?: string | null
+    userAvatarUrl?: string | null
+    rank?: int
+    score?: int
+    badge?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    gamesPlayed?: int
+    gamesWon?: int
+    totalScore?: int
+    averageAttempt?: double
+    perfectScores?: int
+    monthlyStreak?: int
+    daysActive?: int
+    winRate?: double
   }[] | null
-  lastUpdated: date-time
+  lastUpdated?: date-time
 }
 ```
 
@@ -151,33 +151,33 @@ Returns the all-time top players. `limit` defaults to 100. `mode` selects the ch
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 100 |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  totalPlayers: int
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  entries: {
-    userId: string | null
-    username: string | null
-    userAvatarUrl: string | null
-    rank: int
-    score: int
-    badge: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    totalGamesPlayed: int
-    totalGamesWon: int
-    totalScore: int64
-    currentStreak: int
-    longestStreak: int
-    averageAttempt: double
-    perfectScores: int
-    memberSince: date-time
-    winRate: double
+  totalPlayers?: int
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  entries?: {
+    userId?: string | null
+    username?: string | null
+    userAvatarUrl?: string | null
+    rank?: int
+    score?: int
+    badge?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    totalGamesPlayed?: int
+    totalGamesWon?: int
+    totalScore?: int64
+    currentStreak?: int
+    longestStreak?: int
+    averageAttempt?: double
+    perfectScores?: int
+    memberSince?: date-time
+    winRate?: double
   }[] | null
-  lastUpdated: date-time
+  lastUpdated?: date-time
 }
 ```
 
@@ -197,14 +197,14 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  userId: string | null
-  username: string | null
-  dailyRank: int | null
-  weeklyRank: int | null
-  monthlyRank: int | null
-  globalRank: int | null
-  currentStreak: int
-  longestStreak: int
+  userId?: string | null
+  username?: string | null
+  dailyRank?: int | null
+  weeklyRank?: int | null
+  monthlyRank?: int | null
+  globalRank?: int | null
+  currentStreak?: int
+  longestStreak?: int
 }
 ```
 
@@ -212,11 +212,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```

@@ -24,30 +24,30 @@ Returns metadata and aggregate stats for today's challenge. The answer is not in
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `ephemeral` | query | `bool` | no | default: false |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  date: date-time
-  totalPlays: int
-  totalWins: int
-  averageAttempt: double
-  winRate: double
-  isInvalid: bool
-  invalidationMessage: string | null
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  audioClips: {
-    attemptNumber: int
-    clipLength: int
-    audioUrl: string | null
-    mode: int  // Possible values: `0` = Normal, `1` = Extreme
-    effect: int  // Possible values: `0` = None, `1` = Reverse, `2` = PitchShift, `3` = SpeedChange, `4` = LowPassFilter, `5` = AudioMix, `6` = GradualReveal, `7` = VocalsOnly, `8` = Distortion, `9` = Echo, `10` = Chorus, `11` = Flanger, `12` = TelephoneReverb, `13` = PitchShiftSlowMotion, `14` = StutterCut, `15` = TheVoices, `16` = Shuffle, `17` = WhisperMode, `18` = BitCrush, `19` = BandPassFilter, `20` = CassetteDamage, `21` = Robotize, `22` = LoopShortSegment
-    sourceClipLength: int
+  id?: string | null
+  date?: date-time
+  totalPlays?: int
+  totalWins?: int
+  averageAttempt?: double
+  winRate?: double
+  isInvalid?: bool
+  invalidationMessage?: string | null
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  audioClips?: {
+    attemptNumber?: int
+    clipLength?: int
+    audioUrl?: string | null
+    mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+    effect?: int  // Possible values: `0` = None, `1` = Reverse, `2` = PitchShift, `3` = SpeedChange, `4` = LowPassFilter, `5` = AudioMix, `6` = GradualReveal, `7` = VocalsOnly, `8` = Distortion, `9` = Echo, `10` = Chorus, `11` = Flanger, `12` = TelephoneReverb, `13` = PitchShiftSlowMotion, `14` = StutterCut, `15` = TheVoices, `16` = Shuffle, `17` = WhisperMode, `18` = BitCrush, `19` = BandPassFilter, `20` = CassetteDamage, `21` = Robotize, `22` = LoopShortSegment
+    sourceClipLength?: int
   }[] | null
-  replaySongId: string | null
+  replaySongId?: string | null
 }
 ```
 
@@ -63,14 +63,14 @@ Starts today's session for the caller and records the start time. Each caller ca
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Request body `application/json`:
 
 ```ts
 {
-  excludeFromLeaderboard: bool
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
+  excludeFromLeaderboard?: bool
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
 }
 ```
 
@@ -78,9 +78,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  startedAt: date-time
-  date: date-time
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
+  startedAt?: date-time
+  date?: date-time
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
 }
 ```
 
@@ -88,11 +88,11 @@ Response `401` Unauthorized `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -101,11 +101,11 @@ Response `409` Conflict `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -123,18 +123,18 @@ With a bearer token, only clips for attempts already played and the next attempt
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `attemptNumber` | path | `int` | yes |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  attemptNumber: int
-  clipLength: int
-  audioUrl: string | null
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  effect: int  // Possible values: `0` = None, `1` = Reverse, `2` = PitchShift, `3` = SpeedChange, `4` = LowPassFilter, `5` = AudioMix, `6` = GradualReveal, `7` = VocalsOnly, `8` = Distortion, `9` = Echo, `10` = Chorus, `11` = Flanger, `12` = TelephoneReverb, `13` = PitchShiftSlowMotion, `14` = StutterCut, `15` = TheVoices, `16` = Shuffle, `17` = WhisperMode, `18` = BitCrush, `19` = BandPassFilter, `20` = CassetteDamage, `21` = Robotize, `22` = LoopShortSegment
-  sourceClipLength: int
+  attemptNumber?: int
+  clipLength?: int
+  audioUrl?: string | null
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  effect?: int  // Possible values: `0` = None, `1` = Reverse, `2` = PitchShift, `3` = SpeedChange, `4` = LowPassFilter, `5` = AudioMix, `6` = GradualReveal, `7` = VocalsOnly, `8` = Distortion, `9` = Echo, `10` = Chorus, `11` = Flanger, `12` = TelephoneReverb, `13` = PitchShiftSlowMotion, `14` = StutterCut, `15` = TheVoices, `16` = Shuffle, `17` = WhisperMode, `18` = BitCrush, `19` = BandPassFilter, `20` = CassetteDamage, `21` = Robotize, `22` = LoopShortSegment
+  sourceClipLength?: int
 }
 ```
 
@@ -142,11 +142,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -163,17 +163,17 @@ Returns the list of songs available as answers, used to populate the guess input
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 300 |
 | `replaySongId` | query | `string` | no |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  songId: string | null
-  title: string | null
-  originalArtists: string | null
-  coverArtists: string | null
-  formattedName: string | null
+  songId?: string | null
+  title?: string | null
+  originalArtists?: string | null
+  coverArtists?: string | null
+  formattedName?: string | null
 }[]
 ```
 
@@ -191,10 +191,10 @@ Request body `application/json`:
 
 ```ts
 {
-  attemptNumber: int
-  guessedSongId: string | null
-  isSkip: bool
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
+  attemptNumber?: int
+  guessedSongId?: string | null
+  isSkip?: bool
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
 }
 ```
 
@@ -215,11 +215,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -228,11 +228,11 @@ Response `401` Unauthorized `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -241,11 +241,11 @@ Response `409` Conflict `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -264,12 +264,12 @@ Request body `application/json`:
 
 ```ts
 {
-  won: bool
-  attemptNumber: int
-  songId: string | null
-  songTitle: string | null
-  artist: string | null
-  attempts: {
+  won?: bool
+  attemptNumber?: int
+  songId?: string | null
+  songTitle?: string | null
+  artist?: string | null
+  attempts?: {
     attemptNumber?: int
     status?: int  // Possible values: `0` = Correct, `1` = Incorrect, `2` = Skipped
     guessedSongId?: string | null
@@ -277,8 +277,8 @@ Request body `application/json`:
     clipLength: int
     attemptedAt?: date-time
   }[] | null
-  excludeFromLeaderboard: bool
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
+  excludeFromLeaderboard?: bool
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
 }
 ```
 
@@ -296,25 +296,25 @@ Response `200` OK `application/json`:
     attemptedAt?: date-time
   }[] | null
   mediaListDTO?: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
   attemptNumber?: int
   songId?: string | null
@@ -331,11 +331,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -344,11 +344,11 @@ Response `401` Unauthorized `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -357,11 +357,11 @@ Response `409` Conflict `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -378,20 +378,20 @@ Returns whether the caller has completed today's challenge. If a session is in p
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  userId: string | null
-  hasPlayed: bool
-  date: date-time
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  inProgress: bool
-  progress: {
-    currentAttemptNumber: int
-    attempts: {
+  userId?: string | null
+  hasPlayed?: bool
+  date?: date-time
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  inProgress?: bool
+  progress?: {
+    currentAttemptNumber?: int
+    attempts?: {
       attemptNumber?: int
       status?: int  // Possible values: `0` = Correct, `1` = Incorrect, `2` = Skipped
       guessedSongId?: string | null
@@ -399,7 +399,7 @@ Response `200` OK `application/json`:
       clipLength: int
       attemptedAt?: date-time
     }[] | null
-    lastUpdated: date-time
+    lastUpdated?: date-time
   }
 }
 ```
@@ -418,17 +418,17 @@ Returns the caller's streaks, win counts and guess distribution. `mode` selects 
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  lastPlayed: date-time | null
-  streak: int  // min: 0; max: 2147483647
-  gamesPlayed: int  // min: 0; max: 2147483647
-  gamesWon: int  // min: 0; max: 2147483647
-  lastResult: {
+  lastPlayed?: date-time | null
+  streak?: int  // min: 0; max: 2147483647
+  gamesPlayed?: int  // min: 0; max: 2147483647
+  gamesWon?: int  // min: 0; max: 2147483647
+  lastResult?: {
     won?: bool
     attempts?: {
       attemptNumber?: int
@@ -439,25 +439,25 @@ Response `200` OK `application/json`:
       attemptedAt?: date-time
     }[] | null
     mediaListDTO?: {
-      id: string | null
-      fileName: string | null
-      contentType: string | null
-      description: string | null
-      isAnimated: bool
-      credit: string | null
-      cloudflareId: string | null
-      mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-      absolutePath: string | null
-      artist: {
-        id: string | null
-        name: string | null
-        socialLink: string | null
-        userId: string | null
-        arts: object[] | null
+      id?: string | null
+      fileName?: string | null
+      contentType?: string | null
+      description?: string | null
+      isAnimated?: bool
+      credit?: string | null
+      cloudflareId?: string | null
+      mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+      absolutePath?: string | null
+      artist?: {
+        id?: string | null
+        name?: string | null
+        socialLink?: string | null
+        userId?: string | null
+        arts?: object[] | null
       }
-      upvotes: int
-      tagString: string | null
-      mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+      upvotes?: int
+      tagString?: string | null
+      mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
     }
     attemptNumber?: int
     songId?: string | null
@@ -468,8 +468,8 @@ Response `200` OK `application/json`:
     challengeDate?: date-time
     invalidChallengeReimbursement?: int | null
   }
-  attemptDistribution: { [key: string]: int } | null
-  longestStreak: int  // min: 0; max: 2147483647
+  attemptDistribution?: { [key: string]: int } | null
+  longestStreak?: int  // min: 0; max: 2147483647
 }
 ```
 
@@ -488,927 +488,927 @@ Returns the caller's previous games, newest first. `limit` defaults to 30.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `limit` | query | `int` | no | default: 30 |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  userId: string | null
-  guestId: string | null
-  challengeDate: date-time
-  mode: int  // Possible values: `0` = Normal, `1` = Extreme
-  dailySongId: string | null
-  won: bool
-  attemptNumber: int
-  score: int
-  attemptsJson: string | null
-  timeSpent: date-span | null
-  gameStartedAt: date-time | null
-  completedAt: date-time
-  user: {
-    id: string | null
-    userName: string | null
-    normalizedUserName: string | null
-    email: string | null
-    normalizedEmail: string | null
-    emailConfirmed: bool
-    passwordHash: string | null
-    securityStamp: string | null
-    concurrencyStamp: string | null
-    phoneNumber: string | null
-    phoneNumberConfirmed: bool
-    twoFactorEnabled: bool
-    lockoutEnd: date-time | null
-    lockoutEnabled: bool
-    accessFailedCount: int
-    displayName: string | null
-    userAvatarUrl: string | null
-    locked: bool
-    lastLogin: date-time | null
-    playlistLimit: int | null
-    songPerPlaylistLimit: int | null
-    userSongLimit: int | null
-    uploadSizeLimit: int64
-    uploadSongAllowance: bool
-    uploadVideoAllowance: bool
-    uploadArtAllowance: bool
-    discordId: string | null
-    admin: bool
-    staff: bool
-    developer: bool
-    updateLyrics: bool
-    updateSongMetadata: bool
-    updateArtist: bool
-    updateSetlist: bool
-    uploadSoundBite: bool
-    updateBadge: bool
-    updateQuote: bool
-    listenAlongAdmin: bool
-    chatModerator: bool
-    manageEmotes: bool
-    manageArtContest: bool
-    artist: bool
-    totalXP: int
-    level: int
-    userPreferences: string | null
-    lastDomain: string | null
-    cardArtUrl: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    displayItemIds: string | null
-    neuroCoin: int
-    evilCoin: int
-    twinsCoin: int
-    gachaCrystals: int
-    aspNetUserRoles: {
-      userId: string | null
-      roleId: string | null
-      role: {
-        id: string | null
-        name: string | null
-        normalizedName: string | null
-        concurrencyStamp: string | null
-        aspNetUserRoles: object[] | null
+  id?: string | null
+  userId?: string | null
+  guestId?: string | null
+  challengeDate?: date-time
+  mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+  dailySongId?: string | null
+  won?: bool
+  attemptNumber?: int
+  score?: int
+  attemptsJson?: string | null
+  timeSpent?: date-span | null
+  gameStartedAt?: date-time | null
+  completedAt?: date-time
+  user?: {
+    id?: string | null
+    userName?: string | null
+    normalizedUserName?: string | null
+    email?: string | null
+    normalizedEmail?: string | null
+    emailConfirmed?: bool
+    passwordHash?: string | null
+    securityStamp?: string | null
+    concurrencyStamp?: string | null
+    phoneNumber?: string | null
+    phoneNumberConfirmed?: bool
+    twoFactorEnabled?: bool
+    lockoutEnd?: date-time | null
+    lockoutEnabled?: bool
+    accessFailedCount?: int
+    displayName?: string | null
+    userAvatarUrl?: string | null
+    locked?: bool
+    lastLogin?: date-time | null
+    playlistLimit?: int | null
+    songPerPlaylistLimit?: int | null
+    userSongLimit?: int | null
+    uploadSizeLimit?: int64
+    uploadSongAllowance?: bool
+    uploadVideoAllowance?: bool
+    uploadArtAllowance?: bool
+    discordId?: string | null
+    admin?: bool
+    staff?: bool
+    developer?: bool
+    updateLyrics?: bool
+    updateSongMetadata?: bool
+    updateArtist?: bool
+    updateSetlist?: bool
+    uploadSoundBite?: bool
+    updateBadge?: bool
+    updateQuote?: bool
+    listenAlongAdmin?: bool
+    chatModerator?: bool
+    manageEmotes?: bool
+    manageArtContest?: bool
+    artist?: bool
+    totalXP?: int
+    level?: int
+    userPreferences?: string | null
+    lastDomain?: string | null
+    cardArtUrl?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    displayItemIds?: string | null
+    neuroCoin?: int
+    evilCoin?: int
+    twinsCoin?: int
+    gachaCrystals?: int
+    aspNetUserRoles?: {
+      userId?: string | null
+      roleId?: string | null
+      role?: {
+        id?: string | null
+        name?: string | null
+        normalizedName?: string | null
+        concurrencyStamp?: string | null
+        aspNetUserRoles?: object[] | null
       }
-      user: object
+      user?: object
     }[] | null
-    userActivityStats: {
-      userId: string | null
-      songsListened: int
-      uniqueSongsListened: int
-      quizCorrect: int
-      quizAttempts: int
-      multiplayerWins: int
-      multiplayerGames: int
-      playlistsCreated: int
-      playlistSongsAdded: int
-      favoritesCount: int
-      videosWatched: int
-      soundbitesPlayed: int
-      canvasPosts: int
-      dailyBandlePlayed: int
-      dailyBandleCorrect: int
-      dailyBandleStreak: int
-      dailyBandleFailed: int
-      dailyBandleWeeklyTop: int
-      dailyBandleDailyTop: int
-      battleRoyalePlayed: int
-      battleRoyaleTop5: int
-      battleRoyaleWins: int
-      leastPlayedSongsListened: int
-      songsNotPlayed30DaysListened: int
-      distinctGenresListened: int
-      upvoteQuotes: int
-      upvoteVideos: int
-      upvoteArts: int
-      upvoteSoundbites: int
-      upvotePlaylists: int
-      upvoteYuriArts: int
-      bugsReported: int
-      songListenedAt3AM: int
-      allGenresListened: int
-      ideasImplemented: int
-      bandleOrQuizAttempts: int
-      gachaTotalPulls: int
-      gachaCrystalsPurchased: int
-      gachaCrystalsSpent: int
-      gachaDailyTasksCompleted: int
-      gachaDailyTaskAllClear: int
-      rankScoreTotal: int
-      rankTierReached: int
-      dailyLoginStreak: int
-      lastUpdated: date-time
-      user: object
+    userActivityStats?: {
+      userId?: string | null
+      songsListened?: int
+      uniqueSongsListened?: int
+      quizCorrect?: int
+      quizAttempts?: int
+      multiplayerWins?: int
+      multiplayerGames?: int
+      playlistsCreated?: int
+      playlistSongsAdded?: int
+      favoritesCount?: int
+      videosWatched?: int
+      soundbitesPlayed?: int
+      canvasPosts?: int
+      dailyBandlePlayed?: int
+      dailyBandleCorrect?: int
+      dailyBandleStreak?: int
+      dailyBandleFailed?: int
+      dailyBandleWeeklyTop?: int
+      dailyBandleDailyTop?: int
+      battleRoyalePlayed?: int
+      battleRoyaleTop5?: int
+      battleRoyaleWins?: int
+      leastPlayedSongsListened?: int
+      songsNotPlayed30DaysListened?: int
+      distinctGenresListened?: int
+      upvoteQuotes?: int
+      upvoteVideos?: int
+      upvoteArts?: int
+      upvoteSoundbites?: int
+      upvotePlaylists?: int
+      upvoteYuriArts?: int
+      bugsReported?: int
+      songListenedAt3AM?: int
+      allGenresListened?: int
+      ideasImplemented?: int
+      bandleOrQuizAttempts?: int
+      gachaTotalPulls?: int
+      gachaCrystalsPurchased?: int
+      gachaCrystalsSpent?: int
+      gachaDailyTasksCompleted?: int
+      gachaDailyTaskAllClear?: int
+      rankScoreTotal?: int
+      rankTierReached?: int
+      dailyLoginStreak?: int
+      lastUpdated?: date-time
+      user?: object
     }
-    userBadges: {
-      userId: string | null
-      badgeId: string | null
-      unlockedAt: date-time
-      user: object
-      badge: {
-        id: string | null
-        name: string | null
-        description: string | null
-        category: string | null
-        rarity: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
-        requirement: string | null
-        conditionType: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
-        conditionValue: int
-        iconKey: string | null
-        userBadges: object[] | null
-        media: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          fileName: string | null
-          fileSize: int64
-          contentType: string | null
-          description: string | null
-          url: string | null
-          imageWidth: int
-          imageHeight: int
-          isAnimated: bool
-          credit: string | null
-          mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
-          cloudflareId: string | null
-          mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-          absolutePath: string | null
-          tagString: string | null
-          tagJson: string | null
-          isTagged: bool
-          rating: string | null
-          ratingConfidence: double | null
-          artArtist: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            name: string | null
-            socialLink: string | null
-            track: bool
-            userId: string | null
-            arts: object[] | null
+    userBadges?: {
+      userId?: string | null
+      badgeId?: string | null
+      unlockedAt?: date-time
+      user?: object
+      badge?: {
+        id?: string | null
+        name?: string | null
+        description?: string | null
+        category?: string | null
+        rarity?: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
+        requirement?: string | null
+        conditionType?: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
+        conditionValue?: int
+        iconKey?: string | null
+        userBadges?: object[] | null
+        media?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          fileName?: string | null
+          fileSize?: int64
+          contentType?: string | null
+          description?: string | null
+          url?: string | null
+          imageWidth?: int
+          imageHeight?: int
+          isAnimated?: bool
+          credit?: string | null
+          mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+          cloudflareId?: string | null
+          mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+          absolutePath?: string | null
+          tagString?: string | null
+          tagJson?: string | null
+          isTagged?: bool
+          rating?: string | null
+          ratingConfidence?: double | null
+          artArtist?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            name?: string | null
+            socialLink?: string | null
+            track?: bool
+            userId?: string | null
+            arts?: object[] | null
           }
-          artistId: string | null
-          createdAt: date-time | null
-          upvotes: int
-          updatedBy: string | null
-          updatedDate: date-time | null
-          isBadge: bool
-          approvalStatus: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
-          mediaImageTags: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            mediaId: string | null
-            media: object
-            tagId: string | null
-            tag: {
-              id: string | null
-              isDeleted: bool
-              deletedBy: string | null
-              deletedDate: date-time | null
-              name: string | null
-              category: string | null
-              mediaImageTags: object[] | null
+          artistId?: string | null
+          createdAt?: date-time | null
+          upvotes?: int
+          updatedBy?: string | null
+          updatedDate?: date-time | null
+          isBadge?: bool
+          approvalStatus?: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
+          mediaImageTags?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            mediaId?: string | null
+            media?: object
+            tagId?: string | null
+            tag?: {
+              id?: string | null
+              isDeleted?: bool
+              deletedBy?: string | null
+              deletedDate?: date-time | null
+              name?: string | null
+              category?: string | null
+              mediaImageTags?: object[] | null
             }
-            confidence: double
+            confidence?: double
           }[] | null
         }
       }
     }[] | null
-    inventoryPurchases: {
-      id: string | null
-      userId: string | null
-      inventoryItemId: string | null
-      pricePaid: int
-      coinTypePaid: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
-      purchasedAt: date-time
-      user: object
-      inventoryItem: {
-        id: string | null
-        name: string | null
-        description: string | null
-        coinType: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
-        price: int
-        category: string | null
-        incrementValue: int
-        maxPurchases: int
-        isActive: bool
-        sortOrder: int
-        createdAt: date-time
+    inventoryPurchases?: {
+      id?: string | null
+      userId?: string | null
+      inventoryItemId?: string | null
+      pricePaid?: int
+      coinTypePaid?: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
+      purchasedAt?: date-time
+      user?: object
+      inventoryItem?: {
+        id?: string | null
+        name?: string | null
+        description?: string | null
+        coinType?: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
+        price?: int
+        category?: string | null
+        incrementValue?: int
+        maxPurchases?: int
+        isActive?: bool
+        sortOrder?: int
+        createdAt?: date-time
       }
     }[] | null
   }
-  dailySong: {
-    id: string | null
-    date: date-time
-    songId: string | null
-    songTitle: string | null
-    artist: string | null
-    coverArtist: string | null
-    audioUrl: string | null
-    forGuestUser: bool
-    mode: int  // Possible values: `0` = Normal, `1` = Extreme
-    audioClipsJson: string | null
-    totalPlays: int
-    totalWins: int
-    totalAttempts: int
-    createdAt: date-time
-    isInvalid: bool
-    invalidationMessage: string | null
-    invalidatedAt: date-time | null
-    song: {
-      id: string | null
-      isDeleted: bool
-      deletedBy: string | null
-      deletedDate: date-time | null
-      coverArtId: string | null
-      coverArt: { …same as `media` above }
-      thumbnailArtId: string | null
-      thumbnailArt: { …same as `media` above }
-      title: string | null
-      duration: int | null
-      audioUrl: string | null
-      absolutePath: string | null
-      audioName: string | null
-      audioExtension: string | null
-      thumbnailUrl: string | null
-      hls: string | null
-      neuroEmbed: string | null
-      evilEmbed: string | null
-      playCount: int
-      karaokeDate: date-time | null
-      tagged: bool
-      hasLyrics: bool
-      temporary: bool
-      uploadedToRadio: bool
-      opus: string | null
-      oss: string | null
-      cnPath: string | null
-      metadata: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        tempoBPM: int
-        genre: string | null
-        key: string | null
-        energyLevel: int | null
-        language: string | null
-        comments: string | null
-        occasion: string | null
-        createdDate: date-time | null
-        createdBy: string | null
-        description: string | null
-        writers: string | null
-        composers: string | null
-        publishers: string | null
-        featuredArtists: string | null
-        foreignTitle: string | null
-        englishTitle: string | null
-        updatedBy: string | null
-        updatedDate: date-time | null
-        translations: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          songMetadataId: string | null
-          songMetadata: object
-          languageCode: string | null
-          description: string | null
-          occasion: string | null
+  dailySong?: {
+    id?: string | null
+    date?: date-time
+    songId?: string | null
+    songTitle?: string | null
+    artist?: string | null
+    coverArtist?: string | null
+    audioUrl?: string | null
+    forGuestUser?: bool
+    mode?: int  // Possible values: `0` = Normal, `1` = Extreme
+    audioClipsJson?: string | null
+    totalPlays?: int
+    totalWins?: int
+    totalAttempts?: int
+    createdAt?: date-time
+    isInvalid?: bool
+    invalidationMessage?: string | null
+    invalidatedAt?: date-time | null
+    song?: {
+      id?: string | null
+      isDeleted?: bool
+      deletedBy?: string | null
+      deletedDate?: date-time | null
+      coverArtId?: string | null
+      coverArt?: { …same as `media` above }
+      thumbnailArtId?: string | null
+      thumbnailArt?: { …same as `media` above }
+      title?: string | null
+      duration?: int | null
+      audioUrl?: string | null
+      absolutePath?: string | null
+      audioName?: string | null
+      audioExtension?: string | null
+      thumbnailUrl?: string | null
+      hls?: string | null
+      neuroEmbed?: string | null
+      evilEmbed?: string | null
+      playCount?: int
+      karaokeDate?: date-time | null
+      tagged?: bool
+      hasLyrics?: bool
+      temporary?: bool
+      uploadedToRadio?: bool
+      opus?: string | null
+      oss?: string | null
+      cnPath?: string | null
+      metadata?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        tempoBPM?: int
+        genre?: string | null
+        key?: string | null
+        energyLevel?: int | null
+        language?: string | null
+        comments?: string | null
+        occasion?: string | null
+        createdDate?: date-time | null
+        createdBy?: string | null
+        description?: string | null
+        writers?: string | null
+        composers?: string | null
+        publishers?: string | null
+        featuredArtists?: string | null
+        foreignTitle?: string | null
+        englishTitle?: string | null
+        updatedBy?: string | null
+        updatedDate?: date-time | null
+        translations?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          songMetadataId?: string | null
+          songMetadata?: object
+          languageCode?: string | null
+          description?: string | null
+          occasion?: string | null
         }[] | null
       }
-      songArtists: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        artistId: string | null
-        artist: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          name: string | null
-          mediaId: string | null
-          media: { …same as `media` above }
-          songArtists: object[] | null
-          artistBio: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            artistId: string | null
-            artist: object
-            summary: string | null
-            content: string | null
-            imagePath: string | null
-            translations: {
-              id: string | null
-              isDeleted: bool
-              deletedBy: string | null
-              deletedDate: date-time | null
-              artistBioId: string | null
-              artistBio: object
-              languageCode: string | null
-              summary: string | null
-              content: string | null
+      songArtists?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        artistId?: string | null
+        artist?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          name?: string | null
+          mediaId?: string | null
+          media?: { …same as `media` above }
+          songArtists?: object[] | null
+          artistBio?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            artistId?: string | null
+            artist?: object
+            summary?: string | null
+            content?: string | null
+            imagePath?: string | null
+            translations?: {
+              id?: string | null
+              isDeleted?: bool
+              deletedBy?: string | null
+              deletedDate?: date-time | null
+              artistBioId?: string | null
+              artistBio?: object
+              languageCode?: string | null
+              summary?: string | null
+              content?: string | null
             }[] | null
           }
         }
       }[] | null
-      coverSongArtists: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        coverArtistId: string | null
-        coverArtist: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          name: string | null
-          mediaId: string | null
-          media: { …same as `media` above }
-          coverSongArtists: object[] | null
+      coverSongArtists?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        coverArtistId?: string | null
+        coverArtist?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          name?: string | null
+          mediaId?: string | null
+          media?: { …same as `media` above }
+          coverSongArtists?: object[] | null
         }
       }[] | null
-      playlistSongs: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        playlistId: string | null
-        playlist: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          mediaId: string | null
-          media: { …same as `media` above }
-          userId: string | null
-          guestId: string | null
-          name: string | null
-          description: string | null
-          createdAt: date-time
-          updatedAt: date-time
-          createdBy: string | null
-          updatedBy: string | null
-          isPublic: bool
-          playCount: int
-          isSetList: bool
-          isFeatured: bool
-          setListDate: date-time | null
-          lastActivity: date-time | null
-          totalDuration: int | null
-          songCount: int | null
-          neuroEmbed: string | null
-          evilEmbed: string | null
-          twinsEmbed: string | null
-          playlistSongs: object[] | null
-          featuredArtistPlaylists: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            playlistId: string | null
-            playlist: object
-            coverArtistId: string | null
+      playlistSongs?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        playlistId?: string | null
+        playlist?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          mediaId?: string | null
+          media?: { …same as `media` above }
+          userId?: string | null
+          guestId?: string | null
+          name?: string | null
+          description?: string | null
+          createdAt?: date-time
+          updatedAt?: date-time
+          createdBy?: string | null
+          updatedBy?: string | null
+          isPublic?: bool
+          playCount?: int
+          isSetList?: bool
+          isFeatured?: bool
+          setListDate?: date-time | null
+          lastActivity?: date-time | null
+          totalDuration?: int | null
+          songCount?: int | null
+          neuroEmbed?: string | null
+          evilEmbed?: string | null
+          twinsEmbed?: string | null
+          playlistSongs?: object[] | null
+          featuredArtistPlaylists?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            playlistId?: string | null
+            playlist?: object
+            coverArtistId?: string | null
           }[] | null
         }
-        itemType: int  // Possible values: `0` = Song, `1` = UserAudio
-        songId: string | null
-        song: object
-        order: int
-        userAudioId: string | null
-        userAudio: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          userId: string | null
-          title: string | null
-          artist: string | null
-          duration: int | null
-          absolutePath: string | null
-          audioUrl: string | null
-          cnPath: string | null
-          contentType: string | null
-          uploadedAt: date-time
-          isPublic: bool
-          fileSize: int64
-          thumbnailUrl: string | null
-          urlId: string | null
+        itemType?: int  // Possible values: `0` = Song, `1` = UserAudio
+        songId?: string | null
+        song?: object
+        order?: int
+        userAudioId?: string | null
+        userAudio?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          userId?: string | null
+          title?: string | null
+          artist?: string | null
+          duration?: int | null
+          absolutePath?: string | null
+          audioUrl?: string | null
+          cnPath?: string | null
+          contentType?: string | null
+          uploadedAt?: date-time
+          isPublic?: bool
+          fileSize?: int64
+          thumbnailUrl?: string | null
+          urlId?: string | null
         }
-        createdAt: date-time
+        createdAt?: date-time
       }[] | null
-      songThemes: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        themeId: string | null
-        theme: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          name: string | null
-          songThemes: object[] | null
-          translations: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            themeId: string | null
-            theme: object
-            languageCode: string | null
-            name: string | null
-          }[] | null
-        }
-      }[] | null
-      songGenres: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        genreId: string | null
-        genre: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          name: string | null
-          songGenres: object[] | null
-          translations: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            genreId: string | null
-            genre: object
-            languageCode: string | null
-            name: string | null
+      songThemes?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        themeId?: string | null
+        theme?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          name?: string | null
+          songThemes?: object[] | null
+          translations?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            themeId?: string | null
+            theme?: object
+            languageCode?: string | null
+            name?: string | null
           }[] | null
         }
       }[] | null
-      songMoods: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        moodId: string | null
-        mood: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          name: string | null
-          songMoods: object[] | null
-          translations: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            moodId: string | null
-            mood: object
-            languageCode: string | null
-            name: string | null
+      songGenres?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        genreId?: string | null
+        genre?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          name?: string | null
+          songGenres?: object[] | null
+          translations?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            genreId?: string | null
+            genre?: object
+            languageCode?: string | null
+            name?: string | null
           }[] | null
         }
       }[] | null
-      videos: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        name: string | null
-        description: string | null
-        url: string | null
-        absolutePath: string | null
-        mP4: string | null
-        cnPath: string | null
-        createdDate: date-time | null
-        createdBy: string | null
-        creatorUserId: string | null
-        creatorUser: {
-          id: string | null
-          userName: string | null
-          normalizedUserName: string | null
-          email: string | null
-          normalizedEmail: string | null
-          emailConfirmed: bool
-          passwordHash: string | null
-          securityStamp: string | null
-          concurrencyStamp: string | null
-          phoneNumber: string | null
-          phoneNumberConfirmed: bool
-          twoFactorEnabled: bool
-          lockoutEnd: date-time | null
-          lockoutEnabled: bool
-          accessFailedCount: int
-          displayName: string | null
-          userAvatarUrl: string | null
-          locked: bool
-          lastLogin: date-time | null
-          playlistLimit: int | null
-          songPerPlaylistLimit: int | null
-          userSongLimit: int | null
-          uploadSizeLimit: int64
-          uploadSongAllowance: bool
-          uploadVideoAllowance: bool
-          uploadArtAllowance: bool
-          discordId: string | null
-          admin: bool
-          staff: bool
-          developer: bool
-          updateLyrics: bool
-          updateSongMetadata: bool
-          updateArtist: bool
-          updateSetlist: bool
-          uploadSoundBite: bool
-          updateBadge: bool
-          updateQuote: bool
-          listenAlongAdmin: bool
-          chatModerator: bool
-          manageEmotes: bool
-          manageArtContest: bool
-          artist: bool
-          totalXP: int
-          level: int
-          userPreferences: string | null
-          lastDomain: string | null
-          cardArtUrl: string | null
-          frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-          displayItemIds: string | null
-          neuroCoin: int
-          evilCoin: int
-          twinsCoin: int
-          gachaCrystals: int
-          aspNetUserRoles: { …same as `aspNetUserRoles` above }[] | null
-          userActivityStats: { …same as `userActivityStats` above }
-          userBadges: {
-            userId: string | null
-            badgeId: string | null
-            unlockedAt: date-time
-            user: object
-            badge: {
-              id: string | null
-              name: string | null
-              description: string | null
-              category: string | null
-              rarity: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
-              requirement: string | null
-              conditionType: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
-              conditionValue: int
-              iconKey: string | null
-              userBadges: object[] | null
-              media: {
-                id: string | null
-                isDeleted: bool
-                deletedBy: string | null
-                deletedDate: date-time | null
-                fileName: string | null
-                fileSize: int64
-                contentType: string | null
-                description: string | null
-                url: string | null
-                imageWidth: int
-                imageHeight: int
-                isAnimated: bool
-                credit: string | null
-                mediaTag: object
-                cloudflareId: string | null
-                mediaStorageType: object
-                absolutePath: string | null
-                tagString: string | null
-                tagJson: string | null
-                isTagged: bool
-                rating: string | null
-                ratingConfidence: double | null
-                artArtist: object
-                artistId: string | null
-                createdAt: date-time | null
-                upvotes: int
-                updatedBy: string | null
-                updatedDate: date-time | null
-                isBadge: bool
-                approvalStatus: object
-                mediaImageTags: object[] | null
+      songMoods?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        moodId?: string | null
+        mood?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          name?: string | null
+          songMoods?: object[] | null
+          translations?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            moodId?: string | null
+            mood?: object
+            languageCode?: string | null
+            name?: string | null
+          }[] | null
+        }
+      }[] | null
+      videos?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        name?: string | null
+        description?: string | null
+        url?: string | null
+        absolutePath?: string | null
+        mP4?: string | null
+        cnPath?: string | null
+        createdDate?: date-time | null
+        createdBy?: string | null
+        creatorUserId?: string | null
+        creatorUser?: {
+          id?: string | null
+          userName?: string | null
+          normalizedUserName?: string | null
+          email?: string | null
+          normalizedEmail?: string | null
+          emailConfirmed?: bool
+          passwordHash?: string | null
+          securityStamp?: string | null
+          concurrencyStamp?: string | null
+          phoneNumber?: string | null
+          phoneNumberConfirmed?: bool
+          twoFactorEnabled?: bool
+          lockoutEnd?: date-time | null
+          lockoutEnabled?: bool
+          accessFailedCount?: int
+          displayName?: string | null
+          userAvatarUrl?: string | null
+          locked?: bool
+          lastLogin?: date-time | null
+          playlistLimit?: int | null
+          songPerPlaylistLimit?: int | null
+          userSongLimit?: int | null
+          uploadSizeLimit?: int64
+          uploadSongAllowance?: bool
+          uploadVideoAllowance?: bool
+          uploadArtAllowance?: bool
+          discordId?: string | null
+          admin?: bool
+          staff?: bool
+          developer?: bool
+          updateLyrics?: bool
+          updateSongMetadata?: bool
+          updateArtist?: bool
+          updateSetlist?: bool
+          uploadSoundBite?: bool
+          updateBadge?: bool
+          updateQuote?: bool
+          listenAlongAdmin?: bool
+          chatModerator?: bool
+          manageEmotes?: bool
+          manageArtContest?: bool
+          artist?: bool
+          totalXP?: int
+          level?: int
+          userPreferences?: string | null
+          lastDomain?: string | null
+          cardArtUrl?: string | null
+          frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+          displayItemIds?: string | null
+          neuroCoin?: int
+          evilCoin?: int
+          twinsCoin?: int
+          gachaCrystals?: int
+          aspNetUserRoles?: { …same as `aspNetUserRoles` above }[] | null
+          userActivityStats?: { …same as `userActivityStats` above }
+          userBadges?: {
+            userId?: string | null
+            badgeId?: string | null
+            unlockedAt?: date-time
+            user?: object
+            badge?: {
+              id?: string | null
+              name?: string | null
+              description?: string | null
+              category?: string | null
+              rarity?: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
+              requirement?: string | null
+              conditionType?: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
+              conditionValue?: int
+              iconKey?: string | null
+              userBadges?: object[] | null
+              media?: {
+                id?: string | null
+                isDeleted?: bool
+                deletedBy?: string | null
+                deletedDate?: date-time | null
+                fileName?: string | null
+                fileSize?: int64
+                contentType?: string | null
+                description?: string | null
+                url?: string | null
+                imageWidth?: int
+                imageHeight?: int
+                isAnimated?: bool
+                credit?: string | null
+                mediaTag?: object
+                cloudflareId?: string | null
+                mediaStorageType?: object
+                absolutePath?: string | null
+                tagString?: string | null
+                tagJson?: string | null
+                isTagged?: bool
+                rating?: string | null
+                ratingConfidence?: double | null
+                artArtist?: object
+                artistId?: string | null
+                createdAt?: date-time | null
+                upvotes?: int
+                updatedBy?: string | null
+                updatedDate?: date-time | null
+                isBadge?: bool
+                approvalStatus?: object
+                mediaImageTags?: object[] | null
               }
             }
           }[] | null
-          inventoryPurchases: { …same as `inventoryPurchases` above }[] | null
+          inventoryPurchases?: { …same as `inventoryPurchases` above }[] | null
         }
-        videoType: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
-        cloudflareId: string | null
-        contentType: string | null
-        thumbnailUrl: string | null
-        duration: int64 | null
-        width: int | null
-        height: int | null
-        views: int
-        upvotes: int
-        isWatchalong: bool
-        youtubeSourceId: string | null
-        b2SourceId: string | null
-        bilibiliCommentCount: int | null
-        youtubeViews: int64 | null
-        bilibiliViews: int64 | null
-        sourceViewsUpdatedDate: date-time | null
-        category: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
-        comments: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          videoId: string | null
-          video: object
-          parentCommentId: string | null
-          parentComment: object
-          replies: object[] | null
-          authorUserId: string | null
-          authorUser: {
-            id: string | null
-            userName: string | null
-            normalizedUserName: string | null
-            email: string | null
-            normalizedEmail: string | null
-            emailConfirmed: bool
-            passwordHash: string | null
-            securityStamp: string | null
-            concurrencyStamp: string | null
-            phoneNumber: string | null
-            phoneNumberConfirmed: bool
-            twoFactorEnabled: bool
-            lockoutEnd: date-time | null
-            lockoutEnabled: bool
-            accessFailedCount: int
-            displayName: string | null
-            userAvatarUrl: string | null
-            locked: bool
-            lastLogin: date-time | null
-            playlistLimit: int | null
-            songPerPlaylistLimit: int | null
-            userSongLimit: int | null
-            uploadSizeLimit: int64
-            uploadSongAllowance: bool
-            uploadVideoAllowance: bool
-            uploadArtAllowance: bool
-            discordId: string | null
-            admin: bool
-            staff: bool
-            developer: bool
-            updateLyrics: bool
-            updateSongMetadata: bool
-            updateArtist: bool
-            updateSetlist: bool
-            uploadSoundBite: bool
-            updateBadge: bool
-            updateQuote: bool
-            listenAlongAdmin: bool
-            chatModerator: bool
-            manageEmotes: bool
-            manageArtContest: bool
-            artist: bool
-            totalXP: int
-            level: int
-            userPreferences: string | null
-            lastDomain: string | null
-            cardArtUrl: string | null
-            frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-            displayItemIds: string | null
-            neuroCoin: int
-            evilCoin: int
-            twinsCoin: int
-            gachaCrystals: int
-            aspNetUserRoles: { …same as `aspNetUserRoles` above }[] | null
-            userActivityStats: { …same as `userActivityStats` above }
-            userBadges: {
-              userId: string | null
-              badgeId: string | null
-              unlockedAt: date-time
-              user: object
-              badge: {
-                id: string | null
-                name: string | null
-                description: string | null
-                category: string | null
-                rarity: object
-                requirement: string | null
-                conditionType: object
-                conditionValue: int
-                iconKey: string | null
-                userBadges: object[] | null
-                media: object
+        videoType?: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
+        cloudflareId?: string | null
+        contentType?: string | null
+        thumbnailUrl?: string | null
+        duration?: int64 | null
+        width?: int | null
+        height?: int | null
+        views?: int
+        upvotes?: int
+        isWatchalong?: bool
+        youtubeSourceId?: string | null
+        b2SourceId?: string | null
+        bilibiliCommentCount?: int | null
+        youtubeViews?: int64 | null
+        bilibiliViews?: int64 | null
+        sourceViewsUpdatedDate?: date-time | null
+        category?: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
+        comments?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          videoId?: string | null
+          video?: object
+          parentCommentId?: string | null
+          parentComment?: object
+          replies?: object[] | null
+          authorUserId?: string | null
+          authorUser?: {
+            id?: string | null
+            userName?: string | null
+            normalizedUserName?: string | null
+            email?: string | null
+            normalizedEmail?: string | null
+            emailConfirmed?: bool
+            passwordHash?: string | null
+            securityStamp?: string | null
+            concurrencyStamp?: string | null
+            phoneNumber?: string | null
+            phoneNumberConfirmed?: bool
+            twoFactorEnabled?: bool
+            lockoutEnd?: date-time | null
+            lockoutEnabled?: bool
+            accessFailedCount?: int
+            displayName?: string | null
+            userAvatarUrl?: string | null
+            locked?: bool
+            lastLogin?: date-time | null
+            playlistLimit?: int | null
+            songPerPlaylistLimit?: int | null
+            userSongLimit?: int | null
+            uploadSizeLimit?: int64
+            uploadSongAllowance?: bool
+            uploadVideoAllowance?: bool
+            uploadArtAllowance?: bool
+            discordId?: string | null
+            admin?: bool
+            staff?: bool
+            developer?: bool
+            updateLyrics?: bool
+            updateSongMetadata?: bool
+            updateArtist?: bool
+            updateSetlist?: bool
+            uploadSoundBite?: bool
+            updateBadge?: bool
+            updateQuote?: bool
+            listenAlongAdmin?: bool
+            chatModerator?: bool
+            manageEmotes?: bool
+            manageArtContest?: bool
+            artist?: bool
+            totalXP?: int
+            level?: int
+            userPreferences?: string | null
+            lastDomain?: string | null
+            cardArtUrl?: string | null
+            frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+            displayItemIds?: string | null
+            neuroCoin?: int
+            evilCoin?: int
+            twinsCoin?: int
+            gachaCrystals?: int
+            aspNetUserRoles?: { …same as `aspNetUserRoles` above }[] | null
+            userActivityStats?: { …same as `userActivityStats` above }
+            userBadges?: {
+              userId?: string | null
+              badgeId?: string | null
+              unlockedAt?: date-time
+              user?: object
+              badge?: {
+                id?: string | null
+                name?: string | null
+                description?: string | null
+                category?: string | null
+                rarity?: object
+                requirement?: string | null
+                conditionType?: object
+                conditionValue?: int
+                iconKey?: string | null
+                userBadges?: object[] | null
+                media?: object
               }
             }[] | null
-            inventoryPurchases: {
-              id: string | null
-              userId: string | null
-              inventoryItemId: string | null
-              pricePaid: int
-              coinTypePaid: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
-              purchasedAt: date-time
-              user: object
-              inventoryItem: {
-                id: string | null
-                name: string | null
-                description: string | null
-                coinType: object
-                price: int
-                category: string | null
-                incrementValue: int
-                maxPurchases: int
-                isActive: bool
-                sortOrder: int
-                createdAt: date-time
+            inventoryPurchases?: {
+              id?: string | null
+              userId?: string | null
+              inventoryItemId?: string | null
+              pricePaid?: int
+              coinTypePaid?: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
+              purchasedAt?: date-time
+              user?: object
+              inventoryItem?: {
+                id?: string | null
+                name?: string | null
+                description?: string | null
+                coinType?: object
+                price?: int
+                category?: string | null
+                incrementValue?: int
+                maxPurchases?: int
+                isActive?: bool
+                sortOrder?: int
+                createdAt?: date-time
               }
             }[] | null
           }
-          guestId: string | null
-          authorDisplayName: string | null
-          authorAvatarUrl: string | null
-          content: string | null
-          translatedContent: string | null
-          pictureUrlsJson: string | null
-          emotesJson: string | null
-          createdAtUtc: date-time
-          updatedAtUtc: date-time | null
-          likeCount: int
-          isFlagged: bool
-          moderationReason: string | null
-          moderationStatus: string | null
-          moderationModel: string | null
-          moderatedAtUtc: date-time | null
-          isModeratorComment: bool
-          moderatorPersona: string | null
-          source: int  // Possible values: `0` = Site, `1` = YouTube, `2` = Bilibili
-          sourceCommentId: string | null
-          sourceAuthorUrl: string | null
-          sourceAuthor: string | null
-          sourcePermalink: string | null
-          sourcePublishedAtUtc: date-time | null
-          sourceLikeCount: int
-          reactions: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            videoCommentId: string | null
-            videoComment: object
-            userId: string | null
-            user: {
-              id: string | null
-              userName: string | null
-              normalizedUserName: string | null
-              email: string | null
-              normalizedEmail: string | null
-              emailConfirmed: bool
-              passwordHash: string | null
-              securityStamp: string | null
-              concurrencyStamp: string | null
-              phoneNumber: string | null
-              phoneNumberConfirmed: bool
-              twoFactorEnabled: bool
-              lockoutEnd: date-time | null
-              lockoutEnabled: bool
-              accessFailedCount: int
-              displayName: string | null
-              userAvatarUrl: string | null
-              locked: bool
-              lastLogin: date-time | null
-              playlistLimit: int | null
-              songPerPlaylistLimit: int | null
-              userSongLimit: int | null
-              uploadSizeLimit: int64
-              uploadSongAllowance: bool
-              uploadVideoAllowance: bool
-              uploadArtAllowance: bool
-              discordId: string | null
-              admin: bool
-              staff: bool
-              developer: bool
-              updateLyrics: bool
-              updateSongMetadata: bool
-              updateArtist: bool
-              updateSetlist: bool
-              uploadSoundBite: bool
-              updateBadge: bool
-              updateQuote: bool
-              listenAlongAdmin: bool
-              chatModerator: bool
-              manageEmotes: bool
-              manageArtContest: bool
-              artist: bool
-              totalXP: int
-              level: int
-              userPreferences: string | null
-              lastDomain: string | null
-              cardArtUrl: string | null
-              frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-              displayItemIds: string | null
-              neuroCoin: int
-              evilCoin: int
-              twinsCoin: int
-              gachaCrystals: int
-              aspNetUserRoles: {
-                userId: string | null
-                roleId: string | null
-                role: object
-                user: object
+          guestId?: string | null
+          authorDisplayName?: string | null
+          authorAvatarUrl?: string | null
+          content?: string | null
+          translatedContent?: string | null
+          pictureUrlsJson?: string | null
+          emotesJson?: string | null
+          createdAtUtc?: date-time
+          updatedAtUtc?: date-time | null
+          likeCount?: int
+          isFlagged?: bool
+          moderationReason?: string | null
+          moderationStatus?: string | null
+          moderationModel?: string | null
+          moderatedAtUtc?: date-time | null
+          isModeratorComment?: bool
+          moderatorPersona?: string | null
+          source?: int  // Possible values: `0` = Site, `1` = YouTube, `2` = Bilibili
+          sourceCommentId?: string | null
+          sourceAuthorUrl?: string | null
+          sourceAuthor?: string | null
+          sourcePermalink?: string | null
+          sourcePublishedAtUtc?: date-time | null
+          sourceLikeCount?: int
+          reactions?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            videoCommentId?: string | null
+            videoComment?: object
+            userId?: string | null
+            user?: {
+              id?: string | null
+              userName?: string | null
+              normalizedUserName?: string | null
+              email?: string | null
+              normalizedEmail?: string | null
+              emailConfirmed?: bool
+              passwordHash?: string | null
+              securityStamp?: string | null
+              concurrencyStamp?: string | null
+              phoneNumber?: string | null
+              phoneNumberConfirmed?: bool
+              twoFactorEnabled?: bool
+              lockoutEnd?: date-time | null
+              lockoutEnabled?: bool
+              accessFailedCount?: int
+              displayName?: string | null
+              userAvatarUrl?: string | null
+              locked?: bool
+              lastLogin?: date-time | null
+              playlistLimit?: int | null
+              songPerPlaylistLimit?: int | null
+              userSongLimit?: int | null
+              uploadSizeLimit?: int64
+              uploadSongAllowance?: bool
+              uploadVideoAllowance?: bool
+              uploadArtAllowance?: bool
+              discordId?: string | null
+              admin?: bool
+              staff?: bool
+              developer?: bool
+              updateLyrics?: bool
+              updateSongMetadata?: bool
+              updateArtist?: bool
+              updateSetlist?: bool
+              uploadSoundBite?: bool
+              updateBadge?: bool
+              updateQuote?: bool
+              listenAlongAdmin?: bool
+              chatModerator?: bool
+              manageEmotes?: bool
+              manageArtContest?: bool
+              artist?: bool
+              totalXP?: int
+              level?: int
+              userPreferences?: string | null
+              lastDomain?: string | null
+              cardArtUrl?: string | null
+              frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+              displayItemIds?: string | null
+              neuroCoin?: int
+              evilCoin?: int
+              twinsCoin?: int
+              gachaCrystals?: int
+              aspNetUserRoles?: {
+                userId?: string | null
+                roleId?: string | null
+                role?: object
+                user?: object
               }[] | null
-              userActivityStats: { …same as `userActivityStats` above }
-              userBadges: {
-                userId: string | null
-                badgeId: string | null
-                unlockedAt: date-time
-                user: object
-                badge: object
+              userActivityStats?: { …same as `userActivityStats` above }
+              userBadges?: {
+                userId?: string | null
+                badgeId?: string | null
+                unlockedAt?: date-time
+                user?: object
+                badge?: object
               }[] | null
-              inventoryPurchases: {
-                id: string | null
-                userId: string | null
-                inventoryItemId: string | null
-                pricePaid: int
-                coinTypePaid: object
-                purchasedAt: date-time
-                user: object
-                inventoryItem: object
+              inventoryPurchases?: {
+                id?: string | null
+                userId?: string | null
+                inventoryItemId?: string | null
+                pricePaid?: int
+                coinTypePaid?: object
+                purchasedAt?: date-time
+                user?: object
+                inventoryItem?: object
               }[] | null
             }
-            guestId: string | null
-            createdAtUtc: date-time
+            guestId?: string | null
+            createdAtUtc?: date-time
           }[] | null
         }[] | null
       }[] | null
-      lyrics: {
-        id: string | null
-        isDeleted: bool
-        deletedBy: string | null
-        deletedDate: date-time | null
-        songId: string | null
-        song: object
-        time: date-span
-        text: string | null
-        translations: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          lyricsId: string | null
-          lyrics: object
-          languageCode: string | null
-          text: string | null
+      lyrics?: {
+        id?: string | null
+        isDeleted?: bool
+        deletedBy?: string | null
+        deletedDate?: date-time | null
+        songId?: string | null
+        song?: object
+        time?: date-span
+        text?: string | null
+        translations?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          lyricsId?: string | null
+          lyrics?: object
+          languageCode?: string | null
+          text?: string | null
         }[] | null
       }[] | null
-      fullTitle: string | null
-      normalizedTitle: string | null
-      normalizedFullTitle: string | null
-      coverArtists: string | null  // read-only
-      originalArtists: string | null  // read-only
-      formattedName: string | null  // read-only
+      fullTitle?: string | null
+      normalizedTitle?: string | null
+      normalizedFullTitle?: string | null
+      coverArtists?: string | null  // read-only
+      originalArtists?: string | null  // read-only
+      formattedName?: string | null  // read-only
     }
   }
 }[]
@@ -1432,233 +1432,233 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  userId: string | null
-  currentStreak: int
-  longestStreak: int
-  totalGamesPlayed: int
-  totalGamesWon: int
-  winsOnAttempt1: int
-  winsOnAttempt2: int
-  winsOnAttempt3: int
-  winsOnAttempt4: int
-  winsOnAttempt5: int
-  winsOnAttempt6: int
-  lastPlayedDate: date-time | null
-  firstPlayedDate: date-time | null
-  lastUpdated: date-time
-  user: {
-    id: string | null
-    userName: string | null
-    normalizedUserName: string | null
-    email: string | null
-    normalizedEmail: string | null
-    emailConfirmed: bool
-    passwordHash: string | null
-    securityStamp: string | null
-    concurrencyStamp: string | null
-    phoneNumber: string | null
-    phoneNumberConfirmed: bool
-    twoFactorEnabled: bool
-    lockoutEnd: date-time | null
-    lockoutEnabled: bool
-    accessFailedCount: int
-    displayName: string | null
-    userAvatarUrl: string | null
-    locked: bool
-    lastLogin: date-time | null
-    playlistLimit: int | null
-    songPerPlaylistLimit: int | null
-    userSongLimit: int | null
-    uploadSizeLimit: int64
-    uploadSongAllowance: bool
-    uploadVideoAllowance: bool
-    uploadArtAllowance: bool
-    discordId: string | null
-    admin: bool
-    staff: bool
-    developer: bool
-    updateLyrics: bool
-    updateSongMetadata: bool
-    updateArtist: bool
-    updateSetlist: bool
-    uploadSoundBite: bool
-    updateBadge: bool
-    updateQuote: bool
-    listenAlongAdmin: bool
-    chatModerator: bool
-    manageEmotes: bool
-    manageArtContest: bool
-    artist: bool
-    totalXP: int
-    level: int
-    userPreferences: string | null
-    lastDomain: string | null
-    cardArtUrl: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    displayItemIds: string | null
-    neuroCoin: int
-    evilCoin: int
-    twinsCoin: int
-    gachaCrystals: int
-    aspNetUserRoles: {
-      userId: string | null
-      roleId: string | null
-      role: {
-        id: string | null
-        name: string | null
-        normalizedName: string | null
-        concurrencyStamp: string | null
-        aspNetUserRoles: object[] | null
+  userId?: string | null
+  currentStreak?: int
+  longestStreak?: int
+  totalGamesPlayed?: int
+  totalGamesWon?: int
+  winsOnAttempt1?: int
+  winsOnAttempt2?: int
+  winsOnAttempt3?: int
+  winsOnAttempt4?: int
+  winsOnAttempt5?: int
+  winsOnAttempt6?: int
+  lastPlayedDate?: date-time | null
+  firstPlayedDate?: date-time | null
+  lastUpdated?: date-time
+  user?: {
+    id?: string | null
+    userName?: string | null
+    normalizedUserName?: string | null
+    email?: string | null
+    normalizedEmail?: string | null
+    emailConfirmed?: bool
+    passwordHash?: string | null
+    securityStamp?: string | null
+    concurrencyStamp?: string | null
+    phoneNumber?: string | null
+    phoneNumberConfirmed?: bool
+    twoFactorEnabled?: bool
+    lockoutEnd?: date-time | null
+    lockoutEnabled?: bool
+    accessFailedCount?: int
+    displayName?: string | null
+    userAvatarUrl?: string | null
+    locked?: bool
+    lastLogin?: date-time | null
+    playlistLimit?: int | null
+    songPerPlaylistLimit?: int | null
+    userSongLimit?: int | null
+    uploadSizeLimit?: int64
+    uploadSongAllowance?: bool
+    uploadVideoAllowance?: bool
+    uploadArtAllowance?: bool
+    discordId?: string | null
+    admin?: bool
+    staff?: bool
+    developer?: bool
+    updateLyrics?: bool
+    updateSongMetadata?: bool
+    updateArtist?: bool
+    updateSetlist?: bool
+    uploadSoundBite?: bool
+    updateBadge?: bool
+    updateQuote?: bool
+    listenAlongAdmin?: bool
+    chatModerator?: bool
+    manageEmotes?: bool
+    manageArtContest?: bool
+    artist?: bool
+    totalXP?: int
+    level?: int
+    userPreferences?: string | null
+    lastDomain?: string | null
+    cardArtUrl?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    displayItemIds?: string | null
+    neuroCoin?: int
+    evilCoin?: int
+    twinsCoin?: int
+    gachaCrystals?: int
+    aspNetUserRoles?: {
+      userId?: string | null
+      roleId?: string | null
+      role?: {
+        id?: string | null
+        name?: string | null
+        normalizedName?: string | null
+        concurrencyStamp?: string | null
+        aspNetUserRoles?: object[] | null
       }
-      user: object
+      user?: object
     }[] | null
-    userActivityStats: {
-      userId: string | null
-      songsListened: int
-      uniqueSongsListened: int
-      quizCorrect: int
-      quizAttempts: int
-      multiplayerWins: int
-      multiplayerGames: int
-      playlistsCreated: int
-      playlistSongsAdded: int
-      favoritesCount: int
-      videosWatched: int
-      soundbitesPlayed: int
-      canvasPosts: int
-      dailyBandlePlayed: int
-      dailyBandleCorrect: int
-      dailyBandleStreak: int
-      dailyBandleFailed: int
-      dailyBandleWeeklyTop: int
-      dailyBandleDailyTop: int
-      battleRoyalePlayed: int
-      battleRoyaleTop5: int
-      battleRoyaleWins: int
-      leastPlayedSongsListened: int
-      songsNotPlayed30DaysListened: int
-      distinctGenresListened: int
-      upvoteQuotes: int
-      upvoteVideos: int
-      upvoteArts: int
-      upvoteSoundbites: int
-      upvotePlaylists: int
-      upvoteYuriArts: int
-      bugsReported: int
-      songListenedAt3AM: int
-      allGenresListened: int
-      ideasImplemented: int
-      bandleOrQuizAttempts: int
-      gachaTotalPulls: int
-      gachaCrystalsPurchased: int
-      gachaCrystalsSpent: int
-      gachaDailyTasksCompleted: int
-      gachaDailyTaskAllClear: int
-      rankScoreTotal: int
-      rankTierReached: int
-      dailyLoginStreak: int
-      lastUpdated: date-time
-      user: object
+    userActivityStats?: {
+      userId?: string | null
+      songsListened?: int
+      uniqueSongsListened?: int
+      quizCorrect?: int
+      quizAttempts?: int
+      multiplayerWins?: int
+      multiplayerGames?: int
+      playlistsCreated?: int
+      playlistSongsAdded?: int
+      favoritesCount?: int
+      videosWatched?: int
+      soundbitesPlayed?: int
+      canvasPosts?: int
+      dailyBandlePlayed?: int
+      dailyBandleCorrect?: int
+      dailyBandleStreak?: int
+      dailyBandleFailed?: int
+      dailyBandleWeeklyTop?: int
+      dailyBandleDailyTop?: int
+      battleRoyalePlayed?: int
+      battleRoyaleTop5?: int
+      battleRoyaleWins?: int
+      leastPlayedSongsListened?: int
+      songsNotPlayed30DaysListened?: int
+      distinctGenresListened?: int
+      upvoteQuotes?: int
+      upvoteVideos?: int
+      upvoteArts?: int
+      upvoteSoundbites?: int
+      upvotePlaylists?: int
+      upvoteYuriArts?: int
+      bugsReported?: int
+      songListenedAt3AM?: int
+      allGenresListened?: int
+      ideasImplemented?: int
+      bandleOrQuizAttempts?: int
+      gachaTotalPulls?: int
+      gachaCrystalsPurchased?: int
+      gachaCrystalsSpent?: int
+      gachaDailyTasksCompleted?: int
+      gachaDailyTaskAllClear?: int
+      rankScoreTotal?: int
+      rankTierReached?: int
+      dailyLoginStreak?: int
+      lastUpdated?: date-time
+      user?: object
     }
-    userBadges: {
-      userId: string | null
-      badgeId: string | null
-      unlockedAt: date-time
-      user: object
-      badge: {
-        id: string | null
-        name: string | null
-        description: string | null
-        category: string | null
-        rarity: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
-        requirement: string | null
-        conditionType: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
-        conditionValue: int
-        iconKey: string | null
-        userBadges: object[] | null
-        media: {
-          id: string | null
-          isDeleted: bool
-          deletedBy: string | null
-          deletedDate: date-time | null
-          fileName: string | null
-          fileSize: int64
-          contentType: string | null
-          description: string | null
-          url: string | null
-          imageWidth: int
-          imageHeight: int
-          isAnimated: bool
-          credit: string | null
-          mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
-          cloudflareId: string | null
-          mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-          absolutePath: string | null
-          tagString: string | null
-          tagJson: string | null
-          isTagged: bool
-          rating: string | null
-          ratingConfidence: double | null
-          artArtist: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            name: string | null
-            socialLink: string | null
-            track: bool
-            userId: string | null
-            arts: object[] | null
+    userBadges?: {
+      userId?: string | null
+      badgeId?: string | null
+      unlockedAt?: date-time
+      user?: object
+      badge?: {
+        id?: string | null
+        name?: string | null
+        description?: string | null
+        category?: string | null
+        rarity?: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
+        requirement?: string | null
+        conditionType?: int  // Possible values: `0` = SongsListened, `1` = UniqueSongsListened, `2` = QuizCorrect, `3` = QuizAttempts, `4` = MultiplayerWins, `5` = MultiplayerGames, `6` = PlaylistsCreated, `7` = PlaylistSongsAdded, `8` = FavoritesCount, `9` = VideosWatched, `10` = SoundbitesPlayed, `11` = CanvasPosts, `12` = DailyBandlePlayed, `13` = DailyBandleCorrect, `14` = DailyBandleStreak, `15` = DailyBandleFailed, `16` = DailyBandleWeeklyTop, `17` = DailyBandleDailyTop, `18` = TotalXP, `19` = Level, `20` = BattleRoyalePlayed, `21` = BattleRoyaleTop5, `22` = BattleRoyaleWins, `23` = LeastPlayedSongsListened, `24` = SongsNotPlayed30DaysListened, `25` = DistinctGenresListened, `26` = UpvoteQuotes, `27` = UpvoteVideos, `28` = UpvoteArts, `29` = UpvoteSoundbites, `30` = UpvotePlaylists, `31` = UpvoteYuriArts, `32` = BugsReported, `33` = SongListenedAt3AM, `34` = AllGenresListened, `35` = IdeasImplemented, `36` = BandleOrQuizAttempts, `37` = GachaPullsSingle, `38` = GachaPullsTen, `39` = GachaTotalPulls, `40` = GachaUniqueItems, `41` = GachaLegendaryPulled, `42` = GachaEpicPulled, `43` = GachaGiftsSent, `44` = GachaGiftsReceived, `45` = GachaLegendaryUsed, `46` = GachaCrystalsPurchased, `47` = GachaCrystalsSpent, `48` = GachaDailyTasksCompleted, `49` = GachaDailyTaskAllClear, `50` = RankScoreTotal, `51` = RankTierReached, `52` = DailyLoginStreak
+        conditionValue?: int
+        iconKey?: string | null
+        userBadges?: object[] | null
+        media?: {
+          id?: string | null
+          isDeleted?: bool
+          deletedBy?: string | null
+          deletedDate?: date-time | null
+          fileName?: string | null
+          fileSize?: int64
+          contentType?: string | null
+          description?: string | null
+          url?: string | null
+          imageWidth?: int
+          imageHeight?: int
+          isAnimated?: bool
+          credit?: string | null
+          mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+          cloudflareId?: string | null
+          mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+          absolutePath?: string | null
+          tagString?: string | null
+          tagJson?: string | null
+          isTagged?: bool
+          rating?: string | null
+          ratingConfidence?: double | null
+          artArtist?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            name?: string | null
+            socialLink?: string | null
+            track?: bool
+            userId?: string | null
+            arts?: object[] | null
           }
-          artistId: string | null
-          createdAt: date-time | null
-          upvotes: int
-          updatedBy: string | null
-          updatedDate: date-time | null
-          isBadge: bool
-          approvalStatus: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
-          mediaImageTags: {
-            id: string | null
-            isDeleted: bool
-            deletedBy: string | null
-            deletedDate: date-time | null
-            mediaId: string | null
-            media: object
-            tagId: string | null
-            tag: {
-              id: string | null
-              isDeleted: bool
-              deletedBy: string | null
-              deletedDate: date-time | null
-              name: string | null
-              category: string | null
-              mediaImageTags: object[] | null
+          artistId?: string | null
+          createdAt?: date-time | null
+          upvotes?: int
+          updatedBy?: string | null
+          updatedDate?: date-time | null
+          isBadge?: bool
+          approvalStatus?: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
+          mediaImageTags?: {
+            id?: string | null
+            isDeleted?: bool
+            deletedBy?: string | null
+            deletedDate?: date-time | null
+            mediaId?: string | null
+            media?: object
+            tagId?: string | null
+            tag?: {
+              id?: string | null
+              isDeleted?: bool
+              deletedBy?: string | null
+              deletedDate?: date-time | null
+              name?: string | null
+              category?: string | null
+              mediaImageTags?: object[] | null
             }
-            confidence: double
+            confidence?: double
           }[] | null
         }
       }
     }[] | null
-    inventoryPurchases: {
-      id: string | null
-      userId: string | null
-      inventoryItemId: string | null
-      pricePaid: int
-      coinTypePaid: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
-      purchasedAt: date-time
-      user: object
-      inventoryItem: {
-        id: string | null
-        name: string | null
-        description: string | null
-        coinType: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
-        price: int
-        category: string | null
-        incrementValue: int
-        maxPurchases: int
-        isActive: bool
-        sortOrder: int
-        createdAt: date-time
+    inventoryPurchases?: {
+      id?: string | null
+      userId?: string | null
+      inventoryItemId?: string | null
+      pricePaid?: int
+      coinTypePaid?: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
+      purchasedAt?: date-time
+      user?: object
+      inventoryItem?: {
+        id?: string | null
+        name?: string | null
+        description?: string | null
+        coinType?: int  // Possible values: `0` = NeuroCoin, `1` = EvilCoin, `2` = TwinsCoin
+        price?: int
+        category?: string | null
+        incrementValue?: int
+        maxPurchases?: int
+        isActive?: bool
+        sortOrder?: int
+        createdAt?: date-time
       }
     }[] | null
   }
@@ -1669,11 +1669,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```
@@ -1690,15 +1690,15 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  date: date-time
-  songId: string | null
-  songTitle: string | null
-  totalPlayers: int
-  totalWinners: int
-  winRate: double  // read-only
-  averageAttempt: double
-  perfectScores: int
-  attemptDistribution: { [key: string]: int } | null
+  date?: date-time
+  songId?: string | null
+  songTitle?: string | null
+  totalPlayers?: int
+  totalWinners?: int
+  winRate?: double  // read-only
+  averageAttempt?: double
+  perfectScores?: int
+  attemptDistribution?: { [key: string]: int } | null
 }
 ```
 

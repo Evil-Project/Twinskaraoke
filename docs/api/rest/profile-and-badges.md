@@ -22,75 +22,75 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  profile: {
-    userId: string | null
-    displayName: string | null
-    avatarUrl: string | null
-    level: int
-    levelTitle: string | null
-    totalXP: int
-    totalBadges: int
-    unlockedBadges: int
-    collectionProgress: double
-    xpToNextLevel: int
-    levelProgress: double
-    neuroCoin: int
-    evilCoin: int
-    twinsCoin: int
-    cardArtUrl: string | null
-    frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    displayItemIds: string[] | null
-    rankScore: int
-    rankTier: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    unlockedTiers: int[] | null  // each item: Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+  profile?: {
+    userId?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+    level?: int
+    levelTitle?: string | null
+    totalXP?: int
+    totalBadges?: int
+    unlockedBadges?: int
+    collectionProgress?: double
+    xpToNextLevel?: int
+    levelProgress?: double
+    neuroCoin?: int
+    evilCoin?: int
+    twinsCoin?: int
+    cardArtUrl?: string | null
+    frameTheme?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    displayItemIds?: string[] | null
+    rankScore?: int
+    rankTier?: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
+    unlockedTiers?: int[] | null  // each item: Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
   }
-  badges: {
-    id: string | null
-    name: string | null
-    description: string | null
-    rarity: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
-    category: string | null
-    unlocked: bool
-    requirement: string | null
-    media: {
-      id: string | null
-      fileName: string | null
-      contentType: string | null
-      description: string | null
-      isAnimated: bool
-      credit: string | null
-      cloudflareId: string | null
-      mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-      absolutePath: string | null
-      artist: {
-        id: string | null
-        name: string | null
-        socialLink: string | null
-        userId: string | null
-        arts: object[] | null
+  badges?: {
+    id?: string | null
+    name?: string | null
+    description?: string | null
+    rarity?: int  // Possible values: `0` = Common, `1` = Rare, `2` = Epic, `3` = Legendary
+    category?: string | null
+    unlocked?: bool
+    requirement?: string | null
+    media?: {
+      id?: string | null
+      fileName?: string | null
+      contentType?: string | null
+      description?: string | null
+      isAnimated?: bool
+      credit?: string | null
+      cloudflareId?: string | null
+      mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+      absolutePath?: string | null
+      artist?: {
+        id?: string | null
+        name?: string | null
+        socialLink?: string | null
+        userId?: string | null
+        arts?: object[] | null
       }
-      upvotes: int
-      tagString: string | null
-      mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+      upvotes?: int
+      tagString?: string | null
+      mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
     }
-    unlockedAt: date-time | null
-    currentProgress: int
-    conditionValue: int
+    unlockedAt?: date-time | null
+    currentProgress?: int
+    conditionValue?: int
   }[] | null
-  categories: string[] | null
-  gachaInventory: {
-    prizeId: string | null
-    name: string | null
-    description: string | null
-    rarity: int  // Possible values: `0` = Common, `1` = Uncommon, `2` = Rare, `3` = Epic, `4` = Legendary
-    category: int  // Possible values: `0` = Prop, `1` = Card, `2` = UsableItem
-    roomOrigin: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Shared
-    imageUrl: string | null
-    thumbnailUrl: string | null
-    quantity: int
-    isGiftable: bool
-    firstObtained: date-time
-    lastObtained: date-time
+  categories?: string[] | null
+  gachaInventory?: {
+    prizeId?: string | null
+    name?: string | null
+    description?: string | null
+    rarity?: int  // Possible values: `0` = Common, `1` = Uncommon, `2` = Rare, `3` = Epic, `4` = Legendary
+    category?: int  // Possible values: `0` = Prop, `1` = Card, `2` = UsableItem
+    roomOrigin?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Shared
+    imageUrl?: string | null
+    thumbnailUrl?: string | null
+    quantity?: int
+    isGiftable?: bool
+    firstObtained?: date-time
+    lastObtained?: date-time
   }[] | null
 }
 ```
@@ -99,11 +99,11 @@ Response `401` Unauthorized `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```

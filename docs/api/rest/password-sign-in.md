@@ -27,6 +27,6 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  token: string | null
+  token?: string | null
 }
 ```

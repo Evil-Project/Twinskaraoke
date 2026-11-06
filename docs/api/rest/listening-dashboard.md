@@ -22,47 +22,47 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  lastRefreshed: string | null
-  stats: {
-    plays: int
-    uniqueListeners: int
-    avgSession: string | null
-    topGenre: string | null
-    uniqueSongsPlayed: int
-    trends: {
-      playsVsPrev: double
-      uniqueListenersVsPrev: double
+  lastRefreshed?: string | null
+  stats?: {
+    plays?: int
+    uniqueListeners?: int
+    avgSession?: string | null
+    topGenre?: string | null
+    uniqueSongsPlayed?: int
+    trends?: {
+      playsVsPrev?: double
+      uniqueListenersVsPrev?: double
     }
   }
-  genres: {
-    genres: {
-      name: string | null
-      plays: int
+  genres?: {
+    genres?: {
+      name?: string | null
+      plays?: int
     }[] | null
   }
-  playsOverTime: {
-    labels: string[] | null
-    data: int[] | null
+  playsOverTime?: {
+    labels?: string[] | null
+    data?: int[] | null
   }
-  topSongs: {
-    songs: {
-      id: string | null
-      slug: string | null
-      title: string | null
-      plays: int
-      thumbnailUrl: string | null
+  topSongs?: {
+    songs?: {
+      id?: string | null
+      slug?: string | null
+      title?: string | null
+      plays?: int
+      thumbnailUrl?: string | null
     }[] | null
   }
-  topArtists: {
-    artists: {
-      name: string | null
-      plays: int
+  topArtists?: {
+    artists?: {
+      name?: string | null
+      plays?: int
     }[] | null
   }
-  coverArtists: {
-    coverArtists: {
-      name: string | null
-      plays: int
+  coverArtists?: {
+    coverArtists?: {
+      name?: string | null
+      plays?: int
     }[] | null
   }
 }
@@ -84,14 +84,14 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  plays: int
-  uniqueListeners: int
-  avgSession: string | null
-  topGenre: string | null
-  uniqueSongsPlayed: int
-  trends: {
-    playsVsPrev: double
-    uniqueListenersVsPrev: double
+  plays?: int
+  uniqueListeners?: int
+  avgSession?: string | null
+  topGenre?: string | null
+  uniqueSongsPlayed?: int
+  trends?: {
+    playsVsPrev?: double
+    uniqueListenersVsPrev?: double
   }
 }
 ```
@@ -112,8 +112,8 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  labels: string[] | null
-  data: int[] | null
+  labels?: string[] | null
+  data?: int[] | null
 }
 ```
 
@@ -133,9 +133,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  genres: {
-    name: string | null
-    plays: int
+  genres?: {
+    name?: string | null
+    plays?: int
   }[] | null
 }
 ```
@@ -157,12 +157,12 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  songs: {
-    id: string | null
-    slug: string | null
-    title: string | null
-    plays: int
-    thumbnailUrl: string | null
+  songs?: {
+    id?: string | null
+    slug?: string | null
+    title?: string | null
+    plays?: int
+    thumbnailUrl?: string | null
   }[] | null
 }
 ```
@@ -184,9 +184,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  artists: {
-    name: string | null
-    plays: int
+  artists?: {
+    name?: string | null
+    plays?: int
   }[] | null
 }
 ```
@@ -207,9 +207,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  coverArtists: {
-    name: string | null
-    plays: int
+  coverArtists?: {
+    name?: string | null
+    plays?: int
   }[] | null
 }
 ```
@@ -231,12 +231,12 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  coverArtist: string | null
-  totalPlays: int
-  songs: {
-    id: string | null
-    title: string | null
-    plays: int
+  coverArtist?: string | null
+  totalPlays?: int
+  songs?: {
+    id?: string | null
+    title?: string | null
+    plays?: int
   }[] | null
 }
 ```
@@ -245,11 +245,11 @@ Response `400` Bad Request `application/json`:
 
 ```ts
 {
-  type: string | null
-  title: string | null
-  status: int | null
-  detail: string | null
-  instance: string | null
+  type?: string | null
+  title?: string | null
+  status?: int | null
+  detail?: string | null
+  instance?: string | null
   [key: string]: any  // extra keys allowed
 }
 ```

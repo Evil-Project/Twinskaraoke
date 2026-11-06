@@ -27,12 +27,12 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  sessionId: string | null
-  approveUrl: string | null
-  statusStreamUrl: string | null
-  qrCodePayload: string | null
-  qrCodeImageDataUrl: string | null
-  expiresAt: date-time
+  sessionId?: string | null
+  approveUrl?: string | null
+  statusStreamUrl?: string | null
+  qrCodePayload?: string | null
+  qrCodeImageDataUrl?: string | null
+  expiresAt?: date-time
 }
 ```
 
@@ -50,9 +50,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  status: string | null
-  token: string | null
-  expiresAt: date-time
+  status?: string | null
+  token?: string | null
+  expiresAt?: date-time
 }
 ```
 
@@ -88,9 +88,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  status: string | null
-  token: string | null
-  expiresAt: date-time
+  status?: string | null
+  token?: string | null
+  expiresAt?: date-time
 }
 ```
 

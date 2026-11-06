@@ -50,24 +50,24 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  name: string | null
-  socialLink: string | null
-  userId: string | null
-  arts: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: object
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+  id?: string | null
+  name?: string | null
+  socialLink?: string | null
+  userId?: string | null
+  arts?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: object
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }[] | null
 }[]
 ```

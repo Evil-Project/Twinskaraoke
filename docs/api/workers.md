@@ -24,34 +24,34 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  roomId: string  // Value to pass as `roomId` when connecting to the WebSocket.
-  roomName: string
-  inviteCode: string
-  isPublic: bool
-  allowListenerAddSongs: bool
-  allowListenerSongCommands: bool
-  allowDuplicateSongs: bool
-  listenerAddSongCooldownSeconds: int
-  autoRemovePlayedSongs: bool
-  hostUserId: string
-  hostDisplayName: string
-  hostAvatarUrl: string | null
-  listenerCount: int
-  maxListeners: int
-  nowPlaying: {
-    queueItemId: string
-    songId: string
-    title: string
-    artists: string
-    audioUrl: string
-    hlsUrl: string | null
-    coverUrl: string
-    positionSeconds: number
-    durationSeconds: number
-    isPlaying: bool
-    serverTimestampMs: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
+  roomId?: string  // Value to pass as `roomId` when connecting to the WebSocket.
+  roomName?: string
+  inviteCode?: string
+  isPublic?: bool
+  allowListenerAddSongs?: bool
+  allowListenerSongCommands?: bool
+  allowDuplicateSongs?: bool
+  listenerAddSongCooldownSeconds?: int
+  autoRemovePlayedSongs?: bool
+  hostUserId?: string
+  hostDisplayName?: string
+  hostAvatarUrl?: string | null
+  listenerCount?: int
+  maxListeners?: int
+  nowPlaying?: {
+    queueItemId?: string
+    songId?: string
+    title?: string
+    artists?: string
+    audioUrl?: string
+    hlsUrl?: string | null
+    coverUrl?: string
+    positionSeconds?: number
+    durationSeconds?: number
+    isPlaying?: bool
+    serverTimestampMs?: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
   } | null
-  createdAt: date-time
+  createdAt?: date-time
 }[]
 ```
 
@@ -71,34 +71,34 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  roomId: string  // Value to pass as `roomId` when connecting to the WebSocket.
-  roomName: string
-  inviteCode: string
-  isPublic: bool
-  allowListenerAddSongs: bool
-  allowListenerSongCommands: bool
-  allowDuplicateSongs: bool
-  listenerAddSongCooldownSeconds: int
-  autoRemovePlayedSongs: bool
-  hostUserId: string
-  hostDisplayName: string
-  hostAvatarUrl: string | null
-  listenerCount: int
-  maxListeners: int
-  nowPlaying: {
-    queueItemId: string
-    songId: string
-    title: string
-    artists: string
-    audioUrl: string
-    hlsUrl: string | null
-    coverUrl: string
-    positionSeconds: number
-    durationSeconds: number
-    isPlaying: bool
-    serverTimestampMs: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
+  roomId?: string  // Value to pass as `roomId` when connecting to the WebSocket.
+  roomName?: string
+  inviteCode?: string
+  isPublic?: bool
+  allowListenerAddSongs?: bool
+  allowListenerSongCommands?: bool
+  allowDuplicateSongs?: bool
+  listenerAddSongCooldownSeconds?: int
+  autoRemovePlayedSongs?: bool
+  hostUserId?: string
+  hostDisplayName?: string
+  hostAvatarUrl?: string | null
+  listenerCount?: int
+  maxListeners?: int
+  nowPlaying?: {
+    queueItemId?: string
+    songId?: string
+    title?: string
+    artists?: string
+    audioUrl?: string
+    hlsUrl?: string | null
+    coverUrl?: string
+    positionSeconds?: number
+    durationSeconds?: number
+    isPlaying?: bool
+    serverTimestampMs?: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
   } | null
-  createdAt: date-time
+  createdAt?: date-time
 }[]
 ```
 
@@ -118,34 +118,34 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  roomId: string  // Value to pass as `roomId` when connecting to the WebSocket.
-  roomName: string
-  inviteCode: string
-  isPublic: bool
-  allowListenerAddSongs: bool
-  allowListenerSongCommands: bool
-  allowDuplicateSongs: bool
-  listenerAddSongCooldownSeconds: int
-  autoRemovePlayedSongs: bool
-  hostUserId: string
-  hostDisplayName: string
-  hostAvatarUrl: string | null
-  listenerCount: int
-  maxListeners: int
-  nowPlaying: {
-    queueItemId: string
-    songId: string
-    title: string
-    artists: string
-    audioUrl: string
-    hlsUrl: string | null
-    coverUrl: string
-    positionSeconds: number
-    durationSeconds: number
-    isPlaying: bool
-    serverTimestampMs: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
+  roomId?: string  // Value to pass as `roomId` when connecting to the WebSocket.
+  roomName?: string
+  inviteCode?: string
+  isPublic?: bool
+  allowListenerAddSongs?: bool
+  allowListenerSongCommands?: bool
+  allowDuplicateSongs?: bool
+  listenerAddSongCooldownSeconds?: int
+  autoRemovePlayedSongs?: bool
+  hostUserId?: string
+  hostDisplayName?: string
+  hostAvatarUrl?: string | null
+  listenerCount?: int
+  maxListeners?: int
+  nowPlaying?: {
+    queueItemId?: string
+    songId?: string
+    title?: string
+    artists?: string
+    audioUrl?: string
+    hlsUrl?: string | null
+    coverUrl?: string
+    positionSeconds?: number
+    durationSeconds?: number
+    isPlaying?: bool
+    serverTimestampMs?: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
   } | null
-  createdAt: date-time
+  createdAt?: date-time
 }
 ```
 

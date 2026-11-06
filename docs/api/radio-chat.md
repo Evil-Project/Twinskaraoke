@@ -37,13 +37,13 @@ Connection query:
 
 ```ts
 {
-  lang: string  // Possible values: `en`, `ja`, `zh`; default: "en"
-  token: string  // Bearer token from neurokaraoke.com. Omit to connect as a guest.
-  guestId: string  // Any UUID. Reuse the same value to keep a stable guest display name.
-  displayName: string
-  avatarUrl: string
-  frameTheme: int
-  level: int
+  lang?: string  // Possible values: `en`, `ja`, `zh`; default: "en"
+  token?: string  // Bearer token from neurokaraoke.com. Omit to connect as a guest.
+  guestId?: string  // Any UUID. Reuse the same value to keep a stable guest display name.
+  displayName?: string
+  avatarUrl?: string
+  frameTheme?: int
+  level?: int
 }
 ```
 
@@ -57,7 +57,7 @@ Send a Ping approximately every 30 seconds.
 
 ```ts
 {
-  type: "Ping"
+  type?: "Ping"
 }
 ```
 
@@ -69,10 +69,10 @@ Send and delete messages, and load older history.
 
 ```ts
 {
-  type: "SendMessage"
-  payload: (string | {
-    content: string
-    replyToId: string
+  type?: "SendMessage"
+  payload?: (string | {
+    content?: string
+    replyToId?: string
   })
 }
 ```
@@ -93,8 +93,8 @@ Example (Reply):
 
 ```ts
 {
-  type: "DeleteMessage"
-  payload: string  // Message ID.
+  type?: "DeleteMessage"
+  payload?: string  // Message ID.
 }
 ```
 
@@ -102,8 +102,8 @@ Example (Reply):
 
 ```ts
 {
-  type: "LoadMoreHistory"
-  payload: int
+  type?: "LoadMoreHistory"
+  payload?: int
 }
 ```
 
@@ -123,7 +123,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "Pong"
+  type?: "Pong"
 }
 ```
 
@@ -131,29 +131,29 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ReceiveMessageHistory"
-  payload: {
-    messages: {
-      id: string
-      userId: string  // For guests, the value is `guest-<guestId>`.
-      displayName: string
-      avatarUrl: string
-      frameTheme: int
-      userLevel: int
-      isAdmin: bool
-      isMod: bool
-      isStaff: bool
-      isDeveloper: bool
-      isGuest: bool
-      isBot: bool
-      isDeleted: bool
-      content: string
-      timestamp: date-time
-      replyToId: string
-      replyToContent: string  // First 80 characters of the referenced message.
+  type?: "ReceiveMessageHistory"
+  payload?: {
+    messages?: {
+      id?: string
+      userId?: string  // For guests, the value is `guest-<guestId>`.
+      displayName?: string
+      avatarUrl?: string
+      frameTheme?: int
+      userLevel?: int
+      isAdmin?: bool
+      isMod?: bool
+      isStaff?: bool
+      isDeveloper?: bool
+      isGuest?: bool
+      isBot?: bool
+      isDeleted?: bool
+      content?: string
+      timestamp?: date-time
+      replyToId?: string
+      replyToContent?: string  // First 80 characters of the referenced message.
     }[]
-    hasMore: bool  // Whether older messages are available via LoadMoreHistory.
-    totalCount: int
+    hasMore?: bool  // Whether older messages are available via LoadMoreHistory.
+    totalCount?: int
   }
 }
 ```
@@ -162,29 +162,29 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "MoreMessageHistory"
-  payload: {
-    messages: {
-      id: string
-      userId: string  // For guests, the value is `guest-<guestId>`.
-      displayName: string
-      avatarUrl: string
-      frameTheme: int
-      userLevel: int
-      isAdmin: bool
-      isMod: bool
-      isStaff: bool
-      isDeveloper: bool
-      isGuest: bool
-      isBot: bool
-      isDeleted: bool
-      content: string
-      timestamp: date-time
-      replyToId: string
-      replyToContent: string  // First 80 characters of the referenced message.
+  type?: "MoreMessageHistory"
+  payload?: {
+    messages?: {
+      id?: string
+      userId?: string  // For guests, the value is `guest-<guestId>`.
+      displayName?: string
+      avatarUrl?: string
+      frameTheme?: int
+      userLevel?: int
+      isAdmin?: bool
+      isMod?: bool
+      isStaff?: bool
+      isDeveloper?: bool
+      isGuest?: bool
+      isBot?: bool
+      isDeleted?: bool
+      content?: string
+      timestamp?: date-time
+      replyToId?: string
+      replyToContent?: string  // First 80 characters of the referenced message.
     }[]
-    hasMore: bool  // Whether older messages are available via LoadMoreHistory.
-    totalCount: int
+    hasMore?: bool  // Whether older messages are available via LoadMoreHistory.
+    totalCount?: int
   }
 }
 ```
@@ -193,25 +193,25 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ReceiveMessage"
-  payload: {
-    id: string
-    userId: string  // For guests, the value is `guest-<guestId>`.
-    displayName: string
-    avatarUrl: string
-    frameTheme: int
-    userLevel: int
-    isAdmin: bool
-    isMod: bool
-    isStaff: bool
-    isDeveloper: bool
-    isGuest: bool
-    isBot: bool
-    isDeleted: bool
-    content: string
-    timestamp: date-time
-    replyToId: string
-    replyToContent: string  // First 80 characters of the referenced message.
+  type?: "ReceiveMessage"
+  payload?: {
+    id?: string
+    userId?: string  // For guests, the value is `guest-<guestId>`.
+    displayName?: string
+    avatarUrl?: string
+    frameTheme?: int
+    userLevel?: int
+    isAdmin?: bool
+    isMod?: bool
+    isStaff?: bool
+    isDeveloper?: bool
+    isGuest?: bool
+    isBot?: bool
+    isDeleted?: bool
+    content?: string
+    timestamp?: date-time
+    replyToId?: string
+    replyToContent?: string  // First 80 characters of the referenced message.
   }
 }
 ```
@@ -220,8 +220,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "MessageDeleted"
-  payload: string  // Message ID.
+  type?: "MessageDeleted"
+  payload?: string  // Message ID.
 }
 ```
 
@@ -229,7 +229,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "MessagesPurged"
+  type?: "MessagesPurged"
 }
 ```
 
@@ -237,10 +237,10 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "UserTimedOut"
-  payload: {
-    userId: string
-    remainingSeconds: int
+  type?: "UserTimedOut"
+  payload?: {
+    userId?: string
+    remainingSeconds?: int
   }
 }
 ```
@@ -249,8 +249,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "UserCount"
-  payload: int
+  type?: "UserCount"
+  payload?: int
 }
 ```
 
@@ -258,8 +258,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "NowPlayingChanged"
-  payload: { [key: string]: any }
+  type?: "NowPlayingChanged"
+  payload?: { [key: string]: any }
 }
 ```
 
@@ -267,7 +267,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "Error"
-  payload: string
+  type?: "Error"
+  payload?: string
 }
 ```

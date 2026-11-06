@@ -17,7 +17,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -167,7 +169,9 @@ def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | Non
             lines = ["{"]
             for prop_name, prop in props.items():
                 prop_resolved = resolve(spec, prop)
-                optional = "?" if required and prop_name not in required else ""
+                # OpenAPI: a property not in `required` may be omitted, also when the
+                # schema has no `required` list at all.
+                optional = "" if prop_name in required else "?"
                 texts = [(prop_resolved.get("description") or "").strip()]
                 item = prop_resolved
                 while isinstance(item, dict) and isinstance(item.get("items"), dict):
@@ -257,7 +261,10 @@ def operation_markdown(spec: dict, method: str, path: str, op: dict, shared: lis
         out += ["| Parameter | In | Type | Required | Description |", "| --- | --- | --- | --- | --- |"]
         for p in params:
             schema_info = resolve(spec, p.get("schema") or {})
-            parts = [(p.get("description") or "").strip(), (schema_info.get("description") or "").strip()] + notes(spec, schema_info)
+            parts = [(p.get("description") or "").strip()]
+            if (schema_info.get("description") or "").strip() not in parts:
+                parts.append((schema_info.get("description") or "").strip())
+            parts += notes(spec, schema_info)
             if p.get("deprecated"):
                 parts.append("deprecated")
             description = "; ".join(x for x in parts if x).replace("\n", " ").replace("|", "\\|")
@@ -313,9 +320,16 @@ def write_openapi(spec: dict, slug_name: str, title_hint: str) -> list[tuple[str
     folder = OUT / slug_name if split else OUT
     if split:
         folder.mkdir(parents=True, exist_ok=True)
+    # Distinct tags can share a slug ("A/B", "A B"); give each its own file.
+    file_names: dict[str, str] = {}
+    for tag in tags:
+        base, n = slug(tag), 1
+        while (candidate := base if n == 1 else f"{base}-{n}") in file_names.values():
+            n += 1
+        file_names[tag] = candidate
     single: list[str] = []
     for tag in tags:
-        file = folder / f"{slug(tag)}.md" if split else OUT / f"{slug_name}.md"
+        file = folder / f"{file_names[tag]}.md" if split else OUT / f"{slug_name}.md"
         rel = file.relative_to(OUT).as_posix()
         tag_info = next((t for t in spec.get("tags", []) if t.get("name") == tag), {})
         section = [f"## {tag}", ""]
@@ -462,8 +476,8 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         "  has no format in the spec.",
         "- `date-time` is an ISO 8601 timestamp, `date-span` a duration (spec format `date-span`),",
         "  `base64` Base64-encoded bytes (format `byte`), `binary` a file upload.",
-        "- `| null` means the value can be null. `name?:` means the field isn't required; this only",
-        "  appears where the spec lists required fields, otherwise every field is shown without `?`.",
+        "- `| null` means the value can be null. `name?:` means the spec doesn't list the field as",
+        "  required, so it may be missing; fields without `?` are in the spec's `required` list.",
         "- `[key: string]: T` means the object allows extra keys. REST request and response objects",
         "  without it are closed in the spec (`additionalProperties: false`) or don't say; check",
         "  `specs/` when it matters.",
@@ -517,14 +531,14 @@ def main() -> int:
 
     SPECS.mkdir(parents=True, exist_ok=True)
     if not args.offline:
-        changed = []
-        for remote, local, _, _ in SOURCES:
-            text = canonical(fetch(remote))
-            target = SPECS / local
-            if not target.exists() or target.read_text(encoding="utf-8") != text:
-                changed.append(local)
-                if not args.check:
-                    target.write_text(text, encoding="utf-8")
+        # Download and parse every spec before touching any file, so a failed
+        # download can't leave a mix of old and new specs behind.
+        fetched = {local: canonical(fetch(remote)) for remote, local, _, _ in SOURCES}
+        changed = [local for local, text in fetched.items()
+                   if not (SPECS / local).exists() or (SPECS / local).read_text(encoding="utf-8") != text]
+        if not args.check:
+            for local in changed:
+                (SPECS / local).write_text(fetched[local], encoding="utf-8")
         if args.check:
             if changed:
                 print("API specs changed upstream: " + ", ".join(changed))
@@ -534,22 +548,30 @@ def main() -> int:
             return 0
         print("Changed specs: " + (", ".join(changed) if changed else "none"))
 
-    # Regenerate everything from the committed specs.
-    for old in OUT.rglob("*.md"):
-        old.unlink()
-    for folder in sorted((p for p in OUT.iterdir() if p.is_dir() and p != SPECS), reverse=True):
-        if not any(folder.iterdir()):
-            folder.rmdir()
+    # Regenerate everything from the committed specs into a staging folder, and
+    # replace the existing Markdown only once that succeeded.
     loaded = {slug_name: json.loads((SPECS / local).read_text(encoding="utf-8"))
               for _, local, slug_name, _ in SOURCES}
-    rest_rows, async_rows = {}, {}
-    for _, _, slug_name, kind in SOURCES:
-        if kind == "openapi":
-            rest_rows[slug_name] = write_openapi(loaded[slug_name], slug_name, slug_name)
-        else:
-            async_rows[slug_name] = write_asyncapi(loaded[slug_name], slug_name)
-    write_index(loaded, rest_rows, async_rows)
-    files = sorted(p.relative_to(ROOT).as_posix() for p in OUT.rglob("*.md"))
+    global OUT
+    target = OUT
+    staging = Path(tempfile.mkdtemp(prefix=".api-docs-", dir=target.parent))
+    try:
+        OUT = staging
+        rest_rows, async_rows = {}, {}
+        for _, _, slug_name, kind in SOURCES:
+            if kind == "openapi":
+                rest_rows[slug_name] = write_openapi(loaded[slug_name], slug_name, slug_name)
+            else:
+                async_rows[slug_name] = write_asyncapi(loaded[slug_name], slug_name)
+        write_index(loaded, rest_rows, async_rows)
+        files = sorted(p.relative_to(staging).as_posix() for p in staging.rglob("*.md"))
+        for old in [p for p in target.iterdir() if p != SPECS]:
+            shutil.rmtree(old) if old.is_dir() else old.unlink()
+        for new in staging.iterdir():
+            shutil.move(str(new), target / new.name)
+    finally:
+        OUT = target
+        shutil.rmtree(staging, ignore_errors=True)
     print(f"Wrote {len(files)} Markdown files to docs/api/")
     return 0
 

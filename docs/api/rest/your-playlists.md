@@ -34,68 +34,68 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  name: string | null
-  description: string | null
-  createdBy: string | null
-  updatedBy: string | null
-  media: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  name?: string | null
+  description?: string | null
+  createdBy?: string | null
+  updatedBy?: string | null
+  media?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  createdAt: date-time | null
-  updatedAt: date-time | null
-  totalDuration: int | null
-  songCount: int | null
-  playCount: int | null
-  favoriteCount: int | null
-  playlistType: int  // Possible values: `0` = Setlist, `1` = Public, `2` = Private, `3` = Featured
-  songListDTOs: {
-    id: string | null
-    title: string | null
-    opus: string | null
-    oss: string | null
-    cnPath: string | null
-    absolutePath: string | null
-    playCount: int | null
-    duration: int | null
-    streamDate: date-time | null
-    dateAdded: date-time | null
-    coverArtists: string[] | null
-    originalArtists: string[] | null
-    genres: string[] | null
-    coverArt: { …same as `media` above }
-    thumbnailArt: { …same as `media` above }
-    order: int
-    hasLyrics: bool
-    userUploaded: bool
-    videoId: string | null
-    hls: string | null
+  createdAt?: date-time | null
+  updatedAt?: date-time | null
+  totalDuration?: int | null
+  songCount?: int | null
+  playCount?: int | null
+  favoriteCount?: int | null
+  playlistType?: int  // Possible values: `0` = Setlist, `1` = Public, `2` = Private, `3` = Featured
+  songListDTOs?: {
+    id?: string | null
+    title?: string | null
+    opus?: string | null
+    oss?: string | null
+    cnPath?: string | null
+    absolutePath?: string | null
+    playCount?: int | null
+    duration?: int | null
+    streamDate?: date-time | null
+    dateAdded?: date-time | null
+    coverArtists?: string[] | null
+    originalArtists?: string[] | null
+    genres?: string[] | null
+    coverArt?: { …same as `media` above }
+    thumbnailArt?: { …same as `media` above }
+    order?: int
+    hasLyrics?: bool
+    userUploaded?: bool
+    videoId?: string | null
+    hls?: string | null
   }[] | null
-  mosaicMedia: { …same as `media` above }[] | null
-  genres: string[] | null
-  editable: bool
-  deletable: bool
-  isPublic: bool
-  isSetList: bool
-  setListDate: date-time | null
+  mosaicMedia?: { …same as `media` above }[] | null
+  genres?: string[] | null
+  editable?: bool
+  deletable?: bool
+  isPublic?: bool
+  isSetList?: bool
+  setListDate?: date-time | null
 }[]
 ```
 
@@ -113,36 +113,36 @@ Request body `application/json`:
 
 ```ts
 {
-  id: string | null
-  name: string | null
-  description: string | null
-  createdBy: string | null
-  mediaListDTO: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  name?: string | null
+  description?: string | null
+  createdBy?: string | null
+  mediaListDTO?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  songId: string | null
-  userAudioId: string | null
-  isPublic: bool
-  isSetList: bool
-  setListDate: date-time | null
+  songId?: string | null
+  userAudioId?: string | null
+  isPublic?: bool
+  isSetList?: bool
+  setListDate?: date-time | null
 }
 ```
 
@@ -226,11 +226,11 @@ Request body `application/json`:
 
 ```ts
 {
-  songId: string | null
-  userAudioId: string | null
-  order: int
-  oldOrder: int
-  newOrder: int
+  songId?: string | null
+  userAudioId?: string | null
+  order?: int
+  oldOrder?: int
+  newOrder?: int
 }[]
 ```
 
@@ -254,46 +254,46 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  title: string | null
-  opus: string | null
-  oss: string | null
-  cnPath: string | null
-  absolutePath: string | null
-  playCount: int | null
-  duration: int | null
-  streamDate: date-time | null
-  dateAdded: date-time | null
-  coverArtists: string[] | null
-  originalArtists: string[] | null
-  genres: string[] | null
-  coverArt: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  title?: string | null
+  opus?: string | null
+  oss?: string | null
+  cnPath?: string | null
+  absolutePath?: string | null
+  playCount?: int | null
+  duration?: int | null
+  streamDate?: date-time | null
+  dateAdded?: date-time | null
+  coverArtists?: string[] | null
+  originalArtists?: string[] | null
+  genres?: string[] | null
+  coverArt?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  thumbnailArt: { …same as `coverArt` above }
-  order: int
-  hasLyrics: bool
-  userUploaded: bool
-  videoId: string | null
-  hls: string | null
+  thumbnailArt?: { …same as `coverArt` above }
+  order?: int
+  hasLyrics?: bool
+  userUploaded?: bool
+  videoId?: string | null
+  hls?: string | null
 }[]
 ```
 
@@ -311,46 +311,46 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  title: string | null
-  opus: string | null
-  oss: string | null
-  cnPath: string | null
-  absolutePath: string | null
-  playCount: int | null
-  duration: int | null
-  streamDate: date-time | null
-  dateAdded: date-time | null
-  coverArtists: string[] | null
-  originalArtists: string[] | null
-  genres: string[] | null
-  coverArt: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  title?: string | null
+  opus?: string | null
+  oss?: string | null
+  cnPath?: string | null
+  absolutePath?: string | null
+  playCount?: int | null
+  duration?: int | null
+  streamDate?: date-time | null
+  dateAdded?: date-time | null
+  coverArtists?: string[] | null
+  originalArtists?: string[] | null
+  genres?: string[] | null
+  coverArt?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  thumbnailArt: { …same as `coverArt` above }
-  order: int
-  hasLyrics: bool
-  userUploaded: bool
-  videoId: string | null
-  hls: string | null
+  thumbnailArt?: { …same as `coverArt` above }
+  order?: int
+  hasLyrics?: bool
+  userUploaded?: bool
+  videoId?: string | null
+  hls?: string | null
 }[]
 ```
 
@@ -417,11 +417,11 @@ Request body `application/json`:
 
 ```ts
 {
-  songId: string | null
-  userAudioId: string | null
-  order: int
-  oldOrder: int
-  newOrder: int
+  songId?: string | null
+  userAudioId?: string | null
+  order?: int
+  oldOrder?: int
+  newOrder?: int
 }[]
 ```
 
@@ -439,154 +439,154 @@ Returns the authenticated user's favorites of one kind, given in `type`.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `type` | query | `int` | no | Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote; Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote |
+| `type` | query | `int` | no | Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  order: int
-  type: int  // Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote
-  userId: string | null
-  guestId: string | null
-  song: {
-    id: string | null
-    title: string | null
-    opus: string | null
-    oss: string | null
-    cnPath: string | null
-    absolutePath: string | null
-    playCount: int | null
-    duration: int | null
-    streamDate: date-time | null
-    dateAdded: date-time | null
-    coverArtists: string[] | null
-    originalArtists: string[] | null
-    genres: string[] | null
-    coverArt: {
-      id: string | null
-      fileName: string | null
-      contentType: string | null
-      description: string | null
-      isAnimated: bool
-      credit: string | null
-      cloudflareId: string | null
-      mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-      absolutePath: string | null
-      artist: {
-        id: string | null
-        name: string | null
-        socialLink: string | null
-        userId: string | null
-        arts: object[] | null
+  id?: string | null
+  order?: int
+  type?: int  // Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote
+  userId?: string | null
+  guestId?: string | null
+  song?: {
+    id?: string | null
+    title?: string | null
+    opus?: string | null
+    oss?: string | null
+    cnPath?: string | null
+    absolutePath?: string | null
+    playCount?: int | null
+    duration?: int | null
+    streamDate?: date-time | null
+    dateAdded?: date-time | null
+    coverArtists?: string[] | null
+    originalArtists?: string[] | null
+    genres?: string[] | null
+    coverArt?: {
+      id?: string | null
+      fileName?: string | null
+      contentType?: string | null
+      description?: string | null
+      isAnimated?: bool
+      credit?: string | null
+      cloudflareId?: string | null
+      mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+      absolutePath?: string | null
+      artist?: {
+        id?: string | null
+        name?: string | null
+        socialLink?: string | null
+        userId?: string | null
+        arts?: object[] | null
       }
-      upvotes: int
-      tagString: string | null
-      mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+      upvotes?: int
+      tagString?: string | null
+      mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
     }
-    thumbnailArt: { …same as `coverArt` above }
-    order: int
-    hasLyrics: bool
-    userUploaded: bool
-    videoId: string | null
-    hls: string | null
+    thumbnailArt?: { …same as `coverArt` above }
+    order?: int
+    hasLyrics?: bool
+    userUploaded?: bool
+    videoId?: string | null
+    hls?: string | null
   }
-  soundBite: {
-    id: string | null
-    title: string | null
-    comments: string | null
-    duration: int | null
-    absolutePath: string | null
-    tag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Vedal, `3` = Other
-    audioUrl: string | null
-    uploadedAt: date-time
-    uploadedBy: string | null
-    imageUrl: string | null
-    embeddable: bool
-    playCount: int
-    downloadCount: int
+  soundBite?: {
+    id?: string | null
+    title?: string | null
+    comments?: string | null
+    duration?: int | null
+    absolutePath?: string | null
+    tag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Vedal, `3` = Other
+    audioUrl?: string | null
+    uploadedAt?: date-time
+    uploadedBy?: string | null
+    imageUrl?: string | null
+    embeddable?: bool
+    playCount?: int
+    downloadCount?: int
   }
-  video: {
-    songId: string | null
-    songTitle: string | null
-    id: string | null
-    name: string | null
-    description: string | null
-    contentType: string | null
-    absolutePath: string | null
-    mP4: string | null
-    cnPath: string | null
-    url: string | null
-    videoType: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
-    cloudflareId: string | null
-    createdBy: string | null
-    creatorUserId: string | null
-    creatorAvatarUrl: string | null
-    thumbnailUrl: string | null
-    duration: int64 | null
-    width: int | null
-    height: int | null
-    createdDate: date-time | null
-    isWatchalong: bool
-    category: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
-    views: int
-    upvotes: int
-    commentCount: int
-    channelUploadCount: int
-    youtubeSourceId: string | null
-    b2SourceId: string | null
-    youtubeViews: int64 | null
-    bilibiliViews: int64 | null
-    sourceViewsUpdatedDate: date-time | null
-    totalViews: int64  // read-only
+  video?: {
+    songId?: string | null
+    songTitle?: string | null
+    id?: string | null
+    name?: string | null
+    description?: string | null
+    contentType?: string | null
+    absolutePath?: string | null
+    mP4?: string | null
+    cnPath?: string | null
+    url?: string | null
+    videoType?: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
+    cloudflareId?: string | null
+    createdBy?: string | null
+    creatorUserId?: string | null
+    creatorAvatarUrl?: string | null
+    thumbnailUrl?: string | null
+    duration?: int64 | null
+    width?: int | null
+    height?: int | null
+    createdDate?: date-time | null
+    isWatchalong?: bool
+    category?: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
+    views?: int
+    upvotes?: int
+    commentCount?: int
+    channelUploadCount?: int
+    youtubeSourceId?: string | null
+    b2SourceId?: string | null
+    youtubeViews?: int64 | null
+    bilibiliViews?: int64 | null
+    sourceViewsUpdatedDate?: date-time | null
+    totalViews?: int64  // read-only
   }
-  playlist: {
-    id: string | null
-    name: string | null
-    description: string | null
-    createdBy: string | null
-    updatedBy: string | null
-    media: { …same as `coverArt` above }
-    createdAt: date-time | null
-    updatedAt: date-time | null
-    totalDuration: int | null
-    songCount: int | null
-    playCount: int | null
-    favoriteCount: int | null
-    playlistType: int  // Possible values: `0` = Setlist, `1` = Public, `2` = Private, `3` = Featured
-    songListDTOs: { …same as `song` above }[] | null
-    mosaicMedia: { …same as `coverArt` above }[] | null
-    genres: string[] | null
-    editable: bool
-    deletable: bool
-    isPublic: bool
-    isSetList: bool
-    setListDate: date-time | null
+  playlist?: {
+    id?: string | null
+    name?: string | null
+    description?: string | null
+    createdBy?: string | null
+    updatedBy?: string | null
+    media?: { …same as `coverArt` above }
+    createdAt?: date-time | null
+    updatedAt?: date-time | null
+    totalDuration?: int | null
+    songCount?: int | null
+    playCount?: int | null
+    favoriteCount?: int | null
+    playlistType?: int  // Possible values: `0` = Setlist, `1` = Public, `2` = Private, `3` = Featured
+    songListDTOs?: { …same as `song` above }[] | null
+    mosaicMedia?: { …same as `coverArt` above }[] | null
+    genres?: string[] | null
+    editable?: bool
+    deletable?: bool
+    isPublic?: bool
+    isSetList?: bool
+    setListDate?: date-time | null
   }
-  art: { …same as `coverArt` above }
-  quote: {
-    id: string | null
-    character: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
-    quoteText: string | null
-    date: date-time | null
-    submitterName: string | null
-    upvotes: int
-    video: { …same as `video` above }
-    sourceUrl: string | null
-    reuploadVideoUrl: string | null
-    startTime: int | null
-    endTime: int | null
-    sourceType: int  // Possible values: `0` = Youtube, `1` = Bilibili, `2` = Upload, `3` = Other
-    uploadedClipUrl: string | null
-    approvalStatus: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
-    submittedByUserId: string | null
-    submittedDate: date-time | null
-    reviewedBy: string | null
-    reviewedDate: date-time | null
-    rejectionReason: string | null
+  art?: { …same as `coverArt` above }
+  quote?: {
+    id?: string | null
+    character?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    quoteText?: string | null
+    date?: date-time | null
+    submitterName?: string | null
+    upvotes?: int
+    video?: { …same as `video` above }
+    sourceUrl?: string | null
+    reuploadVideoUrl?: string | null
+    startTime?: int | null
+    endTime?: int | null
+    sourceType?: int  // Possible values: `0` = Youtube, `1` = Bilibili, `2` = Upload, `3` = Other
+    uploadedClipUrl?: string | null
+    approvalStatus?: int  // Possible values: `0` = Pending, `1` = Approved, `2` = Rejected
+    submittedByUserId?: string | null
+    submittedDate?: date-time | null
+    reviewedBy?: string | null
+    reviewedDate?: date-time | null
+    rejectionReason?: string | null
   }
-  createdAt: date-time | null
+  createdAt?: date-time | null
 }[]
 ```
 

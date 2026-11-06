@@ -45,22 +45,22 @@ Connection query:
 
 ```ts
 {
-  action: string  // Possible values: `create`
-  roomId: string
-  inviteCode: string
-  token: string  // Bearer token from neurokaraoke.com. Omit to connect as a guest.
-  guestId: string  // Any UUID. Reuse the same value to keep a stable guest identity.
-  displayName: string
-  avatarUrl: string
-  frameTheme: int
-  level: int
-  roomName: string
-  isPublic: bool  // default: true
-  allowListenerAddSongs: bool  // default: false
-  allowListenerSongCommands: bool  // default: false
-  allowDuplicateSongs: bool  // default: false
-  listenerAddSongCooldownSeconds: int  // default: 0
-  autoRemovePlayedSongs: bool
+  action?: string  // Possible values: `create`
+  roomId?: string
+  inviteCode?: string
+  token?: string  // Bearer token from neurokaraoke.com. Omit to connect as a guest.
+  guestId?: string  // Any UUID. Reuse the same value to keep a stable guest identity.
+  displayName?: string
+  avatarUrl?: string
+  frameTheme?: int
+  level?: int
+  roomName?: string
+  isPublic?: bool  // default: true
+  allowListenerAddSongs?: bool  // default: false
+  allowListenerSongCommands?: bool  // default: false
+  allowDuplicateSongs?: bool  // default: false
+  listenerAddSongCooldownSeconds?: int  // default: 0
+  autoRemovePlayedSongs?: bool
 }
 ```
 
@@ -74,7 +74,7 @@ Send a Ping approximately every 30 seconds.
 
 ```ts
 {
-  type: "Ping"
+  type?: "Ping"
 }
 ```
 
@@ -86,7 +86,7 @@ Restricted to the host and co-hosts. Each change is followed by a PlaybackSync b
 
 ```ts
 {
-  type: "Play"
+  type?: "Play"
 }
 ```
 
@@ -94,7 +94,7 @@ Restricted to the host and co-hosts. Each change is followed by a PlaybackSync b
 
 ```ts
 {
-  type: "Pause"
+  type?: "Pause"
 }
 ```
 
@@ -102,8 +102,8 @@ Restricted to the host and co-hosts. Each change is followed by a PlaybackSync b
 
 ```ts
 {
-  type: "Seek"
-  payload: number  // Position in seconds.
+  type?: "Seek"
+  payload?: number  // Position in seconds.
 }
 ```
 
@@ -117,7 +117,7 @@ Example:
 
 ```ts
 {
-  type: "SkipNext"
+  type?: "SkipNext"
 }
 ```
 
@@ -125,7 +125,7 @@ Example:
 
 ```ts
 {
-  type: "SkipPrevious"
+  type?: "SkipPrevious"
 }
 ```
 
@@ -133,10 +133,10 @@ Example:
 
 ```ts
 {
-  type: "PlaySongAt"
-  payload: (string | {
-    queueItemId: string
-    songId: string
+  type?: "PlaySongAt"
+  payload?: (string | {
+    queueItemId?: string
+    songId?: string
   })  // Queue item reference: a `queueItemId` (or `songId`) string, or an object containing either field.
 }
 ```
@@ -145,10 +145,10 @@ Example:
 
 ```ts
 {
-  type: "ReportPosition"
-  payload: {
-    positionSeconds: number
-    isPlaying: bool
+  type?: "ReportPosition"
+  payload?: {
+    positionSeconds?: number
+    isPlaying?: bool
   }
 }
 ```
@@ -167,8 +167,8 @@ Host and co-hosts can send all of these. Listeners can only send ListenerAddSong
 
 ```ts
 {
-  type: "AddSong"
-  payload: {
+  type?: "AddSong"
+  payload?: {
     queueItemId?: string
     songId: string
     title?: string
@@ -186,10 +186,10 @@ Host and co-hosts can send all of these. Listeners can only send ListenerAddSong
 
 ```ts
 {
-  type: "RemoveSong"
-  payload: (string | {
-    queueItemId: string
-    songId: string
+  type?: "RemoveSong"
+  payload?: (string | {
+    queueItemId?: string
+    songId?: string
   })  // Queue item reference: a `queueItemId` (or `songId`) string, or an object containing either field.
 }
 ```
@@ -198,8 +198,8 @@ Host and co-hosts can send all of these. Listeners can only send ListenerAddSong
 
 ```ts
 {
-  type: "ReorderQueue"
-  payload: {
+  type?: "ReorderQueue"
+  payload?: {
     queueItemId?: string
     songId?: string
     newOrder: int  // Zero-based target index.
@@ -217,7 +217,7 @@ Example:
 
 ```ts
 {
-  type: "ShuffleQueue"
+  type?: "ShuffleQueue"
 }
 ```
 
@@ -225,8 +225,8 @@ Example:
 
 ```ts
 {
-  type: "SetRepeatMode"
-  payload: string  // Possible values: `Off`, `All`, `One`
+  type?: "SetRepeatMode"
+  payload?: string  // Possible values: `Off`, `All`, `One`
 }
 ```
 
@@ -234,8 +234,8 @@ Example:
 
 ```ts
 {
-  type: "ListenerAddSong"
-  payload: {
+  type?: "ListenerAddSong"
+  payload?: {
     queueItemId?: string
     songId: string
     title?: string
@@ -257,10 +257,10 @@ Available to all connected users.
 
 ```ts
 {
-  type: "SendMessage"
-  payload: (string | {
-    content: string
-    replyToId: string
+  type?: "SendMessage"
+  payload?: (string | {
+    content?: string
+    replyToId?: string
   })
 }
 ```
@@ -279,8 +279,8 @@ Restricted to the host.
 
 ```ts
 {
-  type: "KickUser"
-  payload: string  // Target user ID.
+  type?: "KickUser"
+  payload?: string  // Target user ID.
 }
 ```
 
@@ -288,7 +288,7 @@ Restricted to the host.
 
 ```ts
 {
-  type: "CloseRoom"
+  type?: "CloseRoom"
 }
 ```
 
@@ -302,7 +302,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "Pong"
+  type?: "Pong"
 }
 ```
 
@@ -310,10 +310,10 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "RoomState"
-  payload: {
-    room: object  // Same structure as the items returned by `GET /rooms/public`.
-    queue: {
+  type?: "RoomState"
+  payload?: {
+    room?: object  // Same structure as the items returned by `GET /rooms/public`.
+    queue?: {
       queueItemId?: string
       songId: string
       title?: string
@@ -324,29 +324,29 @@ Messages pushed by the server.
       duration?: number  // Duration in seconds.
       addedBy?: string
     }[]  // each item: Queue item. `queueItemId` and `addedBy` are assigned by the server.
-    listeners: {
-      userId: string
-      displayName: string
-      avatarUrl: string
-      frameTheme: int
-      level: int
-      isHost: bool
-      isCoHost: bool
+    listeners?: {
+      userId?: string
+      displayName?: string
+      avatarUrl?: string
+      frameTheme?: int
+      level?: int
+      isHost?: bool
+      isCoHost?: bool
     }[]
-    nowPlaying: {
-      queueItemId: string
-      songId: string
-      title: string
-      artists: string
-      audioUrl: string
-      hlsUrl: string
-      coverUrl: string
-      positionSeconds: number
-      durationSeconds: number
-      isPlaying: bool
-      serverTimestampMs: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
+    nowPlaying?: {
+      queueItemId?: string
+      songId?: string
+      title?: string
+      artists?: string
+      audioUrl?: string
+      hlsUrl?: string
+      coverUrl?: string
+      positionSeconds?: number
+      durationSeconds?: number
+      isPlaying?: bool
+      serverTimestampMs?: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
     }
-    repeatMode: string  // Possible values: `Off`, `All`, `One`
+    repeatMode?: string  // Possible values: `Off`, `All`, `One`
   }
 }
 ```
@@ -355,19 +355,19 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "PlaybackSync"
-  payload: {
-    queueItemId: string
-    songId: string
-    title: string
-    artists: string
-    audioUrl: string
-    hlsUrl: string
-    coverUrl: string
-    positionSeconds: number
-    durationSeconds: number
-    isPlaying: bool
-    serverTimestampMs: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
+  type?: "PlaybackSync"
+  payload?: {
+    queueItemId?: string
+    songId?: string
+    title?: string
+    artists?: string
+    audioUrl?: string
+    hlsUrl?: string
+    coverUrl?: string
+    positionSeconds?: number
+    durationSeconds?: number
+    isPlaying?: bool
+    serverTimestampMs?: int  // Server time (Unix ms) when the snapshot was taken. Add the elapsed time to `positionSeconds` to get the current position.
   }
 }
 ```
@@ -376,8 +376,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "QueueUpdated"
-  payload: {
+  type?: "QueueUpdated"
+  payload?: {
     queueItemId?: string
     songId: string
     title?: string
@@ -395,8 +395,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "RepeatModeChanged"
-  payload: string  // Possible values: `Off`, `All`, `One`
+  type?: "RepeatModeChanged"
+  payload?: string  // Possible values: `Off`, `All`, `One`
 }
 ```
 
@@ -404,15 +404,15 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ListenerJoined"
-  payload: {
-    userId: string
-    displayName: string
-    avatarUrl: string
-    frameTheme: int
-    level: int
-    isHost: bool
-    isCoHost: bool
+  type?: "ListenerJoined"
+  payload?: {
+    userId?: string
+    displayName?: string
+    avatarUrl?: string
+    frameTheme?: int
+    level?: int
+    isHost?: bool
+    isCoHost?: bool
   }
 }
 ```
@@ -421,8 +421,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ListenerLeft"
-  payload: string  // Target user ID.
+  type?: "ListenerLeft"
+  payload?: string  // Target user ID.
 }
 ```
 
@@ -430,8 +430,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ListenerCount"
-  payload: int
+  type?: "ListenerCount"
+  payload?: int
 }
 ```
 
@@ -439,8 +439,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "CoHostsUpdated"
-  payload: string[]  // User IDs of the current co-hosts.
+  type?: "CoHostsUpdated"
+  payload?: string[]  // User IDs of the current co-hosts.
 }
 ```
 
@@ -448,8 +448,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "RoomSettingsUpdated"
-  payload: object
+  type?: "RoomSettingsUpdated"
+  payload?: object
 }
 ```
 
@@ -457,16 +457,16 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ReceiveMessage"
-  payload: {
-    id: string
-    userId: string
-    displayName: string
-    avatarUrl: string
-    content: string
-    timestamp: date-time
-    replyToId: string
-    isBot: bool
+  type?: "ReceiveMessage"
+  payload?: {
+    id?: string
+    userId?: string
+    displayName?: string
+    avatarUrl?: string
+    content?: string
+    timestamp?: date-time
+    replyToId?: string
+    isBot?: bool
   }
 }
 ```
@@ -475,16 +475,16 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "ReceiveMessageHistory"
-  payload: {
-    id: string
-    userId: string
-    displayName: string
-    avatarUrl: string
-    content: string
-    timestamp: date-time
-    replyToId: string
-    isBot: bool
+  type?: "ReceiveMessageHistory"
+  payload?: {
+    id?: string
+    userId?: string
+    displayName?: string
+    avatarUrl?: string
+    content?: string
+    timestamp?: date-time
+    replyToId?: string
+    isBot?: bool
   }[]
 }
 ```
@@ -493,8 +493,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "MessageDeleted"
-  payload: string  // Message ID.
+  type?: "MessageDeleted"
+  payload?: string  // Message ID.
 }
 ```
 
@@ -502,8 +502,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "SongSuggestion"
-  payload: object
+  type?: "SongSuggestion"
+  payload?: object
 }
 ```
 
@@ -511,8 +511,8 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "Kicked"
-  payload: string  // Reason for removal.
+  type?: "Kicked"
+  payload?: string  // Reason for removal.
 }
 ```
 
@@ -520,7 +520,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "RoomClosed"
+  type?: "RoomClosed"
 }
 ```
 
@@ -528,7 +528,7 @@ Messages pushed by the server.
 
 ```ts
 {
-  type: "Error"
-  payload: string
+  type?: "Error"
+  payload?: string
 }
 ```

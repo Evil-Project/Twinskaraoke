@@ -26,7 +26,7 @@ Request body `multipart/form-data`:
 
 ```ts
 {
-  File: binary
+  File?: binary
 }
 ```
 
@@ -48,8 +48,8 @@ Request body `application/json`:
 
 ```ts
 {
-  url: string | null
-  playlistId: string | null
+  url?: string | null
+  playlistId?: string | null
 }
 ```
 
@@ -69,13 +69,13 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  maxSongs: int
-  maxStorageBytes: int64
-  usedStorageBytes: int64
-  currentSongCount: int
-  currentPlaylistCount: int
-  playlistLimit: int
-  songPerPlaylistLimit: int
+  maxSongs?: int
+  maxStorageBytes?: int64
+  usedStorageBytes?: int64
+  currentSongCount?: int
+  currentPlaylistCount?: int
+  playlistLimit?: int
+  songPerPlaylistLimit?: int
 }
 ```
 
@@ -93,46 +93,46 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  title: string | null
-  opus: string | null
-  oss: string | null
-  cnPath: string | null
-  absolutePath: string | null
-  playCount: int | null
-  duration: int | null
-  streamDate: date-time | null
-  dateAdded: date-time | null
-  coverArtists: string[] | null
-  originalArtists: string[] | null
-  genres: string[] | null
-  coverArt: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  title?: string | null
+  opus?: string | null
+  oss?: string | null
+  cnPath?: string | null
+  absolutePath?: string | null
+  playCount?: int | null
+  duration?: int | null
+  streamDate?: date-time | null
+  dateAdded?: date-time | null
+  coverArtists?: string[] | null
+  originalArtists?: string[] | null
+  genres?: string[] | null
+  coverArt?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  thumbnailArt: { …same as `coverArt` above }
-  order: int
-  hasLyrics: bool
-  userUploaded: bool
-  videoId: string | null
-  hls: string | null
+  thumbnailArt?: { …same as `coverArt` above }
+  order?: int
+  hasLyrics?: bool
+  userUploaded?: bool
+  videoId?: string | null
+  hls?: string | null
 }[]
 ```
 
@@ -154,9 +154,9 @@ Request body `application/json`:
 
 ```ts
 {
-  title: string | null
-  artist: string | null
-  mediaId: string | null
+  title?: string | null
+  artist?: string | null
+  mediaId?: string | null
 }
 ```
 

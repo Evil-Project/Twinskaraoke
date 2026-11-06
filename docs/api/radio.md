@@ -44,46 +44,46 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  station: {
-    id: int
-    name: string
-    shortcode: string
-    description: string
-    timezone: string
-    listen_url: string  // MP3 stream URL.
-    hls_url: string | null  // HLS stream URL.
-    public_player_url: string
-    requests_enabled: bool
-    is_public: bool
+  station?: {
+    id?: int
+    name?: string
+    shortcode?: string
+    description?: string
+    timezone?: string
+    listen_url?: string  // MP3 stream URL.
+    hls_url?: string | null  // HLS stream URL.
+    public_player_url?: string
+    requests_enabled?: bool
+    is_public?: bool
   }
-  listeners: {
-    current: int
-    unique: int
-    total: int
+  listeners?: {
+    current?: int
+    unique?: int
+    total?: int
   }
-  now_playing: {
-    sh_id: int  // History entry ID.
-    played_at: int  // Unix timestamp in seconds.
-    duration: int  // Length in seconds.
-    playlist: string  // The rotation playlist the song came from.
-    is_request: bool  // Whether a listener requested the song.
-    elapsed: int  // Seconds played so far. Only on `now_playing`.
-    remaining: int  // Seconds left. Only on `now_playing`.
-    song: {
-      id: string  // AzuraCast song hash.
-      text: string  // `Artist - Title`.
-      artist: string
-      title: string
-      album: string
-      art: string  // Cover art URL.
-      custom_fields: {
-        songId: string
+  now_playing?: {
+    sh_id?: int  // History entry ID.
+    played_at?: int  // Unix timestamp in seconds.
+    duration?: int  // Length in seconds.
+    playlist?: string  // The rotation playlist the song came from.
+    is_request?: bool  // Whether a listener requested the song.
+    elapsed?: int  // Seconds played so far. Only on `now_playing`.
+    remaining?: int  // Seconds left. Only on `now_playing`.
+    song?: {
+      id?: string  // AzuraCast song hash.
+      text?: string  // `Artist - Title`.
+      artist?: string
+      title?: string
+      album?: string
+      art?: string  // Cover art URL.
+      custom_fields?: {
+        songId?: string
       }  // `songId` is the song's ID in the main API, usable with `GET /api/songs/{id}`.
     }
   }
-  playing_next: { …same as `now_playing` above }
-  song_history: { …same as `now_playing` above }[]
-  is_online: bool
+  playing_next?: { …same as `now_playing` above }
+  song_history?: { …same as `now_playing` above }[]
+  is_online?: bool
 }
 ```
 
@@ -108,22 +108,22 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  page: int
-  per_page: int
-  total: int
-  total_pages: int
-  rows: {
-    request_id: string
-    request_url: string  // Path to POST to for this song.
-    song: {
-      id: string  // AzuraCast song hash.
-      text: string  // `Artist - Title`.
-      artist: string
-      title: string
-      album: string
-      art: string  // Cover art URL.
-      custom_fields: {
-        songId: string
+  page?: int
+  per_page?: int
+  total?: int
+  total_pages?: int
+  rows?: {
+    request_id?: string
+    request_url?: string  // Path to POST to for this song.
+    song?: {
+      id?: string  // AzuraCast song hash.
+      text?: string  // `Artist - Title`.
+      artist?: string
+      title?: string
+      album?: string
+      art?: string  // Cover art URL.
+      custom_fields?: {
+        songId?: string
       }  // `songId` is the song's ID in the main API, usable with `GET /api/songs/{id}`.
     }
   }[]

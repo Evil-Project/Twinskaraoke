@@ -21,46 +21,46 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  title: string | null
-  opus: string | null
-  oss: string | null
-  cnPath: string | null
-  absolutePath: string | null
-  playCount: int | null
-  duration: int | null
-  streamDate: date-time | null
-  dateAdded: date-time | null
-  coverArtists: string[] | null
-  originalArtists: string[] | null
-  genres: string[] | null
-  coverArt: {
-    id: string | null
-    fileName: string | null
-    contentType: string | null
-    description: string | null
-    isAnimated: bool
-    credit: string | null
-    cloudflareId: string | null
-    mediaStorageType: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
-    absolutePath: string | null
-    artist: {
-      id: string | null
-      name: string | null
-      socialLink: string | null
-      userId: string | null
-      arts: object[] | null
+  id?: string | null
+  title?: string | null
+  opus?: string | null
+  oss?: string | null
+  cnPath?: string | null
+  absolutePath?: string | null
+  playCount?: int | null
+  duration?: int | null
+  streamDate?: date-time | null
+  dateAdded?: date-time | null
+  coverArtists?: string[] | null
+  originalArtists?: string[] | null
+  genres?: string[] | null
+  coverArt?: {
+    id?: string | null
+    fileName?: string | null
+    contentType?: string | null
+    description?: string | null
+    isAnimated?: bool
+    credit?: string | null
+    cloudflareId?: string | null
+    mediaStorageType?: int  // Possible values: `0` = Blob, `1` = Cloudflare, `2` = Badge
+    absolutePath?: string | null
+    artist?: {
+      id?: string | null
+      name?: string | null
+      socialLink?: string | null
+      userId?: string | null
+      arts?: object[] | null
     }
-    upvotes: int
-    tagString: string | null
-    mediaTag: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
+    upvotes?: int
+    tagString?: string | null
+    mediaTag?: int  // Possible values: `0` = Neuro, `1` = Evil, `2` = Twins, `3` = Hiyori
   }
-  thumbnailArt: { …same as `coverArt` above }
-  order: int
-  hasLyrics: bool
-  userUploaded: bool
-  videoId: string | null
-  hls: string | null
+  thumbnailArt?: { …same as `coverArt` above }
+  order?: int
+  hasLyrics?: bool
+  userUploaded?: bool
+  videoId?: string | null
+  hls?: string | null
 }[]
 ```
 
@@ -74,9 +74,9 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  id: string | null
-  name: string | null
-  songCount: int
+  id?: string | null
+  name?: string | null
+  songCount?: int
 }[]
 ```
 
@@ -90,11 +90,11 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  totalSongs: int
-  neuroCount: int
-  evilCount: int
-  duetCount: int
-  otherCount: int
+  totalSongs?: int
+  neuroCount?: int
+  evilCount?: int
+  duetCount?: int
+  otherCount?: int
 }
 ```
 
@@ -108,8 +108,8 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  name: string | null
-  credit: string | null
-  isArtist: bool
+  name?: string | null
+  credit?: string | null
+  isArtist?: bool
 }[]
 ```

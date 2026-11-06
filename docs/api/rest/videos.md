@@ -21,51 +21,51 @@ Returns a page of videos. `page` starts at 1. `pageSize` defaults to 30 and acce
 | `search` | query | `string` | no |  |
 | `sortBy` | query | `string` | no |  |
 | `sortDescending` | query | `bool` | no | default: false |
-| `category` | query | `int` | no | Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All; Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All |
-| `character` | query | `int` | no | Possible values: `0` = Neuro, `1` = Evil, `2` = Both; Possible values: `0` = Neuro, `1` = Evil, `2` = Both |
-| `uploaded` | query | `int` | no | Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year; Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year |
-| `duration` | query | `int` | no | Possible values: `0` = Short, `1` = Medium, `2` = Long; Possible values: `0` = Short, `1` = Medium, `2` = Long |
+| `category` | query | `int` | no | Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All |
+| `character` | query | `int` | no | Possible values: `0` = Neuro, `1` = Evil, `2` = Both |
+| `uploaded` | query | `int` | no | Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year |
+| `duration` | query | `int` | no | Possible values: `0` = Short, `1` = Medium, `2` = Long |
 
 Response `200` OK `application/json`:
 
 ```ts
 {
-  items: {
-    songId: string | null
-    songTitle: string | null
-    id: string | null
-    name: string | null
-    description: string | null
-    contentType: string | null
-    absolutePath: string | null
-    mP4: string | null
-    cnPath: string | null
-    url: string | null
-    videoType: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
-    cloudflareId: string | null
-    createdBy: string | null
-    creatorUserId: string | null
-    creatorAvatarUrl: string | null
-    thumbnailUrl: string | null
-    duration: int64 | null
-    width: int | null
-    height: int | null
-    createdDate: date-time | null
-    isWatchalong: bool
-    category: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
-    views: int
-    upvotes: int
-    commentCount: int
-    channelUploadCount: int
-    youtubeSourceId: string | null
-    b2SourceId: string | null
-    youtubeViews: int64 | null
-    bilibiliViews: int64 | null
-    sourceViewsUpdatedDate: date-time | null
-    totalViews: int64  // read-only
+  items?: {
+    songId?: string | null
+    songTitle?: string | null
+    id?: string | null
+    name?: string | null
+    description?: string | null
+    contentType?: string | null
+    absolutePath?: string | null
+    mP4?: string | null
+    cnPath?: string | null
+    url?: string | null
+    videoType?: int  // Possible values: `0` = Blob, `1` = Youtube, `2` = Spotify, `3` = Quote
+    cloudflareId?: string | null
+    createdBy?: string | null
+    creatorUserId?: string | null
+    creatorAvatarUrl?: string | null
+    thumbnailUrl?: string | null
+    duration?: int64 | null
+    width?: int | null
+    height?: int | null
+    createdDate?: date-time | null
+    isWatchalong?: bool
+    category?: int  // Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All
+    views?: int
+    upvotes?: int
+    commentCount?: int
+    channelUploadCount?: int
+    youtubeSourceId?: string | null
+    b2SourceId?: string | null
+    youtubeViews?: int64 | null
+    bilibiliViews?: int64 | null
+    sourceViewsUpdatedDate?: date-time | null
+    totalViews?: int64  // read-only
   }[] | null
-  totalCount: int
-  page: int
-  pageSize: int
+  totalCount?: int
+  page?: int
+  pageSize?: int
 }
 ```

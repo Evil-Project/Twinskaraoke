@@ -37,8 +37,8 @@ In the tables, "optional" means the endpoint works without auth but returns more
   has no format in the spec.
 - `date-time` is an ISO 8601 timestamp, `date-span` a duration (spec format `date-span`),
   `base64` Base64-encoded bytes (format `byte`), `binary` a file upload.
-- `| null` means the value can be null. `name?:` means the field isn't required; this only
-  appears where the spec lists required fields, otherwise every field is shown without `?`.
+- `| null` means the value can be null. `name?:` means the spec doesn't list the field as
+  required, so it may be missing; fields without `?` are in the spec's `required` list.
 - `[key: string]: T` means the object allows extra keys. REST request and response objects
   without it are closed in the spec (`additionalProperties: false`) or don't say; check
   `specs/` when it matters.
