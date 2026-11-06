@@ -84,10 +84,10 @@ def scalar(schema: dict) -> str:
     if kind == "integer":
         return "int64" if fmt == "int64" else "int"
     if kind == "number":
-        return "number"
+        return fmt if fmt in ("double", "float") else "number"
     if kind == "string":
-        return {"date-time": "date-time", "date": "date", "uuid": "uuid", "uri": "url",
-                "binary": "binary"}.get(fmt, "string")
+        return {"date-time": "date-time", "date": "date", "date-span": "date-span", "uuid": "uuid",
+                "uri": "url", "byte": "base64", "binary": "binary"}.get(fmt, "string" if not fmt else f"string /* {fmt} */")
     if kind == "boolean":
         return "bool"
     return kind or "any"
@@ -150,8 +150,10 @@ def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | Non
         props = schema.get("properties") or {}
         extra = schema.get("additionalProperties")
         if not props:
-            if isinstance(extra, dict):
+            if isinstance(extra, dict) and extra:
                 text = f"{{ [key: string]: {render(spec, extra, indent, depth + 1, memo, name)} }}"
+            elif extra is True or isinstance(extra, dict):
+                text = "{ [key: string]: any }"
             else:
                 text = "object"
         elif depth > 40:
@@ -166,13 +168,22 @@ def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | Non
             for prop_name, prop in props.items():
                 prop_resolved = resolve(spec, prop)
                 optional = "?" if required and prop_name not in required else ""
-                comment = "; ".join(x for x in [(prop_resolved.get("description") or "").strip().replace("\n", " ")]
-                                    + notes(spec, prop_resolved) if x)
+                texts = [(prop_resolved.get("description") or "").strip()]
+                item = prop_resolved
+                while isinstance(item, dict) and isinstance(item.get("items"), dict):
+                    # List items can carry their own description ("Queue item. …").
+                    item = resolve(spec, item["items"])
+                    if item.get("description"):
+                        texts.append("each item: " + item["description"].strip())
+                comment = "; ".join(x.replace("\n", " ") for x in texts + notes(spec, prop_resolved) if x)
                 rendered = render(spec, prop, indent + 1, depth + 1, memo, prop_name)
                 line = f"{pad}  {prop_name}{optional}: {rendered}"
                 if comment:
                     line += f"  // {comment}"
                 lines.append(line)
+            if extra is True or isinstance(extra, dict):
+                value = render(spec, extra, indent + 1, depth + 1, memo, name) if isinstance(extra, dict) and extra else "any"
+                lines.append(f"{pad}  [key: string]: {value}  // extra keys allowed")
             lines.append(pad + "}")
             text = "\n".join(lines)
     else:
@@ -339,6 +350,8 @@ def write_asyncapi(spec: dict, slug_name: str) -> list[tuple[str, str, str, str]
     out = [f"# {info.get('title')}", ""]
     if info.get("description"):
         out += [info["description"].strip(), ""]
+    if spec.get("defaultContentType"):
+        out += [f"Messages are `{spec['defaultContentType']}` unless noted.", ""]
     for name, server in spec.get("servers", {}).items():
         out += [f"Server `{name}`: `{server.get('protocol')}://{server.get('host')}{server.get('pathname', '')}`"
                 + (f" — {server['description'].strip()}" if server.get("description") else ""), ""]
@@ -411,10 +424,10 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         "",
         "## Hosts",
         "",
-        "| API | Base URL | Reference |",
-        "| --- | --- | --- |",
+        "| API | Version | Base URL | Reference | Spec |",
+        "| --- | --- | --- | --- | --- |",
     ]
-    for _, _, slug_name, kind in SOURCES:
+    for _, local, slug_name, kind in SOURCES:
         spec = loaded[slug_name]
         title = spec.get("info", {}).get("title")
         if kind == "openapi":
@@ -423,7 +436,9 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         else:
             hosts = ", ".join(f"{s.get('protocol')}://{s.get('host')}" for s in spec.get("servers", {}).values())
             ref = f"[{slug_name}.md]({slug_name}.md)"
-        lines.append(f"| {title} | {hosts} | {ref} |")
+        version = spec.get("info", {}).get("version", "")
+        spec_kind = f"OpenAPI {spec.get('openapi')}" if kind == "openapi" else f"AsyncAPI {spec.get('asyncapi')}"
+        lines.append(f"| {title} | {version} | {hosts} | {ref} | `specs/{local}` ({spec_kind}) |")
     lines += [
         "",
         "The app also uses the China mirrors (`*.neurokaraoke.com.cn`); see",
@@ -433,12 +448,28 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         "",
     ]
     for name, scheme in schemes.items():
-        where = f"header `{scheme.get('name')}`" if scheme.get("in") == "header" else "`Authorization: Bearer <token>`"
+        where = (f"header `{scheme.get('name')}`" if scheme.get("in") == "header"
+                 else "`Authorization: Bearer <token>`" + (f" ({scheme['bearerFormat']})" if scheme.get("bearerFormat") else ""))
         lines.append(f"- `{name}` — {where}. {(scheme.get('description') or '').strip()}")
     lines += [
         "",
         "In the tables, \"optional\" means the endpoint works without auth but returns more",
         "(for example the caller's own data) when authenticated.",
+        "",
+        "## Reading the types",
+        "",
+        "- `int` is a 32-bit integer, `int64` 64-bit; `double` and `float` are floating point; `number`",
+        "  has no format in the spec.",
+        "- `date-time` is an ISO 8601 timestamp, `date-span` a duration (spec format `date-span`),",
+        "  `base64` Base64-encoded bytes (format `byte`), `binary` a file upload.",
+        "- `| null` means the value can be null. `name?:` means the field isn't required; this only",
+        "  appears where the spec lists required fields, otherwise every field is shown without `?`.",
+        "- `[key: string]: T` means the object allows extra keys. REST request and response objects",
+        "  without it are closed in the spec (`additionalProperties: false`) or don't say; check",
+        "  `specs/` when it matters.",
+        "- `// …` comments carry the spec's description plus defaults, min/max, length limits, regex",
+        "  patterns and read-only flags.",
+        "- `{ …same as `x` above }` repeats the shape of field `x` shown earlier for the same endpoint.",
         "",
     ]
     for slug_name, rows in rest_rows.items():

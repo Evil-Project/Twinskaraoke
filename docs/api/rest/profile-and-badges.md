@@ -31,9 +31,9 @@ Response `200` OK `application/json`:
     totalXP: int
     totalBadges: int
     unlockedBadges: int
-    collectionProgress: number
+    collectionProgress: double
     xpToNextLevel: int
-    levelProgress: number
+    levelProgress: double
     neuroCoin: int
     evilCoin: int
     twinsCoin: int
@@ -42,7 +42,7 @@ Response `200` OK `application/json`:
     displayItemIds: string[] | null
     rankScore: int
     rankTier: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
-    unlockedTiers: int[] | null
+    unlockedTiers: int[] | null  // each item: Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
   }
   badges: {
     id: string | null
@@ -104,6 +104,7 @@ Response `401` Unauthorized `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 

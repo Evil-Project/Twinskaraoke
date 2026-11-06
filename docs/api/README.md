@@ -12,24 +12,39 @@ these files). Never edit the generated Markdown by hand.
 
 ## Hosts
 
-| API | Base URL | Reference |
-| --- | --- | --- |
-| Neuro & Evil Karaoke API | https://api.neurokaraoke.com | `rest/` |
-| Listen along & radio chat (HTTP) | https://listen-along.neurokaraoke.com, https://radio-chat.neurokaraoke.com | [workers.md](workers.md) |
-| Radio (AzuraCast) | https://radio.twinskaraoke.com | [radio.md](radio.md) |
-| Listen along (WebSocket) | wss://listen-along.neurokaraoke.com | [listen-along.md](listen-along.md) |
-| Radio chat (WebSocket) | wss://radio-chat.neurokaraoke.com | [radio-chat.md](radio-chat.md) |
+| API | Version | Base URL | Reference | Spec |
+| --- | --- | --- | --- | --- |
+| Neuro & Evil Karaoke API | v1 | https://api.neurokaraoke.com | `rest/` | `specs/rest.openapi.json` (OpenAPI 3.0.4) |
+| Listen along & radio chat (HTTP) | v1 | https://listen-along.neurokaraoke.com, https://radio-chat.neurokaraoke.com | [workers.md](workers.md) | `specs/workers.openapi.json` (OpenAPI 3.0.3) |
+| Radio (AzuraCast) | v1 | https://radio.twinskaraoke.com | [radio.md](radio.md) | `specs/radio.openapi.json` (OpenAPI 3.0.3) |
+| Listen along (WebSocket) | v1 | wss://listen-along.neurokaraoke.com | [listen-along.md](listen-along.md) | `specs/listen-along.asyncapi.json` (AsyncAPI 3.0.0) |
+| Radio chat (WebSocket) | v1 | wss://radio-chat.neurokaraoke.com | [radio-chat.md](radio-chat.md) | `specs/radio-chat.asyncapi.json` (AsyncAPI 3.0.0) |
 
 The app also uses the China mirrors (`*.neurokaraoke.com.cn`); see
 `Packages/Core/Configuration/Apple/StorageHost.swift`.
 
 ## Authentication
 
-- `Bearer` — `Authorization: Bearer <token>`. neurokaraoke.com session token (the `authToken` value in local storage).
+- `Bearer` — `Authorization: Bearer <token>` (JWT). neurokaraoke.com session token (the `authToken` value in local storage).
 - `GuestId` — header `X-Guest-Id`. Any UUID. Identifies a guest session for game endpoints. Reuse the same value to keep progress across requests.
 
 In the tables, "optional" means the endpoint works without auth but returns more
 (for example the caller's own data) when authenticated.
+
+## Reading the types
+
+- `int` is a 32-bit integer, `int64` 64-bit; `double` and `float` are floating point; `number`
+  has no format in the spec.
+- `date-time` is an ISO 8601 timestamp, `date-span` a duration (spec format `date-span`),
+  `base64` Base64-encoded bytes (format `byte`), `binary` a file upload.
+- `| null` means the value can be null. `name?:` means the field isn't required; this only
+  appears where the spec lists required fields, otherwise every field is shown without `?`.
+- `[key: string]: T` means the object allows extra keys. REST request and response objects
+  without it are closed in the spec (`additionalProperties: false`) or don't say; check
+  `specs/` when it matters.
+- `// …` comments carry the spec's description plus defaults, min/max, length limits, regex
+  patterns and read-only flags.
+- `{ …same as `x` above }` repeats the shape of field `x` shown earlier for the same endpoint.
 
 ## About the Neuro & Evil Karaoke API
 

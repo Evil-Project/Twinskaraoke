@@ -34,8 +34,8 @@ Response `200` OK `application/json`:
   date: date-time
   totalPlays: int
   totalWins: int
-  averageAttempt: number
-  winRate: number
+  averageAttempt: double
+  winRate: double
   isInvalid: bool
   invalidationMessage: string | null
   mode: int  // Possible values: `0` = Normal, `1` = Extreme
@@ -93,6 +93,7 @@ Response `401` Unauthorized `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -105,6 +106,7 @@ Response `409` Conflict `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -145,6 +147,7 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -217,6 +220,7 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -229,6 +233,7 @@ Response `401` Unauthorized `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -241,6 +246,7 @@ Response `409` Conflict `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -315,7 +321,7 @@ Response `200` OK `application/json`:
   songTitle?: string | null
   artist?: string | null
   completedAt: date-time
-  timeSpent?: string | null
+  timeSpent?: date-span | null
   challengeDate?: date-time
   invalidChallengeReimbursement?: int | null
 }
@@ -330,6 +336,7 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -342,6 +349,7 @@ Response `401` Unauthorized `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -354,6 +362,7 @@ Response `409` Conflict `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -455,7 +464,7 @@ Response `200` OK `application/json`:
     songTitle?: string | null
     artist?: string | null
     completedAt: date-time
-    timeSpent?: string | null
+    timeSpent?: date-span | null
     challengeDate?: date-time
     invalidChallengeReimbursement?: int | null
   }
@@ -495,7 +504,7 @@ Response `200` OK `application/json`:
   attemptNumber: int
   score: int
   attemptsJson: string | null
-  timeSpent: string | null
+  timeSpent: date-span | null
   gameStartedAt: date-time | null
   completedAt: date-time
   user: {
@@ -650,7 +659,7 @@ Response `200` OK `application/json`:
           tagJson: string | null
           isTagged: bool
           rating: string | null
-          ratingConfidence: number | null
+          ratingConfidence: double | null
           artArtist: {
             id: string | null
             isDeleted: bool
@@ -686,7 +695,7 @@ Response `200` OK `application/json`:
               category: string | null
               mediaImageTags: object[] | null
             }
-            confidence: number
+            confidence: double
           }[] | null
         }
       }
@@ -1117,7 +1126,7 @@ Response `200` OK `application/json`:
                 tagJson: string | null
                 isTagged: bool
                 rating: string | null
-                ratingConfidence: number | null
+                ratingConfidence: double | null
                 artArtist: object
                 artistId: string | null
                 createdAt: date-time | null
@@ -1381,7 +1390,7 @@ Response `200` OK `application/json`:
         deletedDate: date-time | null
         songId: string | null
         song: object
-        time: string
+        time: date-span
         text: string | null
         translations: {
           id: string | null
@@ -1589,7 +1598,7 @@ Response `200` OK `application/json`:
           tagJson: string | null
           isTagged: bool
           rating: string | null
-          ratingConfidence: number | null
+          ratingConfidence: double | null
           artArtist: {
             id: string | null
             isDeleted: bool
@@ -1625,7 +1634,7 @@ Response `200` OK `application/json`:
               category: string | null
               mediaImageTags: object[] | null
             }
-            confidence: number
+            confidence: double
           }[] | null
         }
       }
@@ -1665,6 +1674,7 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 
@@ -1685,8 +1695,8 @@ Response `200` OK `application/json`:
   songTitle: string | null
   totalPlayers: int
   totalWinners: int
-  winRate: number  // read-only
-  averageAttempt: number
+  winRate: double  // read-only
+  averageAttempt: double
   perfectScores: int
   attemptDistribution: { [key: string]: int } | null
 }

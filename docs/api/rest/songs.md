@@ -238,7 +238,7 @@ Response `200` OK `application/json`:
     totalViews: int64  // read-only
   }[] | null
   lyricsDTOs: {
-    time: string
+    time: date-span
     text: string | null
   }[] | null
   setlist: string | null
@@ -492,7 +492,7 @@ Response `200` OK `application/json`:
 
 ```ts
 {
-  time: string
+  time: date-span
   text: string | null
 }[]
 ```

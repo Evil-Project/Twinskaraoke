@@ -29,8 +29,8 @@ Response `200` OK `application/json`:
   totalPlaysIncludingGuests: int
   totalWins: int
   totalLosses: int
-  winRate: number  // read-only
-  lossRate: number  // read-only
+  winRate: double  // read-only
+  lossRate: double  // read-only
   entries: {
     userId: string | null
     username: string | null
@@ -41,12 +41,12 @@ Response `200` OK `application/json`:
     frameTheme: int  // Possible values: `0` = None, `1` = Evolved, `2` = Awakened, `3` = Transcendent, `4` = Ascended, `5` = Mythic, `6` = Apex
     date: date-time
     attemptNumber: int
-    timeSpent: string
+    timeSpent: date-span
     completedAt: date-time
     isPerfect: bool
   }[] | null
   lastUpdated: date-time
-  averageAttempt: number
+  averageAttempt: double
   perfectScoreCount: int
   attemptDistribution: { [key: string]: int } | null
   isInvalid: bool
@@ -88,10 +88,10 @@ Response `200` OK `application/json`:
     gamesPlayed: int
     gamesWon: int
     totalScore: int
-    averageAttempt: number
+    averageAttempt: double
     perfectScores: int
     weeklyStreak: int
-    winRate: number
+    winRate: double
   }[] | null
   lastUpdated: date-time
 }
@@ -130,11 +130,11 @@ Response `200` OK `application/json`:
     gamesPlayed: int
     gamesWon: int
     totalScore: int
-    averageAttempt: number
+    averageAttempt: double
     perfectScores: int
     monthlyStreak: int
     daysActive: int
-    winRate: number
+    winRate: double
   }[] | null
   lastUpdated: date-time
 }
@@ -172,10 +172,10 @@ Response `200` OK `application/json`:
     totalScore: int64
     currentStreak: int
     longestStreak: int
-    averageAttempt: number
+    averageAttempt: double
     perfectScores: int
     memberSince: date-time
-    winRate: number
+    winRate: double
   }[] | null
   lastUpdated: date-time
 }
@@ -217,6 +217,7 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```
 

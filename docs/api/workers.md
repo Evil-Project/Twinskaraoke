@@ -172,5 +172,5 @@ Returns the song currently playing on the radio and upcoming songs.
 Response `200` OK. Returns an empty object if no now-playing data has been received yet. `application/json`:
 
 ```ts
-object
+{ [key: string]: any }
 ```

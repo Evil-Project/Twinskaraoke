@@ -30,8 +30,8 @@ Response `200` OK `application/json`:
     topGenre: string | null
     uniqueSongsPlayed: int
     trends: {
-      playsVsPrev: number
-      uniqueListenersVsPrev: number
+      playsVsPrev: double
+      uniqueListenersVsPrev: double
     }
   }
   genres: {
@@ -90,8 +90,8 @@ Response `200` OK `application/json`:
   topGenre: string | null
   uniqueSongsPlayed: int
   trends: {
-    playsVsPrev: number
-    uniqueListenersVsPrev: number
+    playsVsPrev: double
+    uniqueListenersVsPrev: double
   }
 }
 ```
@@ -250,5 +250,6 @@ Response `400` Bad Request `application/json`:
   status: int | null
   detail: string | null
   instance: string | null
+  [key: string]: any  // extra keys allowed
 }
 ```

@@ -23,6 +23,8 @@ const ws = new WebSocket("wss://listen-along.neurokaraoke.com/ws?inviteCode=ABC1
 ws.onmessage = e => console.log(JSON.parse(e.data));
 ```
 
+Messages are `application/json` unless noted.
+
 Server `production`: `wss://listen-along.neurokaraoke.com` — Listen along worker.
 
 ## Channel `/ws` — A listen along room
@@ -321,7 +323,7 @@ Messages pushed by the server.
       coverUrl?: string
       duration?: number  // Duration in seconds.
       addedBy?: string
-    }[]
+    }[]  // each item: Queue item. `queueItemId` and `addedBy` are assigned by the server.
     listeners: {
       userId: string
       displayName: string
@@ -385,7 +387,7 @@ Messages pushed by the server.
     coverUrl?: string
     duration?: number  // Duration in seconds.
     addedBy?: string
-  }[]
+  }[]  // each item: Queue item. `queueItemId` and `addedBy` are assigned by the server.
 }
 ```
 

@@ -23,6 +23,8 @@ const ws = new WebSocket("wss://radio-chat.neurokaraoke.com/ws?lang=en&guestId="
 ws.onmessage = e => console.log(JSON.parse(e.data));
 ```
 
+Messages are `application/json` unless noted.
+
 Server `production`: `wss://radio-chat.neurokaraoke.com` — Radio chat worker.
 
 ## Channel `/ws` — Radio chat room
@@ -257,7 +259,7 @@ Messages pushed by the server.
 ```ts
 {
   type: "NowPlayingChanged"
-  payload: object
+  payload: { [key: string]: any }
 }
 ```
 

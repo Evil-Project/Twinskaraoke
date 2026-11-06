@@ -73,7 +73,7 @@ Response `200` OK `application/json`:
     hls: string | null
   }[] | null
   songCount: int
-  newImageBytes: string | null
+  newImageBytes: base64 | null
 }[]
 ```
 
@@ -140,7 +140,7 @@ Response `200` OK `application/json`:
     hls: string | null
   }[] | null
   songCount: int
-  newImageBytes: string | null
+  newImageBytes: base64 | null
 }
 ```
 
