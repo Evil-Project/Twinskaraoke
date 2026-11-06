@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Password sign-in
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Sign in with a neurokaraoke.com username and password. Use this when the client has a keyboard and the user is comfortable typing their password into it.
 
@@ -18,8 +18,8 @@ Request body `application/json`:
 
 ```ts
 {
-  username: string
-  password: string
+  username: string  // min length: 3
+  password: string  // min length: 6
 }
 ```
 

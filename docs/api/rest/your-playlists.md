@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Your playlists
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Playlists and favorites owned by the authenticated user. All endpoints require a bearer token unless noted.
 
@@ -248,7 +248,7 @@ Returns recommended songs based on the user's listening history. `take` sets the
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `take` | query | `int` | no |  |
+| `take` | query | `int` | no | default: 100 |
 
 Response `200` OK `application/json`:
 
@@ -439,7 +439,7 @@ Returns the authenticated user's favorites of one kind, given in `type`.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `type` | query | `int` | no | Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote |
+| `type` | query | `int` | no | Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote; Possible values: `0` = Song, `1` = SoundBite, `2` = Video, `3` = Playlist, `4` = Art, `5` = Quote |
 
 Response `200` OK `application/json`:
 
@@ -539,7 +539,7 @@ Response `200` OK `application/json`:
     youtubeViews: int64 | null
     bilibiliViews: int64 | null
     sourceViewsUpdatedDate: date-time | null
-    totalViews: int64
+    totalViews: int64  // read-only
   }
   playlist: {
     id: string | null

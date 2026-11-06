@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Videos
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Fan-made and stream videos shown on the Videos page.
 
@@ -16,15 +16,15 @@ Returns a page of videos. `page` starts at 1. `pageSize` defaults to 30 and acce
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 1 |
+| `pageSize` | query | `int` | no | default: 30 |
 | `search` | query | `string` | no |  |
 | `sortBy` | query | `string` | no |  |
-| `sortDescending` | query | `bool` | no |  |
-| `category` | query | `int` | no | Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All |
-| `character` | query | `int` | no | Possible values: `0` = Neuro, `1` = Evil, `2` = Both |
-| `uploaded` | query | `int` | no | Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year |
-| `duration` | query | `int` | no | Possible values: `0` = Short, `1` = Medium, `2` = Long |
+| `sortDescending` | query | `bool` | no | default: false |
+| `category` | query | `int` | no | Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All; Possible values: `0` = Karaoke, `1` = Clips, `2` = Watchalong, `3` = Fanmade, `4` = TwinsSightings, `5` = All |
+| `character` | query | `int` | no | Possible values: `0` = Neuro, `1` = Evil, `2` = Both; Possible values: `0` = Neuro, `1` = Evil, `2` = Both |
+| `uploaded` | query | `int` | no | Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year; Possible values: `0` = Today, `1` = Week, `2` = Month, `3` = Year |
+| `duration` | query | `int` | no | Possible values: `0` = Short, `1` = Medium, `2` = Long; Possible values: `0` = Short, `1` = Medium, `2` = Long |
 
 Response `200` OK `application/json`:
 
@@ -62,7 +62,7 @@ Response `200` OK `application/json`:
     youtubeViews: int64 | null
     bilibiliViews: int64 | null
     sourceViewsUpdatedDate: date-time | null
-    totalViews: int64
+    totalViews: int64  // read-only
   }[] | null
   totalCount: int
   page: int

@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Songs
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Song library lookup: search, details, batch retrieval and similarity recommendations.
 
@@ -235,7 +235,7 @@ Response `200` OK `application/json`:
     youtubeViews: int64 | null
     bilibiliViews: int64 | null
     sourceViewsUpdatedDate: date-time | null
-    totalViews: int64
+    totalViews: int64  // read-only
   }[] | null
   lyricsDTOs: {
     time: string

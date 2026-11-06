@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Genres, themes and moods
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Lookup lists used for song filters (genres, themes, moods, artists, cover artists, languages, stream dates) and the detail pages for a single genre, theme or mood.
 
@@ -218,8 +218,8 @@ Returns genres matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -240,8 +240,8 @@ Returns themes matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -262,8 +262,8 @@ Returns moods matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -284,8 +284,8 @@ Returns original artists matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -306,8 +306,8 @@ Returns cover artists (for example Neuro, Evil) matching `search`, for use as so
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -328,8 +328,8 @@ Returns song languages matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 
@@ -350,8 +350,8 @@ Returns karaoke stream dates matching `search`, for use as song filter options.
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `search` | query | `string` | no |  |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 50 |
 
 Response `200` OK `application/json`:
 

@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Login code sign-in
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 For car head units (Android Auto, CarPlay) and other devices where scanning a QR code is impractical. The user reads a short code from a signed-in device and types it on the new device.
 
@@ -41,7 +41,7 @@ Request body `application/json`:
 
 ```ts
 {
-  code: string
+  code: string  // min length: 1; pattern: ^[A-HJ-NP-Za-hj-np-z2-9]{6}$
 }
 ```
 

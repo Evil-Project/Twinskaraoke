@@ -29,11 +29,13 @@ Server `production`: `wss://radio-chat.neurokaraoke.com` — Radio chat worker.
 
 Select a room with `lang` (default `en`). Identify the caller with `token` (the neurokaraoke.com `authToken`) or, for guests, `guestId` (any UUID). `displayName`, `avatarUrl`, `frameTheme` and `level` are attached to the caller's messages.
 
+Handshake: HTTP `GET` upgrade to WebSocket.
+
 Connection query:
 
 ```ts
 {
-  lang: string  // Possible values: `en`, `ja`, `zh`
+  lang: string  // Possible values: `en`, `ja`, `zh`; default: "en"
   token: string  // Bearer token from neurokaraoke.com. Omit to connect as a guest.
   guestId: string  // Any UUID. Reuse the same value to keep a stable guest display name.
   displayName: string
@@ -73,6 +75,18 @@ Send and delete messages, and load older history.
 }
 ```
 
+Example (Plain):
+
+```json
+{"type": "SendMessage", "payload": "this song is a banger"}
+```
+
+Example (Reply):
+
+```json
+{"type": "SendMessage", "payload": {"content": "real", "replyToId": "6f1c..."}}
+```
+
 #### `DeleteMessage` — Deletes one of the caller's messages. Returns an Error if the caller does not own the message.
 
 ```ts
@@ -89,6 +103,12 @@ Send and delete messages, and load older history.
   type: "LoadMoreHistory"
   payload: int
 }
+```
+
+Example:
+
+```json
+{"type": "LoadMoreHistory", "payload": 50}
 ```
 
 ## Server → client (receive)

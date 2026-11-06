@@ -24,7 +24,7 @@ The Neuro 21 Station radio runs on AzuraCast, so some public AzuraCast endpoints
 
 Now playing data updates every few seconds. Poll no more than once every 15 seconds.
 
-Base URL: https://radio.twinskaraoke.com
+Base URL: https://radio.twinskaraoke.com (AzuraCast)
 
 ## Now playing
 
@@ -38,7 +38,7 @@ Returns the current song with elapsed and remaining time, the next song, the las
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `station_id` | path | `string` | yes | Always `neuro_21`. |
+| `station_id` | path | `string` | yes | Always `neuro_21`.; default: "neuro_21" |
 
 Response `200` OK `application/json`:
 
@@ -99,9 +99,9 @@ Returns a page of songs that can be requested. Use `request_id` from a row to su
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `station_id` | path | `string` | yes | Always `neuro_21`. |
-| `current` | query | `int` | no | Page number, starting at 1. |
-| `rowCount` | query | `int` | no | Rows per page. |
+| `station_id` | path | `string` | yes | Always `neuro_21`.; default: "neuro_21" |
+| `current` | query | `int` | no | Page number, starting at 1.; default: 1 |
+| `rowCount` | query | `int` | no | Rows per page.; default: 25 |
 | `searchPhrase` | query | `string` | no | Filters by title or artist. |
 
 Response `200` OK `application/json`:
@@ -138,7 +138,7 @@ Adds a song to the request queue. AzuraCast limits how often one listener can re
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `station_id` | path | `string` | yes | Always `neuro_21`. |
+| `station_id` | path | `string` | yes | Always `neuro_21`.; default: "neuro_21" |
 | `request_id` | path | `string` | yes | `request_id` from the requestable songs list. |
 
 Response `200` The request was accepted.

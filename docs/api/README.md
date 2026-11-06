@@ -31,15 +31,63 @@ The app also uses the China mirrors (`*.neurokaraoke.com.cn`); see
 In the tables, "optional" means the endpoint works without auth but returns more
 (for example the caller's own data) when authenticated.
 
+## About the Neuro & Evil Karaoke API
+
+The API behind the Neuro & Evil Karaoke web player at [neurokaraoke.com](https://neurokaraoke.com),
+[evilkaraoke.com](https://evilkaraoke.com) and [twinskaraoke.com](https://twinskaraoke.com). 
+
+**Base URL:** `https://api.neurokaraoke.com`
+
+### Authentication
+
+Most read endpoints are public. Endpoints marked with a lock need credentials, passed in one of
+these ways:
+
+| Method | Example |
+| --- | --- |
+| Bearer token **recommended** | `Authorization: Bearer YOUR_TOKEN` |
+| Guest ID | `X-Guest-Id: ANY_UUID` |
+
+The karaoke site lets visitors who are not signed in add songs to playlists, play games and more.
+Those requests are tied to a guest ID instead of an account. Send the same UUID every time to keep
+the guest's data.
+
+To get a token, sign in with one of the endpoints under **Authentication**, or copy the
+`authToken` value from the karaoke site's local storage. Paste it into the authentication panel
+without the `Bearer ` prefix. This page fills in a guest ID for you.
+
+### Status codes
+
+| Code | Meaning |
+| --- | --- |
+| `200` / `204` | Success |
+| `400` | The request is missing a value or has an invalid one |
+| `401` | Missing, invalid or expired token |
+| `404` | The item does not exist |
+| `429` | Too many requests. Wait a moment before trying again |
+
+### Webhooks
+
+Get notified when a karaoke setlist is added or updated.
+
+TBD
+
+### Other documents
+
+Listen along and radio chat use WebSockets, and the 24/7 radio runs on AzuraCast. Each has its own
+document. Pick them from the document selector at the top of the sidebar.
+
 ## Neuro & Evil Karaoke API — endpoints
 
-### Password sign-in
+### Authentication
+
+#### Password sign-in
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | POST | [`/api/auth/login`](rest/password-sign-in.md#post-apiauthlogin--sign-in-with-username-and-password) | Sign in with username and password | none |
 
-### QR code sign-in
+#### QR code sign-in
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -48,14 +96,16 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/auth/qr-session/{sessionId}/events`](rest/qr-code-sign-in.md#get-apiauthqr-sessionsessionidevents--stream-qr-sign-in-status) | Stream QR sign-in status | none |
 | POST | [`/api/auth/approve-qr`](rest/qr-code-sign-in.md#post-apiauthapprove-qr--approve-a-qr-sign-in-session) | Approve a QR sign-in session | `Bearer` |
 
-### Login code sign-in
+#### Login code sign-in
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | POST | [`/api/auth/pairing-code`](rest/login-code-sign-in.md#post-apiauthpairing-code--create-a-login-code) | Create a login code | `Bearer` |
 | POST | [`/api/auth/redeem-code`](rest/login-code-sign-in.md#post-apiauthredeem-code--redeem-a-login-code) | Redeem a login code | none |
 
-### Songs
+### Music library
+
+#### Songs
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -69,7 +119,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/songs/{songId}/lyrics`](rest/songs.md#get-apisongssongidlyrics--get-song-lyrics) | Get song lyrics | none |
 | PUT | [`/api/songs/playcount/{id}`](rest/songs.md#put-apisongsplaycountid--record-a-play) | Record a play | optional (`Bearer`) |
 
-### Playlists
+#### Playlists
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -78,7 +128,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/playlist/public/genres`](rest/playlists.md#get-apiplaylistpublicgenres--list-playlist-genres) | List playlist genres | none |
 | GET | [`/api/featured-playlists`](rest/playlists.md#get-apifeatured-playlists--list-featured-playlists) | List featured playlists | none |
 
-### Karaoke setlists
+#### Karaoke setlists
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -86,7 +136,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/playlist/recent`](rest/karaoke-setlists.md#get-apiplaylistrecent--get-the-latest-setlist) | Get the latest setlist | none |
 | GET | [`/api/setlists/stats`](rest/karaoke-setlists.md#get-apisetlistsstats--get-setlist-statistics) | Get setlist statistics | none |
 
-### Genres, themes and moods
+#### Genres, themes and moods
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -101,7 +151,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/filters/languages`](rest/genres-themes-and-moods.md#get-apifilterslanguages--list-languages) | List languages | none |
 | GET | [`/api/filters/stream-dates`](rest/genres-themes-and-moods.md#get-apifiltersstream-dates--list-stream-dates) | List stream dates | none |
 
-### Explore
+#### Explore
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -110,7 +160,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/stats/cover-distribution`](rest/explore.md#get-apistatscover-distribution--get-cover-artist-distribution) | Get cover artist distribution | none |
 | GET | [`/api/credits`](rest/explore.md#get-apicredits--list-contributors) | List contributors | none |
 
-### Artists
+#### Artists
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -118,32 +168,36 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/artist/{id}`](rest/artists.md#get-apiartistid--get-an-artist) | Get an artist | none |
 | GET | [`/api/artist/search`](rest/artists.md#get-apiartistsearch--find-an-artist-by-song-title) | Find an artist by song title | none |
 
-### Sharing and embeds
+#### Sharing and embeds
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | GET | [`/public/search/suggestions`](rest/sharing-and-embeds.md#get-publicsearchsuggestions--get-search-suggestions) | Get search suggestions | none |
 
-### Videos
+### Videos and art
+
+#### Videos
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | GET | [`/api/videos`](rest/videos.md#get-apivideos--list-videos) | List videos | none |
 
-### Fan art
+#### Fan art
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | GET | [`/api/media/gallery`](rest/fan-art.md#get-apimediagallery--list-fan-art) | List fan art | optional (`Bearer`) |
 | GET | [`/api/media/artists`](rest/fan-art.md#get-apimediaartists--list-fan-artists) | List fan artists | optional (`Bearer`) |
 
-### Profile and badges
+### Your account
+
+#### Profile and badges
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
 | GET | [`/api/badge/profile`](rest/profile-and-badges.md#get-apibadgeprofile--get-a-badge-profile) | Get a badge profile | optional (`Bearer`) |
 
-### Your playlists
+#### Your playlists
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -162,7 +216,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | POST | [`/api/user/favorites/save-order`](rest/your-playlists.md#post-apiuserfavoritessave-order--reorder-favorites) | Reorder favorites | `Bearer` |
 | GET | [`/api/favorites/type`](rest/your-playlists.md#get-apifavoritestype--list-favorites-by-type) | List favorites by type | `Bearer` |
 
-### Your uploads
+#### Your uploads
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -173,7 +227,9 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | POST | [`/api/user/song/{songId}`](rest/your-uploads.md#post-apiusersongsongid--update-an-uploaded-song) | Update an uploaded song | `Bearer` |
 | DELETE | [`/api/user/song/{songId}`](rest/your-uploads.md#delete-apiusersongsongid--delete-an-uploaded-song) | Delete an uploaded song | `Bearer` |
 
-### Bandle challenge
+### Bandle
+
+#### Bandle challenge
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -189,7 +245,7 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/dailychallenge/stats/{userId}`](rest/bandle-challenge.md#get-apidailychallengestatsuserid--get-a-users-stats) | Get a user's stats | none |
 | GET | [`/api/dailychallenge/stats/global/today`](rest/bandle-challenge.md#get-apidailychallengestatsglobaltoday--get-todays-global-stats) | Get today's global stats | none |
 
-### Bandle leaderboards
+#### Bandle leaderboards
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |
@@ -199,7 +255,9 @@ In the tables, "optional" means the endpoint works without auth but returns more
 | GET | [`/api/dailychallenge/leaderboard/global`](rest/bandle-leaderboards.md#get-apidailychallengeleaderboardglobal--get-the-all-time-leaderboard) | Get the all-time leaderboard | none |
 | GET | [`/api/dailychallenge/leaderboard/user/{userId}/ranks`](rest/bandle-leaderboards.md#get-apidailychallengeleaderboarduseruseridranks--get-a-users-ranks) | Get a user's ranks | none |
 
-### Listening dashboard
+### Statistics
+
+#### Listening dashboard
 
 | Method | Path | Summary | Auth |
 | --- | --- | --- | --- |

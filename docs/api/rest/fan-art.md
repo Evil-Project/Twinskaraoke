@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Fan art
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Fan artists and their art shown on the Art page.
 
@@ -22,12 +22,12 @@ Authentication is optional. When a bearer token is supplied, the request is asso
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `page` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
-| `search` | query | `string` | no |  |
-| `tag` | query | `string` | no |  |
-| `artistId` | query | `string` | no |  |
-| `hideWebM` | query | `bool` | no |  |
+| `page` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 30 |
+| `search` | query | `string` | no | default: "" |
+| `tag` | query | `string` | no | default: "" |
+| `artistId` | query | `string` | no | default: "" |
+| `hideWebM` | query | `bool` | no | default: false |
 | `sort` | query | `string` | no |  |
 
 Response `200` OK
@@ -44,7 +44,7 @@ Authentication is optional. When a bearer token is supplied, the request is asso
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `loadArts` | query | `bool` | no |  |
+| `loadArts` | query | `bool` | no | default: true |
 
 Response `200` OK `application/json`:
 

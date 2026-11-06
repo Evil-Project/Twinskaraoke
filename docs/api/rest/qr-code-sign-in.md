@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — QR code sign-in
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 For devices with a screen but no convenient keyboard (TVs, desktop apps, kiosks). The user approves the sign-in from a phone that is already signed in.
 
@@ -80,7 +80,7 @@ Request body `application/json`:
 
 ```ts
 {
-  sessionId: string
+  sessionId: string  // min length: 1
 }
 ```
 

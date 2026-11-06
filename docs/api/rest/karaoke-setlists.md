@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Karaoke setlists
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Setlists from karaoke streams. A setlist is a playlist with `isSetlist = true`.
 
@@ -14,13 +14,13 @@ Returns playlists. Set `isSetlist=true` to return only karaoke setlists. Paging,
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `startIndex` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `startIndex` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 30 |
 | `search` | query | `string` | no |  |
 | `sortBy` | query | `string` | no |  |
-| `sortDescending` | query | `bool` | no |  |
-| `isSetlist` | query | `bool` | no |  |
-| `year` | query | `int` | no |  |
+| `sortDescending` | query | `bool` | no | default: false |
+| `isSetlist` | query | `bool` | no | default: false |
+| `year` | query | `int` | no | default: 0 |
 
 Response `200` OK `application/json`:
 

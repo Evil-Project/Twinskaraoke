@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Bandle leaderboards
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Bandle rankings for daily, weekly, monthly and all-time periods.
 
@@ -14,8 +14,8 @@ Returns today's top players. `limit` defaults to 100. `mode` selects the challen
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `limit` | query | `int` | no |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
+| `limit` | query | `int` | no | default: 100 |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
@@ -29,8 +29,8 @@ Response `200` OK `application/json`:
   totalPlaysIncludingGuests: int
   totalWins: int
   totalLosses: int
-  winRate: number
-  lossRate: number
+  winRate: number  // read-only
+  lossRate: number  // read-only
   entries: {
     userId: string | null
     username: string | null
@@ -64,8 +64,8 @@ Returns the top players for the current week. `limit` defaults to 100. `mode` se
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `limit` | query | `int` | no |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
+| `limit` | query | `int` | no | default: 100 |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
@@ -107,8 +107,8 @@ Returns the top players for the current month. `limit` defaults to 100. `mode` s
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `limit` | query | `int` | no |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
+| `limit` | query | `int` | no | default: 100 |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 
@@ -150,8 +150,8 @@ Returns the all-time top players. `limit` defaults to 100. `mode` selects the ch
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `limit` | query | `int` | no |  |
-| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme |
+| `limit` | query | `int` | no | default: 100 |
+| `mode` | query | `int` | no | Possible values: `0` = Normal, `1` = Extreme; Possible values: `0` = Normal, `1` = Extreme |
 
 Response `200` OK `application/json`:
 

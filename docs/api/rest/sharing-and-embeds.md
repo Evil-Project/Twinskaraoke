@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Sharing and embeds
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Lightweight public endpoints used for browser search integration.
 

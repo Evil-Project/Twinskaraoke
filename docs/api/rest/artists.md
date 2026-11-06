@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Artists
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Original artists and their details.
 
@@ -14,11 +14,11 @@ Returns original artists. Supports paging (`startIndex`, `pageSize`, default 30)
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `startIndex` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `startIndex` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 30 |
 | `search` | query | `string` | no |  |
 | `sortBy` | query | `string` | no |  |
-| `sortDescending` | query | `bool` | no |  |
+| `sortDescending` | query | `bool` | no | default: false |
 
 Response `200` OK `application/json`:
 

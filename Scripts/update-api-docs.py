@@ -93,6 +93,30 @@ def scalar(schema: dict) -> str:
     return kind or "any"
 
 
+def notes(spec: dict, schema) -> list[str]:
+    """Constraints and defaults that the type alone doesn't show."""
+    schema = resolve(spec, schema or {})
+    if not isinstance(schema, dict):
+        return []
+    out = []
+    if "default" in schema:
+        out.append(f"default: {json.dumps(schema['default'], ensure_ascii=False)}")
+    for key, label in (("minimum", "min: "), ("maximum", "max: "), ("exclusiveMinimum", "> "), ("exclusiveMaximum", "< "),
+                       ("minLength", "min length: "), ("maxLength", "max length: "),
+                       ("minItems", "min items: "), ("maxItems", "max items: ")):
+        if key in schema and not isinstance(schema[key], bool):
+            out.append(f"{label}{schema[key]}")
+    if "pattern" in schema:
+        out.append(f"pattern: {schema['pattern']}")
+    if schema.get("readOnly"):
+        out.append("read-only")
+    if schema.get("writeOnly"):
+        out.append("write-only")
+    if schema.get("uniqueItems"):
+        out.append("unique items")
+    return out
+
+
 def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | None = None, name: str = "") -> str:
     """Renders a schema as a compact TypeScript-like type. Within one call tree,
     an object shape that already appeared is shown as "same as `x` above"."""
@@ -130,8 +154,8 @@ def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | Non
                 text = f"{{ [key: string]: {render(spec, extra, indent, depth + 1, memo, name)} }}"
             else:
                 text = "object"
-        elif depth > 6:
-            text = "{ … }"
+        elif depth > 40:
+            raise RecursionError("schema nesting deeper than 40 levels; recursive $ref?")
         elif len(props) >= 3 and json.dumps(props, sort_keys=True) in memo and depth > 0:
             text = f"{{ …same as `{memo[json.dumps(props, sort_keys=True)]}` above }}"
         else:
@@ -142,7 +166,8 @@ def render(spec: dict, schema, indent: int = 0, depth: int = 0, memo: dict | Non
             for prop_name, prop in props.items():
                 prop_resolved = resolve(spec, prop)
                 optional = "?" if required and prop_name not in required else ""
-                comment = (prop_resolved.get("description") or "").strip().replace("\n", " ")
+                comment = "; ".join(x for x in [(prop_resolved.get("description") or "").strip().replace("\n", " ")]
+                                    + notes(spec, prop_resolved) if x)
                 rendered = render(spec, prop, indent + 1, depth + 1, memo, prop_name)
                 line = f"{pad}  {prop_name}{optional}: {rendered}"
                 if comment:
@@ -220,7 +245,11 @@ def operation_markdown(spec: dict, method: str, path: str, op: dict, shared: lis
     if params:
         out += ["| Parameter | In | Type | Required | Description |", "| --- | --- | --- | --- | --- |"]
         for p in params:
-            description = (p.get("description") or "").strip().replace("\n", " ").replace("|", "\\|")
+            schema_info = resolve(spec, p.get("schema") or {})
+            parts = [(p.get("description") or "").strip(), (schema_info.get("description") or "").strip()] + notes(spec, schema_info)
+            if p.get("deprecated"):
+                parts.append("deprecated")
+            description = "; ".join(x for x in parts if x).replace("\n", " ").replace("|", "\\|")
             kind = render(spec, p.get("schema")).replace("\n", " ").replace("|", "\\|")
             out.append(f"| `{p.get('name')}` | {p.get('in')} | `{kind}` | {'yes' if p.get('required') else 'no'} | {description} |")
         out.append("")
@@ -230,6 +259,11 @@ def operation_markdown(spec: dict, method: str, path: str, op: dict, shared: lis
         media, schema = first_content(body.get("content"))
         required = " (required)" if body.get("required") else ""
         out += [f"Request body `{media}`{required}:", "", "```ts", render(spec, schema), "```", ""]
+        encoding = (body.get("content", {}).get(media) or {}).get("encoding")
+        if encoding:
+            parts = [f"`{field}`: " + ", ".join(f"{k}={v if isinstance(v, str) else json.dumps(v)}" for k, v in enc.items())
+                     for field, enc in encoding.items()]
+            out += ["Encoding: " + "; ".join(parts), ""]
 
     responses = op.get("responses", {})
     for code, response in responses.items():
@@ -241,6 +275,17 @@ def operation_markdown(spec: dict, method: str, path: str, op: dict, shared: lis
         else:
             out += [f"Response `{code}` {description}".rstrip(), ""]
     return "\n".join(out).rstrip() + "\n"
+
+
+def servers_text(spec: dict) -> str:
+    return ", ".join(s.get("url", "") + (f" ({s['description'].strip()})" if s.get("description") else "")
+                     for s in spec.get("servers", []))
+
+
+def write(path: Path, text: str) -> None:
+    """Writes generated Markdown with LF line endings (some spec texts use CRLF)."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    path.write_text(text.rstrip() + "\n", encoding="utf-8")
 
 
 def write_openapi(spec: dict, slug_name: str, title_hint: str) -> list[tuple[str, str, str, str, str]]:
@@ -270,18 +315,18 @@ def write_openapi(spec: dict, slug_name: str, title_hint: str) -> list[tuple[str
             anchor = github_anchor(f"`{method.upper()} {path}` — {op.get('summary', '').strip()}")
             rows.append((tag, method.upper(), path, (op.get("summary") or "").strip(), auth_text(spec, op), f"{rel}#{anchor}"))
         if split:
-            servers = ", ".join(s.get("url", "") for s in spec.get("servers", []))
+            servers = servers_text(spec)
             text = HEADER + f"# {info.get('title')} — {tag}\n\nBase URL: {servers}\n\n" + "\n".join(section[2:])
-            file.write_text(text, encoding="utf-8")
+            write(file, text)
         else:
             single += section
     if not split:
-        servers = ", ".join(s.get("url", "") for s in spec.get("servers", []))
+        servers = servers_text(spec)
         head = f"# {info.get('title')}\n\n"
         if info.get("description"):
             head += info["description"].strip() + "\n\n"
         head += f"Base URL: {servers}\n\n"
-        (OUT / f"{slug_name}.md").write_text(HEADER + head + "\n".join(single), encoding="utf-8")
+        write(OUT / f"{slug_name}.md", HEADER + head + "\n".join(single))
     return rows
 
 
@@ -304,6 +349,8 @@ def write_asyncapi(spec: dict, slug_name: str) -> list[tuple[str, str, str, str]
         params = channel.get("parameters") or {}
         bindings = (channel.get("bindings") or {}).get("ws", {})
         query = resolve(spec, bindings.get("query")) if bindings.get("query") else None
+        if bindings.get("method"):
+            out += [f"Handshake: HTTP `{bindings['method']}` upgrade to WebSocket.", ""]
         if query:
             out += ["Connection query:", "", "```ts", render(spec, query), "```", ""]
         for pname, param in params.items():
@@ -333,8 +380,12 @@ def write_asyncapi(spec: dict, slug_name: str) -> list[tuple[str, str, str, str]
                 if message.get("description"):
                     out += [message["description"].strip(), ""]
                 out += ["```ts", render(spec, message.get("payload")), "```", ""]
+                for example in message.get("examples") or []:
+                    label = example.get("name") or example.get("summary") or "Example"
+                    out += [f"Example ({label}):" if label != "Example" else "Example:", "", "```json",
+                            json.dumps(example.get("payload"), ensure_ascii=False), "```", ""]
                 rows.append((direction, title, summary, f"{slug_name}.md"))
-    (OUT / f"{slug_name}.md").write_text(HEADER + "\n".join(out).rstrip() + "\n", encoding="utf-8")
+    write(OUT / f"{slug_name}.md", HEADER + "\n".join(out))
     return rows
 
 
@@ -392,13 +443,24 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
     ]
     for slug_name, rows in rest_rows.items():
         spec = loaded[slug_name]
+        # Split specs have no single file to carry the API's intro, so it goes here.
+        if spec.get("info", {}).get("description") and (OUT / slug_name).is_dir():
+            about = re.sub(r"(?m)^(#+) ", lambda m: "#" + m.group(1) + " ", spec["info"]["description"].strip())
+            lines += [f"## About the {spec.get('info', {}).get('title')}", "", about, ""]
         lines += [f"## {spec.get('info', {}).get('title')} — endpoints", ""]
-        current = None
+        groups = spec.get("x-tagGroups") or []
+        group_of = {tag: g["name"] for g in groups for tag in g.get("tags", [])}
+        current, current_group = None, None
         for tag, method, path, summary, auth, link in rows:
             if tag != current:
                 if current is not None:
                     lines.append("")
-                lines += [f"### {tag}", "", "| Method | Path | Summary | Auth |", "| --- | --- | --- | --- |"]
+                group = group_of.get(tag)
+                if groups and group != current_group:
+                    lines += [f"### {group or 'Other'}", ""]
+                    current_group = group
+                level = "####" if groups else "###"
+                lines += [f"{level} {tag}", "", "| Method | Path | Summary | Auth |", "| --- | --- | --- | --- |"]
                 current = tag
             lines.append(f"| {method} | [`{path}`]({link}) | {summary} | {auth} |")
         lines.append("")
@@ -409,7 +471,7 @@ def write_index(loaded: dict, rest_rows: dict, async_rows: dict) -> None:
         for direction, title, summary, link in rows:
             lines.append(f"| {direction} | [`{title}`]({link}) | {summary} |")
         lines.append("")
-    (OUT / "README.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    write(OUT / "README.md", "\n".join(lines))
 
 
 # --------------------------------------------------------------------------

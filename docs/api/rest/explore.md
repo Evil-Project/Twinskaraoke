@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Explore
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Discovery data for the Explore page: trending songs, genre overview, cover artist distribution and contributor credits.
 
@@ -15,7 +15,7 @@ Returns the most played songs over the last `days` days. `take` sets the number 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `days` | query | `int` | no |  |
-| `take` | query | `int` | no |  |
+| `take` | query | `int` | no | default: 100 |
 
 Response `200` OK `application/json`:
 

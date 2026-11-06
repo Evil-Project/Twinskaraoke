@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Listening dashboard
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Aggregated listening statistics used by the public dashboard page.
 
@@ -14,7 +14,7 @@ Returns all dashboard data in a single response. Use the individual endpoints be
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 
@@ -76,7 +76,7 @@ Returns the headline figures (total plays, listeners, etc.). `range` accepts `to
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 
@@ -104,7 +104,7 @@ Returns play counts as a time series. `range` accepts `today` (default), `7d`, `
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 
@@ -125,7 +125,7 @@ Returns play counts grouped by genre. `range` accepts `today` (default), `7d`, `
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 
@@ -148,10 +148,10 @@ Returns the most played songs. `limit` defaults to 7. `range` accepts `today` (d
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
-| `limit` | query | `int` | no |  |
+| `limit` | query | `int` | no | default: 7 |
 
 Response `200` OK `application/json`:
 
@@ -175,10 +175,10 @@ Returns the most played original artists. `limit` defaults to 7. `range` accepts
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
-| `limit` | query | `int` | no |  |
+| `limit` | query | `int` | no | default: 7 |
 
 Response `200` OK `application/json`:
 
@@ -199,7 +199,7 @@ Returns play counts grouped by cover artist (Neuro, Evil, duets, etc.). `range` 
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 
@@ -223,7 +223,7 @@ Returns top songs and totals for the cover artist given in `coverArtist`. `range
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
 | `coverArtist` | query | `string` | no |  |
-| `range` | query | `string` | no |  |
+| `range` | query | `string` | no | default: "today" |
 | `from` | query | `date-time` | no |  |
 | `to` | query | `date-time` | no |  |
 

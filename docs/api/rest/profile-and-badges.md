@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Profile and badges
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 The badge profile page: level, XP, coin balances, badges and showcase items.
 

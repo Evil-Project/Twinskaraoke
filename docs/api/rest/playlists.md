@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Playlists
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Public user-created playlists and the featured playlists shown on the home page.
 
@@ -93,12 +93,12 @@ Returns public playlists. Supports paging (`startIndex`, `pageSize`), `search`, 
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `startIndex` | query | `int` | no |  |
-| `pageSize` | query | `int` | no |  |
+| `startIndex` | query | `int` | no | default: 0 |
+| `pageSize` | query | `int` | no | default: 30 |
 | `search` | query | `string` | no |  |
 | `sortBy` | query | `string` | no |  |
-| `sortDescending` | query | `bool` | no |  |
-| `year` | query | `int` | no |  |
+| `sortDescending` | query | `bool` | no | default: false |
+| `year` | query | `int` | no | default: 0 |
 | `genreIds` | query | `string` | no |  |
 
 Response `200` OK `application/json`:

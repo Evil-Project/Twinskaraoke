@@ -2,7 +2,7 @@
 
 # Neuro & Evil Karaoke API — Your uploads
 
-Base URL: https://api.neurokaraoke.com
+Base URL: https://api.neurokaraoke.com (Production)
 
 Songs uploaded by the authenticated user. All endpoints require a bearer token.
 
@@ -29,6 +29,8 @@ Request body `multipart/form-data`:
   File: binary
 }
 ```
+
+Encoding: `File`: style=form
 
 Response `200` OK
 

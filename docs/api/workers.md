@@ -6,7 +6,7 @@ Listen along and radio chat run as Cloudflare Workers, separate from the main AP
 
 This document covers their read-only HTTP endpoints.
 
-Base URL: https://listen-along.neurokaraoke.com, https://radio-chat.neurokaraoke.com
+Base URL: https://listen-along.neurokaraoke.com (Listen along worker.), https://radio-chat.neurokaraoke.com (Radio chat worker.)
 
 ## Listen along
 
@@ -167,7 +167,7 @@ Returns the song currently playing on the radio and upcoming songs.
 
 | Parameter | In | Type | Required | Description |
 | --- | --- | --- | --- | --- |
-| `lang` | query | `string` | no | Language room to query. All rooms report the same stream. |
+| `lang` | query | `string` | no | Language room to query. All rooms report the same stream.; Possible values: `en`, `ja`, `zh`; default: "en" |
 
 Response `200` OK. Returns an empty object if no now-playing data has been received yet. `application/json`:
 

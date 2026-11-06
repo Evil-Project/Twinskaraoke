@@ -37,6 +37,8 @@ Identify the caller with `token` (the neurokaraoke.com `authToken`) or, for gues
 
 When creating a room, the following are also accepted: `roomName`, `isPublic` (default true), `allowListenerAddSongs`, `allowListenerSongCommands`, `allowDuplicateSongs`, `listenerAddSongCooldownSeconds` and `autoRemovePlayedSongs`.
 
+Handshake: HTTP `GET` upgrade to WebSocket.
+
 Connection query:
 
 ```ts
@@ -51,11 +53,11 @@ Connection query:
   frameTheme: int
   level: int
   roomName: string
-  isPublic: bool
-  allowListenerAddSongs: bool
-  allowListenerSongCommands: bool
-  allowDuplicateSongs: bool
-  listenerAddSongCooldownSeconds: int
+  isPublic: bool  // default: true
+  allowListenerAddSongs: bool  // default: false
+  allowListenerSongCommands: bool  // default: false
+  allowDuplicateSongs: bool  // default: false
+  listenerAddSongCooldownSeconds: int  // default: 0
   autoRemovePlayedSongs: bool
 }
 ```
@@ -103,6 +105,12 @@ Restricted to the host and co-hosts. Each change is followed by a PlaybackSync b
 }
 ```
 
+Example:
+
+```json
+{"type": "Seek", "payload": 42.5}
+```
+
 #### `SkipNext` — Advance to the next song in the queue.
 
 ```ts
@@ -141,6 +149,12 @@ Restricted to the host and co-hosts. Each change is followed by a PlaybackSync b
     isPlaying: bool
   }
 }
+```
+
+Example:
+
+```json
+{"type": "ReportPosition", "payload": {"positionSeconds": 61.2, "isPlaying": true}}
 ```
 
 ### Change the queue
@@ -189,6 +203,12 @@ Host and co-hosts can send all of these. Listeners can only send ListenerAddSong
     newOrder: int  // Zero-based target index.
   }
 }
+```
+
+Example:
+
+```json
+{"type": "ReorderQueue", "payload": {"queueItemId": "q_123", "newOrder": 0}}
 ```
 
 #### `ShuffleQueue` — Shuffles the remaining queue items.
@@ -241,6 +261,12 @@ Available to all connected users.
     replyToId: string
   })
 }
+```
+
+Example:
+
+```json
+{"type": "SendMessage", "payload": {"content": "this song slaps", "replyToId": null}}
 ```
 
 ### Manage the room
