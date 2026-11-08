@@ -566,11 +566,11 @@ nonisolated struct Playlist: Codable, Identifiable, Hashable, Sendable {
         mosaicMedia =
             (try? container.decodeIfPresent(LossyArray<Media>.self, forKey: .mosaicMedia)?.elements)
                 ?? (try? container.decodeIfPresent([Media].self, forKey: .mosaicMedia))
-        songListDTOs =
+        songListDTOs = (
             Self.decodeSongs(from: container, forKey: .songListDTOs)
                 ?? Self.decodeSongs(from: container, forKey: .items)
                 ?? Self.decodeSongs(from: container, forKey: .songs)
-                ?? Self.decodeSongs(from: container, forKey: .favorites)
+                ?? Self.decodeSongs(from: container, forKey: .favorites))?.inPlaylistOrder()
         isPersonal = (try? container.decodeIfPresent(Bool.self, forKey: .isPersonal)) ?? false
     }
 
@@ -677,11 +677,11 @@ nonisolated struct PlaylistListItem: Decodable, Identifiable, Sendable {
         mosaicMedia =
             (try? container.decodeIfPresent(LossyArray<Media>.self, forKey: .mosaicMedia)?.elements)
                 ?? (try? container.decodeIfPresent([Media].self, forKey: .mosaicMedia))
-        songListDTOs =
+        songListDTOs = (
             Self.decodeSongs(from: container, forKey: .songListDTOs)
                 ?? Self.decodeSongs(from: container, forKey: .items)
                 ?? Self.decodeSongs(from: container, forKey: .songs)
-                ?? Self.decodeSongs(from: container, forKey: .favorites)
+                ?? Self.decodeSongs(from: container, forKey: .favorites))?.inPlaylistOrder()
     }
 
     func asPlaylist() -> Playlist {
@@ -754,12 +754,12 @@ nonisolated struct PlaylistDetail: Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        songListDTOs =
+        songListDTOs = (
             Self.decodeSongs(from: container, forKey: .songListDTOs)
                 ?? Self.decodeSongs(from: container, forKey: .items)
                 ?? Self.decodeSongs(from: container, forKey: .songs)
                 ?? Self.decodeSongs(from: container, forKey: .favorites)
-                ?? []
+                ?? []).inPlaylistOrder()
     }
 
     func encode(to encoder: Encoder) throws {
