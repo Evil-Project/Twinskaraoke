@@ -14,22 +14,30 @@ final class SetlistsViewModel {
         var search = ""
     }
 
+    /// One page of setlists.
+    struct Page {
+        let setlists: [KaraokeSetlist]
+        /// Entries the server sent, including any that failed to decode, so
+        /// the next page starts at the right index.
+        let sourceCount: Int
+    }
+
     /// The requests behind the screen, replaced in tests.
     struct Service {
-        var page: @MainActor (_ filter: Filter, _ startIndex: Int, _ pageSize: Int) async throws
-            -> LossyArray<KaraokeSetlist>
+        var page: @MainActor (_ filter: Filter, _ startIndex: Int, _ pageSize: Int) async throws -> Page
         var latest: @MainActor () async throws -> KaraokeSetlist
         var stats: @MainActor () async throws -> SetlistStats
 
         static var live: Service {
             Service(
                 page: { filter, startIndex, pageSize in
-                    try await KaraokeAPIClient.setlists(
+                    let page = try await KaraokeAPIClient.setlists(
                         startIndex: startIndex,
                         pageSize: pageSize,
                         year: filter.year,
                         search: filter.search
                     )
+                    return Page(setlists: page.elements, sourceCount: page.sourceCount)
                 },
                 latest: { try await KaraokeAPIClient.latestSetlist() },
                 stats: { try await KaraokeAPIClient.setlistStats() }
@@ -157,7 +165,7 @@ final class SetlistsViewModel {
         let service = service
         let pageSize = pageSize
         pageTask = Task { [weak self] in
-            let result: Result<LossyArray<KaraokeSetlist>, any Error>
+            let result: Result<Page, any Error>
             do {
                 result = try await .success(service.page(filter, startIndex, pageSize))
             } catch {
@@ -168,14 +176,14 @@ final class SetlistsViewModel {
         }
     }
 
-    private func apply(_ result: Result<LossyArray<KaraokeSetlist>, any Error>, for filter: Filter, startIndex: Int) {
+    private func apply(_ result: Result<Page, any Error>, for filter: Filter, startIndex: Int) {
         isLoading = false
         isLoadingMore = false
         pageTask = nil
         switch result {
         case let .success(page):
             var seen = startIndex == 0 ? Set<String>() : Set(setlists.map(\.id))
-            let fresh = page.elements.filter { seen.insert($0.id).inserted }
+            let fresh = page.setlists.filter { seen.insert($0.id).inserted }
             setlists = startIndex == 0 ? fresh : setlists + fresh
             shownFilter = filter
             nextOffset = startIndex + page.sourceCount

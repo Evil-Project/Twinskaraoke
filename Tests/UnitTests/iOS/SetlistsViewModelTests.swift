@@ -12,7 +12,7 @@ private final class FakeSetlistService {
     }
 
     private(set) var pageCalls: [PageCall] = []
-    private var pending: [Int: CheckedContinuation<LossyArray<KaraokeSetlist>, any Error>] = [:]
+    private var pending: [Int: CheckedContinuation<SetlistsViewModel.Page, any Error>] = [:]
     var latestCalls = 0
 
     var service: SetlistsViewModel.Service {
@@ -24,12 +24,17 @@ private final class FakeSetlistService {
             },
             latest: {
                 self.latestCalls += 1
-                return try JSONDecoder().decode(
-                    KaraokeSetlist.self,
-                    from: Data(#"{"id":"latest","name":"Latest"}"#.utf8)
-                )
+                return Self.setlist("latest")
             },
             stats: { SetlistStats(totalCount: 3, years: [2025, 2026]) }
+        )
+    }
+
+    static func setlist(_ id: String) -> KaraokeSetlist {
+        KaraokeSetlist(
+            playlist: Playlist(id: id, name: id, songCount: 0, mosaicMedia: nil, songListDTOs: nil),
+            streamDay: nil,
+            totalDuration: nil
         )
     }
 
@@ -37,10 +42,10 @@ private final class FakeSetlistService {
         while pageCalls.count < count || pending[count - 1] == nil { await Task.yield() }
     }
 
-    func answer(_ call: Int, ids: [String]) {
-        let json = "[" + ids.map { #"{"id":"\#($0)","name":"\#($0)"}"# }.joined(separator: ",") + "]"
-        let page = Result { try JSONDecoder().decode(LossyArray<KaraokeSetlist>.self, from: Data(json.utf8)) }
-        pending.removeValue(forKey: call)?.resume(with: page)
+    /// `sourceCount` above `ids.count` stands for entries that failed to decode.
+    func answer(_ call: Int, ids: [String], sourceCount: Int? = nil) {
+        let page = SetlistsViewModel.Page(setlists: ids.map(Self.setlist), sourceCount: sourceCount ?? ids.count)
+        pending.removeValue(forKey: call)?.resume(returning: page)
     }
 
     func fail(_ call: Int) {
@@ -79,21 +84,23 @@ struct SetlistsViewModelTests {
         let model = SetlistsViewModel(service: fake.service, pageSize: 2, searchDelay: .zero)
         model.loadIfNeeded()
         await fake.waitForPageCalls(1)
-        fake.answer(0, ids: ["a", "b"])
+        // One of the two entries failed to decode; the page is still full.
+        fake.answer(0, ids: ["a"], sourceCount: 2)
         await settle(model)
 
         model.loadMoreIfNeeded(current: try #require(model.setlists.last))
         await fake.waitForPageCalls(2)
         #expect(fake.pageCalls[1].startIndex == 2)
-        fake.answer(1, ids: ["b", "c"])
+        fake.answer(1, ids: ["a", "c"])
         await settle(model)
-        #expect(model.setlists.map(\.id) == ["a", "b", "c"])
+        #expect(model.setlists.map(\.id) == ["a", "c"])
 
         model.loadMoreIfNeeded(current: try #require(model.setlists.last))
         await fake.waitForPageCalls(3)
+        #expect(fake.pageCalls[2].startIndex == 4)
         fake.answer(2, ids: ["d"])
         await settle(model)
-        #expect(model.setlists.map(\.id) == ["a", "b", "c", "d"])
+        #expect(model.setlists.map(\.id) == ["a", "c", "d"])
 
         model.loadMoreIfNeeded(current: try #require(model.setlists.last))
         #expect(fake.pageCalls.count == 3)
