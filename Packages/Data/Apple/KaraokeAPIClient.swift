@@ -372,6 +372,51 @@ nonisolated enum KaraokeAPIClient {
         return try decodePlaylists(from: data)
     }
 
+    /// Karaoke setlists, newest first. A nil `year` means every year.
+    static func setlists(
+        startIndex: Int,
+        pageSize: Int,
+        year: Int? = nil,
+        search: String = ""
+    ) async throws -> LossyArray<KaraokeSetlist> {
+        let request = try setlistsRequest(startIndex: startIndex, pageSize: pageSize, year: year, search: search)
+        return try decode(LossyArray<KaraokeSetlist>.self, from: try await data(for: request))
+    }
+
+    /// Setlists always come back newest first: the server ignores
+    /// `sortDescending` for them, so it isn't sent.
+    static func setlistsRequest(
+        startIndex: Int,
+        pageSize: Int,
+        year: Int?,
+        search: String,
+        readToken: () throws -> String? = CredentialStore.requestToken
+    ) throws -> URLRequest {
+        var queryItems = [
+            URLQueryItem(name: "isSetlist", value: "True"),
+            URLQueryItem(name: "startIndex", value: String(startIndex)),
+            URLQueryItem(name: "pageSize", value: String(pageSize)),
+        ]
+        if let year {
+            queryItems.append(URLQueryItem(name: "year", value: String(year)))
+        }
+        if !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "search", value: search))
+        }
+        return try request(path: "/api/playlists", queryItems: queryItems, readToken: readToken)
+    }
+
+    /// The setlist of the latest karaoke stream.
+    static func latestSetlist() async throws -> KaraokeSetlist {
+        let request = try request(path: "/api/playlist/recent")
+        return try decode(KaraokeSetlist.self, from: try await data(for: request))
+    }
+
+    static func setlistStats() async throws -> SetlistStats {
+        let request = try request(path: "/api/setlists/stats")
+        return try decode(SetlistStats.self, from: try await data(for: request))
+    }
+
     static func playlistDetail(id: String) async throws -> PlaylistDetail {
         let data = try await playlistDetailData(id: id)
         return try decode(PlaylistDetail.self, from: data)
