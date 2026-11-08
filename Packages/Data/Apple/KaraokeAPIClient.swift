@@ -383,8 +383,9 @@ nonisolated enum KaraokeAPIClient {
         return try decode(LossyArray<KaraokeSetlist>.self, from: try await data(for: request))
     }
 
-    /// Setlists always come back newest first: the server ignores
-    /// `sortDescending` for them, so it isn't sent.
+    /// Newest first. The server ignores `sortDescending` for setlists today and
+    /// sorts them newest first anyway; it's sent so that stays true if the
+    /// server starts honouring it, whose documented default is `false`.
     static func setlistsRequest(
         startIndex: Int,
         pageSize: Int,
@@ -396,6 +397,7 @@ nonisolated enum KaraokeAPIClient {
             URLQueryItem(name: "isSetlist", value: "True"),
             URLQueryItem(name: "startIndex", value: String(startIndex)),
             URLQueryItem(name: "pageSize", value: String(pageSize)),
+            URLQueryItem(name: "sortDescending", value: "True"),
         ]
         if let year {
             queryItems.append(URLQueryItem(name: "year", value: String(year)))

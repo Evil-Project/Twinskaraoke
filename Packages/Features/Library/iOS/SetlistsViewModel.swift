@@ -48,9 +48,7 @@ final class SetlistsViewModel {
         /// for UI tests launched with `-UITestMode`.
         static var uiTestFixture: Service {
             let setlists = UITestFixtures.setlists
-            let year = { (setlist: KaraokeSetlist) in
-                setlist.streamDay.map { Calendar.current.component(.year, from: $0) }
-            }
+            let year = { (setlist: KaraokeSetlist) in setlist.streamDay?.year }
             return Service(
                 page: { filter, startIndex, pageSize in
                     let matches = setlists.filter { setlist in
@@ -176,11 +174,11 @@ final class SetlistsViewModel {
         }
     }
 
+    /// Starts the list over. The paging position stays until page one
+    /// answers, so a refresh that fails can still load the rest.
     private func reload() {
         generation += 1
         pageTask?.cancel()
-        nextOffset = 0
-        canLoadMore = false
         isLoadingMore = false
         loadFailed = false
         isLoading = true
@@ -216,16 +214,24 @@ final class SetlistsViewModel {
             shownFilter = filter
             nextOffset = startIndex + page.sourceCount
             canLoadMore = page.sourceCount >= pageSize
+            // A full page with nothing new (every entry failed to decode or was
+            // already shown) adds no row whose appearance would ask for more.
+            if fresh.isEmpty, canLoadMore {
+                if setlists.isEmpty { isLoading = true } else { isLoadingMore = true }
+                loadPage(startIndex: nextOffset)
+            }
         case let .failure(error):
             DebugLogger.log("Setlists page at \(startIndex) failed: \(error.localizedDescription)", category: .network)
-            if startIndex == 0 {
-                // Results for another year or search would look like results for this one.
-                if shownFilter != filter { setlists = [] }
-                loadFailed = setlists.isEmpty
-            } else {
+            if startIndex != 0 {
                 // Reaching the end of the list again retries.
                 canLoadMore = true
+            } else if shownFilter != filter {
+                // Results for another year or search would look like results for this one.
+                setlists = []
+                nextOffset = 0
+                canLoadMore = false
             }
+            loadFailed = setlists.isEmpty
         }
     }
 }

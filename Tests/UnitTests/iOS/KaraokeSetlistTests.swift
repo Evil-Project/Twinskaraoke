@@ -8,13 +8,6 @@ struct KaraokeSetlistTests {
         try JSONDecoder().decode(KaraokeSetlist.self, from: Data(json.utf8))
     }
 
-    private func dayComponents(_ date: Date?, in timeZone: TimeZone) throws -> [Int] {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        let parts = calendar.dateComponents([.year, .month, .day, .hour], from: try #require(date))
-        return [parts.year, parts.month, parts.day, parts.hour].compactMap(\.self)
-    }
-
     @Test("A setlist keeps its playlist fields, length and stream day")
     func decodesSetlist() throws {
         let setlist = try decode(#"""
@@ -27,16 +20,21 @@ struct KaraokeSetlistTests {
         #expect(setlist.playlist.songCount == 15)
         #expect(setlist.playlist.songListDTOs?.map(\.id) == ["s1"])
         #expect(setlist.totalDuration == 3191)
-        #expect(try dayComponents(setlist.streamDay, in: .current) == [2026, 10, 29, 0])
+        #expect(setlist.streamDay == DateComponents(year: 2026, month: 10, day: 29))
     }
 
-    @Test("The stream day ignores the time, its seven-digit fraction and the time zone")
+    @Test("The stream day ignores the time and its seven-digit fraction, and reads the same in every time zone")
     func readsOnlyTheDate() throws {
-        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
-        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
-        let evening = "2025-12-27T20:14:06.4719616"
-        #expect(try dayComponents(KaraokeSetlist.day(from: evening, timeZone: losAngeles), in: losAngeles) == [2025, 12, 27, 0])
-        #expect(try dayComponents(KaraokeSetlist.day(from: evening, timeZone: tokyo), in: tokyo) == [2025, 12, 27, 0])
+        let day = try #require(KaraokeSetlist.day(from: "2025-12-27T20:14:06.4719616"))
+        #expect(day == DateComponents(year: 2025, month: 12, day: 27))
+        // The extremes, 25 hours apart: a stored instant would fall on
+        // different days in them.
+        for zone in ["Pacific/Kiritimati", "Pacific/Pago_Pago"] {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = try #require(TimeZone(identifier: zone))
+            let date = try #require(calendar.date(from: day))
+            #expect(calendar.component(.day, from: date) == 27, "\(zone)")
+        }
         #expect(KaraokeSetlist.day(from: "not a date") == nil)
         #expect(KaraokeSetlist.day(from: "2026-13-40T00:00:00") == nil)
     }
@@ -52,6 +50,13 @@ struct KaraokeSetlistTests {
         #expect(setlist.playlist.songCount == 2)
     }
 
+    @Test("Counting the songs keeps the rest of the playlist")
+    func countFallbackKeepsPlaylistFields() throws {
+        let setlist = try decode(#"{"id":"a","name":"A","isPersonal":true,"songListDTOs":[{"id":"s1","title":"One"}]}"#)
+        #expect(setlist.playlist.songCount == 1)
+        #expect(setlist.playlist.isPersonal)
+    }
+
     @Test("Stats list the years newest first, once each")
     func decodesStats() throws {
         let stats = try JSONDecoder().decode(
@@ -60,11 +65,18 @@ struct KaraokeSetlistTests {
         )
         #expect(stats == SetlistStats(totalCount: 109, years: [2026, 2025, 2024, 2023]))
         #expect(stats.years == [2026, 2025, 2024, 2023])
-        let empty = try JSONDecoder().decode(SetlistStats.self, from: Data("{}".utf8))
-        #expect(empty == SetlistStats(totalCount: 0, years: []))
     }
 
-    @Test("The setlist request filters by year and search only when they're set")
+    @Test("Stats that don't match fail to decode instead of reading as no years")
+    func rejectsMalformedStats() {
+        for json in [#"{}"#, #"{"totalCount":109}"#, #"{"totalCount":109,"years":["2026"]}"#] {
+            #expect(throws: DecodingError.self, "\(json)") {
+                try JSONDecoder().decode(SetlistStats.self, from: Data(json.utf8))
+            }
+        }
+    }
+
+    @Test("The setlist request asks for newest first, and filters by year and search only when they're set")
     func buildsRequest() throws {
         let filtered = try KaraokeAPIClient.setlistsRequest(
             startIndex: 25,
@@ -80,12 +92,13 @@ struct KaraokeSetlistTests {
             URLQueryItem(name: "isSetlist", value: "True"),
             URLQueryItem(name: "startIndex", value: "25"),
             URLQueryItem(name: "pageSize", value: "25"),
+            URLQueryItem(name: "sortDescending", value: "True"),
             URLQueryItem(name: "year", value: "2024"),
             URLQueryItem(name: "search", value: "christmas"),
         ])
 
         let all = try KaraokeAPIClient.setlistsRequest(startIndex: 0, pageSize: 25, year: nil, search: "", readToken: { nil })
         let names = (URLComponents(url: try #require(all.url), resolvingAgainstBaseURL: false)?.queryItems ?? []).map(\.name)
-        #expect(Set(names) == ["isSetlist", "startIndex", "pageSize"])
+        #expect(Set(names) == ["isSetlist", "startIndex", "pageSize", "sortDescending"])
     }
 }

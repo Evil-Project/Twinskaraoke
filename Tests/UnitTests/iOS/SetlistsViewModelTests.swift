@@ -60,6 +60,14 @@ struct SetlistsViewModelTests {
         while model.isLoading || model.isLoadingMore { await Task.yield() }
     }
 
+    /// Lets queued work run, for requests that never come when the code is
+    /// broken: waiting for them would hang instead of failing.
+    private func yieldBriefly() async {
+        for _ in 0 ..< 50 {
+            await Task.yield()
+        }
+    }
+
     @Test("The first load fetches the latest setlist, the years and page one, once")
     func loadsOnce() async {
         let fake = FakeSetlistService()
@@ -175,5 +183,50 @@ struct SetlistsViewModelTests {
         fake.answer(3, ids: ["zzz"])
         await settle(model)
         #expect(model.setlists.map(\.id) == ["zzz"])
+    }
+
+    @Test("A failed refresh keeps paging where it was")
+    func failedRefreshKeepsPaging() async throws {
+        let fake = FakeSetlistService()
+        let model = SetlistsViewModel(service: fake.service, pageSize: 2, searchDelay: .zero)
+        model.loadIfNeeded()
+        await fake.waitForPageCalls(1)
+        fake.answer(0, ids: ["a", "b"])
+        await settle(model)
+        model.loadMoreIfNeeded(current: try #require(model.setlists.last))
+        await fake.waitForPageCalls(2)
+        fake.answer(1, ids: ["c", "d"])
+        await settle(model)
+
+        let refresh = Task { await model.refresh() }
+        await fake.waitForPageCalls(3)
+        fake.fail(2)
+        await refresh.value
+        #expect(model.setlists.map(\.id) == ["a", "b", "c", "d"])
+
+        model.loadMoreIfNeeded(current: try #require(model.setlists.last))
+        await yieldBriefly()
+        try #require(fake.pageCalls.count == 4, "Scrolling to the end asked for nothing after the failed refresh.")
+        #expect(fake.pageCalls[3].startIndex == 4)
+        fake.answer(3, ids: [])
+        await settle(model)
+    }
+
+    @Test("A full page with nothing to show loads the next one by itself")
+    func skipsUnusablePages() async throws {
+        let fake = FakeSetlistService()
+        let model = SetlistsViewModel(service: fake.service, pageSize: 2, searchDelay: .zero)
+        model.loadIfNeeded()
+        await fake.waitForPageCalls(1)
+        // Both entries failed to decode, so no row appears to ask for more.
+        fake.answer(0, ids: [], sourceCount: 2)
+        await yieldBriefly()
+        try #require(fake.pageCalls.count == 2, "The empty page left the list stuck.")
+        #expect(fake.pageCalls[1].startIndex == 2)
+        #expect(model.isLoading)
+        fake.answer(1, ids: ["c"])
+        await settle(model)
+        #expect(model.setlists.map(\.id) == ["c"])
+        #expect(!model.loadFailed)
     }
 }
