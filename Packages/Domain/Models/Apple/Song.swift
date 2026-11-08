@@ -754,12 +754,12 @@ nonisolated struct PlaylistDetail: Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        songListDTOs =
+        songListDTOs = (
             Self.decodeSongs(from: container, forKey: .songListDTOs)
                 ?? Self.decodeSongs(from: container, forKey: .items)
                 ?? Self.decodeSongs(from: container, forKey: .songs)
                 ?? Self.decodeSongs(from: container, forKey: .favorites)
-                ?? []
+                ?? []).inPlaylistOrder()
     }
 
     func encode(to encoder: Encoder) throws {

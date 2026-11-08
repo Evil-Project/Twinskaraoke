@@ -46,6 +46,12 @@ struct PlaylistSongOrderTests {
         #expect(playlists.first?.songListDTOs?.map(\.id) == expected)
     }
 
+    @Test("A playlist's detail is in playlist order, as a link to an unknown playlist shows it before its own load")
+    func detail() throws {
+        let detail = try JSONDecoder().decode(PlaylistDetail.self, from: playlistJSON())
+        #expect(detail.songListDTOs.map(\.id) == expected)
+    }
+
     @Test("A setlist's songs are in sung order")
     func setlist() throws {
         let setlist = try JSONDecoder().decode(
