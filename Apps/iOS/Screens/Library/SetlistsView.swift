@@ -106,7 +106,7 @@ struct SetlistsView: View {
         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
         .accessibilityIdentifier("Setlists.row.\(setlist.id)")
         .contextMenu {
-            PlaylistActionsMenuItems(playlist: setlist.playlist, songs: setlist.songsInOrder)
+            PlaylistActionsMenuItems(playlist: setlist.playlist, songs: setlist.songs)
         } preview: {
             PlaylistContextPreview(playlist: setlist.playlist)
         }
@@ -143,11 +143,10 @@ struct SetlistsView: View {
     }
 }
 
-extension KaraokeSetlist {
-    /// The songs in the order they were sung. The server sends them in no
-    /// particular order, with each song's place in `order`.
-    var songsInOrder: [Song] {
-        KaraokeAPIClient.applyingPersistedOrder(playlist.songListDTOs ?? [])
+private extension KaraokeSetlist {
+    /// The songs in the order they were sung; decoding sorts them.
+    var songs: [Song] {
+        playlist.songListDTOs ?? []
     }
 }
 
@@ -159,7 +158,7 @@ enum SetlistCardActions {
         _ setlist: KaraokeSetlist,
         playInOrder: @MainActor (Song, Playlist, [Song]) -> Void = PlaylistPlayback.playInOrder
     ) {
-        let songs = setlist.songsInOrder
+        let songs = setlist.songs
         guard let first = songs.first else { return }
         playInOrder(first, setlist.playlist, songs)
     }
@@ -168,7 +167,7 @@ enum SetlistCardActions {
         _ setlist: KaraokeSetlist,
         playShuffled: @MainActor (Playlist, [Song]) -> Void = PlaylistPlayback.playShuffled
     ) {
-        playShuffled(setlist.playlist, setlist.songsInOrder)
+        playShuffled(setlist.playlist, setlist.songs)
     }
 }
 
@@ -226,7 +225,7 @@ private struct SetlistLatestCard: View {
     let zoomNamespace: Namespace.ID
 
     var body: some View {
-        let songs = setlist.songsInOrder
+        let songs = setlist.songs
         VStack(alignment: .leading, spacing: AM.Spacing.l) {
             // Its own zoom id: the same setlist is usually also the first row.
             ZoomNavigationLink(id: "latest.\(setlist.id)", in: zoomNamespace) {
