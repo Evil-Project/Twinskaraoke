@@ -143,11 +143,32 @@ struct SetlistsView: View {
     }
 }
 
-private extension KaraokeSetlist {
+extension KaraokeSetlist {
     /// The songs in the order they were sung. The server sends them in no
     /// particular order, with each song's place in `order`.
     var songsInOrder: [Song] {
         KaraokeAPIClient.applyingPersistedOrder(playlist.songListDTOs ?? [])
+    }
+}
+
+/// What the latest-stream card's Play and Shuffle buttons do. Tests pass their
+/// own playback functions to see what each button hands over.
+@MainActor
+enum SetlistCardActions {
+    static func play(
+        _ setlist: KaraokeSetlist,
+        playInOrder: @MainActor (Song, Playlist, [Song]) -> Void = PlaylistPlayback.playInOrder
+    ) {
+        let songs = setlist.songsInOrder
+        guard let first = songs.first else { return }
+        playInOrder(first, setlist.playlist, songs)
+    }
+
+    static func shuffle(
+        _ setlist: KaraokeSetlist,
+        playShuffled: @MainActor (Playlist, [Song]) -> Void = PlaylistPlayback.playShuffled
+    ) {
+        playShuffled(setlist.playlist, setlist.songsInOrder)
     }
 }
 
@@ -240,10 +261,8 @@ private struct SetlistLatestCard: View {
 
             HStack(spacing: AM.Spacing.m) {
                 Button {
-                    if let first = songs.first {
-                        AppHaptic.selection.play()
-                        PlaylistPlayback.playInOrder(first, from: setlist.playlist, context: songs)
-                    }
+                    AppHaptic.selection.play()
+                    SetlistCardActions.play(setlist)
                 } label: {
                     LibraryActionButtonLabel(symbol: "play.fill", text: String(localized: "Play"))
                 }
@@ -252,7 +271,7 @@ private struct SetlistLatestCard: View {
 
                 Button {
                     AppHaptic.selection.play()
-                    PlaylistPlayback.playShuffled(from: setlist.playlist, songs: songs)
+                    SetlistCardActions.shuffle(setlist)
                 } label: {
                     LibraryActionButtonLabel(symbol: "shuffle", text: String(localized: "Shuffle"))
                 }

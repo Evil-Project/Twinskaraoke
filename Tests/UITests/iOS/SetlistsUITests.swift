@@ -29,8 +29,12 @@ final class SetlistsUITests: XCTestCase {
         XCTAssertTrue(year2025.waitForExistence(timeout: 5), "Expected 2025 in the year menu.")
         year2025.tap()
 
-        XCTAssertTrue(waitUntil(timeout: 8) { !halloween.exists }, "Expected 2026 setlists to leave the 2025 list.")
-        XCTAssertTrue(christmas.exists, "Expected the 2025 setlist to stay.")
+        // Choosing a year empties the list until that year's page arrives, so
+        // wait for the final state rather than for Halloween to go.
+        XCTAssertTrue(
+            waitUntil(timeout: 8) { christmas.exists && !halloween.exists },
+            "Expected only the 2025 setlist once the year is chosen."
+        )
         XCTAssertFalse(latest.exists, "The latest stream leads the unfiltered list only.")
 
         christmas.tap()
