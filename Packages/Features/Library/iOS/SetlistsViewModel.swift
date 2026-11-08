@@ -43,6 +43,30 @@ final class SetlistsViewModel {
                 stats: { try await KaraokeAPIClient.setlistStats() }
             )
         }
+
+        /// `UITestFixtures.setlists`, filtered here the way the server filters,
+        /// for UI tests launched with `-UITestMode`.
+        static var uiTestFixture: Service {
+            let setlists = UITestFixtures.setlists
+            let year = { (setlist: KaraokeSetlist) in
+                setlist.streamDay.map { Calendar.current.component(.year, from: $0) }
+            }
+            return Service(
+                page: { filter, startIndex, pageSize in
+                    let matches = setlists.filter { setlist in
+                        (filter.year == nil || year(setlist) == filter.year)
+                            && (filter.search.isEmpty || setlist.name.localizedCaseInsensitiveContains(filter.search))
+                    }
+                    let page = Array(matches.dropFirst(startIndex).prefix(pageSize))
+                    return Page(setlists: page, sourceCount: page.count)
+                },
+                latest: {
+                    guard let first = setlists.first else { throw URLError(.resourceUnavailable) }
+                    return first
+                },
+                stats: { SetlistStats(totalCount: setlists.count, years: setlists.compactMap(year)) }
+            )
+        }
     }
 
     private(set) var latest: KaraokeSetlist?
@@ -70,7 +94,11 @@ final class SetlistsViewModel {
     @ObservationIgnored private var pageTask: Task<Void, Never>?
     @ObservationIgnored private var headerTask: Task<Void, Never>?
 
-    init(service: Service = .live, pageSize: Int = 25, searchDelay: Duration = .milliseconds(300)) {
+    init(
+        service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
+        pageSize: Int = 25,
+        searchDelay: Duration = .milliseconds(300)
+    ) {
         self.service = service
         self.pageSize = pageSize
         self.searchDelay = searchDelay

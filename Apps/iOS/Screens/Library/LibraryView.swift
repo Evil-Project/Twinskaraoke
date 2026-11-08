@@ -265,6 +265,7 @@ struct LibraryView: View {
             libraryLink(icon: "music.note.list", title: String(localized: "Playlists")) {
                 PlaylistsGridScreen(viewModel: viewModel, zoomNamespace: zoomNamespace)
             }
+            libraryLink(icon: "list.bullet.rectangle", title: String(localized: "Karaoke Setlists")) { SetlistsView() }
             libraryLink(icon: "music.mic", title: String(localized: "Artists")) { ArtistsView() }
             libraryLink(icon: "music.note", title: String(localized: "Songs")) { LibrarySongsView() }
             libraryLink(icon: "arrow.down.circle", title: String(localized: "Downloaded")) {

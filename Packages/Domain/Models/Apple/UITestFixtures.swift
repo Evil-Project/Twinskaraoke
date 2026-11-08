@@ -81,4 +81,34 @@ nonisolated enum UITestFixtures {
             songListDTOs: songs
         )
     }
+
+    /// Newest first, across two years, as the server sends them.
+    static let setlists: [KaraokeSetlist] = [
+        setlist(
+            id: "ui-setlist-halloween",
+            name: "Evil Halloween Karaoke - October 29, 2026 Setlist",
+            day: "2026-10-29",
+            songs: Array(coreSongs.prefix(4))
+        ),
+        setlist(
+            id: "ui-setlist-drive",
+            name: "Neuro Long Drive Mini Karaoke - October 16, 2026 Setlist",
+            day: "2026-10-16",
+            songs: Array(coreSongs.suffix(3))
+        ),
+        setlist(
+            id: "ui-setlist-christmas",
+            name: "Neuro Christmas Karaoke - December 25, 2025 Setlist",
+            day: "2025-12-25",
+            songs: Array(coreSongs.dropFirst(2).prefix(4))
+        ),
+    ]
+
+    static func setlist(id: String, name: String, day: String, songs: [Song]) -> KaraokeSetlist {
+        KaraokeSetlist(
+            playlist: playlist(id: id, name: name, songs: songs),
+            streamDay: KaraokeSetlist.day(from: day),
+            totalDuration: songs.reduce(0) { $0 + $1.duration }
+        )
+    }
 }
