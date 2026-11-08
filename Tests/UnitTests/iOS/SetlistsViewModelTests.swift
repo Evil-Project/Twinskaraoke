@@ -60,12 +60,17 @@ struct SetlistsViewModelTests {
         while model.isLoading || model.isLoadingMore { await Task.yield() }
     }
 
-    /// Lets queued work run, for requests that never come when the code is
-    /// broken: waiting for them would hang instead of failing.
-    private func yieldBriefly() async {
-        for _ in 0 ..< 50 {
-            await Task.yield()
+    /// Waits until `condition` holds, for requests that never come when the
+    /// code is broken: it gives up after `timeout` so the test fails instead
+    /// of hanging, and it waits on the condition rather than a number of
+    /// turns, so a busy machine can't fail it early.
+    private func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while !condition() {
+            guard ContinuousClock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(5))
         }
+        return true
     }
 
     @Test("The first load fetches the latest setlist, the years and page one, once")
@@ -205,8 +210,8 @@ struct SetlistsViewModelTests {
         #expect(model.setlists.map(\.id) == ["a", "b", "c", "d"])
 
         model.loadMoreIfNeeded(current: try #require(model.setlists.last))
-        await yieldBriefly()
-        try #require(fake.pageCalls.count == 4, "Scrolling to the end asked for nothing after the failed refresh.")
+        let askedForMore = await eventually { fake.pageCalls.count == 4 }
+        try #require(askedForMore, "Scrolling to the end asked for nothing after the failed refresh.")
         #expect(fake.pageCalls[3].startIndex == 4)
         fake.answer(3, ids: [])
         await settle(model)
@@ -220,13 +225,40 @@ struct SetlistsViewModelTests {
         await fake.waitForPageCalls(1)
         // Both entries failed to decode, so no row appears to ask for more.
         fake.answer(0, ids: [], sourceCount: 2)
-        await yieldBriefly()
-        try #require(fake.pageCalls.count == 2, "The empty page left the list stuck.")
+        let loadedNext = await eventually { fake.pageCalls.count == 2 }
+        try #require(loadedNext, "The empty page left the list stuck.")
         #expect(fake.pageCalls[1].startIndex == 2)
         #expect(model.isLoading)
         fake.answer(1, ids: ["c"])
         await settle(model)
         #expect(model.setlists.map(\.id) == ["c"])
         #expect(!model.loadFailed)
+    }
+
+    @Test("Pages that keep adding nothing stop after three, instead of loading forever")
+    func stopsAfterUnusablePagesInARow() async throws {
+        let fake = FakeSetlistService()
+        let model = SetlistsViewModel(service: fake.service, pageSize: 2, searchDelay: .zero)
+        model.loadIfNeeded()
+        // A server that ignored `startIndex` would answer every page like this.
+        for call in 0 ..< 4 {
+            await fake.waitForPageCalls(call + 1)
+            fake.answer(call, ids: [], sourceCount: 2)
+        }
+        let askedAgain = await eventually(timeout: .milliseconds(300)) { fake.pageCalls.count > 4 }
+        #expect(!askedAgain, "Kept loading after three pages in a row added nothing.")
+        if askedAgain {
+            fake.answer(4, ids: [])
+        }
+        await settle(model)
+        #expect(model.loadFailed)
+        #expect(model.setlists.isEmpty)
+
+        model.retry()
+        await fake.waitForPageCalls(fake.pageCalls.count + 1)
+        #expect(fake.pageCalls.last?.startIndex == 0)
+        fake.answer(fake.pageCalls.count - 1, ids: ["a"])
+        await settle(model)
+        #expect(model.setlists.map(\.id) == ["a"])
     }
 }

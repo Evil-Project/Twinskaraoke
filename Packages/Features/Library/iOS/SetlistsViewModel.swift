@@ -86,6 +86,11 @@ final class SetlistsViewModel {
     @ObservationIgnored private var shownFilter = Filter()
     @ObservationIgnored private var nextOffset = 0
     @ObservationIgnored private var canLoadMore = false
+    /// Pages loaded in a row without a user's scroll because the one before
+    /// added nothing. Capped, so a server that ignored `startIndex` couldn't
+    /// keep the list loading forever.
+    @ObservationIgnored private var unusablePagesInARow = 0
+    @ObservationIgnored private let maxUnusablePagesInARow = 3
     /// Bumped whenever the list starts over, so a page for an earlier filter
     /// is dropped when it lands late.
     @ObservationIgnored private var generation = 0
@@ -180,6 +185,7 @@ final class SetlistsViewModel {
         generation += 1
         pageTask?.cancel()
         isLoadingMore = false
+        unusablePagesInARow = 0
         loadFailed = false
         isLoading = true
         loadPage(startIndex: 0)
@@ -216,9 +222,17 @@ final class SetlistsViewModel {
             canLoadMore = page.sourceCount >= pageSize
             // A full page with nothing new (every entry failed to decode or was
             // already shown) adds no row whose appearance would ask for more.
-            if fresh.isEmpty, canLoadMore {
+            guard fresh.isEmpty, canLoadMore else {
+                unusablePagesInARow = 0
+                return
+            }
+            if unusablePagesInARow < maxUnusablePagesInARow {
+                unusablePagesInARow += 1
                 if setlists.isEmpty { isLoading = true } else { isLoadingMore = true }
                 loadPage(startIndex: nextOffset)
+            } else {
+                // Give up; with nothing to show, offer Try Again.
+                loadFailed = setlists.isEmpty
             }
         case let .failure(error):
             DebugLogger.log("Setlists page at \(startIndex) failed: \(error.localizedDescription)", category: .network)
