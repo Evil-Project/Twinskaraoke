@@ -79,7 +79,7 @@ extension UserPlaylist {
         playCount = try values.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
         favoriteCount = try values.decodeIfPresent(Int.self, forKey: .favoriteCount)
         playlistType = try values.decodeIfPresent(Int.self, forKey: .playlistType)
-        songListDTOs = try values.decodeIfPresent([Song].self, forKey: .songListDTOs)
+        songListDTOs = try values.decodeIfPresent([Song].self, forKey: .songListDTOs)?.inPlaylistOrder()
         mosaicMedia = try values.decodeIfPresent([Media].self, forKey: .mosaicMedia)
         genres = try values.decodeIfPresent([String].self, forKey: .genres)
         editable = try values.decodeIfPresent(Bool.self, forKey: .editable) ?? false

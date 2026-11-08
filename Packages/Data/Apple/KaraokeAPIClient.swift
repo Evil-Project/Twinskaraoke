@@ -930,13 +930,7 @@ nonisolated enum KaraokeAPIClient {
     /// Comparing the original offset on ties pins them to the order the server
     /// sent. Songs with no `order` sort last, keeping their relative order.
     static func applyingPersistedOrder(_ songs: [Song]) -> [Song] {
-        songs.enumerated()
-            .sorted { lhs, rhs in
-                let left = lhs.element.order ?? Int.max
-                let right = rhs.element.order ?? Int.max
-                return left == right ? lhs.offset < rhs.offset : left < right
-            }
-            .map(\.element)
+        songs.inPlaylistOrder()
     }
 
     static func songMovePayload(
