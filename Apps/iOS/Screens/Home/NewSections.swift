@@ -31,6 +31,7 @@ struct NewFeaturedRail: View {
                             song: primary,
                             context: songs,
                             hint: String(localized: "Plays this release."),
+                            identifier: "New.FeatureCard.NewRelease",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
@@ -45,6 +46,7 @@ struct NewFeaturedRail: View {
                             song: secondary,
                             context: songs,
                             hint: String(localized: "Plays this song."),
+                            identifier: "New.FeatureCard.Trending",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
@@ -74,6 +76,8 @@ private struct NewFeatureCard: View {
     let song: Song
     let context: [Song]
     let hint: String
+    /// Names the card's role, not its song: both cards can show the same song.
+    let identifier: String
     let width: CGFloat
     let artworkSize: CGFloat
 
@@ -127,7 +131,7 @@ private struct NewFeatureCard: View {
         .accessibilityLabel("\(kicker), \(title)")
         .accessibilityValue(subtitle)
         .accessibilityHint(hint)
-        .accessibilityIdentifier("New.FeatureCard.\(song.id)")
+        .accessibilityIdentifier(identifier)
     }
 }
 

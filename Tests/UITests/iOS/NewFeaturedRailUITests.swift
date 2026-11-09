@@ -14,7 +14,7 @@ final class NewFeaturedRailUITests: XCTestCase {
         app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "new"]
         app.launch()
 
-        let card = app.descendants(matching: .any).matching(identifier: "New.FeatureCard.ui-home-song-3").firstMatch
+        let card = app.descendants(matching: .any).matching(identifier: "New.FeatureCard.Trending").firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 15), "Expected the featured card for the top trending song.")
         XCTAssertEqual(card.label, "Trending Now, Cure For Me")
     }
