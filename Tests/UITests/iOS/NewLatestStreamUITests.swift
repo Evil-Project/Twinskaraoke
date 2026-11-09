@@ -8,17 +8,27 @@ import XCTest
 final class NewLatestStreamUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
-    func testLatestStreamCardPlaysTheSetlist() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "new"]
-        app.launch()
-
-        let card = element("New.FeatureCard.LatestStream", in: app)
-        XCTAssertTrue(card.waitForExistence(timeout: 15), "Expected the Latest Stream card.")
-        XCTAssertEqual(card.label, "Latest Stream, Neuro Karaoke - November 1, 2026 Setlist")
-        XCTAssertEqual(card.value as? String, "6 songs · 21 min")
-        XCTAssertTrue(waitUntilHittable(card), "The Latest Stream card never became tappable.")
+    /// Tapping the card opens the setlist, like the setlist tiles on New.
+    func testLatestStreamCardOpensTheSetlist() throws {
+        let app = launch()
+        let card = latestStreamCard(in: app)
         card.tap()
+
+        XCTAssertTrue(
+            element("PlaylistDetail.Overview", in: app).waitForExistence(timeout: 8),
+            "Expected the card to open the setlist."
+        )
+        XCTAssertFalse(element("MiniPlayerBar", in: app).exists, "Opening the setlist shouldn't start playback.")
+    }
+
+    /// The card's play button plays the setlist in order without leaving New.
+    func testLatestStreamPlayButtonPlaysTheSetlist() throws {
+        let app = launch()
+        _ = latestStreamCard(in: app)
+        let play = element("New.FeatureCard.LatestStream.Play", in: app)
+        XCTAssertTrue(waitUntilHittable(play), "Expected the card's play button.")
+        play.tap()
+        XCTAssertFalse(element("PlaylistDetail.Overview", in: app).exists, "Playing shouldn't open the setlist.")
 
         openQueue(in: app)
         let next = app.descendants(matching: .any)
@@ -31,6 +41,23 @@ final class NewLatestStreamUITests: XCTestCase {
             list.swipeUp(velocity: .slow)
         }
         XCTAssertTrue(last.exists, "Expected the rest of the setlist, in setlist order, in the queue.")
+    }
+
+    private func launch() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "new"]
+        app.launch()
+        return app
+    }
+
+    /// The card, after checking what it says.
+    private func latestStreamCard(in app: XCUIApplication) -> XCUIElement {
+        let card = element("New.FeatureCard.LatestStream", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: 15), "Expected the Latest Stream card.")
+        XCTAssertEqual(card.label, "Latest Stream, Neuro Karaoke - November 1, 2026 Setlist")
+        XCTAssertEqual(card.value as? String, "6 songs · 21 min")
+        XCTAssertTrue(waitUntilHittable(card), "The Latest Stream card never became tappable.")
+        return card
     }
 
     /// Opens the queue the way `verifyQueueEditing` does.

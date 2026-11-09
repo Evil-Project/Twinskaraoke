@@ -2,8 +2,8 @@ import SwiftUI
 
 struct NewFeaturedRail: View {
     /// The most recent karaoke stream's setlist, when it has songs. The
-    /// website leads with it as "Recent Setlist"; the first card plays it in
-    /// order.
+    /// website leads with it as "Recent Setlist". The first card opens it,
+    /// and the card's play button plays it in order.
     let latestStream: KaraokeSetlist?
     /// The 7-day trending list. Its top song gets the second card, which
     /// queues the rest of the list after it, as the website does.
@@ -36,10 +36,9 @@ struct NewFeaturedRail: View {
                             hint: String(localized: "Plays this setlist."),
                             identifier: "New.FeatureCard.LatestStream",
                             width: cardWidth,
-                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
-                        ) {
-                            SetlistCardActions.play(latestStream)
-                        }
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio,
+                            action: .open(latestStream.playlist, play: { SetlistCardActions.play(latestStream) })
+                        )
                     }
                     // The top trending song, so it is labelled like the iPad
                     // hero's trending row.
@@ -52,10 +51,9 @@ struct NewFeaturedRail: View {
                             hint: String(localized: "Plays this song."),
                             identifier: "New.FeatureCard.Trending",
                             width: cardWidth,
-                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
-                        ) {
-                            AudioPlayerManager.shared.play(song: secondary, context: trending)
-                        }
+                            artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio,
+                            action: .play { AudioPlayerManager.shared.play(song: secondary, context: trending) }
+                        )
                     }
                 }
                 .scrollTargetLayout()
@@ -81,63 +79,112 @@ private struct NewFeatureCard: View {
         case playlist(Playlist)
     }
 
+    /// What a tap on the card does.
+    enum Action {
+        /// Plays; the play glyph is part of the card.
+        case play(() -> Void)
+        /// Opens the playlist. The play glyph is then its own button.
+        case open(Playlist, play: () -> Void)
+    }
+
     let kicker: String
     let title: String
     let subtitle: String
     let artwork: Artwork
+    /// VoiceOver's hint for whatever plays: the card, or its play button.
     let hint: String
     /// Names the card's role, not its song: both cards can show the same song.
     let identifier: String
     let width: CGFloat
     let artworkSize: CGFloat
-    let play: () -> Void
+    let action: Action
+    @Namespace private var zoomNamespace
 
     var body: some View {
-        Button {
-            AppHaptic.selection.play()
-            play()
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(kicker)
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        switch action {
+        case let .play(play):
+            Button {
+                AppHaptic.selection.play()
+                play()
+            } label: {
+                content(showsPlayGlyph: true)
+            }
+            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+            .accessibilityElement(children: .combine)
+            // VoiceOver reads the kicker before the title, as they are shown.
+            .accessibilityLabel("\(kicker), \(title)")
+            .accessibilityValue(subtitle)
+            .accessibilityHint(hint)
+            .accessibilityIdentifier(identifier)
+        case let .open(playlist, play):
+            ZoomNavigationLink(id: identifier, in: zoomNamespace) {
+                PlaylistDetailView(playlist: playlist)
+            } label: {
+                content(showsPlayGlyph: false)
+            }
+            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(kicker), \(title)")
+            .accessibilityValue(subtitle)
+            .accessibilityIdentifier(identifier)
+            // Over the link, not inside its label, so a tap here plays
+            // without opening the playlist.
+            .overlay(alignment: .bottomLeading) {
+                Button {
+                    AppHaptic.selection.play()
+                    play()
+                } label: {
+                    playGlyph
                 }
-                ZStack(alignment: .bottomLeading) {
-                    artworkImage
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.38)],
-                        startPoint: .center,
-                        endPoint: .bottom
-                    )
-                    Image(systemName: "play.fill")
-                        .font(.headline.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.32), in: Circle())
+                .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.8))
+                .padding(10)
+                .accessibilityLabel(String(localized: "Play"))
+                .accessibilityHint(hint)
+                .accessibilityIdentifier("\(identifier).Play")
+            }
+        }
+    }
+
+    private func content(showsPlayGlyph: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(kicker)
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            ZStack(alignment: .bottomLeading) {
+                artworkImage
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.38)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                if showsPlayGlyph {
+                    playGlyph
                         .padding(10)
                 }
-                .frame(width: width, height: artworkSize)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
             }
-            .frame(width: width, alignment: .leading)
+            .frame(width: width, height: artworkSize)
+            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
-        .accessibilityElement(children: .combine)
-        // VoiceOver reads the kicker before the title, as they are shown.
-        .accessibilityLabel("\(kicker), \(title)")
-        .accessibilityValue(subtitle)
-        .accessibilityHint(hint)
-        .accessibilityIdentifier(identifier)
+        .frame(width: width, alignment: .leading)
+    }
+
+    private var playGlyph: some View {
+        Image(systemName: "play.fill")
+            .font(.headline.bold())
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .background(.black.opacity(0.32), in: Circle())
     }
 
     @ViewBuilder private var artworkImage: some View {
