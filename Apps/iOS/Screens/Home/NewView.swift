@@ -76,8 +76,8 @@ struct NewView: View {
             if !viewModel.newReleases.isEmpty {
                 NewFeaturedRail(
                     primary: viewModel.newReleases.first,
-                    secondary: viewModel.trending.first,
-                    songs: viewModel.newReleases
+                    songs: viewModel.newReleases,
+                    trending: viewModel.trending
                 )
             }
 
@@ -105,7 +105,7 @@ struct NewView: View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             WideNewHero(
                 primary: viewModel.newReleases.first,
-                secondary: viewModel.trending.first,
+                trending: viewModel.trending,
                 context: viewModel.newReleases.isEmpty ? viewModel.trending : viewModel.newReleases,
                 playlist: viewModel.recentPlaylists.first
             )
@@ -113,8 +113,8 @@ struct NewView: View {
             if !viewModel.newReleases.isEmpty {
                 NewFeaturedRail(
                     primary: viewModel.newReleases.first,
-                    secondary: viewModel.trending.first,
-                    songs: viewModel.newReleases
+                    songs: viewModel.newReleases,
+                    trending: viewModel.trending
                 )
             }
 

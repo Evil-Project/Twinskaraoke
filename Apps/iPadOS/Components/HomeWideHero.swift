@@ -72,7 +72,9 @@ private extension HomeShuffleMix {
 
 struct WideNewHero: View {
     let primary: Song?
-    let secondary: Song?
+    /// The 7-day trending list. The Trending Now row plays its top song with
+    /// the rest of the list queued after it.
+    let trending: [Song]
     let context: [Song]
     let playlist: Playlist?
 
@@ -93,8 +95,8 @@ struct WideNewHero: View {
                 if let primary {
                     WideHeroSongRow(song: primary, context: context, label: String(localized: "Featured Release"))
                 }
-                if let secondary {
-                    WideHeroSongRow(song: secondary, context: context.isEmpty ? [secondary] : context, label: String(localized: "Trending Now"))
+                if let topTrending = trending.first {
+                    WideHeroSongRow(song: topTrending, context: trending, label: String(localized: "Trending Now"))
                 }
                 if let playlist {
                     NavigationLink(destination: DeferredView { PlaylistDetailView(playlist: playlist) }) {

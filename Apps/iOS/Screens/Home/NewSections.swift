@@ -2,8 +2,10 @@ import SwiftUI
 
 struct NewFeaturedRail: View {
     let primary: Song?
-    let secondary: Song?
     let songs: [Song]
+    /// The 7-day trending list. Its top song gets the second card, which
+    /// queues the rest of the list after it, as the website does.
+    let trending: [Song]
 
     /// The kicker/title/subtitle block above each card's artwork. Split out of
     /// the old flat 316 so it can scale with the text, which a fixed total
@@ -38,13 +40,13 @@ struct NewFeaturedRail: View {
                     }
                     // The top trending song, so it is labelled like the iPad
                     // hero's trending row.
-                    if let secondary {
+                    if let secondary = trending.first {
                         NewFeatureCard(
                             kicker: String(localized: "Trending Now"),
                             title: secondary.title,
                             subtitle: secondary.displayArtist,
                             song: secondary,
-                            context: songs,
+                            context: trending,
                             hint: String(localized: "Plays this song."),
                             identifier: "New.FeatureCard.Trending",
                             width: cardWidth,
@@ -174,7 +176,9 @@ struct NewSongRail: View {
     }
 }
 
-/// The first `rowLimit` songs as rows; See All opens all of `songs`.
+/// The first `rowLimit` songs as rows; See All opens all of `songs`. A row
+/// plays its song with all of `songs` queued, so the songs past the preview
+/// follow too.
 struct NewSongListPreview: View {
     let title: String
     let songs: [Song]
@@ -193,13 +197,14 @@ struct NewSongListPreview: View {
                 ForEach(rows) { song in
                     Button {
                         AppHaptic.selection.play()
-                        AudioPlayerManager.shared.play(song: song, context: rows)
+                        AudioPlayerManager.shared.play(song: song, context: songs)
                     } label: {
                         SongRow(song: song, size: .compact)
                             .padding(.horizontal, horizontalPadding)
                             .padding(.vertical, 3)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("NewSongListPreview.\(title).\(song.id)")
                     Divider().padding(.leading, 76)
                 }
             }
