@@ -104,16 +104,18 @@ struct HomeView: View {
                     .shelfEntrance(index: 2)
             }
 
+            // Named and placed as on the website's Home: the 7-day trending
+            // list, right below Made for You.
+            if !viewModel.trending.isEmpty {
+                HomeSongSection(title: String(localized: "Trending This Week"), songs: viewModel.trending)
+                    .shelfEntrance(index: 3)
+            }
+
             latestSingleSection()
-                .shelfEntrance(index: 3)
+                .shelfEntrance(index: 4)
 
             if !viewModel.newReleases.isEmpty {
                 HomeSongSection(title: String(localized: "New Releases"), songs: viewModel.newReleases)
-                    .shelfEntrance(index: 4)
-            }
-
-            if !viewModel.trending.isEmpty {
-                HomeSongSection(title: String(localized: "More to Explore"), songs: viewModel.trending)
                     .shelfEntrance(index: 5)
             }
         }
@@ -159,7 +161,7 @@ struct HomeView: View {
                     }
 
                     if !viewModel.trending.isEmpty {
-                        WideSongListPanel(title: String(localized: "More to Explore"), songs: Array(viewModel.trending.prefix(6)))
+                        WideSongListPanel(title: String(localized: "Trending This Week"), songs: Array(viewModel.trending.prefix(6)))
                     }
                 }
                 .frame(
