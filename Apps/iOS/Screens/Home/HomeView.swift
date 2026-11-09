@@ -127,8 +127,7 @@ struct HomeView: View {
                 song: homeHeroSong,
                 context: homeHeroContext,
                 playlist: viewModel.recentPlaylists.first,
-                secondarySong: homeSecondarySong,
-                secondaryContext: viewModel.suggestions.isEmpty ? viewModel.trending : viewModel.suggestions
+                shuffleMix: viewModel.heroShuffleMix
             )
             .shelfEntrance(index: 0)
 
@@ -182,10 +181,6 @@ struct HomeView: View {
         viewModel.latestSingle ?? viewModel.suggestions.first ?? viewModel.newReleases.first ?? viewModel.trending.first
     }
 
-    private var homeSecondarySong: Song? {
-        viewModel.suggestions.dropFirst().first ?? viewModel.newReleases.dropFirst().first ?? viewModel.trending.first
-    }
-
     private var homeHeroContext: [Song] {
         if !viewModel.latestSingleContext.isEmpty { return viewModel.latestSingleContext }
         if !viewModel.suggestions.isEmpty { return viewModel.suggestions }
@@ -194,7 +189,7 @@ struct HomeView: View {
     }
 
     private var artworkPrefetchSongs: [Song] {
-        [homeHeroSong, homeSecondarySong].compactMap { $0 }
+        [homeHeroSong].compactMap { $0 }
             + Array(viewModel.suggestions.prefix(8))
             + Array(viewModel.newReleases.prefix(8))
             + Array(viewModel.trending.prefix(8))
