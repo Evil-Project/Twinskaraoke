@@ -317,20 +317,6 @@ nonisolated enum KaraokeAPIClient {
     private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
     private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
-    /// Only `days` of 7 and 30 return data; the results are precomputed for
-    /// those two windows. For an all-time chart use `mostPlayedSongs`.
-    static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
-        var queryItems = [
-            URLQueryItem(name: "days", value: String(days)),
-        ]
-        if let take {
-            queryItems.append(URLQueryItem(name: "take", value: String(take)))
-        }
-        let request = try request(path: "/api/explore/trendings", queryItems: queryItems)
-        let data = try await data(for: request)
-        return try decode([Song].self, from: data)
-    }
-
     static func playlists(
         startIndex: Int,
         pageSize: Int,
@@ -590,10 +576,12 @@ nonisolated enum KaraokeAPIClient {
     /// "Temporary Stream Audio" title until a better upload replaces them.
     /// Charts and shelves leave them out, unless nothing else is left.
     static func droppingStreamPlaceholders(_ songs: [Song]) -> [Song] {
-        let filtered = songs.filter {
-            !$0.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
-        }
+        let filtered = songs.filter { !isStreamPlaceholder($0) }
         return filtered.isEmpty ? songs : filtered
+    }
+
+    static func isStreamPlaceholder(_ song: Song) -> Bool {
+        song.title.localizedCaseInsensitiveContains("Temporary Stream Audio")
     }
 
     static func fetchSong(id: String) async throws -> Song {
