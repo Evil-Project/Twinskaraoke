@@ -126,6 +126,7 @@ struct HomeView: View {
             WideHomeHero(
                 song: homeHeroSong,
                 context: homeHeroContext,
+                latestRelease: viewModel.heroLatestRelease,
                 playlist: viewModel.recentPlaylists.first,
                 shuffleMix: viewModel.heroShuffleMix
             )

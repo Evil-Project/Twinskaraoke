@@ -3,6 +3,7 @@ import SwiftUI
 struct WideHomeHero: View {
     let song: Song?
     let context: [Song]
+    let latestRelease: (song: Song, context: [Song])?
     let playlist: Playlist?
     let shuffleMix: HomeShuffleMix?
 
@@ -20,14 +21,14 @@ struct WideHomeHero: View {
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
                 WideHeroModuleTitle(title: String(localized: "Start Here"), subtitle: String(localized: "Fast actions"))
-                if let song {
+                if let latestRelease {
                     WideHeroActionRow(
                         systemImage: "play.fill",
                         title: String(localized: "Play Latest"),
-                        subtitle: song.title
+                        subtitle: latestRelease.song.title
                     ) {
                         AppHaptic.selection.play()
-                        AudioPlayerManager.shared.play(song: song, context: context)
+                        AudioPlayerManager.shared.play(song: latestRelease.song, context: latestRelease.context)
                     }
                 }
                 if let playlist {
