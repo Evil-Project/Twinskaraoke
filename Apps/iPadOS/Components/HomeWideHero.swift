@@ -4,8 +4,7 @@ struct WideHomeHero: View {
     let song: Song?
     let context: [Song]
     let playlist: Playlist?
-    let secondarySong: Song?
-    let secondaryContext: [Song]
+    let shuffleMix: HomeShuffleMix?
 
     var body: some View {
         HStack(alignment: .top, spacing: AM.Spacing.xxl) {
@@ -41,14 +40,14 @@ struct WideHomeHero: View {
                     }
                     .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.78, haptic: .selection))
                 }
-                if let secondarySong {
+                if let shuffleMix {
                     WideHeroActionRow(
                         systemImage: "shuffle",
                         title: String(localized: "Shuffle Mix"),
-                        subtitle: secondarySong.title
+                        subtitle: shuffleMix.listName
                     ) {
                         AppHaptic.selection.play()
-                        AudioPlayerManager.shared.playShuffled(from: secondaryContext.isEmpty ? [secondarySong] : secondaryContext)
+                        AudioPlayerManager.shared.playShuffled(from: shuffleMix.songs)
                     }
                 }
             }
@@ -57,6 +56,16 @@ struct WideHomeHero: View {
         .frame(minHeight: 286)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("Home.WideHero")
+    }
+}
+
+private extension HomeShuffleMix {
+    /// The shelf title of the list it shuffles.
+    var listName: String {
+        switch source {
+        case .madeForYou: String(localized: "Made for You")
+        case .trendingThisWeek: String(localized: "Trending This Week")
+        }
     }
 }
 
