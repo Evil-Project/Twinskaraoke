@@ -85,8 +85,10 @@ struct NewView: View {
                 NewSongRail(title: String(localized: "Up Next"), songs: Array(viewModel.newReleases.prefix(8)))
             }
 
+            // The website's "Trending This Week": the 7-day trending list. See
+            // All opens all of it, so it isn't repeated as a rail below.
             if !viewModel.trending.isEmpty {
-                NewSongListPreview(title: String(localized: "Best New Songs"), songs: Array(viewModel.trending.prefix(5)))
+                NewSongListPreview(title: String(localized: "Trending This Week"), songs: viewModel.trending)
             }
 
             if !viewModel.recentPlaylists.isEmpty {
@@ -95,10 +97,6 @@ struct NewView: View {
 
             if !viewModel.newReleases.isEmpty {
                 NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
-            }
-
-            if !viewModel.trending.isEmpty {
-                NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
             }
         }
     }
@@ -133,10 +131,6 @@ struct NewView: View {
                     if !viewModel.newReleases.isEmpty {
                         NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
                     }
-
-                    if !viewModel.trending.isEmpty {
-                        NewSongRail(title: String(localized: "More to Explore"), songs: viewModel.trending)
-                    }
                 }
                 .frame(minWidth: 520, maxWidth: .infinity, alignment: .topLeading)
                 .layoutPriority(1)
@@ -144,8 +138,8 @@ struct NewView: View {
                 VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
                     if !viewModel.trending.isEmpty {
                         NewSongListPreview(
-                            title: String(localized: "Best New Songs"),
-                            songs: Array(viewModel.trending.prefix(5)),
+                            title: String(localized: "Trending This Week"),
+                            songs: viewModel.trending,
                             horizontalPadding: 0
                         )
                     }

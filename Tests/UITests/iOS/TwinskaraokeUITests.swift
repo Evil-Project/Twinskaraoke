@@ -530,12 +530,12 @@ final class TwinskaraokeUITests: XCTestCase {
             "Expected New to render the Up Next shelf."
         )
         XCTAssertTrue(
-            app.staticTexts["Best New Songs"].waitForExistence(timeout: 8),
-            "Expected New to render the Best New Songs preview."
+            app.staticTexts["Trending This Week"].waitForExistence(timeout: 8),
+            "Expected New to render the Trending This Week preview."
         )
-        XCTAssertTrue(
-            app.staticTexts["More to Explore"].waitForExistence(timeout: 8),
-            "Expected New to render exploration links."
+        XCTAssertFalse(
+            app.staticTexts["More to Explore"].exists,
+            "The trending list is shown once, as Trending This Week."
         )
 
         if isRunningOnPad {
