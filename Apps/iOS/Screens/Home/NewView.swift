@@ -73,12 +73,8 @@ struct NewView: View {
 
     private var compactNewOverview: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
-            if !viewModel.newReleases.isEmpty {
-                NewFeaturedRail(
-                    primary: viewModel.newReleases.first,
-                    songs: viewModel.newReleases,
-                    trending: viewModel.trending
-                )
+            if viewModel.latestSetlist != nil || !viewModel.trending.isEmpty {
+                NewFeaturedRail(latestStream: viewModel.latestSetlist, trending: viewModel.trending)
             }
 
             if !viewModel.newReleases.isEmpty {
@@ -110,12 +106,8 @@ struct NewView: View {
                 playlist: viewModel.recentPlaylists.first
             )
 
-            if !viewModel.newReleases.isEmpty {
-                NewFeaturedRail(
-                    primary: viewModel.newReleases.first,
-                    songs: viewModel.newReleases,
-                    trending: viewModel.trending
-                )
+            if viewModel.latestSetlist != nil || !viewModel.trending.isEmpty {
+                NewFeaturedRail(latestStream: viewModel.latestSetlist, trending: viewModel.trending)
             }
 
             HStack(alignment: .top, spacing: AM.Spacing.xxl) {

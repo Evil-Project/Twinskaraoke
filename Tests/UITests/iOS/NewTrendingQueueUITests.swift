@@ -18,7 +18,7 @@ final class NewTrendingQueueUITests: XCTestCase {
         // the first card. Scroll the rail until it is fully visible.
         let window = app.windows.firstMatch
         if card.frame.maxX > window.frame.maxX {
-            let first = element("New.FeatureCard.NewRelease", in: app)
+            let first = element("New.FeatureCard.LatestStream", in: app)
             first.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
                 .press(forDuration: 0.05, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)))
         }

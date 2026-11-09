@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct NewFeaturedRail: View {
-    let primary: Song?
-    let songs: [Song]
+    /// The most recent karaoke stream's setlist. The website leads with it as
+    /// "Recent Setlist"; the first card plays it in order.
+    let latestStream: KaraokeSetlist?
     /// The 7-day trending list. Its top song gets the second card, which
     /// queues the rest of the list after it, as the website does.
     let trending: [Song]
@@ -25,18 +26,19 @@ struct NewFeaturedRail: View {
             let cardWidth = featureCardWidth(for: proxy.size.width)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
-                    if let primary {
+                    if let latestStream, latestStream.playlist.songListDTOs?.isEmpty == false {
                         NewFeatureCard(
-                            kicker: String(localized: "Updated Playlist"),
-                            title: String(localized: "New Tracks"),
-                            subtitle: primary.displayArtist.isEmpty ? "Twinskaraoke" : primary.displayArtist,
-                            song: primary,
-                            context: songs,
-                            hint: String(localized: "Plays this release."),
-                            identifier: "New.FeatureCard.NewRelease",
+                            kicker: String(localized: "Latest Stream"),
+                            title: latestStream.name,
+                            subtitle: latestStream.countAndLength,
+                            artwork: .playlist(latestStream.playlist),
+                            hint: String(localized: "Plays \(latestStream.name)."),
+                            identifier: "New.FeatureCard.LatestStream",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
-                        )
+                        ) {
+                            SetlistCardActions.play(latestStream)
+                        }
                     }
                     // The top trending song, so it is labelled like the iPad
                     // hero's trending row.
@@ -45,13 +47,14 @@ struct NewFeaturedRail: View {
                             kicker: String(localized: "Trending Now"),
                             title: secondary.title,
                             subtitle: secondary.displayArtist,
-                            song: secondary,
-                            context: trending,
+                            artwork: .song(secondary),
                             hint: String(localized: "Plays this song."),
                             identifier: "New.FeatureCard.Trending",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
-                        )
+                        ) {
+                            AudioPlayerManager.shared.play(song: secondary, context: trending)
+                        }
                     }
                 }
                 .scrollTargetLayout()
@@ -72,21 +75,26 @@ private struct NewFeatureCard: View {
     /// NewFeaturedRail too, so the rail's frame matches what the card draws.
     static let artworkWidthRatio: CGFloat = 0.56
 
+    enum Artwork {
+        case song(Song)
+        case playlist(Playlist)
+    }
+
     let kicker: String
     let title: String
     let subtitle: String
-    let song: Song
-    let context: [Song]
+    let artwork: Artwork
     let hint: String
     /// Names the card's role, not its song: both cards can show the same song.
     let identifier: String
     let width: CGFloat
     let artworkSize: CGFloat
+    let play: () -> Void
 
     var body: some View {
         Button {
             AppHaptic.selection.play()
-            AudioPlayerManager.shared.play(song: song, context: context)
+            play()
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -104,12 +112,7 @@ private struct NewFeatureCard: View {
                         .lineLimit(1)
                 }
                 ZStack(alignment: .bottomLeading) {
-                    RemoteArtworkImage(
-                        url: song.imageURL,
-                        cornerRadius: AM.Radius.card,
-                        contentMode: .fill,
-                        lowResURL: song.thumbnailURL
-                    )
+                    artworkImage
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.38)],
                         startPoint: .center,
@@ -134,6 +137,31 @@ private struct NewFeatureCard: View {
         .accessibilityValue(subtitle)
         .accessibilityHint(hint)
         .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder private var artworkImage: some View {
+        switch artwork {
+        case let .song(song):
+            RemoteArtworkImage(
+                url: song.imageURL,
+                cornerRadius: AM.Radius.card,
+                contentMode: .fill,
+                lowResURL: song.thumbnailURL
+            )
+        case let .playlist(playlist):
+            PlaylistArtwork(playlist: playlist, cornerRadius: AM.Radius.card)
+        }
+    }
+}
+
+private extension KaraokeSetlist {
+    /// "15 songs · 54 min", as on the Setlists screen's latest-stream card,
+    /// or just the count when the length is unknown.
+    var countAndLength: String {
+        let count = playlist.songCountText
+        guard let seconds = totalDuration, seconds > 0 else { return count }
+        let length = Duration.seconds(seconds).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))
+        return String(localized: "\(count) · \(length)")
     }
 }
 

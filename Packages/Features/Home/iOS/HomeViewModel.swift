@@ -18,6 +18,9 @@ final class HomeViewModel {
     var canLoadMoreTopPicks = true
     var latestSingle: Song?
     var latestSingleContext: [Song] = []
+    /// The setlist of the most recent karaoke stream, which New leads with as
+    /// the website does.
+    var latestSetlist: KaraokeSetlist?
     /// Set once a load has finished, whether or not anything came back.
     private(set) var hasFinishedLoading = false
 
@@ -86,12 +89,14 @@ final class HomeViewModel {
             async let suggestionsResult = try? KaraokeAPIClient.songSuggestions(take: 20)
             async let topPicksResult = fetchTopPicks(startIndex: 0)
             async let releasesResult = try? KaraokeAPIClient.latestReleases()
+            async let latestSetlistResult = try? KaraokeAPIClient.latestSetlist()
 
-            let (loadedTrending, loadedSuggestions, loadedTopPicks, loadedReleases) = await (
+            let (loadedTrending, loadedSuggestions, loadedTopPicks, loadedReleases, loadedLatestSetlist) = await (
                 trendingResult,
                 suggestionsResult,
                 topPicksResult,
-                releasesResult
+                releasesResult,
+                latestSetlistResult
             )
             guard !Task.isCancelled, dataGeneration == generation else { return }
 
@@ -105,6 +110,7 @@ final class HomeViewModel {
             }
             // Match the sections above: a failed refresh keeps the existing
             // New Releases shelf instead of erasing it mid-session.
+            if let loadedLatestSetlist { latestSetlist = loadedLatestSetlist }
             if let loadedReleases {
                 newReleases = loadedReleases
                 latestSingle = loadedReleases.first
@@ -220,6 +226,16 @@ final class HomeViewModel {
         newReleases = fixtureSongs
         latestSingle = fixtureSongs.first
         latestSingleContext = fixtureSongs
+        // In reverse, so its order differs from New Releases.
+        latestSetlist = KaraokeSetlist(
+            playlist: UITestFixtures.playlist(
+                id: "ui-home-setlist-latest",
+                name: "Neuro Karaoke - November 1, 2026 Setlist",
+                songs: fixtureSongs.reversed()
+            ),
+            streamDay: DateComponents(year: 2026, month: 11, day: 1),
+            totalDuration: 1260
+        )
         recentPlaylists = [
             UITestFixtures.playlist(
                 id: "ui-home-playlist-essentials",
