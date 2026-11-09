@@ -32,14 +32,14 @@ struct HomeShuffleMixTests {
     func shufflesMadeForYou() {
         let mix = model(suggestions: Self.suggestions, trending: Self.trending, releases: Self.releases).heroShuffleMix
 
-        #expect(mix == HomeShuffleMix(source: .madeForYou, songs: Self.suggestions))
+        #expect(mix == .madeForYou(Self.suggestions))
     }
 
     @Test("Shuffles Trending This Week without Made for You, as when signed out")
     func shufflesTrendingWithoutSuggestions() {
         let mix = model(suggestions: [], trending: Self.trending, releases: Self.releases).heroShuffleMix
 
-        #expect(mix == HomeShuffleMix(source: .trendingThisWeek, songs: Self.trending))
+        #expect(mix == .trendingThisWeek(Self.trending))
     }
 
     @Test("No Shuffle Mix when neither list has songs, even with New Releases")

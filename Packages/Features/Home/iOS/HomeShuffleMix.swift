@@ -1,15 +1,17 @@
 import Foundation
 
 /// The list the iPad Home hero's Shuffle Mix row shuffles, so the row can
-/// name it.
-struct HomeShuffleMix: Equatable {
-    enum Source: Equatable {
-        case madeForYou
-        case trendingThisWeek
-    }
+/// name it. Each case carries that list's songs, so the name and the songs
+/// can't disagree.
+enum HomeShuffleMix: Equatable {
+    case madeForYou([Song])
+    case trendingThisWeek([Song])
 
-    let source: Source
-    let songs: [Song]
+    var songs: [Song] {
+        switch self {
+        case let .madeForYou(songs), let .trendingThisWeek(songs): songs
+        }
+    }
 }
 
 extension HomeViewModel {
@@ -17,10 +19,10 @@ extension HomeViewModel {
     /// when neither has songs, so the row isn't shown.
     var heroShuffleMix: HomeShuffleMix? {
         if !suggestions.isEmpty {
-            return HomeShuffleMix(source: .madeForYou, songs: suggestions)
+            return .madeForYou(suggestions)
         }
         if !trending.isEmpty {
-            return HomeShuffleMix(source: .trendingThisWeek, songs: trending)
+            return .trendingThisWeek(trending)
         }
         return nil
     }

@@ -62,7 +62,7 @@ struct WideHomeHero: View {
 private extension HomeShuffleMix {
     /// The shelf title of the list it shuffles.
     var listName: String {
-        switch source {
+        switch self {
         case .madeForYou: String(localized: "Made for You")
         case .trendingThisWeek: String(localized: "Trending This Week")
         }
