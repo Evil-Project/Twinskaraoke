@@ -119,6 +119,11 @@ a copy of its specs and a Markdown reference generated from them.
 - UI tests launch with `-UITestMode 1` and the other `-UITest…` arguments
   used in `Tests/UITests/iOS/TwinskaraokeUITests.swift`; reuse those hooks
   instead of adding new test-only code paths.
+- Live data in a simulator (a run or screenshot without `-UITestMode`) needs
+  a signed build, so leave out `CODE_SIGNING_ALLOWED=NO`. An unsigned app
+  can't read the Keychain, so `CredentialStore.requestToken()` fails every
+  API request on purpose and Home shows "Couldn't load Home". The
+  `-UITestMode` fixtures don't use the network, so CI isn't affected.
 - Changing `Apple/` code affects all four apps: `Scripts/verify.sh` builds
   every scheme.
 - Never delete, skip or weaken a failing test to make CI pass.
