@@ -30,17 +30,23 @@ struct NewFeaturedRail: View {
                             subtitle: primary.displayArtist.isEmpty ? "Twinskaraoke" : primary.displayArtist,
                             song: primary,
                             context: songs,
+                            hint: String(localized: "Plays this release."),
+                            identifier: "New.FeatureCard.NewRelease",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
                     }
+                    // The top trending song, so it is labelled like the iPad
+                    // hero's trending row.
                     if let secondary {
                         NewFeatureCard(
-                            kicker: String(localized: "Featured Release"),
+                            kicker: String(localized: "Trending Now"),
                             title: secondary.title,
                             subtitle: secondary.displayArtist,
                             song: secondary,
                             context: songs,
+                            hint: String(localized: "Plays this song."),
+                            identifier: "New.FeatureCard.Trending",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
                         )
@@ -69,6 +75,9 @@ private struct NewFeatureCard: View {
     let subtitle: String
     let song: Song
     let context: [Song]
+    let hint: String
+    /// Names the card's role, not its song: both cards can show the same song.
+    let identifier: String
     let width: CGFloat
     let artworkSize: CGFloat
 
@@ -118,9 +127,11 @@ private struct NewFeatureCard: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        // VoiceOver reads the kicker before the title, as they are shown.
+        .accessibilityLabel("\(kicker), \(title)")
         .accessibilityValue(subtitle)
-        .accessibilityHint("Plays this release.")
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(identifier)
     }
 }
 
