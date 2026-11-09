@@ -12,8 +12,10 @@ private final class FakeHomeRequests {
 
     var feedsFail = false
     var answersSetlistAtOnce = false
+    var setlistFails = false
     var setlistSongs = songs
     private(set) var trendingCalls = 0
+    private(set) var setlistCalls = 0
     private var pendingSetlist: CheckedContinuation<KaraokeSetlist, any Error>?
 
     var requests: HomeViewModel.Requests {
@@ -33,6 +35,8 @@ private final class FakeHomeRequests {
                 return []
             },
             latestSetlist: {
+                self.setlistCalls += 1
+                if self.setlistFails { throw URLError(.notConnectedToInternet) }
                 if self.answersSetlistAtOnce { return self.setlist }
                 return try await withCheckedThrowingContinuation { self.pendingSetlist = $0 }
             }
@@ -114,6 +118,24 @@ struct HomeLatestSetlistLoadTests {
 
         #expect(model.playableLatestSetlist == nil)
         #expect(model.newIsEmpty)
+    }
+
+    @Test("A failed refresh keeps the setlist already shown")
+    func failedRefreshKeepsTheSetlist() async throws {
+        let fake = FakeHomeRequests()
+        fake.answersSetlistAtOnce = true
+        let model = HomeViewModel(requests: fake.requests)
+        model.fetchHomeData()
+        await waitUntil { model.latestSetlist != nil }
+
+        fake.setlistFails = true
+        model.fetchHomeData(force: true)
+        await waitUntil { fake.setlistCalls == 2 && !model.isLoading }
+        // Let the failed request's task finish before checking.
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(fake.setlistCalls == 2)
+        #expect(model.latestSetlist?.id == "latest")
     }
 
     @Test("A load that left Home empty is retried, even when the setlist loaded")
