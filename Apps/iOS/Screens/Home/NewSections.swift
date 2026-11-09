@@ -60,8 +60,12 @@ struct NewFeaturedRail: View {
         .frame(height: cardArtworkHeight + AM.Spacing.s + cardTextAllowance)
     }
 
+    /// Narrow enough that the next card peeks in at the trailing edge, so the
+    /// rail reads as scrollable. With both margins taken off, the second card
+    /// started right at a phone's edge and looked missing.
     private func featureCardWidth(for availableWidth: CGFloat) -> CGFloat {
-        min(max(availableWidth - AM.Spacing.screenMargin * 2, 300), 420)
+        let peekingWidth = availableWidth - AM.Spacing.screenMargin - AM.Spacing.l - AM.Spacing.xxl
+        return min(max(peekingWidth, 300), 420)
     }
 }
 
