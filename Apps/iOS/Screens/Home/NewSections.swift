@@ -32,7 +32,7 @@ struct NewFeaturedRail: View {
                             title: latestStream.name,
                             subtitle: latestStream.countAndLength,
                             artwork: .playlist(latestStream.playlist),
-                            hint: String(localized: "Plays \(latestStream.name)."),
+                            hint: String(localized: "Plays this setlist."),
                             identifier: "New.FeatureCard.LatestStream",
                             width: cardWidth,
                             artworkSize: cardWidth * NewFeatureCard.artworkWidthRatio
