@@ -320,15 +320,10 @@ nonisolated enum KaraokeAPIClient {
     /// Only `days` of 7 and 30 return data; the results are precomputed for
     /// those two windows. For an all-time chart use `mostPlayedSongs`.
     static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
-        var queryItems = [
-            URLQueryItem(name: "days", value: String(days)),
-        ]
-        if let take {
-            queryItems.append(URLQueryItem(name: "take", value: String(take)))
-        }
+        let queryItems = trendingQueryItems(days: days, take: take)
         let request = try request(path: "/api/explore/trendings", queryItems: queryItems)
         let data = try await data(for: request)
-        return try decode([Song].self, from: data)
+        return try trendingChart(decode([Song].self, from: data), take: take)
     }
 
     static func playlists(
