@@ -41,6 +41,25 @@ final class TrendingThisWeekUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["More to Explore"].exists, "The trending list is no longer repeated as More to Explore.")
     }
 
+    /// New previews five trending songs; See All must open every one of them.
+    func testNewSeeAllShowsEveryTrendingSong() throws {
+        let app = launch(section: "new")
+
+        let header = app.buttons["Trending This Week"].firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 15), "Expected the Trending This Week header on New.")
+        header.tap()
+        XCTAssertTrue(
+            element("BrowseSongCollection.song.ui-home-song-3", in: app).waitForExistence(timeout: 8),
+            "Expected See All to open the trending list."
+        )
+
+        // The sixth fixture song, past the preview's five rows.
+        XCTAssertTrue(
+            element("BrowseSongCollection.song.ui-home-song-2", in: app).waitForExistence(timeout: 8),
+            "See All on New shows the whole trending list."
+        )
+    }
+
     private func launch(section: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", section]

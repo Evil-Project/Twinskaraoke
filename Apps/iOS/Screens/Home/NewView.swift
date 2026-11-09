@@ -88,7 +88,7 @@ struct NewView: View {
             // The website's "Trending This Week": the 7-day trending list. See
             // All opens all of it, so it isn't repeated as a rail below.
             if !viewModel.trending.isEmpty {
-                NewSongListPreview(title: String(localized: "Trending This Week"), songs: Array(viewModel.trending.prefix(5)))
+                NewSongListPreview(title: String(localized: "Trending This Week"), songs: viewModel.trending)
             }
 
             if !viewModel.recentPlaylists.isEmpty {
@@ -139,7 +139,7 @@ struct NewView: View {
                     if !viewModel.trending.isEmpty {
                         NewSongListPreview(
                             title: String(localized: "Trending This Week"),
-                            songs: Array(viewModel.trending.prefix(5)),
+                            songs: viewModel.trending,
                             horizontalPadding: 0
                         )
                     }

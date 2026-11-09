@@ -206,7 +206,8 @@ final class HomeViewModel {
         topPicksSource = .setlists
 
         let fixtureSongs = Self.fixtureSongs
-        trending = Array(fixtureSongs.suffix(4))
+        // More songs than New's five-row preview shows, so See All has more.
+        trending = Array(fixtureSongs.suffix(4)) + Array(fixtureSongs.prefix(2))
         suggestions = Array(fixtureSongs.prefix(4))
         newReleases = fixtureSongs
         latestSingle = fixtureSongs.first

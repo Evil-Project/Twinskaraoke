@@ -163,12 +163,15 @@ struct NewSongRail: View {
     }
 }
 
+/// The first `rowLimit` songs as rows; See All opens all of `songs`.
 struct NewSongListPreview: View {
     let title: String
     let songs: [Song]
+    var rowLimit = 5
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
     var body: some View {
+        let rows = Array(songs.prefix(rowLimit))
         VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
             AMSectionHeader(
                 title,
@@ -176,10 +179,10 @@ struct NewSongListPreview: View {
                 horizontalPadding: horizontalPadding
             )
             LazyVStack(spacing: 0) {
-                ForEach(songs) { song in
+                ForEach(rows) { song in
                     Button {
                         AppHaptic.selection.play()
-                        AudioPlayerManager.shared.play(song: song, context: songs)
+                        AudioPlayerManager.shared.play(song: song, context: rows)
                     } label: {
                         SongRow(song: song, size: .compact)
                             .padding(.horizontal, horizontalPadding)
