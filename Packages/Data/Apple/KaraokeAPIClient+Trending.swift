@@ -9,11 +9,23 @@ nonisolated extension KaraokeAPIClient {
     /// Stream placeholders are left out. If they leave the first response
     /// short of `take` songs and the server has more, it asks once more for
     /// the most it returns.
-    static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
-        var songs = try await trendingResponse(trendingQueryItems(days: days, take: take))
+    ///
+    /// `fetch` sends one request; tests pass a stand-in for the network.
+    static func trendingSongs(
+        days: Int = 7,
+        take: Int? = nil,
+        fetch: ([URLQueryItem]) async throws -> [Song] = KaraokeAPIClient.trendingResponse
+    ) async throws -> [Song] {
+        var songs = try await fetch(trendingQueryItems(days: days, take: take))
         if needsMoreTrendingSongs(songs, take: take) {
-            // Without `take` the server returns its maximum, 100 songs.
-            songs = try await trendingResponse(trendingQueryItems(days: days, take: nil))
+            do {
+                // Without `take` the server returns its maximum, 100 songs.
+                songs = try await fetch(trendingQueryItems(days: days, take: nil))
+            } catch {
+                // A failed second request keeps the first, shorter chart; a
+                // cancelled one still ends the call.
+                if Task.isCancelled { throw error }
+            }
         }
         return trendingChart(songs, take: take)
     }
@@ -44,14 +56,16 @@ nonisolated extension KaraokeAPIClient {
     static func trendingChart(_ songs: [Song], take: Int?) -> [Song] {
         let chart = droppingStreamPlaceholders(songs)
         guard let take else { return chart }
-        return Array(chart.prefix(take))
+        return Array(chart.prefix(max(take, 0)))
     }
 
+    /// `take` and 20 spare songs, up to the server's 100. Compares before
+    /// adding, so even `Int.max` can't overflow.
     private static func trendingRequestSize(for take: Int) -> Int {
-        min(take + 20, 100)
+        take >= 80 ? 100 : max(take, 0) + 20
     }
 
-    private static func trendingResponse(_ queryItems: [URLQueryItem]) async throws -> [Song] {
+    static func trendingResponse(_ queryItems: [URLQueryItem]) async throws -> [Song] {
         let request = try request(path: "/api/explore/trendings", queryItems: queryItems)
         let data = try await data(for: request)
         return try JSONDecoder().decode([Song].self, from: data)

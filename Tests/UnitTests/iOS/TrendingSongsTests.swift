@@ -84,4 +84,67 @@ struct TrendingSongsTests {
         #expect(!KaraokeAPIClient.needsMoreTrendingSongs(maximum, take: 90))
         #expect(!KaraokeAPIClient.needsMoreTrendingSongs([placeholder("p")], take: nil))
     }
+
+    /// `take: 2` asks for 22 songs; this window has one real song in them.
+    private var shortWindow: [Song] {
+        [real("a")] + (1...21).map { placeholder("p\($0)") }
+    }
+
+    @Test("A short chart is filled from a second request without take")
+    func secondRequestFillsTheChart() async throws {
+        let log = TrendingRequestLog()
+        let fullList = shortWindow + [real("b"), real("c")]
+        let chart = try await KaraokeAPIClient.trendingSongs(days: 7, take: 2) { items in
+            await log.record(items) == 1 ? shortWindow : fullList
+        }
+
+        #expect(await log.takes == ["22", nil])
+        #expect(chart.map(\.id) == ["a", "b"])
+    }
+
+    @Test("A failed second request keeps the songs from the first")
+    func failedSecondRequestKeepsTheFirstChart() async throws {
+        let log = TrendingRequestLog()
+        let chart = try await KaraokeAPIClient.trendingSongs(days: 7, take: 2) { items in
+            if await log.record(items) > 1 { throw URLError(.timedOut) }
+            return shortWindow
+        }
+
+        #expect(chart.map(\.id) == ["a"])
+    }
+
+    @Test("A cancelled second request still ends the call")
+    func cancelledSecondRequestThrows() async {
+        let log = TrendingRequestLog()
+        let window = shortWindow
+        let task = Task {
+            try await KaraokeAPIClient.trendingSongs(days: 7, take: 2) { items in
+                if await log.record(items) > 1 {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    throw URLError(.cancelled)
+                }
+                return window
+            }
+        }
+
+        await #expect(throws: URLError.self) { try await task.value }
+    }
+
+    @Test("Out-of-range take values neither overflow nor trap")
+    func outOfRangeTakeIsSafe() throws {
+        #expect(query(days: 7, take: .max) == ["days": "7", "take": "100"])
+        #expect(!KaraokeAPIClient.needsMoreTrendingSongs([real("a")], take: .max))
+        #expect(KaraokeAPIClient.trendingChart(try songs(), take: -1).isEmpty)
+    }
+}
+
+/// The `take` of each trending request a test's stand-in network receives.
+private actor TrendingRequestLog {
+    private(set) var takes: [String?] = []
+
+    /// Records the request and returns how many there have been.
+    func record(_ items: [URLQueryItem]) -> Int {
+        takes.append(items.first { $0.name == "take" }?.value)
+        return takes.count
+    }
 }
