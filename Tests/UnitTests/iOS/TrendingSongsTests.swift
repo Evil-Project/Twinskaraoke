@@ -52,4 +52,36 @@ struct TrendingSongsTests {
         // Without `take` the server already returns its maximum.
         #expect(query(days: 30, take: nil) == ["days": "30"])
     }
+
+    private func real(_ id: String) -> Song {
+        UITestFixtures.song(id: id, title: "Song \(id)", artist: "Evil")
+    }
+
+    private func placeholder(_ id: String) -> Song {
+        UITestFixtures.song(id: id, title: "Temporary Stream Audio", artist: "Evil")
+    }
+
+    @Test("Asks again for the full list when placeholders leave the chart short")
+    func asksAgainWhenPlaceholdersLeaveTheChartShort() {
+        // `take: 2` asks for 22 songs; here 21 of them are placeholders.
+        let mostlyPlaceholders = [real("a")] + (1...21).map { placeholder("p\($0)") }
+        let onlyPlaceholders = (1...22).map { placeholder("p\($0)") }
+
+        #expect(KaraokeAPIClient.needsMoreTrendingSongs(mostlyPlaceholders, take: 2))
+        #expect(KaraokeAPIClient.needsMoreTrendingSongs(onlyPlaceholders, take: 2))
+    }
+
+    @Test("Doesn't ask again when the chart is full or the server has no more")
+    func doesNotAskAgainWithoutCause() {
+        let enough = [real("a"), real("b")] + (1...20).map { placeholder("p\($0)") }
+        // Fewer songs than requested: the server has no more to give.
+        let everythingTheServerHas = [real("a"), placeholder("p")]
+        // `take: 90` already asks for the maximum of 100.
+        let maximum = (1...100).map { placeholder("p\($0)") }
+
+        #expect(!KaraokeAPIClient.needsMoreTrendingSongs(enough, take: 2))
+        #expect(!KaraokeAPIClient.needsMoreTrendingSongs(everythingTheServerHas, take: 2))
+        #expect(!KaraokeAPIClient.needsMoreTrendingSongs(maximum, take: 90))
+        #expect(!KaraokeAPIClient.needsMoreTrendingSongs([placeholder("p")], take: nil))
+    }
 }

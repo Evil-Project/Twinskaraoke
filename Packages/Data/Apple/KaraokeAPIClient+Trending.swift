@@ -3,15 +3,40 @@ import Foundation
 /// `GET /api/explore/trendings`: the most played songs of the last 7 or 30
 /// days, most played first.
 nonisolated extension KaraokeAPIClient {
+    /// Only `days` of 7 and 30 return data; the results are precomputed for
+    /// those two windows. For an all-time chart use `mostPlayedSongs`.
+    ///
+    /// Stream placeholders are left out. If they leave the first response
+    /// short of `take` songs and the server has more, it asks once more for
+    /// the most it returns.
+    static func trendingSongs(days: Int = 7, take: Int? = nil) async throws -> [Song] {
+        var songs = try await trendingResponse(trendingQueryItems(days: days, take: take))
+        if needsMoreTrendingSongs(songs, take: take) {
+            // Without `take` the server returns its maximum, 100 songs.
+            songs = try await trendingResponse(trendingQueryItems(days: days, take: nil))
+        }
+        return trendingChart(songs, take: take)
+    }
+
     /// Asks for 20 more songs than the caller shows, as `mostPlayedSongs`
-    /// does, so the chart stays full once stream placeholders are dropped.
-    /// The server caps `take` at 100.
+    /// does, so the chart usually stays full once stream placeholders are
+    /// dropped. The server caps `take` at 100.
     static func trendingQueryItems(days: Int, take: Int?) -> [URLQueryItem] {
         var queryItems = [URLQueryItem(name: "days", value: String(days))]
         if let take {
-            queryItems.append(URLQueryItem(name: "take", value: String(min(take + 20, 100))))
+            queryItems.append(URLQueryItem(name: "take", value: String(trendingRequestSize(for: take))))
         }
         return queryItems
+    }
+
+    /// Whether placeholders left the first response short of `take` real
+    /// songs while the server may have more: it sent every song asked for,
+    /// and that was fewer than its maximum.
+    static func needsMoreTrendingSongs(_ response: [Song], take: Int?) -> Bool {
+        guard let take else { return false }
+        let requested = trendingRequestSize(for: take)
+        guard requested < 100, response.count >= requested else { return false }
+        return response.count(where: { !isStreamPlaceholder($0) }) < take
     }
 
     /// The trending songs without stream placeholders, which have no real
@@ -20,5 +45,15 @@ nonisolated extension KaraokeAPIClient {
         let chart = droppingStreamPlaceholders(songs)
         guard let take else { return chart }
         return Array(chart.prefix(take))
+    }
+
+    private static func trendingRequestSize(for take: Int) -> Int {
+        min(take + 20, 100)
+    }
+
+    private static func trendingResponse(_ queryItems: [URLQueryItem]) async throws -> [Song] {
+        let request = try request(path: "/api/explore/trendings", queryItems: queryItems)
+        let data = try await data(for: request)
+        return try JSONDecoder().decode([Song].self, from: data)
     }
 }
