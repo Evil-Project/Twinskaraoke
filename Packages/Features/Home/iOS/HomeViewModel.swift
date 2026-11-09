@@ -35,6 +35,14 @@ final class HomeViewModel {
         hasFinishedLoading && !isLoading
             && trending.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
     }
+
+    /// The newest release and the list it plays in, for the iPad Home hero's
+    /// Play Latest row. Nil when New Releases didn't load, so the row isn't
+    /// shown over a song from another list.
+    var heroLatestRelease: (song: Song, context: [Song])? {
+        guard let latestSingle else { return nil }
+        return (latestSingle, latestSingleContext.isEmpty ? [latestSingle] : latestSingleContext)
+    }
     // Bookkeeping the views never read; keep it out of the observation graph.
     @ObservationIgnored private var hasLoaded = false
     @ObservationIgnored private var topPicksPage = 0
