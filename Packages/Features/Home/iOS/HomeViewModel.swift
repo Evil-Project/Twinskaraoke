@@ -9,6 +9,36 @@ final class HomeViewModel {
         case setlists
     }
 
+    /// The requests behind Home and New, replaced in tests.
+    struct Requests {
+        var trending: @MainActor () async throws -> [Song]
+        var suggestions: @MainActor () async throws -> [Song]
+        var releases: @MainActor () async throws -> [Song]
+        var setlists: @MainActor (_ startIndex: Int, _ pageSize: Int) async throws -> [Playlist]
+        var publicPlaylists: @MainActor (_ startIndex: Int, _ pageSize: Int) async throws -> [Playlist]
+        var latestSetlist: @MainActor () async throws -> KaraokeSetlist
+
+        static var live: Requests {
+            Requests(
+                trending: { try await KaraokeAPIClient.trendingSongs(take: 20) },
+                suggestions: { try await KaraokeAPIClient.songSuggestions(take: 20) },
+                releases: { try await KaraokeAPIClient.latestReleases() },
+                setlists: { startIndex, pageSize in
+                    try await KaraokeAPIClient.playlists(
+                        startIndex: startIndex,
+                        pageSize: pageSize,
+                        isSetlist: true,
+                        sortDescending: true
+                    )
+                },
+                publicPlaylists: { startIndex, pageSize in
+                    try await KaraokeAPIClient.publicPlaylists(startIndex: startIndex, pageSize: pageSize)
+                },
+                latestSetlist: { try await KaraokeAPIClient.latestSetlist() }
+            )
+        }
+    }
+
     var trending: [Song] = []
     var suggestions: [Song] = []
     var recentPlaylists: [Playlist] = []
@@ -21,6 +51,10 @@ final class HomeViewModel {
     /// The setlist of the most recent karaoke stream, which New leads with as
     /// the website does.
     var latestSetlist: KaraokeSetlist?
+    /// `latestSetlist` when it has songs to play.
+    var playableLatestSetlist: KaraokeSetlist? {
+        latestSetlist?.playlist.songListDTOs?.isEmpty == false ? latestSetlist : nil
+    }
     /// Set once a load has finished, whether or not anything came back.
     private(set) var hasFinishedLoading = false
 
@@ -29,12 +63,18 @@ final class HomeViewModel {
     /// a bare title with no way to tell why, and stayed that way until pulled
     /// to refresh.
     var homeIsEmpty: Bool {
-        newIsEmpty && suggestions.isEmpty
+        feedsAreEmpty && suggestions.isEmpty
     }
 
-    /// The same for New, which does not show suggestions: suggestions alone
-    /// would otherwise leave New blank while Home still had something.
+    /// The same for New, which does not show suggestions (suggestions alone
+    /// would otherwise leave New blank while Home still had something) but
+    /// does show the latest stream's setlist.
     var newIsEmpty: Bool {
+        feedsAreEmpty && playableLatestSetlist == nil
+    }
+
+    /// Every feed Home and New share came back empty or failed.
+    private var feedsAreEmpty: Bool {
         hasFinishedLoading && !isLoading
             && trending.isEmpty && recentPlaylists.isEmpty && newReleases.isEmpty
     }
@@ -54,6 +94,8 @@ final class HomeViewModel {
     @ObservationIgnored private var dataGeneration = 0
     @ObservationIgnored private var homeLoadTask: Task<Void, Never>?
     @ObservationIgnored private var topPicksLoadMoreTask: Task<Void, Never>?
+    @ObservationIgnored private var latestSetlistTask: Task<Void, Never>?
+    @ObservationIgnored private let requests: Requests
 
     // No work in init. This type is held in `@State`, whose initial-value
     // expression is re-evaluated on every re-initialization of the owning view
@@ -61,6 +103,9 @@ final class HomeViewModel {
     // @autoclosure and evaluated it once, so an init-time fetch was safe there
     // and is a request flood here. The fetch is driven from the view's .task
     // instead, and `hasLoaded` keeps it to one round trip.
+    init(requests: Requests = .live) {
+        self.requests = requests
+    }
 
     func fetchHomeData(force: Bool = false) {
         if AppRuntime.isUITestMode {
@@ -85,18 +130,17 @@ final class HomeViewModel {
         canLoadMoreTopPicks = true
         homeLoadTask = Task { [weak self] in
             guard let self else { return }
-            async let trendingResult = try? KaraokeAPIClient.trendingSongs(take: 20)
-            async let suggestionsResult = try? KaraokeAPIClient.songSuggestions(take: 20)
+            let requests = requests
+            async let trendingResult = try? requests.trending()
+            async let suggestionsResult = try? requests.suggestions()
             async let topPicksResult = fetchTopPicks(startIndex: 0)
-            async let releasesResult = try? KaraokeAPIClient.latestReleases()
-            async let latestSetlistResult = try? KaraokeAPIClient.latestSetlist()
+            async let releasesResult = try? requests.releases()
 
-            let (loadedTrending, loadedSuggestions, loadedTopPicks, loadedReleases, loadedLatestSetlist) = await (
+            let (loadedTrending, loadedSuggestions, loadedTopPicks, loadedReleases) = await (
                 trendingResult,
                 suggestionsResult,
                 topPicksResult,
-                releasesResult,
-                latestSetlistResult
+                releasesResult
             )
             guard !Task.isCancelled, dataGeneration == generation else { return }
 
@@ -110,7 +154,6 @@ final class HomeViewModel {
             }
             // Match the sections above: a failed refresh keeps the existing
             // New Releases shelf instead of erasing it mid-session.
-            if let loadedLatestSetlist { latestSetlist = loadedLatestSetlist }
             if let loadedReleases {
                 newReleases = loadedReleases
                 latestSingle = loadedReleases.first
@@ -121,15 +164,30 @@ final class HomeViewModel {
             homeLoadTask = nil
             // Let the next appearance or activation try again instead of
             // treating a load that left a screen empty as done.
-            if newIsEmpty { hasLoaded = false }
+            if feedsAreEmpty { hasLoaded = false }
+        }
+        loadLatestSetlist(generation: generation)
+    }
+
+    /// Loaded on its own: it only feeds New's first card, so a slow request
+    /// must not keep Home and New on their skeletons. Like the shelves, a
+    /// failed refresh keeps the setlist already shown.
+    private func loadLatestSetlist(generation: Int) {
+        latestSetlistTask?.cancel()
+        let requests = requests
+        latestSetlistTask = Task { [weak self] in
+            let loaded = try? await requests.latestSetlist()
+            guard !Task.isCancelled, let self, dataGeneration == generation else { return }
+            if let loaded { latestSetlist = loaded }
+            latestSetlistTask = nil
         }
     }
 
     /// Retries a load that left Home or New with nothing to show. Called when
     /// the app becomes active, which is usually when a connection has come
-    /// back.
+    /// back. The latest setlist alone doesn't count: Home doesn't show it.
     func retryIfLoadFailed() {
-        guard newIsEmpty, homeLoadTask == nil else { return }
+        guard feedsAreEmpty, homeLoadTask == nil else { return }
         fetchHomeData(force: true)
     }
 
@@ -162,20 +220,13 @@ final class HomeViewModel {
         let source = topPicksSource
         let pageSize = topPicksPageSize
         let generation = dataGeneration
+        let requests = requests
         topPicksLoadMoreTask = Task { [weak self] in
             let playlists: [Playlist] = switch source {
             case .setlists:
-                await (try? KaraokeAPIClient.playlists(
-                    startIndex: startIndex,
-                    pageSize: pageSize,
-                    isSetlist: true,
-                    sortDescending: true
-                )) ?? []
+                await (try? requests.setlists(startIndex, pageSize)) ?? []
             case .publicPlaylists:
-                await (try? KaraokeAPIClient.publicPlaylists(
-                    startIndex: startIndex,
-                    pageSize: pageSize
-                )) ?? []
+                await (try? requests.publicPlaylists(startIndex, pageSize)) ?? []
             }
             guard !Task.isCancelled, let self, self.dataGeneration == generation else { return }
             if !playlists.isEmpty {
@@ -195,20 +246,12 @@ final class HomeViewModel {
         startIndex: Int
     ) async -> (source: TopPicksSource, playlists: [Playlist]?) {
         let pageSize = topPicksPageSize
-        let setlists = await (try? KaraokeAPIClient.playlists(
-            startIndex: startIndex,
-            pageSize: pageSize,
-            isSetlist: true,
-            sortDescending: true
-        )) ?? []
+        let setlists = await (try? requests.setlists(startIndex, pageSize)) ?? []
         if !setlists.isEmpty {
             return (.setlists, setlists)
         }
 
-        let fallback = try? await KaraokeAPIClient.publicPlaylists(
-            startIndex: startIndex,
-            pageSize: pageSize
-        )
+        let fallback = try? await requests.publicPlaylists(startIndex, pageSize)
         return (.publicPlaylists, fallback)
     }
 
@@ -299,5 +342,6 @@ final class HomeViewModel {
     deinit {
         homeLoadTask?.cancel()
         topPicksLoadMoreTask?.cancel()
+        latestSetlistTask?.cancel()
     }
 }

@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct NewFeaturedRail: View {
-    /// The most recent karaoke stream's setlist. The website leads with it as
-    /// "Recent Setlist"; the first card plays it in order.
+    /// The most recent karaoke stream's setlist, when it has songs. The
+    /// website leads with it as "Recent Setlist"; the first card plays it in
+    /// order.
     let latestStream: KaraokeSetlist?
     /// The 7-day trending list. Its top song gets the second card, which
     /// queues the rest of the list after it, as the website does.
@@ -26,7 +27,7 @@ struct NewFeaturedRail: View {
             let cardWidth = featureCardWidth(for: proxy.size.width)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: AM.Spacing.l) {
-                    if let latestStream, latestStream.playlist.songListDTOs?.isEmpty == false {
+                    if let latestStream {
                         NewFeatureCard(
                             kicker: String(localized: "Latest Stream"),
                             title: latestStream.name,
