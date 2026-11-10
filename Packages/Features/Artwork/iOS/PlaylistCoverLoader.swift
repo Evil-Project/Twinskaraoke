@@ -6,6 +6,10 @@ import Observation
 @Observable
 final class PlaylistCoverLoader {
     var artworkURLs: [URL] = []
+    /// True once the request for the current playlist has answered, with
+    /// covers or without. Until then an empty `artworkURLs` means "not yet",
+    /// and afterwards it means the playlist has no cover to show.
+    private(set) var hasResolved = false
     private var loadedID: String?
     private var fallbackSongs: [Song] = []
     private var loadedPlaylist: Playlist?
@@ -25,6 +29,7 @@ final class PlaylistCoverLoader {
             return
         }
         loadedID = playlistID
+        hasResolved = false
         fallbackSongs = fallback ?? []
         loadedPlaylist = nil
         artworkURLs = Self.extractArtworkURLs(fromSongs: fallbackSongs)
@@ -54,6 +59,7 @@ final class PlaylistCoverLoader {
     private func handleLoadFailure(playlistID: String) {
         guard loadedID == playlistID else { return }
         loadedID = nil
+        hasResolved = true
     }
 
     private struct DecodedArtworkPayload: Sendable {
@@ -73,6 +79,7 @@ final class PlaylistCoverLoader {
         loadedPlaylist = decoded.playlist
         fallbackSongs = decoded.songs ?? fallbackSongs
         refreshFallbackArtwork()
+        hasResolved = true
     }
 
     func refreshFallbackArtwork() {

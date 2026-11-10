@@ -447,18 +447,27 @@ struct MusicEmptyActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.body.bold())
-                .foregroundStyle(.primary)
-                .padding(.horizontal, AM.Spacing.xl)
-                .padding(.vertical, 11)
-                .background(Color.appSecondaryBackground, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(Color.appDivider, lineWidth: 0.7)
-                }
+            MusicEmptyActionLabel(title: title)
         }
         .buttonStyle(PressableButtonStyle(scale: 0.94, dim: 0.78, haptic: .selection))
+    }
+}
+
+/// The capsule an empty state's action wears, for a button or a link.
+struct MusicEmptyActionLabel: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.body.bold())
+            .foregroundStyle(.primary)
+            .padding(.horizontal, AM.Spacing.xl)
+            .padding(.vertical, 11)
+            .background(Color.appSecondaryBackground, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.appDivider, lineWidth: 0.7)
+            }
     }
 }
 

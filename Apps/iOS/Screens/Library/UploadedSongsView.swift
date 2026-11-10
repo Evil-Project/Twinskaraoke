@@ -142,7 +142,9 @@ struct UploadedSongsView: View {
         VStack(spacing: AM.Spacing.l) {
             MusicEmptyState(title: emptyTitle(isSearching: isSearching), message: emptyMessage(isSearching: isSearching))
 
-            if viewModel.loadFailed {
+            if viewModel.requiresSignIn, !isSearching {
+                SignInEmptyStateLink()
+            } else if viewModel.loadFailed {
                 MusicEmptyActionButton(title: String(localized: "Try Again")) {
                     Task {
                         await viewModel.refresh()
