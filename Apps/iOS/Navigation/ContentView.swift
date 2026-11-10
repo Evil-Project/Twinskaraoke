@@ -36,7 +36,7 @@ private struct PopupHostView: View {
         // them back.
         GeometryReader { proxy in
             ZStack {
-                rootShell
+                rootShell.accessibilityHiddenBehindPlayer()
                 NowPlayingOverlay(safeAreaInsets: proxy.safeAreaInsets)
             }
         }
