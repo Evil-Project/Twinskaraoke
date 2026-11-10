@@ -18,8 +18,36 @@ final class PlaylistsViewModel {
     @ObservationIgnored private var sourceObservation: ObservationToken?
     @ObservationIgnored private let playlistsRefresh = RefreshTracker()
     @ObservationIgnored private let favoriteSongsRefresh = RefreshTracker()
+    @ObservationIgnored private let service: Service
 
-    init() {
+    /// The requests behind the Library overview, replaced in tests.
+    struct Service {
+        var playlists: @MainActor () async throws -> [Playlist]
+        var favoriteSongs: @MainActor () async throws -> [Song]
+
+        static var live: Service {
+            Service(
+                playlists: {
+                    try await KaraokeAPIClient.restoringRequest {
+                        try await KaraokeAPIClient.playlists(
+                            startIndex: 0,
+                            pageSize: 25,
+                            isSetlist: false,
+                            sortDescending: false
+                        )
+                    }
+                },
+                favoriteSongs: {
+                    try await KaraokeAPIClient.restoringRequest {
+                        try await KaraokeAPIClient.favoriteSongs()
+                    }
+                }
+            )
+        }
+    }
+
+    init(service: Service = .live) {
+        self.service = service
         // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
         // and `$favoriteIDs`. `observeContinuously` already hops to the next
         // main-actor turn before calling back, which is what the old
@@ -106,17 +134,10 @@ final class PlaylistsViewModel {
             guard let self else { return }
             defer { isLoading = false }
             do {
-                let loaded = try await KaraokeAPIClient.restoringRequest {
-                    try await KaraokeAPIClient.playlists(
-                        startIndex: 0,
-                        pageSize: 25,
-                        isSetlist: false,
-                        sortDescending: false
-                    )
-                }
-                playlists = loaded
+                playlists = try await service.playlists()
                 hasLoadedPlaylists = true
             } catch {
+                guard !Self.isCancellation(error) else { return }
                 errorMessage = String(localized: "Playlists couldn’t be loaded. Pull to refresh to retry.")
             }
         })
@@ -128,16 +149,37 @@ final class PlaylistsViewModel {
         isLoadingFavorites = true
         favoritesErrorMessage = nil
         favoriteSongsRefresh.track(Task { [weak self] in
-            guard let self else { return }
-            defer { isLoadingFavorites = false }
-            do {
-                favoriteSongs = try await KaraokeAPIClient.restoringRequest {
-                    try await KaraokeAPIClient.favoriteSongs()
-                }
-                hasLoadedFavoriteSongs = true
-            } catch {
-                favoritesErrorMessage = String(localized: "Favourite songs couldn’t be loaded. Pull to refresh to retry.")
-            }
+            await self?.loadFavoriteSongs()
         })
+    }
+
+    /// The favourites request is shared with `FavoritesManager`, and every
+    /// app activation invalidates it for the Watch sync, which cancels it for
+    /// everyone waiting on it. That is a superseded request, not a failure:
+    /// reported as one, it left "couldn't be loaded" on the Library after any
+    /// launch where the two crossed. So a cancelled request is asked for once
+    /// more, which joins the load that replaced it.
+    private func loadFavoriteSongs() async {
+        defer { isLoadingFavorites = false }
+        for _ in 0 ..< 2 {
+            do {
+                favoriteSongs = try await service.favoriteSongs()
+                hasLoadedFavoriteSongs = true
+                return
+            } catch {
+                guard Self.isCancellation(error) else {
+                    favoritesErrorMessage = String(localized: "Favourite songs couldn’t be loaded. Pull to refresh to retry.")
+                    return
+                }
+                // This load itself was cancelled: nobody is waiting for it.
+                if Task.isCancelled { return }
+            }
+        }
+    }
+
+    /// A cancelled load did not fail: nothing is wrong with the connection,
+    /// and the next appearance or refresh loads again.
+    private static func isCancellation(_ error: any Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
     }
 }

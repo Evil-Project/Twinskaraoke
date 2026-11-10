@@ -71,11 +71,12 @@ struct LibraryView: View {
         NavigationStack(path: $path) {
             GeometryReader { proxy in
                 ScrollView {
-                    libraryOverview(
-                        recentlyAddedSongs: recentlyAddedSongs,
-                        pinned: pinned,
-                        availableWidth: proxy.size.width
-                    )
+                    VStack(spacing: AM.Spacing.s) {
+                        if let message = viewModel.errorMessage ?? viewModel.favoritesErrorMessage {
+                            LibraryLoadNotice(message: message)
+                        }
+                        libraryOverview(recentlyAddedSongs: recentlyAddedSongs, pinned: pinned, availableWidth: proxy.size.width)
+                    }
                     .padding(.top, AM.Spacing.s)
                     .padding(.bottom, AM.Spacing.l)
                 }
@@ -109,11 +110,6 @@ struct LibraryView: View {
             }
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistDetailView(playlist: playlist)
-            }
-            .safeAreaInset(edge: .top) {
-                if let message = viewModel.errorMessage ?? viewModel.favoritesErrorMessage {
-                    Text(message).font(.footnote).padding()
-                }
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
