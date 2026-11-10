@@ -794,10 +794,7 @@ struct PlaylistGridCell: View {
             // Same two-level structure as MusicGridCard: the label pair sits
             // tight and is set away from the artwork as a unit.
             VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name)
-                    .font(AM.Font.tileTitle)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                TileTitleText(text: playlist.name)
                 PlaylistSongCountLabel(
                     playlist: playlist,
                     fallbackText: prefersDetailCount ? nil : String(localized: "Playlist"),
