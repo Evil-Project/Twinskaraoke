@@ -13,12 +13,13 @@ struct PlaylistCarousel: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
     /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
         AM.Layout.shelfLabelAllowance
 
     var body: some View {
         GeometryReader { proxy in
-            let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
+            let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width, accessibilityText: dynamicTypeSize.isAccessibilitySize)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
                     title,
@@ -58,8 +59,9 @@ struct PlaylistCarousel: View {
         }
         .trackingWidth(into: $availableWidth)
         .frame(height: AM.Layout.mediaShelfHeight(
-            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
-            labelAllowance: labelAllowance
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth, accessibilityText: dynamicTypeSize.isAccessibilitySize),
+            labelAllowance: labelAllowance,
+            accessibilityText: dynamicTypeSize.isAccessibilitySize
         ))
     }
 }
@@ -70,6 +72,7 @@ struct HomeSongSection: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
     @State private var availableWidth: CGFloat = 390
     /// Grows the shelf with the text size; see AM.Layout.shelfLabelAllowance.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat =
         AM.Layout.shelfLabelAllowance
 
@@ -85,7 +88,7 @@ struct HomeSongSection: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width)
+            let tileWidth = AM.Layout.shelfTileWidth(for: proxy.size.width, accessibilityText: dynamicTypeSize.isAccessibilitySize)
             VStack(alignment: .leading, spacing: AM.Spacing.sectionHeaderGap) {
                 AMSectionHeader(
                     title,
@@ -110,8 +113,9 @@ struct HomeSongSection: View {
         }
         .trackingWidth(into: $availableWidth)
         .frame(height: AM.Layout.mediaShelfHeight(
-            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth),
-            labelAllowance: labelAllowance
+            tileWidth: AM.Layout.shelfTileWidth(for: availableWidth, accessibilityText: dynamicTypeSize.isAccessibilitySize),
+            labelAllowance: labelAllowance,
+            accessibilityText: dynamicTypeSize.isAccessibilitySize
         ))
     }
 }

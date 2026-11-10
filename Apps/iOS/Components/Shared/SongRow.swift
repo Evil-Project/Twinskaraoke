@@ -267,10 +267,7 @@ struct MusicGridCard: View {
             VStack(alignment: .leading, spacing: size.artworkTextGap) {
                 artwork
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title)
-                        .font(size.titleFont)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    TileTitleText(text: song.title, font: size.titleFont)
                     Text(artistText)
                         .font(size.artistFont)
                         .foregroundStyle(.secondary)
