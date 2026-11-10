@@ -17,6 +17,7 @@ struct PlayerVolumeRow: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
+            .playerControlGlyphScaling()
             .padding(.horizontal, horizontalPadding)
         #endif
     }

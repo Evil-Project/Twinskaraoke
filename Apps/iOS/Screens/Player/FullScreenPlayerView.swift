@@ -264,7 +264,7 @@ private extension View {
     @ViewBuilder
     func playerTitleButtonChrome(_ isVisible: Bool, size: CGFloat) -> some View {
         if isVisible {
-            frame(
+            playerControlGlyphScaling().frame(
                 width: size - playerTitleButtonChromeInset,
                 height: size - playerTitleButtonChromeInset
             )
@@ -272,7 +272,7 @@ private extension View {
             .frame(width: size, height: size)
             .contentShape(Rectangle())
         } else {
-            frame(width: size, height: size)
+            playerControlGlyphScaling().frame(width: size, height: size)
                 .contentShape(Rectangle())
         }
     }

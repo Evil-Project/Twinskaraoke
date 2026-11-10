@@ -52,6 +52,7 @@ struct LyricsView: View {
     var body: some View {
         if lyrics.isEmpty {
             emptyState
+                .scrollsWhenTooTall()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // Resolved once per pass. As a computed property read inside the

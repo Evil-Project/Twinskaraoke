@@ -126,6 +126,7 @@ struct PlayerBottomToolbar: View {
             .accessibilityIdentifier("PlayerToolbar.PlayingNext")
             .animation(badgeAnimation, value: queueModeBadge?.symbol)
         }
+        .playerControlGlyphScaling()
         .padding(.horizontal, audioManager.isRadioMode ? 0 : horizontalPadding)
         .padding(.top, 16)
         .frame(maxWidth: .infinity)
