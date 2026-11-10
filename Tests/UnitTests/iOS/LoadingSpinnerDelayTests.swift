@@ -25,7 +25,11 @@ struct LoadingSpinnerDelayTests {
             window.rootViewController = nil
         }
         try? await Task.sleep(for: wait)
-        return UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+        return draw(host)
+    }
+
+    private func draw(_ host: UIViewController) -> Data {
+        UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }.pngData() ?? Data()
     }
@@ -39,13 +43,29 @@ struct LoadingSpinnerDelayTests {
         #expect(waiting == empty)
     }
 
+    /// Polls for the spinner instead of trusting one fixed wait: on a busy
+    /// machine the view's task and the next render can both run late.
     @Test func theSpinnerShowsOnceItsDelayHasPassed() async {
-        let empty = await render(Color.clear, after: .milliseconds(900))
-        let shown = await render(
-            CenteredLoadingView(minHeight: 100, appearanceDelay: .milliseconds(50)),
-            after: .milliseconds(900)
-        )
-        #expect(shown != empty)
+        let host = UIHostingController(rootView: ZStack {
+            Color.black
+            CenteredLoadingView(minHeight: 100, appearanceDelay: .milliseconds(50))
+        }
+        .frame(width: Self.frame.width, height: Self.frame.height)
+        .environment(\.colorScheme, .dark))
+        let window = makeTestWindow(frame: Self.frame)
+        window.rootViewController = host
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        let empty = await render(Color.clear, after: .milliseconds(100))
+        var shown = false
+        for _ in 0 ..< 50 where !shown {
+            try? await Task.sleep(for: .milliseconds(100))
+            shown = draw(host) != empty
+        }
+        #expect(shown, "The spinner was not drawn within five seconds")
     }
 
     @Test func screensWaitAThirdOfASecond() {

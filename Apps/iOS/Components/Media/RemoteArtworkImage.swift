@@ -357,6 +357,9 @@ struct CenteredLoadingView: View {
             .frame(minHeight: minHeight)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
+            // Not announced before it is shown: VoiceOver would say
+            // "Loading" for a load that never shows a spinner.
+            .accessibilityHidden(!isShown)
             .task {
                 try? await Task.sleep(for: appearanceDelay)
                 guard !Task.isCancelled else { return }
