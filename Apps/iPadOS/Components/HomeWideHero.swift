@@ -20,7 +20,7 @@ struct WideHomeHero: View {
             .frame(minWidth: 0, maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                WideHeroModuleTitle(title: String(localized: "Start Here"), subtitle: String(localized: "Fast actions"))
+                WideHeroModuleTitle(title: String(localized: "Start Here"))
                 if let latestRelease {
                     WideHeroActionRow(
                         systemImage: "play.fill",
@@ -91,7 +91,7 @@ struct WideNewHero: View {
             .frame(minWidth: 0, maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: AM.Spacing.m) {
-                WideHeroModuleTitle(title: String(localized: "Fresh Picks"), subtitle: String(localized: "Updated for large screens"))
+                WideHeroModuleTitle(title: String(localized: "Fresh Picks"))
                 if let primary {
                     WideHeroSongRow(song: primary, context: context, label: String(localized: "Featured Release"))
                 }
@@ -211,20 +211,17 @@ private struct WideSongHeroCard: View {
     }
 }
 
+/// A module's heading. It used to carry a second line ("Fast actions",
+/// "Updated for large screens") that described the layout rather than the
+/// content, which is a note for us and not for the person using it.
 private struct WideHeroModuleTitle: View {
     let title: String
-    let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AM.Font.groupHeader)
-                .foregroundStyle(.primary)
-            Text(subtitle)
-                .font(AM.Font.rowSubtitle)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.bottom, 2)
+        Text(title)
+            .font(AM.Font.groupHeader)
+            .foregroundStyle(.primary)
+            .padding(.bottom, 2)
     }
 }
 
