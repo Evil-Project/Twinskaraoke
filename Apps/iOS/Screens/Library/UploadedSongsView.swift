@@ -62,11 +62,7 @@ struct UploadedSongsView: View {
                 sortMenu
             }
         }
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refresh()
-            AppHaptic.success.play()
-        }
+        .refreshableWithTick { await viewModel.refresh() }
         .task {
             viewModel.loadIfNeeded()
         }

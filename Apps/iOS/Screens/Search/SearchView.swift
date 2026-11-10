@@ -678,7 +678,7 @@ private struct PublicPlaylistsCollectionView: View {
                 .padding()
             }
         }
-        .refreshable { await viewModel.refreshPublicPlaylists() }
+        .refreshableWithTick { await viewModel.refreshPublicPlaylists() }
         .task {
             viewModel.loadIfNeeded()
         }
@@ -781,10 +781,7 @@ struct SearchCategorySongCollectionView: View {
         .musicScreenBackground()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            AppHaptic.selection.play()
-            await loader.refreshCategory()
-        }
+        .refreshableWithTick { await loader.refreshCategory() }
         .task {
             loader.loadIfNeeded()
         }

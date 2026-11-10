@@ -58,11 +58,7 @@ struct RandomSongsView: View {
                 .accessibilityLabel("More Actions")
             }
         }
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.reload()
-            AppHaptic.success.play()
-        }
+        .refreshableWithTick { await viewModel.reload() }
         .task {
             await viewModel.loadIfNeeded()
         }

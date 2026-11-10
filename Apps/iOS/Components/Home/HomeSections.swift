@@ -38,7 +38,7 @@ struct PlaylistCarousel: View {
                             } label: {
                                 PlaylistGridCell(playlist: playlist, width: tileWidth)
                             }
-                            .buttonStyle(PressableButtonStyle())
+                            .buttonStyle(PressableButtonStyle(scale: 0.96, dim: 0.78, haptic: .selection))
                             .contextMenu {
                                 PlaylistActionsMenuItems(playlist: playlist, songs: playlist.songListDTOs ?? [])
                             } preview: {
