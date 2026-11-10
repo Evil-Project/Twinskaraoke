@@ -335,17 +335,36 @@ struct MusicArtworkPlaceholder: View {
     }
 }
 
+/// A screen's loading spinner. It holds back for a moment, so a load that
+/// finishes quickly goes straight to its content: shown at once, the spinner
+/// flashed for a few frames on every fast load, which reads as a flicker.
 struct CenteredLoadingView: View {
+    /// Long enough for a cached or fast response to land first, short enough
+    /// that a slow one never looks like a blank screen.
+    static let standardDelay = Duration.milliseconds(300)
+
     var minHeight: CGFloat = 280
     var label: String = String(localized: "Loading")
+    var appearanceDelay = CenteredLoadingView.standardDelay
+    @Environment(\.appReduceMotion) private var reduceMotion
+    @State private var isShown = false
 
     var body: some View {
         ProgressView()
             .controlSize(.large)
+            .opacity(isShown ? 1 : 0)
             .frame(maxWidth: .infinity)
             .frame(minHeight: minHeight)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
+            // Not announced before it is shown: VoiceOver would say
+            // "Loading" for a load that never shows a spinner.
+            .accessibilityHidden(!isShown)
+            .task {
+                try? await Task.sleep(for: appearanceDelay)
+                guard !Task.isCancelled else { return }
+                withOptionalAnimation(reduceMotion ? nil : AppMotion.quick) { isShown = true }
+            }
     }
 }
 
