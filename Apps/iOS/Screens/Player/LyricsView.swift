@@ -166,7 +166,16 @@ private struct InstrumentalDots: View {
     }
 }
 
-private struct LyricLineRow: View, Equatable {
+struct LyricLineRow: View, Equatable {
+    /// Every line is laid out at one size, current or not, as in Apple Music.
+    /// The current line used to be set larger and bolder (30pt against 23pt),
+    /// so a line wrapped differently the moment it became current: rows
+    /// changed height by a whole line of text, under the scroll that was
+    /// centring them. What tells the current line apart now changes no
+    /// layout: scale, colour, blur and opacity.
+    static let lineFontSize: CGFloat = 30
+    static let translationFontSize: CGFloat = 18
+
     let line: LyricLine
     let index: Int
     let currentIndex: Int
@@ -226,7 +235,7 @@ private struct LyricLineRow: View, Equatable {
                 } else {
                     VStack(alignment: .leading, spacing: isCurrent ? 6 : 3) {
                         Text(line.text)
-                            .scaledSystemFont(size: isCurrent ? 30 : 23, weight: isCurrent ? .bold : .semibold)
+                            .scaledSystemFont(size: Self.lineFontSize, weight: .bold)
                             .foregroundStyle(lineColor)
                             .modifier(LyricGlow(color: glowColor))
                             .multilineTextAlignment(.leading)
@@ -238,7 +247,7 @@ private struct LyricLineRow: View, Equatable {
                            translated != line.text
                         {
                             Text(translated)
-                                .scaledSystemFont(size: isCurrent ? 18 : 15, weight: .medium)
+                                .scaledSystemFont(size: Self.translationFontSize, weight: .medium)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
