@@ -91,6 +91,7 @@ struct QueueView: View {
                         title: String(localized: "No songs queued"),
                         message: String(localized: "Songs you play next will appear here.")
                     )
+                    .scrollsWhenTooTall()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("No songs queued")
