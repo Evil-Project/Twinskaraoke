@@ -1066,10 +1066,11 @@ struct FullScreenPlayerView: View {
             let progress: Binding<Double> = isLive
                 ? $clock.progress
                 : .constant(duration > 0 ? elapsed / duration : 0)
-            // Under a scrubbing finger the labels show where it is.
+            // Load-bearing read: `clock.progress` ticks with playback and is
+            // what redraws these labels. `playbackTime` observes nothing.
             let times = PlayerTimecode.labels(
-                elapsed: elapsed, duration: duration,
-                scrubProgress: isLive && audioManager.isEditingProgress ? clock.progress : nil
+                elapsed: elapsed, duration: duration, clockProgress: isLive ? clock.progress : nil,
+                isScrubbing: audioManager.isEditingProgress
             )
             let remaining = PlayerTimecode.string(max(0, duration - elapsed))
             return VStack(spacing: 0) {

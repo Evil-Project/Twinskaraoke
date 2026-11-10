@@ -11,12 +11,22 @@ nonisolated enum PlayerTimecode {
     /// Music's do: they say where letting go would land, not where playback
     /// still is. The remaining time counts down, so it carries a minus.
     ///
-    /// - Parameter scrubProgress: where the finger is, from 0 to 1, or nil
-    ///   when nobody is scrubbing.
-    static func labels(elapsed: Double, duration: Double, scrubProgress: Double?) -> Labels {
+    /// - Parameters:
+    ///   - clockProgress: the playback clock, from 0 to 1, which the scrubber
+    ///     writes while a finger is on it; nil while the player is closed.
+    ///     The caller reads it on every pass, scrubbing or not: that read is
+    ///     what redraws the labels as playback ticks. Taking it only while
+    ///     scrubbing would freeze them.
+    ///   - isScrubbing: whether a finger is on the scrubber.
+    static func labels(
+        elapsed: Double,
+        duration: Double,
+        clockProgress: Double?,
+        isScrubbing: Bool
+    ) -> Labels {
         let length = max(duration, 0)
-        let position: Double = if let scrubProgress {
-            length * min(1, max(0, scrubProgress))
+        let position: Double = if isScrubbing, let clockProgress {
+            length * min(1, max(0, clockProgress))
         } else {
             min(max(elapsed, 0), length)
         }
