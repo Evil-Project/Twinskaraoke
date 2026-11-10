@@ -396,7 +396,7 @@ private struct WideLibraryHero: View {
                         .foregroundStyle(.secondary)
                 }
 
-                HStack(spacing: AM.Spacing.m) {
+                LibraryActionButtonRow {
                     Button {
                         if let first = playableSongs.first {
                             AppHaptic.selection.play()
@@ -578,7 +578,7 @@ struct LibrarySongsView: View {
     }
 
     private func actionButtons(songs: [Song]) -> some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 if let first = songs.first {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
@@ -627,49 +627,6 @@ struct LibrarySongsView: View {
             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-    }
-}
-
-struct LibraryRow: View {
-    let icon: String
-    let color: Color
-    let title: String
-    var subtitle: String?
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-                .frame(width: 30)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(AM.Font.rowTitle)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(AM.Font.tileCaption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-        }
-        .frame(minHeight: 52)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(subtitle ?? "")
     }
 }
 

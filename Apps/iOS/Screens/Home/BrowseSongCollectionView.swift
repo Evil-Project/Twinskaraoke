@@ -183,7 +183,7 @@ struct BrowseSongCollectionView: View {
     }
 
     private func actionButtons(horizontalPadding: CGFloat = AM.Spacing.screenMargin) -> some View {
-        HStack(spacing: AM.Spacing.m) {
+        LibraryActionButtonRow {
             Button {
                 if let first = songs.first {
                     AppHaptic.commit.play()

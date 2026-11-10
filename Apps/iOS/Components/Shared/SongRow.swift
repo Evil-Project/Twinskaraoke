@@ -93,6 +93,7 @@ struct SongRow: View {
     @State private var downloadState: SongDownloadRowState
     @State private var showAddToPlaylist = false
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         song: Song,
@@ -141,39 +142,16 @@ struct SongRow: View {
                 Text(song.title)
                     .font(size.titleFont)
                     .foregroundStyle(isCurrentSong ? Color.appAccent : .primary)
-                    .lineLimit(1)
+                    // Two lines at an accessibility size: one line there
+                    // holds a handful of letters.
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 Text(song.displayArtist)
                     .font(size.subtitleFont)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
-            // One trailing accessory, then the menu. Apple Music's rows show a
-            // single status glyph; this used to stack a download badge, a
-            // duration and an ellipsis side by side, which read busier than the
-            // artwork it sat next to. Download state outranks the duration
-            // because it is the transient, actionable one — the duration is
-            // still on the row's accessibility value either way.
-            Group {
-                if downloadState.status.isDownloaded {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel(statusLabel(String(localized: "Downloaded")))
-                        .transition(statusTransition)
-                } else if downloadState.status.isDownloading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel(statusLabel(String(localized: "Downloading")))
-                        .transition(statusTransition)
-                } else if !song.durationText.isEmpty {
-                    Text(song.durationText)
-                        .font(AM.Font.timecode)
-                        .foregroundStyle(.secondary)
-                        .transition(statusTransition)
-                }
-            }
-            .animation(statusAnimation, value: downloadState.status)
+            SongRowStatusAccessory(status: downloadState.status, durationText: song.durationText)
             if let trailing {
                 trailing
             } else {
@@ -210,21 +188,8 @@ struct SongRow: View {
         }
     }
 
-    /// The status glyph replaces the duration rather than sitting beside it, so
-    /// it has to carry the duration itself. `songRowAccessibility` also puts the
-    /// duration on the row, but six of the screens that draw a SongRow never
-    /// apply that modifier — without this the time is simply gone for VoiceOver
-    /// on any downloaded row there.
-    private func statusLabel(_ status: String) -> String {
-        song.durationText.isEmpty ? status : "\(status), \(song.durationText)"
-    }
-
     private var statusAnimation: Animation? {
         reduceMotion ? nil : AppMotion.quick
-    }
-
-    private var statusTransition: AnyTransition {
-        reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity)
     }
 }
 

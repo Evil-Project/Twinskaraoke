@@ -286,7 +286,7 @@ struct ArtistDetailView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 if let first = songs.first {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)

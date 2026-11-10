@@ -258,7 +258,7 @@ private struct SetlistLatestCard: View {
             .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.85, haptic: .selection))
             .accessibilityIdentifier("Setlists.latest")
 
-            HStack(spacing: AM.Spacing.m) {
+            LibraryActionButtonRow {
                 Button {
                     AppHaptic.selection.play()
                     SetlistCardActions.play(setlist)

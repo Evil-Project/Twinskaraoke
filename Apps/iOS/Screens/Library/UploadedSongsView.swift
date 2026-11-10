@@ -117,7 +117,7 @@ struct UploadedSongsView: View {
     }
 
     private func actionButtons(songs: [Song]) -> some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 if let first = songs.first {
                     AudioPlayerManager.shared.playInOrder(song: first, context: songs)
