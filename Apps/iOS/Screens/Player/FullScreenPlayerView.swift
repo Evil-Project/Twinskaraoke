@@ -1052,11 +1052,6 @@ struct FullScreenPlayerView: View {
         private let presentation = NowPlayingPresentation.shared
         @Environment(\.appReduceMotion) private var reduceMotion
 
-        private func formattedTime(_ seconds: Double) -> String {
-            let s = Int(seconds)
-            return String(format: "%d:%02d", s / 60, s % 60)
-        }
-
         var body: some View {
             @Bindable var clock = clock
             @Bindable var audioManager = audioManager
@@ -1071,6 +1066,13 @@ struct FullScreenPlayerView: View {
             let progress: Binding<Double> = isLive
                 ? $clock.progress
                 : .constant(duration > 0 ? elapsed / duration : 0)
+            // Load-bearing read: `clock.progress` ticks with playback and is
+            // what redraws these labels. `playbackTime` observes nothing.
+            let times = PlayerTimecode.labels(
+                elapsed: elapsed, duration: duration, clockProgress: isLive ? clock.progress : nil,
+                isScrubbing: audioManager.isEditingProgress
+            )
+            let remaining = PlayerTimecode.string(max(0, duration - elapsed))
             return VStack(spacing: 0) {
                 AppleMusicProgressBar(
                     progress: progress,
@@ -1078,9 +1080,8 @@ struct FullScreenPlayerView: View {
                     onSeekEnd: { fraction in audioManager.seek(to: fraction) },
                     accessibilityLabel: String(localized: "Playback position"),
                     accessibilityValueText:
-                    String(localized: "\(formattedTime(elapsed)) elapsed, \(formattedTime(max(0, duration - elapsed))) remaining"),
-                    accessibilityHint: String(localized: "Drag or swipe up and down to seek."),
-                    scrubValueText: isLive ? formattedTime(duration * clock.progress) : nil
+                    String(localized: "\(PlayerTimecode.string(elapsed)) elapsed, \(remaining) remaining"),
+                    accessibilityHint: String(localized: "Drag or swipe up and down to seek.")
                 )
                 .padding(.horizontal, metrics.horizontalPadding)
                 .padding(.top, metrics.progressTopPadding)
@@ -1094,10 +1095,10 @@ struct FullScreenPlayerView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     } else {
-                        Text(formattedTime(elapsed))
+                        Text(verbatim: times.elapsed)
                     }
                     Spacer()
-                    Text(formattedTime(max(0, duration - elapsed)))
+                    Text(verbatim: times.remaining)
                 }
                 .font(AM.Font.timecode)
                 .foregroundStyle(audioManager.isEditingProgress ? .primary : .secondary)
@@ -1241,11 +1242,6 @@ struct FullScreenPlayerView: View {
         )
     }
 
-    private func formattedTime(_ seconds: Double) -> String {
-        let s = Int(seconds)
-        return String(format: "%d:%02d", s / 60, s % 60)
-    }
-
     private func songActions(song: Song) -> some View {
         SongActionsMenuItems(song: song) {
             showAddToPlaylist = true
@@ -1319,6 +1315,10 @@ struct FullScreenPlayerView: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.7))
         .disabled(lyricsViewModel.isLoading || lyricsViewModel.hasNoLyrics)
+        // With no lyrics there is nothing to translate; a dimmed globe over
+        // "No lyrics for this song" only looked like a broken control.
+        .opacity(lyricsViewModel.hasNoLyrics ? 0 : 1)
+        .accessibilityHidden(lyricsViewModel.hasNoLyrics)
         .accessibilityLabel(lyricsTranslationAccessibilityLabel)
         .accessibilityValue(lyricsTranslationAccessibilityValue)
         .accessibilityHint(lyricsTranslationAccessibilityHint)

@@ -8,7 +8,6 @@ struct AppleMusicProgressBar: View {
     var accessibilityLabel: String = String(localized: "Progress")
     var accessibilityValueText: String?
     var accessibilityHint: String = String(localized: "Swipe up or down to adjust.")
-    var scrubValueText: String?
     @State private var scrubHaptics = ScrubHapticFeedback()
     #if DEBUG
     @State private var lastScrubbedValue: Double = 0
@@ -60,18 +59,6 @@ struct AppleMusicProgressBar: View {
                 NativeScrubValueProbe(value: lastScrubbedValue)
             }
             #endif
-        }
-        .overlay(alignment: .top) {
-            if isScrubbing, let scrubValueText {
-                Text(scrubValueText)
-                    .font(.caption.monospacedDigit())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(.regularMaterial, in: Capsule())
-                    .offset(y: -20)
-                    .accessibilityHidden(true)
-                    .allowsHitTesting(false)
-            }
         }
     }
 }
