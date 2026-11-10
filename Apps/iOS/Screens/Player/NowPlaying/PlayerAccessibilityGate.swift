@@ -12,13 +12,30 @@ import SwiftUI
 /// in flight leaves the player open, and the shell should not come and go
 /// under a finger that has not decided yet.
 ///
+/// Only while there is a player to hide behind. The presentation can be
+/// expanded with no song loaded (the Now Playing widget opens the player
+/// either way), and the overlay draws nothing then: hiding the shell too
+/// would leave VoiceOver with nothing on screen to focus.
+///
 /// A modifier of its own, so that only this body reads the presentation. Read
 /// from the root view instead, every open and close would rebuild the shell.
 private struct HiddenBehindPlayer: ViewModifier {
     let presentation: NowPlayingPresentation
+    private let snapshot = NowPlayingSnapshotState.shared
 
     func body(content: Content) -> some View {
-        content.accessibilityHidden(presentation.isExpanded)
+        content.accessibilityHidden(
+            PlayerAccessibilityGate.hidesShell(
+                isExpanded: presentation.isExpanded,
+                hasCurrentSong: snapshot.hasCurrentSong
+            )
+        )
+    }
+}
+
+enum PlayerAccessibilityGate {
+    static func hidesShell(isExpanded: Bool, hasCurrentSong: Bool) -> Bool {
+        isExpanded && hasCurrentSong
     }
 }
 
