@@ -47,10 +47,7 @@ struct SetlistsView: View {
         }
         .searchable(text: $searchText, prompt: "Search Setlists")
         .secondarySearchBehavior()
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refresh()
-        }
+        .refreshableWithTick { await viewModel.refresh() }
         .onAppear { viewModel.loadIfNeeded() }
         .task(id: trimmedQuery) {
             await viewModel.search(trimmedQuery)

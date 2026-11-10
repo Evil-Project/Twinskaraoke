@@ -30,10 +30,11 @@ struct NewView: View {
                         }
                     }
                     .animation(loadingAnimation, value: viewModel.isLoading)
-                    .padding(.top, AM.Spacing.m)
+                    .padding(.top, AM.Spacing.l)
                     .padding(.bottom, AM.Spacing.l)
                 }
                 .smoothScrolling()
+                .scrollEdgeHaptic()
                 .musicScreenBackground()
             }
             .navigationTitle("New")
@@ -43,7 +44,7 @@ struct NewView: View {
                     AccountToolbarButton()
                 }
             }
-            .refreshable { await viewModel.refreshHomeData() }
+            .refreshableWithTick { await viewModel.refreshHomeData() }
             .task { viewModel.fetchHomeData() }
             .onChange(of: artworkPrefetchSignature) { _, _ in
                 prefetchVisibleArtworkIfNeeded()
@@ -75,24 +76,29 @@ struct NewView: View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
             if viewModel.playableLatestSetlist != nil || !viewModel.trending.isEmpty {
                 NewFeaturedRail(latestStream: viewModel.playableLatestSetlist, trending: viewModel.trending)
+                    .shelfEntrance(index: 0)
             }
 
             if !viewModel.newReleases.isEmpty {
                 NewSongRail(title: String(localized: "Up Next"), songs: Array(viewModel.newReleases.prefix(8)))
+                    .shelfEntrance(index: 1)
             }
 
             // The website's "Trending This Week": the 7-day trending list. See
             // All opens all of it, so it isn't repeated as a rail below.
             if !viewModel.trending.isEmpty {
                 NewSongListPreview(title: String(localized: "Trending This Week"), songs: viewModel.trending)
+                    .shelfEntrance(index: 2)
             }
 
             if !viewModel.recentPlaylists.isEmpty {
                 NewPlaylistRail(title: String(localized: "New This Week"), playlists: viewModel.recentPlaylists)
+                    .shelfEntrance(index: 3)
             }
 
             if !viewModel.newReleases.isEmpty {
                 NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
+                    .shelfEntrance(index: 4)
             }
         }
     }

@@ -84,10 +84,7 @@ struct ArtistsView: View {
             prompt: "Search Artists"
         )
         .secondarySearchBehavior()
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refreshArtists()
-        }
+        .refreshableWithTick { await viewModel.refreshArtists() }
         .onAppear { viewModel.fetchInitial() }
         .task(id: trimmedQuery) {
             await viewModel.search(trimmedQuery)

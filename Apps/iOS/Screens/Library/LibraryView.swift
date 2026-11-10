@@ -525,10 +525,7 @@ struct LibrarySongsView: View {
                 sortMenu
             }
         }
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refreshSongs()
-        }
+        .refreshableWithTick { await viewModel.refreshSongs() }
         .task {
             viewModel.loadIfNeeded()
         }

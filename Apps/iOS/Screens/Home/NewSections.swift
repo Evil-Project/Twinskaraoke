@@ -73,7 +73,7 @@ struct NewFeaturedRail: View {
     }
 }
 
-private struct NewFeatureCard: View {
+struct NewFeatureCard: View {
     /// The artwork's height as a fraction of the card's width. Read by
     /// NewFeaturedRail too, so the rail's frame matches what the card draws.
     static let artworkWidthRatio: CGFloat = 0.56
@@ -89,6 +89,16 @@ private struct NewFeatureCard: View {
         case play(() -> Void)
         /// Opens the playlist. The play glyph is then its own button.
         case open(Playlist, play: () -> Void)
+
+        /// The haptic the card's button style plays on touch-down. A card
+        /// that plays has none: its action plays one, and both together
+        /// tapped twice for a single touch.
+        var styleHaptic: AppHaptic? {
+            switch self {
+            case .play: nil
+            case .open: .selection
+            }
+        }
     }
 
     let kicker: String
@@ -113,7 +123,7 @@ private struct NewFeatureCard: View {
             } label: {
                 content(showsPlayGlyph: true)
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: action.styleHaptic))
             .accessibilityElement(children: .combine)
             // VoiceOver reads the kicker before the title, as they are shown.
             .accessibilityLabel("\(kicker), \(title)")
@@ -126,7 +136,7 @@ private struct NewFeatureCard: View {
             } label: {
                 content(showsPlayGlyph: false)
             }
-            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+            .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: action.styleHaptic))
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(kicker), \(title)")
             .accessibilityValue(subtitle)

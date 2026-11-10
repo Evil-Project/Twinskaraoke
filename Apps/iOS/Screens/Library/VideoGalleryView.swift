@@ -42,10 +42,7 @@ struct VideoGalleryView: View {
         .musicScreenBackground()
         .navigationTitle("Video Gallery")
         .navigationBarTitleDisplayMode(.large)
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refreshVideos()
-        }
+        .refreshableWithTick { await viewModel.refreshVideos() }
         .onAppear { viewModel.fetchInitial() }
     }
 

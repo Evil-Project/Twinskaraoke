@@ -94,10 +94,7 @@ struct ArtGalleryView: View {
         .musicScreenBackground()
         .navigationTitle("Art Gallery")
         .navigationBarTitleDisplayMode(.large)
-        .refreshable {
-            AppHaptic.selection.play()
-            await viewModel.refreshGallery()
-        }
+        .refreshableWithTick { await viewModel.refreshGallery() }
         .onAppear { viewModel.fetch() }
     }
 
