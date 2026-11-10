@@ -194,7 +194,7 @@ struct DownloadedSongsView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 playInOrder()
             } label: {

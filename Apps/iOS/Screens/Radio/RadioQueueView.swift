@@ -127,7 +127,7 @@ struct RadioQueueView: View {
     }
 
     private var stationControls: some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 AppHaptic.commit.play()
                 playOrPauseLiveStation()

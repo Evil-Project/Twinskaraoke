@@ -801,7 +801,7 @@ struct PlaylistDetailView: View {
         songs: [Song],
         horizontalPadding: CGFloat = AM.Spacing.screenMargin
     ) -> some View {
-        HStack(spacing: 12) {
+        LibraryActionButtonRow {
             Button {
                 if let first = songs.first {
                     AppHaptic.selection.play()
