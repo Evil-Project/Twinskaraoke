@@ -22,9 +22,23 @@ private struct BrowseLoadingPlaceholder: View {
     let label: String
     var featured = false
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat = AM.Layout.shelfLabelAllowance
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// Sized like the shelves that replace it, at accessibility text sizes
+    /// too, so the page does not jump when the content arrives.
     private var tileWidth: CGFloat {
-        AM.Layout.shelfTileWidth(for: min(availableWidth, AM.Layout.wideContentMaxWidth))
+        AM.Layout.shelfTileWidth(
+            for: min(availableWidth, AM.Layout.wideContentMaxWidth),
+            accessibilityText: dynamicTypeSize.isAccessibilitySize
+        )
+    }
+
+    private var tileHeight: CGFloat {
+        AM.Layout.mediaShelfHeight(
+            tileWidth: tileWidth,
+            labelAllowance: labelAllowance,
+            accessibilityText: dynamicTypeSize.isAccessibilitySize
+        )
     }
 
     var body: some View {
@@ -61,7 +75,7 @@ private struct BrowseLoadingPlaceholder: View {
                                 MusicSkeletonLine(width: tileWidth * 0.82)
                                 MusicSkeletonLine(width: tileWidth * 0.56, height: 11, tone: .tertiary)
                             }
-                            .frame(width: tileWidth, height: tileWidth + labelAllowance, alignment: .topLeading)
+                            .frame(width: tileWidth, height: tileHeight, alignment: .topLeading)
                         }
                     }
                     .fixedSize(horizontal: true, vertical: false)
