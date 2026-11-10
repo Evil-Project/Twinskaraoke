@@ -150,6 +150,7 @@ struct SongRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .overlay { SongRowSpokenDuration(status: downloadState.status, durationText: song.durationText) }
             Spacer()
             SongRowStatusAccessory(status: downloadState.status, durationText: song.durationText)
             if let trailing {

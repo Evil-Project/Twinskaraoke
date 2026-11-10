@@ -40,6 +40,21 @@ struct AccessibilityTextRowsTests {
         #expect(!SongRowStatusAccessory.showsDuration("", isAccessibilitySize: false))
     }
 
+    /// Hidden for room, not from VoiceOver.
+    @Test func aHiddenDurationIsStillSpoken() {
+        func isSpoken(_ status: SongDownloadStatus, _ duration: String = "3:27", large: Bool = true) -> Bool {
+            SongRowSpokenDuration.isNeeded(status: status, durationText: duration, isAccessibilitySize: large)
+        }
+        let plain = SongDownloadStatus(isDownloaded: false, isDownloading: false)
+        #expect(isSpoken(plain))
+        // Shown as text at the standard sizes, so nothing extra is needed.
+        #expect(!isSpoken(plain, large: false))
+        #expect(!isSpoken(plain, ""))
+        // The status glyph's own label carries the time.
+        #expect(!isSpoken(SongDownloadStatus(isDownloaded: true, isDownloading: false)))
+        #expect(!isSpoken(SongDownloadStatus(isDownloaded: false, isDownloading: true)))
+    }
+
     @Test func aLibraryRowTitleWrapsAtAnAccessibilitySize() {
         func row(_ title: String) -> some View {
             LibraryRow(icon: "list.bullet.rectangle", color: .appAccent, title: title)

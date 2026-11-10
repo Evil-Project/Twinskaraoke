@@ -54,3 +54,34 @@ struct SongRowStatusAccessory: View {
         reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity)
     }
 }
+
+/// The duration, for VoiceOver only, on a row that has hidden it to make
+/// room for the title. Several lists read a row's duration from the text
+/// `SongRowStatusAccessory` draws; without this they would stop saying it
+/// at exactly the sizes where it is no longer shown. A downloaded or
+/// downloading row needs nothing here: its status glyph carries the time.
+struct SongRowSpokenDuration: View {
+    let status: SongDownloadStatus
+    let durationText: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    static func isNeeded(
+        status: SongDownloadStatus,
+        durationText: String,
+        isAccessibilitySize: Bool
+    ) -> Bool {
+        isAccessibilitySize && !durationText.isEmpty && !status.isDownloaded && !status.isDownloading
+    }
+
+    var body: some View {
+        if Self.isNeeded(
+            status: status,
+            durationText: durationText,
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+        ) {
+            Color.clear
+                .accessibilityElement()
+                .accessibilityLabel(durationText)
+        }
+    }
+}
