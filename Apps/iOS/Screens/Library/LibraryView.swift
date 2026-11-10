@@ -657,7 +657,7 @@ struct PlaylistsGridScreen: View {
                     // Signed out, "playlists you add will appear here" promises
                     // something this screen cannot do: creating one needs an
                     // account. Same wording as Add to Playlist.
-                    MusicEmptyState(
+                    SignInRequiredState(
                         title: String(localized: "Sign In to Use Playlists"),
                         message: String(localized: "Sign in from Account to create playlists and add songs to them.")
                     )

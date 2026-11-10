@@ -132,7 +132,7 @@ struct AddToPlaylistSheet: View {
         } else {
             // Signed out there is nowhere to save a playlist, so offering to
             // create one would only fail.
-            MusicEmptyState(
+            SignInRequiredState(
                 title: String(localized: "Sign In to Use Playlists"),
                 message: String(localized: "Sign in from Account to create playlists and add songs to them.")
             )

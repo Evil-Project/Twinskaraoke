@@ -56,6 +56,9 @@ struct PlaylistArtworkContent: View {
     let playlist: Playlist
     let coverURLs: [URL]
     var cornerRadius: CGFloat = 10
+    /// Whether `coverURLs` is final. Only then does an empty list mean the
+    /// playlist has no cover, and the placeholder says so with a glyph.
+    var isResolved = false
 
     var body: some View {
         Group {
@@ -68,7 +71,7 @@ struct PlaylistArtworkContent: View {
                 // which reads as a glitch; one cover reads as a cover.
                 RemoteArtworkImage(url: url, cornerRadius: cornerRadius)
             } else {
-                PlaylistPlaceholderArtwork(seed: playlist.id)
+                PlaylistPlaceholderArtwork(seed: playlist.id, showsGlyph: isResolved)
             }
         }
     }
@@ -83,7 +86,8 @@ private struct PlaylistCoverWithLoader: View {
         PlaylistArtworkContent(
             playlist: playlist,
             coverURLs: loader.artworkURLs,
-            cornerRadius: cornerRadius
+            cornerRadius: cornerRadius,
+            isResolved: loader.hasResolved
         )
         .onAppear {
             loader.load(playlistID: playlist.id, fallback: playlist.songListDTOs)
@@ -144,9 +148,26 @@ struct PlaylistMosaicArtwork: View {
 
 struct PlaylistPlaceholderArtwork: View {
     let seed: String
+    /// A playlist that turned out to have no cover gets Apple Music's note
+    /// glyph. Without it the tile stayed a flat block, the same as one whose
+    /// cover is still loading, and read as stuck. Off while loading, so
+    /// tiles don't flash a glyph on the way to their cover.
+    var showsGlyph = false
 
     var body: some View {
         MusicArtworkPlaceholder(cornerRadius: 0)
+            .overlay {
+                if showsGlyph {
+                    GeometryReader { proxy in
+                        Image(systemName: "music.note.list")
+                            .font(.system(size: min(proxy.size.width, proxy.size.height) * 0.34, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+                }
+            }
     }
 }
 
