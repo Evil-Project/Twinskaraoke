@@ -8,13 +8,6 @@ import Testing
 struct UploadRequestTests {
     private static let token: () -> String? = { "test-token" }
 
-    private static func queryItems(of request: URLRequest) -> [URLQueryItem] {
-        guard let url = request.url,
-              let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        else { return [] }
-        return components.queryItems ?? []
-    }
-
     private static func jsonBody(of request: URLRequest) throws -> [String: Any] {
         let body = try #require(request.httpBody)
         return try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -57,11 +50,7 @@ struct UploadRequestTests {
 
     @Test("The upload goes to the global upload host as an authorised multipart POST")
     func uploadRequestTargetsUploadHost() throws {
-        let request = try KaraokeAPIClient.songUploadRequest(
-            metadata: SongUploadMetadata(title: "Title", artist: "Artist", playlistID: "pl-1"),
-            boundary: "BOUNDARY",
-            readToken: Self.token
-        )
+        let request = try KaraokeAPIClient.songUploadRequest(boundary: "BOUNDARY", readToken: Self.token)
         let url = try #require(request.url)
         #expect(StorageHost.upload == "https://idk.neurokaraoke.com")
         #expect(url.absoluteString == "https://idk.neurokaraoke.com/api/user/song/upload")
@@ -76,8 +65,6 @@ struct UploadRequestTests {
     func uploadRequestOmitsEmptyMetadata() throws {
         let metadata = SongUploadMetadata(title: "", artist: "  \n", playlistID: " ")
         #expect(metadata.formFields.isEmpty)
-        let request = try KaraokeAPIClient.songUploadRequest(metadata: metadata, boundary: "B", readToken: Self.token)
-        #expect(request.url?.query() == nil)
         let text = try Self.preambleText(metadata: metadata)
         #expect(!text.contains("name=\"Title\""))
         #expect(!text.contains("name=\"Artist\""))
@@ -93,9 +80,6 @@ struct UploadRequestTests {
             .init(name: "Artist", value: "Neuro"),
             .init(name: "PlaylistId", value: "pl-1"),
         ])
-        let request = try KaraokeAPIClient.songUploadRequest(metadata: metadata, boundary: "B", readToken: Self.token)
-        #expect(Self.queryItems(of: request).isEmpty)
-
         let text = try Self.preambleText(metadata: metadata)
         let expectedFields = "--B\r\nContent-Disposition: form-data; name=\"Title\"\r\n\r\nSong\r\n"
             + "--B\r\nContent-Disposition: form-data; name=\"Artist\"\r\n\r\nNeuro\r\n"
@@ -120,13 +104,13 @@ struct UploadRequestTests {
     @Test("Without a token the upload request is refused as signed out")
     func uploadRequestRequiresToken() {
         #expect(throws: SongUploadFailure.signedOut) {
-            try KaraokeAPIClient.songUploadRequest(metadata: Self.noMetadata, boundary: "B", readToken: { nil })
+            try KaraokeAPIClient.songUploadRequest(boundary: "B", readToken: { nil })
         }
     }
 
     @Test("The upload never sends a guest id")
     func uploadRequestSendsNoGuestID() throws {
-        let request = try KaraokeAPIClient.songUploadRequest(metadata: Self.noMetadata, boundary: "B", readToken: Self.token)
+        let request = try KaraokeAPIClient.songUploadRequest(boundary: "B", readToken: Self.token)
         #expect(request.value(forHTTPHeaderField: "x-guest-id") == nil)
     }
 

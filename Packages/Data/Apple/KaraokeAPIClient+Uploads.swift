@@ -18,7 +18,6 @@ nonisolated extension KaraokeAPIClient {
     /// metadata fields and the file part's header), the file's bytes, then
     /// `multipartEpilogue`. The URL carries no metadata.
     static func songUploadRequest(
-        metadata: SongUploadMetadata,
         boundary: String,
         readToken: () throws -> String? = CredentialStore.requestToken
     ) throws -> URLRequest {
