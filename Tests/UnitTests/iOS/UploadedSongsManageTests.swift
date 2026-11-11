@@ -101,6 +101,22 @@ struct UploadedSongsManageTests {
         #expect(fake.removedDownloads.isEmpty)
     }
 
+    @Test func deletedRowStaysGoneAfterAConcurrentRefresh() async {
+        let fake = Fake(songs: Self.songs)
+        fake.holdsDeletes = true
+        let model = await loaded(fake)
+        let task = Task { await model.delete(Self.songs[1]) }
+        while fake.pendingDelete == nil { await Task.yield() }
+        // The server still lists the song while its delete is on the way.
+        await model.refresh()
+        #expect(model.songs.map(\.id) == ["a", "b", "c"])
+        fake.pendingDelete?.resume()
+        #expect(await task.value == nil)
+        #expect(model.songs.map(\.id) == ["a", "c"])
+        #expect(model.displayedSongs.map(\.id) == ["a", "c"])
+        #expect(fake.removedDownloads == ["b"])
+    }
+
     @Test func deleteAlsoStopsAQueuedOrRunningDownload() {
         typealias Manage = UploadedSongsViewModel.ManageService
         #expect(Manage.hasOfflineWork(SongDownloadStatus(isDownloaded: true, isDownloading: false)))

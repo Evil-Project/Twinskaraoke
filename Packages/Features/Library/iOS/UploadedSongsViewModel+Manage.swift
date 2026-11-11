@@ -100,6 +100,11 @@ extension UploadedSongsViewModel {
             }
             return error as? SongUploadFailure ?? .unknown
         }
+        // A reload while the request ran may have put the row back.
+        if songs.contains(where: { $0.id == song.id }) {
+            songs.removeAll { $0.id == song.id }
+            rebuildDisplayedSongs()
+        }
         manage.removeDownload(song.id)
         return nil
     }
