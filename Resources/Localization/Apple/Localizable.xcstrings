@@ -113,6 +113,52 @@
         }
       }
     },
+    "“%@” couldn't be uploaded." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ konnte nicht hochgeladen werden."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kappaletta ”%@” ei voitu lähettää."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’importer « %@ »."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」をアップロードできませんでした。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося вивантажити «%@»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法上传“%@”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法上傳「%@」。"
+          }
+        }
+      }
+    },
     "@%@" : {
 
     },
@@ -5236,6 +5282,52 @@
         }
       }
     },
+    "Added “%@” to your uploads." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ wurde zu deinen Uploads hinzugefügt."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "”%@” lisättiin lähetyksiisi."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "« %@ » a été ajouté à vos imports."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」をアップロードに追加しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«%@» додано до ваших вивантажень."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将“%@”添加到你的上传内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已將「%@」加入你的上傳內容。"
+          }
+        }
+      }
+    },
     "Added to %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5333,6 +5425,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Added to %@. Tap to remove."
+          }
+        }
+      }
+    },
+    "Added to your uploads." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu deinen Uploads hinzugefügt."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lisätty lähetyksiisi."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouté à vos imports."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードに追加しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Додано до ваших вивантажень."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加到你的上传内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加入你的上傳內容。"
           }
         }
       }
@@ -6198,6 +6336,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一律觸發"
+          }
+        }
+      }
+    },
+    "An upload failed." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Upload ist fehlgeschlagen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetys epäonnistui."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un import a échoué."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードに失敗しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося виконати вивантаження."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一项上传失败。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一項上傳失敗。"
           }
         }
       }
@@ -9828,6 +10012,52 @@
         }
       }
     },
+    "Checking storage…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicher wird geprüft …"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tarkistetaan tallennustilaa…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérification du stockage…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ストレージを確認中…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевірка сховища…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查存储空间…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在檢查儲存空間…"
+          }
+        }
+      }
+    },
     "Checking..." : {
       "comment" : "The text that appears when the system is checking if a song is in a playlist.",
       "isCommentAutoGenerated" : true,
@@ -10032,6 +10262,52 @@
     "Choose Apple Watch while your iPhone is connected. This playback device stays selected when you leave your phone. Press Play to connect AirPods or other Bluetooth headphones." : {
       "comment" : "A description of the download section of the watch interface.",
       "isCommentAutoGenerated" : true
+    },
+    "Choose Audio File" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audiodatei auswählen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valitse äänitiedosto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un fichier audio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オーディオファイルを選択"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибрати аудіофайл"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择音频文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇音訊檔案"
+          }
+        }
+      }
     },
     "Choose Download" : {
       "localizations" : {
@@ -18320,6 +18596,52 @@
         }
       }
     },
+    "Enter a full link that starts with https://." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib einen vollständigen Link ein, der mit https:// beginnt."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kirjoita koko linkki, joka alkaa https://."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez un lien complet commençant par https://."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https:// で始まる完全なリンクを入力してください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введіть повне посилання, що починається з https://."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入以 https:// 开头的完整链接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入以 https:// 開頭的完整連結。"
+          }
+        }
+      }
+    },
     "Enter full screen" : {
       "localizations" : {
         "de" : {
@@ -20252,6 +20574,52 @@
         }
       }
     },
+    "Finishing…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird abgeschlossen …"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viimeistellään…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalisation…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了処理中…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершення…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在完成…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在完成…"
+          }
+        }
+      }
+    },
     "First lyric at %@" : {
       "localizations" : {
         "de" : {
@@ -21908,12 +22276,150 @@
       "comment" : "A label displaying the width of an image in a splash slide, as a percentage of the slide's width.",
       "isCommentAutoGenerated" : true
     },
+    "Import" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importieren"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込む"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпортувати"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯入"
+          }
+        }
+      }
+    },
     "Import Image from Files" : {
       "comment" : "A button that imports an image from the user's file system.",
       "isCommentAutoGenerated" : true
     },
     "Import JSON" : {
 
+    },
+    "Import started." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import gestartet."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuonti aloitettu."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import depuis le lien lancé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込みを開始しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпорт розпочато."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开始导入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已開始匯入。"
+          }
+        }
+      }
+    },
+    "Importing. This can take a few minutes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird importiert. Das kann einige Minuten dauern."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuodaan. Tämä voi kestää muutaman minuutin."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import en cours. Cela peut prendre quelques minutes."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込み中です。数分かかることがあります。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпорт. Це може тривати кілька хвилин."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导入，可能需要几分钟。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在匯入，可能需要幾分鐘。"
+          }
+        }
+      }
     },
     "Incorrect username or password." : {
       "localizations" : {
@@ -24016,6 +24522,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "讚"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linkki"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lien"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リンク"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Посилання"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連結"
           }
         }
       }
@@ -31072,6 +31624,52 @@
         }
       }
     },
+    "Only YouTube, Bilibili and Discord attachment links can be imported." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur Links zu YouTube, Bilibili und Discord-Anhängen können importiert werden."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vain YouTube-, Bilibili- ja Discord-liitelinkkejä voi tuoda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seuls les liens YouTube, Bilibili et de pièces jointes Discord peuvent être importés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込めるのは、YouTube、Bilibili、Discordの添付ファイルのリンクだけです。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Імпортувати можна лише посилання YouTube, Bilibili і вкладень Discord."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只能导入 YouTube、Bilibili 和 Discord 附件链接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只能匯入 YouTube、Bilibili 與 Discord 附件連結。"
+          }
+        }
+      }
+    },
     "Open %@" : {
       "localizations" : {
         "de" : {
@@ -32902,6 +33500,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已唱歌詞"
+          }
+        }
+      }
+    },
+    "Paste a Link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link einfügen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liitä linkki"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coller un lien"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リンクをペースト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставте посилання"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴链接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上連結"
           }
         }
       }
@@ -36822,6 +37466,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "準備中，%@"
+          }
+        }
+      }
+    },
+    "Preparing…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird vorbereitet …"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valmistellaan…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備中…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підготовка…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在準備…"
           }
         }
       }
@@ -47366,6 +48056,52 @@
         }
       }
     },
+    "Sign in to upload songs." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich an, um Songs hochzuladen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kirjaudu sisään lähettääksesi kappaleita."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous pour importer des titres."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "曲をアップロードするにはサインインしてください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Увійдіть, щоб вивантажувати пісні."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录后即可上传歌曲。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登入後即可上傳歌曲。"
+          }
+        }
+      }
+    },
     "Sign in to use favorites." : {
       "localizations" : {
         "de" : {
@@ -48970,6 +49706,52 @@
         }
       }
     },
+    "Something went wrong. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etwas ist schiefgelaufen. Versuche es erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jokin meni vikaan. Yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un problème est survenu. Réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "問題が発生しました。もう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щось пішло не так. Повторіть спробу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出了点问题。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "發生問題。請再試一次。"
+          }
+        }
+      }
+    },
     "Song" : {
       "comment" : "Type of entity representing a song.",
       "isCommentAutoGenerated" : true
@@ -49367,52 +50149,6 @@
         }
       }
     },
-    "Songs uploaded through Twins Karaoke will appear here." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Über Twins Karaoke hochgeladene Songs erscheinen hier."
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Twins Karaoken kautta lähetetyt kappaleet näkyvät täällä."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les titres importés via Twins Karaoke apparaîtront ici."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Twins Karaokeでアップロードした曲がここに表示されます。"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пісні, вивантажені через Twins Karaoke, з’являться тут."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通过 Twins Karaoke 上传的歌曲会显示在这里。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "透過 Twins Karaoke 上傳的歌曲會顯示在這裡。"
-          }
-        }
-      }
-    },
     "Songs will be analyzed in the background so audio effects can switch instantly during playback.\n\nThis uses more battery and processing power. Separated stems count toward the 4 GB music cache limit." : {
       "localizations" : {
         "de" : {
@@ -49748,6 +50484,52 @@
         }
       }
     },
+    "Songs you upload will appear here." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songs, die du hochlädst, erscheinen hier."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähettämäsi kappaleet näkyvät täällä."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les titres que vous importez apparaîtront ici."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードした曲がここに表示されます。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пісні, які ви вивантажите, з’являться тут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你上传的歌曲会显示在这里。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你上傳的歌曲會顯示在這裡。"
+          }
+        }
+      }
+    },
     "Songs, artists" : {
       "localizations" : {
         "de" : {
@@ -49940,6 +50722,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "排序上傳的歌曲"
+          }
+        }
+      }
+    },
+    "Source" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelle"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähde"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加元"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Джерело"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源"
           }
         }
       }
@@ -52193,6 +53021,52 @@
         }
       }
     },
+    "The file couldn't be read. Choose it again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datei konnte nicht gelesen werden. Wähle sie erneut aus."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiedostoa ei voitu lukea. Valitse se uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire le fichier. Choisissez-le à nouveau."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを読み込めませんでした。もう一度選択してください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося прочитати файл. Виберіть його ще раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取该文件。请重新选择。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法讀取該檔案。請重新選擇。"
+          }
+        }
+      }
+    },
     "The karaoke catalog may need a moment" : {
       "localizations" : {
         "de" : {
@@ -52625,6 +53499,52 @@
         }
       }
     },
+    "The server couldn't add the song (error %lld). Try again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Server konnte den Song nicht hinzufügen (Fehler %lld). Versuche es später erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palvelin ei voinut lisätä kappaletta (virhe %lld). Yritä myöhemmin uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le serveur n’a pas pu ajouter le titre (erreur %lld). Réessayez plus tard."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サーバーが曲を追加できませんでした（エラー %lld）。しばらくしてからもう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер не зміг додати пісню (помилка %lld). Спробуйте пізніше."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器无法添加这首歌曲（错误 %lld）。请稍后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "伺服器無法加入這首歌曲（錯誤 %lld）。請稍後再試。"
+          }
+        }
+      }
+    },
     "The server returned an error (%lld)." : {
       "localizations" : {
         "de" : {
@@ -52817,6 +53737,98 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The song could not be added to favorites. Please try again."
+          }
+        }
+      }
+    },
+    "The upload took too long. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Upload hat zu lange gedauert. Versuche es erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetys kesti liian kauan. Yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’import a pris trop de temps. Réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードに時間がかかりすぎました。もう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантаження тривало надто довго. Повторіть спробу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传耗时过长。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳耗時過長。請再試一次。"
+          }
+        }
+      }
+    },
+    "The upload was interrupted. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Upload wurde unterbrochen. Versuche es erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetys keskeytyi. Yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’import a été interrompu. Réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードが中断されました。もう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантаження перервано. Повторіть спробу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传已中断。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳已中斷。請再試一次。"
           }
         }
       }
@@ -53675,6 +54687,98 @@
         }
       }
     },
+    "This file is %@, but only %@ of your storage is left." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Datei ist %1$@ groß, aber du hast nur noch %2$@ Speicher frei."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiedoston koko on %1$@, mutta tallennustilaa on jäljellä vain %2$@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce fichier fait %1$@, mais il ne vous reste que %2$@ de stockage."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルは%1$@ですが、ストレージの残りは%2$@だけです。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Розмір файлу — %1$@, але у вашому сховищі залишилося лише %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件大小为 %1$@，但你的存储空间只剩 %2$@。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此檔案大小為 %1$@，但你的儲存空間只剩 %2$@。"
+          }
+        }
+      }
+    },
+    "This links to a Discord message. Copy the link of the attachment itself instead." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist ein Link zu einer Discord-Nachricht. Kopiere stattdessen den Link des Anhangs selbst."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tämä on linkki Discord-viestiin. Kopioi sen sijaan itse liitteen linkki."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce lien mène à un message Discord. Copiez plutôt le lien de la pièce jointe elle-même."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これはDiscordのメッセージへのリンクです。代わりに添付ファイル自体のリンクをコピーしてください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це посилання на повідомлення Discord. Натомість скопіюйте посилання на саме вкладення."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是指向 Discord 消息的链接。请改为复制附件本身的链接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是指向 Discord 訊息的連結。請改為拷貝附件本身的連結。"
+          }
+        }
+      }
+    },
     "This pack needs a newer version of the app." : {
       "localizations" : {
         "de" : {
@@ -54214,6 +55318,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "嘗試次數過多。請稍候再試。"
+          }
+        }
+      }
+    },
+    "Too many uploads at once. Wait a moment, then try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu viele Uploads auf einmal. Warte einen Moment und versuche es dann erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liian monta lähetystä kerralla. Odota hetki ja yritä sitten uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trop d’imports en même temps. Patientez un instant, puis réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一度にアップロードが多すぎます。少し待ってから、もう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Забагато вивантажень одночасно. Зачекайте трохи й повторіть спробу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同时上传的内容过多。请稍等片刻后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同時上傳的內容過多。請稍候片刻再試一次。"
           }
         }
       }
@@ -56750,6 +57900,52 @@
         }
       }
     },
+    "Untitled Song" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbenannter Song"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nimetön kappale"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titre sans nom"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無題の曲"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пісня без назви"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名歌曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名歌曲"
+          }
+        }
+      }
+    },
     "Untitled Video" : {
       "localizations" : {
         "de" : {
@@ -57297,6 +58493,98 @@
         }
       }
     },
+    "Upload" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hochladen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロード"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантажити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳"
+          }
+        }
+      }
+    },
+    "Upload a Song" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Song hochladen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetä kappale"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer un titre"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "曲をアップロード"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантажити пісню"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传歌曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳歌曲"
+          }
+        }
+      }
+    },
     "Upload Limits" : {
       "localizations" : {
         "de" : {
@@ -57343,6 +58631,98 @@
         }
       }
     },
+    "Upload Song" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Song hochladen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetä kappale"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer un titre"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "曲をアップロード"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантажити пісню"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上传歌曲"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上傳歌曲"
+          }
+        }
+      }
+    },
+    "Upload started." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload gestartet."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetys aloitettu."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import lancé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードを開始しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантаження розпочато."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开始上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已開始上傳。"
+          }
+        }
+      }
+    },
     "Uploaded" : {
       "localizations" : {
         "de" : {
@@ -57385,6 +58765,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已上傳"
+          }
+        }
+      }
+    },
+    "Uploading…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird hochgeladen …"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetetään…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import en cours…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロード中…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантаження…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在上传…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在上傳…"
           }
         }
       }
@@ -58692,6 +60118,52 @@
         }
       }
     },
+    "Waiting…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten …"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odotetaan…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待機中…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очікування…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待…"
+          }
+        }
+      }
+    },
     "Walkthrough" : {
 
     },
@@ -59188,6 +60660,52 @@
       "comment" : "A label displaying the width of an element in a splash. The argument is a percentage.",
       "isCommentAutoGenerated" : true
     },
+    "Works with YouTube, Bilibili and Discord attachment links. The song takes its title from the link." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funktioniert mit Links zu YouTube, Bilibili und Discord-Anhängen. Der Song übernimmt den Titel aus dem Link."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toimii YouTube-, Bilibili- ja Discord-liitelinkeillä. Kappale saa nimensä linkistä."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonctionne avec les liens YouTube, Bilibili et de pièces jointes Discord. Le titre est repris du lien."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube、Bilibili、Discordの添付ファイルのリンクに対応しています。曲名はリンクから取得されます。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підтримуються посилання YouTube, Bilibili і вкладень Discord. Назву пісні буде взято з посилання."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持 YouTube、Bilibili 和 Discord 附件链接。歌曲标题取自链接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支援 YouTube、Bilibili 與 Discord 附件連結。歌曲標題取自連結。"
+          }
+        }
+      }
+    },
     "Year" : {
       "localizations" : {
         "de" : {
@@ -59620,6 +61138,52 @@
         }
       }
     },
+    "You're offline. Connect to the internet and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist offline. Verbinde dich mit dem Internet und versuche es erneut."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olet offline-tilassa. Yhdistä internetiin ja yritä uudelleen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous êtes hors ligne. Connectez-vous à Internet et réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフラインです。インターネットに接続して、もう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви офлайн. Підключіться до інтернету й повторіть спробу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已离线。请连接互联网后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已離線。請連接網際網路後再試一次。"
+          }
+        }
+      }
+    },
     "You've reached the empty place" : {
       "localizations" : {
         "de" : {
@@ -59668,6 +61232,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你來到了空無一物的地方"
+          }
+        }
+      }
+    },
+    "You've reached your limit of %lld songs. Delete one to upload another." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast dein Limit von %lld Songs erreicht. Lösche einen, um einen weiteren hochzuladen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olet saavuttanut %lld kappaleen rajan. Poista yksi lähettääksesi uuden."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez atteint votre limite de %lld titres. Supprimez-en un pour en importer un autre."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上限の%lld曲に達しました。別の曲をアップロードするには1曲削除してください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви досягли ліміту в %lld пісень. Видаліть одну, щоб вивантажити іншу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已达到 %lld 首歌曲的上限。删除一首后才能再上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已達到 %lld 首歌曲的上限。刪除一首後才能再上傳。"
           }
         }
       }
@@ -60239,6 +61849,52 @@
         }
       }
     },
+    "Your storage limits couldn't be loaded. You can still upload." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Speichergrenzen konnten nicht geladen werden. Du kannst trotzdem hochladen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tallennustilan rajoja ei voitu ladata. Voit silti lähettää."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger vos limites de stockage. Vous pouvez quand même importer."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ストレージの上限を読み込めませんでした。アップロードは引き続き可能です。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося завантажити ліміти сховища. Ви все одно можете вивантажувати."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载你的存储限额。你仍然可以上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法載入你的儲存空間限額。你仍然可以上傳。"
+          }
+        }
+      }
+    },
     "Your upload and playlist allowances" : {
       "localizations" : {
         "de" : {
@@ -60281,6 +61937,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的上傳和歌單額度"
+          }
+        }
+      }
+    },
+    "Your upload finished." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Upload ist fertig."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lähetys valmistui."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre import est terminé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップロードが完了しました。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вивантаження завершено."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的上传已完成。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的上傳已完成。"
           }
         }
       }
