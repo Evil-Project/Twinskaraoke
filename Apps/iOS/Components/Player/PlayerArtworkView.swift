@@ -30,6 +30,9 @@ struct PlayerArtworkView: View {
     /// still marks the moment.
     var onTap: (() -> Void)?
 
+    /// The compact player's namespace for the lyrics morph; nil everywhere else.
+    var surfaceMorph: Namespace.ID? = nil
+
     var body: some View {
         Group {
             if let onTap {
@@ -70,6 +73,10 @@ struct PlayerArtworkView: View {
                 }
                 #endif
             }
+            // Clipped before the morph, so the clip travels with the image; the
+            // morph sits before the fixed frame, so only the image travels.
+            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
+            .playerSurfaceMorph(.artwork, in: surfaceMorph)
             .frame(width: size, height: size)
             // The morph target, reported from the artwork itself rather than
             // from the body: the body carries `.frame(maxWidth: .infinity)`, so
@@ -82,7 +89,6 @@ struct PlayerArtworkView: View {
             // Inside the `.id(song.id)` below, so every song's artwork, and
             // every instance, reports under its own owner.
             .modifier(PlayerArtworkFrameReporter())
-            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
             .id(song.id)
             .scaleEffect(artworkScale)
             .amShadow(audioManager.isPlaying ? AM.Shadow.heroPlaying : AM.Shadow.heroIdle)

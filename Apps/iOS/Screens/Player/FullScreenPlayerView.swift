@@ -364,6 +364,7 @@ struct FullScreenPlayerView: View {
     @Environment(\.playerClosingContentOpacity) private var closingContentOpacity
     @Environment(\.appReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Namespace private var surfaceMorph
     @State private var showingQueue = false
     @State private var showLyrics = false
     @State private var handledLyricsRequest = 0
@@ -637,20 +638,23 @@ struct FullScreenPlayerView: View {
                                 .padding(.bottom, 32)
                         }
                     }
-                    .transition(lyricsSurfaceTransition)
+                    .playerSurfaceTransition(.lyrics)
                 } else {
                     VStack(spacing: 0) {
                         Spacer(minLength: metrics.artworkTopSpacer)
-                        PlayerArtworkView(song: song, size: metrics.artSize, onTap: { handleCoverArtTap(song: song) })
-                            .contextMenu {
-                                songActions(song: song)
-                            } preview: {
-                                SongContextPreview(song: song)
-                            }
+                        PlayerArtworkView(
+                            song: song, size: metrics.artSize, onTap: { handleCoverArtTap(song: song) },
+                            surfaceMorph: surfaceMorph
+                        )
+                        .contextMenu {
+                            songActions(song: song)
+                        } preview: {
+                            SongContextPreview(song: song)
+                        }
                         Spacer(minLength: metrics.artworkBottomSpacer)
-                        titleRow(song: song, metrics: metrics)
+                        titleRow(song: song, metrics: metrics, surfaceMorph: surfaceMorph)
                     }
-                    .transition(artworkSurfaceTransition)
+                    .playerSurfaceTransition(.artwork)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -933,8 +937,11 @@ struct FullScreenPlayerView: View {
                         contentMode: .fill,
                         lowResURL: song.thumbnailURL
                     )
+                    // Before the fixed frame, so only the image travels.
+                    // `RemoteArtworkImage` clips itself to its moving bounds;
+                    // a clip after the frame would cut it off mid-flight.
+                    .playerSurfaceMorph(.artwork, in: surfaceMorph)
                     .frame(width: metrics.lyricsArtworkSize, height: metrics.lyricsArtworkSize)
-                    .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
                     .id(song.id)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(song.title)
@@ -946,6 +953,7 @@ struct FullScreenPlayerView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                    .playerSurfaceMorph(.nowPlayingText, in: surfaceMorph)
                 }
             }
             .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.7, haptic: .selection))
@@ -996,7 +1004,8 @@ struct FullScreenPlayerView: View {
         song: Song,
         metrics: PlayerLayoutMetrics,
         horizontalPadding: CGFloat? = nil,
-        compact: Bool = false
+        compact: Bool = false,
+        surfaceMorph: Namespace.ID? = nil
     ) -> some View {
         HStack(alignment: .center, spacing: compact ? 8 : 12) {
             VStack(alignment: .leading, spacing: compact ? 2 : 4) {
@@ -1015,6 +1024,7 @@ struct FullScreenPlayerView: View {
                     isPaused: !presentation.isExpanded
                 )
             }
+            .playerSurfaceMorph(.nowPlayingText, in: surfaceMorph)
             .animation(reduceMotion ? nil : AppMotion.quick, value: song.id)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Now playing")
@@ -1248,32 +1258,8 @@ struct FullScreenPlayerView: View {
         }
     }
 
-    private var playerSurfaceAnimation: Animation? {
-        reduceMotion ? nil : AppMotion.standard
-    }
-
-    private var lyricsSurfaceTransition: AnyTransition {
-        guard !reduceMotion else { return .opacity }
-        return AnyTransition.asymmetric(
-            insertion: .move(edge: .bottom)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.98, anchor: .center)),
-            removal: .move(edge: .top)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.98, anchor: .center))
-        )
-    }
-
-    private var artworkSurfaceTransition: AnyTransition {
-        guard !reduceMotion else { return .opacity }
-        return AnyTransition.asymmetric(
-            insertion: .move(edge: .top)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.985, anchor: .center)),
-            removal: .move(edge: .bottom)
-                .combined(with: .opacity)
-                .combined(with: .scale(scale: 0.985, anchor: .center))
-        )
+    private var playerSurfaceAnimation: Animation {
+        PlayerSurfaceMorph.animation(for: PlayerSurfaceMorph.style(reduceMotion: reduceMotion))
     }
 
     private var lyricsTranslationButton: some View {
