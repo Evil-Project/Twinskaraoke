@@ -208,4 +208,9 @@ enum AppMotion {
 
     /// Deliberately bouncy celebratory moments.
     static var playful: Animation { spring(response: 0.34, dampingFraction: 0.7) }
+
+    /// Cross-fades where movement is turned off: a surface that would otherwise
+    /// travel or morph fades in place instead, so Reduce Motion still gets a
+    /// soft change rather than a hard cut.
+    static var crossFade: Animation { easeInOut(duration: 0.25) }
 }
