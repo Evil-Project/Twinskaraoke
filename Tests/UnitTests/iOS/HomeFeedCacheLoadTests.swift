@@ -27,6 +27,7 @@ private final class StubHomeRequests {
     private(set) var trendingCalls = 0
     private(set) var suggestionCalls = 0
     private(set) var setlistPageCalls = 0
+    private(set) var publicPlaylistCalls = 0
     private var held: [CheckedContinuation<Void, Never>] = []
 
     static func songs(_ prefix: String, count: Int) -> [Song] {
@@ -48,7 +49,10 @@ private final class StubHomeRequests {
                 self.setlistPageCalls += 1
                 return try await self.respond(self.mode, self.picks)
             },
-            publicPlaylists: { _, _ in try await self.respond(self.mode, []) },
+            publicPlaylists: { _, _ in
+                self.publicPlaylistCalls += 1
+                return try await self.respond(self.mode, [])
+            },
             latestSetlist: {
                 try await self.respond(self.mode, KaraokeSetlist(
                     playlist: UITestFixtures.playlist(id: "fresh-setlist", name: "Fresh", songs: self.trendingSongs),
@@ -329,7 +333,7 @@ struct HomeFeedCacheLoadTests {
         let model = model(stub)
 
         model.fetchHomeData()
-        await waitUntil { !saves.saves.isEmpty }
+        await waitUntil { await base.loadSuggestions("account-a") != nil }
 
         #expect(saves.saves.map(\.account) == ["account-a"])
         #expect(ids(await base.loadSuggestions("account-a")?.songs) == ids(stub.suggestionSongs))
@@ -403,6 +407,7 @@ struct HomeFeedCacheLoadTests {
         let model = model(stub)
         model.fetchHomeData()
         await waitUntil { model.isShowingSavedContent && !model.isLoading }
+        #expect(model.isShowingSavedContent)
 
         model.retryIfLoadFailed()
         await waitUntil { stub.trendingCalls == 2 }
@@ -427,6 +432,7 @@ struct HomeFeedCacheLoadTests {
         let model = model(stub)
         model.fetchHomeData()
         await waitUntil { model.isShowingSavedContent && !model.isLoading }
+        #expect(model.isShowingSavedContent)
 
         stub.mode = .answer
         model.retryIfLoadFailed()
@@ -447,13 +453,16 @@ struct HomeFeedCacheLoadTests {
         let model = model(stub)
         model.fetchHomeData()
         await waitUntil { model.isShowingSavedContent && !model.isLoading }
-        let calls = stub.setlistPageCalls
+        try #require(model.isShowingSavedContent)
+        let setlistCalls = stub.setlistPageCalls
+        let publicCalls = stub.publicPlaylistCalls
 
         #expect(!model.canLoadMoreTopPicks)
         model.loadMoreTopPicksIfNeeded(current: try #require(model.recentPlaylists.last))
         await settle()
 
-        #expect(stub.setlistPageCalls == calls)
+        #expect(stub.setlistPageCalls == setlistCalls)
+        #expect(stub.publicPlaylistCalls == publicCalls)
         #expect(!model.isLoadingMoreTopPicks)
     }
 }
