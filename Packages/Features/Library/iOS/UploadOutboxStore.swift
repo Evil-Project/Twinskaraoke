@@ -78,9 +78,8 @@ nonisolated final class UploadOutboxStore: Sendable {
         state.withLock { $0 = [] }
     }
 
-    static var live: UploadOutboxStore {
-        UploadOutboxStore(fileURL: UploadStaging.defaultDirectory.appendingPathComponent("outbox.json"))
-    }
+    /// One instance, so every user shares its cached entries.
+    static let live = UploadOutboxStore(fileURL: UploadStaging.defaultDirectory.appendingPathComponent("outbox.json"))
 
     static func inMemory() -> UploadOutboxStore {
         UploadOutboxStore(memory: ())
