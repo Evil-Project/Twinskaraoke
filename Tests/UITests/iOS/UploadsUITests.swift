@@ -81,18 +81,18 @@ final class UploadsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Edit"].exists, "Expected Edit among the swipe actions.")
         delete.tap()
 
-        let confirm = app.buttons["Delete Song"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Expected a confirmation before deleting.")
+        // An alert in the middle of the screen, not a popover by the row.
+        let alert = app.alerts["Delete “Moonlight Densetsu”?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5), "Expected an alert naming the song before deleting.")
+        XCTAssertTrue(alert.buttons["Delete Song"].exists, "Expected the destructive Delete Song button.")
         XCTAssertTrue(
-            app.staticTexts["The song is deleted permanently and removed from all your playlists."].exists,
-            "Expected the confirmation to say the delete is permanent."
+            alert.staticTexts["The song is deleted permanently and removed from all your playlists."].exists,
+            "Expected the alert to say the delete is permanent."
         )
-        XCTAssertTrue(app.staticTexts["Delete “Moonlight Densetsu”?"].exists, "Expected the song's name in the confirmation.")
-        // iOS shows the dialog as a popover here, which has no Cancel
-        // button; tapping outside it cancels.
-        let cancel = app.buttons["Cancel"].firstMatch
-        if cancel.exists { cancel.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
-        XCTAssertTrue(waitUntil(timeout: 3) { !confirm.exists })
+        let cancel = alert.buttons["Cancel"]
+        XCTAssertTrue(cancel.exists, "Expected a Cancel button in the alert.")
+        cancel.tap()
+        XCTAssertTrue(waitUntil(timeout: 3) { !alert.exists })
         XCTAssertTrue(song.exists, "Cancelling keeps the song.")
     }
 

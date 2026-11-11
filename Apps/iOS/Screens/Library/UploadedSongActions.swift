@@ -46,10 +46,11 @@ struct UploadedSongManagement: ViewModifier {
                     await viewModel.update(song, edit: edit)
                 }
             }
-            .confirmationDialog(
+            // An alert, not a confirmation dialog: on iPhone the dialog shows
+            // as a popover by the row, without a Cancel button.
+            .alert(
                 Text("Delete “\(deleting?.title ?? "")”?"),
                 isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-                titleVisibility: .visible,
                 presenting: deleting
             ) { song in
                 Button("Delete Song", role: .destructive) {
