@@ -104,6 +104,33 @@ nonisolated enum UITestFixtures {
         ),
     ]
 
+    /// The signed-in user's uploads: one artist string each, no cover artist.
+    static let uploadedSongs: [Song] = [
+        song(id: "ui-upload-moonlight", title: "Moonlight Densetsu", originalArtists: ["DALI"], coverArtists: []),
+        song(id: "ui-upload-snow-halation", title: "Snow halation", originalArtists: ["μ's"], coverArtists: []),
+        song(id: "ui-upload-demo", title: "Demo Recording", originalArtists: [], coverArtists: [], duration: 95),
+    ]
+
+    /// What the server lists once the fixture link import has finished; the
+    /// title matches the one `SongUploadController`'s fixture returns.
+    static let importedUpload = song(
+        id: "ui-test-link",
+        title: "UI Test Link Song",
+        originalArtists: [],
+        coverArtists: [],
+        duration: 19
+    )
+
+    static let uploadLimits = UploadLimits(
+        maxSongs: 50,
+        maxStorageBytes: 500_000_000,
+        usedStorageBytes: 23_600_000,
+        currentSongCount: uploadedSongs.count,
+        currentPlaylistCount: 2,
+        playlistLimit: 10,
+        songPerPlaylistLimit: 100
+    )
+
     static func setlist(id: String, name: String, day: String, songs: [Song]) -> KaraokeSetlist {
         KaraokeSetlist(
             playlist: playlist(id: id, name: name, songs: songs),

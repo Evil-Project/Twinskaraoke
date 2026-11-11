@@ -4,12 +4,24 @@ struct UploadedSongsView: View {
     @State private var viewModel = UploadedSongsViewModel()
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var prefetchedIDs: [String] = []
+    @State private var isAddingSong = false
+
+    /// Created here, on first use, rather than at launch.
+    private var uploads: SongUploadController { .shared }
 
     var body: some View {
         let songs = viewModel.displayedSongs
         let isSearching = !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         List {
+            if !uploads.uploads.isEmpty {
+                Section {
+                    UploadProgressBanner(controller: uploads)
+                        .listRowInsets(EdgeInsets(top: 0, leading: AM.Spacing.screenMargin, bottom: 0, trailing: AM.Spacing.screenMargin))
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             if viewModel.isLoading, songs.isEmpty {
                 loadingRow
             } else if songs.isEmpty {
@@ -58,10 +70,29 @@ struct UploadedSongsView: View {
         )
         .secondarySearchBehavior()
         .toolbar {
+            if viewModel.isSignedIn {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        AppHaptic.selection.play()
+                        isAddingSong = true
+                    } label: {
+                        Label("Upload Song", systemImage: "plus")
+                    }
+                    .keyboardShortcut("u", modifiers: .command)
+                    .accessibilityIdentifier("Uploads.Add")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 sortMenu
             }
         }
+        .sheet(isPresented: $isAddingSong) {
+            UploadSongSheet()
+        }
+        .onChange(of: uploads.completedUploads) {
+            Task { await viewModel.refresh() }
+        }
+        .modifier(UploadCompletionFeedback(controller: uploads))
         .refreshableWithTick { await viewModel.refresh() }
         .task {
             viewModel.loadIfNeeded()
@@ -146,6 +177,11 @@ struct UploadedSongsView: View {
                         await viewModel.refresh()
                     }
                 }
+            } else if viewModel.isSignedIn, !isSearching {
+                MusicEmptyActionButton(title: String(localized: "Upload a Song")) {
+                    isAddingSong = true
+                }
+                .accessibilityIdentifier("Uploads.EmptyUpload")
             }
         }
         .frame(maxWidth: .infinity, minHeight: 360)
@@ -164,7 +200,7 @@ struct UploadedSongsView: View {
             return String(localized: "Sign in from Account to see the songs you've uploaded, then pull to refresh.")
         }
         if viewModel.loadFailed { return String(localized: "Check your connection and try again.") }
-        return String(localized: "Songs uploaded through Twins Karaoke will appear here.")
+        return String(localized: "Songs you upload will appear here.")
     }
 
     private var loadingRow: some View {

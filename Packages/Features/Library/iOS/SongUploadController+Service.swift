@@ -43,7 +43,8 @@ extension SongUploadController {
 
         /// No network and no files, for UI tests launched with `-UITestMode`:
         /// a file upload reports half, then all of its body sent, then 200;
-        /// a link import returns a title.
+        /// a link import returns a title after three seconds, long enough for a
+        /// UI test to see it running.
         static var uiTestFixture: Service {
             let transport = UploadTransport.uiTestFixture
             return Service(
@@ -65,7 +66,10 @@ extension SongUploadController {
                     request.setValue(staged.boundary, forHTTPHeaderField: "X-UI-Test-Boundary")
                     return request
                 },
-                importLink: { _ in SongLinkImportResult(success: true, songID: "ui-test-link", title: "UI Test Link Song") },
+                importLink: { _ in
+                    try await Task.sleep(for: .seconds(3))
+                    return SongLinkImportResult(success: true, songID: "ui-test-link", title: "UI Test Link Song")
+                },
                 transport: transport,
                 outbox: .inMemory(),
                 stage: { source, _ in
