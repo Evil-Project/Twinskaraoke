@@ -385,6 +385,46 @@ struct HomeFeedCacheLoadTests {
         #expect(saves.saves.first?.ids == ["made-b-0", "made-b-1"])
     }
 
+    @Test("Made for You that loaded while the account changed is neither shown nor saved")
+    func suggestionsFromBeforeAnAccountChangeAreDropped() async {
+        let stub = StubHomeRequests()
+        stub.mode = .hold
+        stub.suggestionSongs = StubHomeRequests.songs("made-a", count: 2)
+        let model = model(stub)
+        model.fetchHomeData()
+        await waitUntil { stub.suggestionCalls == 1 }
+
+        // The token changed under the load, before any session notification.
+        stub.account = .signedIn("account-b")
+        stub.releaseHeld()
+        await waitUntil { !model.isLoading }
+        await waitUntil { await base.loadPublic()?.trending != nil }
+        await settle()
+
+        #expect(model.suggestions.isEmpty)
+        #expect(ids(model.trending) == ids(stub.trendingSongs))
+        #expect(saves.saves.isEmpty)
+    }
+
+    @Test("An account that couldn't be told at the first load reloads Made for You once it can")
+    func accountBecomingKnownReloadsMadeForYou() async {
+        let stub = StubHomeRequests()
+        stub.account = nil
+        let model = model(stub)
+        model.fetchHomeData()
+        await waitUntil { !model.isLoading && !model.suggestions.isEmpty }
+        await settle()
+        #expect(saves.saves.isEmpty)
+
+        stub.account = .signedIn("account-a")
+        await model.accountMayHaveChanged()
+        await waitUntil { await base.loadSuggestions("account-a") != nil }
+
+        #expect(stub.suggestionCalls == 2)
+        #expect(saves.saves.map(\.account) == ["account-a"])
+        #expect(ids(await base.loadSuggestions("account-a")?.songs) == ids(stub.suggestionSongs))
+    }
+
     @Test("Signed out, Made for You is never saved")
     func signedOutNeverWritesSuggestions() async {
         let stub = StubHomeRequests()
