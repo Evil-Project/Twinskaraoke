@@ -60,7 +60,7 @@ struct BadgeMedia: Decodable, Sendable {
     let cloudflareId: String?
 }
 
-struct UploadLimits: Decodable, Sendable {
+nonisolated struct UploadLimits: Decodable, Sendable {
     let maxSongs: Int
     let maxStorageBytes: Int64
     let usedStorageBytes: Int64

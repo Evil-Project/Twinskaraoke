@@ -1,18 +1,43 @@
 import Foundation
 
-/// Optional metadata sent with an uploaded file. A blank field is left out,
-/// and the server then reads that value from the file's own tags.
+/// Optional metadata sent with an uploaded file, as multipart form fields
+/// ahead of the file. A blank field is left out, and the server then reads
+/// that value from the file's own tags.
 nonisolated struct SongUploadMetadata: Sendable, Equatable {
     var title: String
     var artist: String
     var playlistID: String?
 
-    /// `Title`, `Artist` and `PlaylistId`, trimmed, without blank values.
-    var queryItems: [URLQueryItem] {
+    /// One text part of the multipart body.
+    struct FormField: Sendable, Equatable {
+        var name: String
+        var value: String
+    }
+
+    /// `Title`, `Artist` and `PlaylistId`, in that order, trimmed and without
+    /// line breaks, which could end the part early; blank values are left out.
+    var formFields: [FormField] {
         [("Title", title), ("Artist", artist), ("PlaylistId", playlistID ?? "")].compactMap { name, value in
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : URLQueryItem(name: name, value: trimmed)
+            let oneLine = String(value.unicodeScalars.filter { $0 != "\r" && $0 != "\n" })
+                .trimmingCharacters(in: .whitespaces)
+            return oneLine.isEmpty ? nil : FormField(name: name, value: oneLine)
         }
+    }
+
+    /// A title for a file whose own title is blank: its name without the
+    /// extension, trimmed, or `nil` when nothing is left. The server stores
+    /// an upload without a title or tags with no title at all.
+    static func defaultTitle(forFilename filename: String) -> String? {
+        var name = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let dot = name.lastIndex(of: ".") {
+            let pathExtension = name[name.index(after: dot)...]
+            // "Mr. Brightside" has no extension; "song.mp3" does.
+            if (1...5).contains(pathExtension.count), pathExtension.allSatisfy({ $0.isLetter || $0.isNumber }) {
+                name = String(name[..<dot])
+            }
+        }
+        let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? nil : title
     }
 }
 
@@ -34,26 +59,110 @@ nonisolated struct SongLinkImport: Sendable, Equatable, Encodable {
         case playlistID = "playlistId"
     }
 
-    /// The server only downloads YouTube and Bilibili video and playlist
-    /// links and rejects any other URL.
-    private static let supportedHosts: Set = [
+    /// Why a link can't be imported.
+    enum LinkProblem: Sendable, Equatable {
+        /// Not an http(s) URL with a host.
+        case notALink
+        /// A link to a Discord message rather than to its attachment, which
+        /// the server rejects.
+        case discordMessageLink
+        /// A URL on a site the server doesn't download from.
+        case unsupportedSite
+    }
+
+    /// The server downloads YouTube and Bilibili video and playlist links and
+    /// Discord attachments, and rejects any other URL.
+    private static let videoHosts: Set = [
         "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be",
         "bilibili.com", "www.bilibili.com", "m.bilibili.com", "b23.tv",
     ]
 
-    /// The link in `text` if it is an http(s) YouTube or Bilibili URL, else
-    /// `nil`. Surrounding whitespace is ignored; the host must match exactly,
-    /// so a supported name in a path, query or subdomain doesn't count.
+    /// Discord serves attachments from these hosts, under `/attachments/`,
+    /// with signed query parameters that must be kept.
+    private static let discordAttachmentHosts: Set = ["cdn.discordapp.com", "media.discordapp.net"]
+
+    /// Hosts of the Discord app, whose `/channels/` links open a message.
+    private static let discordAppHosts: Set = [
+        "discord.com", "www.discord.com", "ptb.discord.com", "canary.discord.com",
+        "discordapp.com", "www.discordapp.com",
+    ]
+
+    /// The link in `text` if the server can import it, else `nil`: an
+    /// http(s) YouTube or Bilibili URL, or an https Discord attachment URL.
+    /// Surrounding whitespace is ignored; the host must match exactly, so a
+    /// supported name in a path, query or subdomain doesn't count.
     static func supportedLink(_ text: String) -> URL? {
+        guard case let .success(url) = classify(text) else { return nil }
+        return url
+    }
+
+    /// Why `text` can't be imported, or `nil` when `supportedLink` accepts it.
+    static func problem(with text: String) -> LinkProblem? {
+        guard case let .failure(error) = classify(text) else { return nil }
+        return error.problem
+    }
+
+    private static func classify(_ text: String) -> Result<URL, LinkProblemError> {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: trimmed),
               let scheme = components.scheme?.lowercased(),
               scheme == "https" || scheme == "http",
-              components.user == nil, components.password == nil,
-              let host = components.host?.lowercased(),
-              supportedHosts.contains(host)
-        else { return nil }
-        return components.url
+              let host = components.host?.lowercased(), !host.isEmpty,
+              let url = components.url
+        else { return .failure(LinkProblemError(.notALink)) }
+        guard components.user == nil, components.password == nil else {
+            return .failure(LinkProblemError(.unsupportedSite))
+        }
+        if videoHosts.contains(host) {
+            return .success(url)
+        }
+        if discordAttachmentHosts.contains(host), scheme == "https", components.path.hasPrefix("/attachments/") {
+            return .success(url)
+        }
+        if discordAppHosts.contains(host), components.path.hasPrefix("/channels/") {
+            return .failure(LinkProblemError(.discordMessageLink))
+        }
+        return .failure(LinkProblemError(.unsupportedSite))
+    }
+
+    /// `Result` needs an `Error`; `LinkProblem` stays a plain value for the UI.
+    private struct LinkProblemError: Error {
+        let problem: LinkProblem
+        init(_ problem: LinkProblem) { self.problem = problem }
+    }
+}
+
+/// The server's answer to a link import, sent once it has downloaded the
+/// audio. Every field is optional on decode, since nothing guarantees them.
+nonisolated struct SongLinkImportResult: Sendable, Equatable, Decodable {
+    var success: Bool
+    var songID: String?
+    var title: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case success
+        case songID = "songId"
+        case title
+    }
+
+    init(success: Bool, songID: String?, title: String?) {
+        self.success = success
+        self.songID = songID
+        self.title = title
+    }
+
+    /// A 2xx answer without the flag still means the song was added.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = (try? container.decodeIfPresent(Bool.self, forKey: .success)) ?? true
+        songID = try? container.decodeIfPresent(String.self, forKey: .songID)
+        title = try? container.decodeIfPresent(String.self, forKey: .title)
+    }
+
+    /// The decoded answer, or `nil` for an empty body or anything that isn't
+    /// a JSON object.
+    static func decode(from data: Data) -> SongLinkImportResult? {
+        try? JSONDecoder().decode(SongLinkImportResult.self, from: data)
     }
 }
 
@@ -65,8 +174,9 @@ nonisolated struct UploadServerProblem: Sendable, Equatable {
 
     private static let maxPlainTextLength = 300
 
-    /// Reads a problem-details JSON object (`title`, `detail`, `errors`) or a
-    /// short plain-text body. Anything else, including an empty or malformed
+    /// Reads a problem-details JSON object (`title`, `detail`, `errors`), a
+    /// bare JSON string (what the upload endpoints send), or a short
+    /// plain-text body. Anything else, including an empty or malformed
     /// body, gives `nil`.
     static func parse(data: Data, contentType: String?) -> UploadServerProblem? {
         guard let mediaType = contentType?
@@ -84,7 +194,11 @@ nonisolated struct UploadServerProblem: Sendable, Equatable {
     }
 
     private static func parseJSON(_ data: Data) -> UploadServerProblem? {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let json = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
+        if let text = json as? String {
+            return oneLineProblem(text)
+        }
+        guard let object = json as? [String: Any] else { return nil }
         let message = [object["detail"], object["title"]]
             .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
@@ -99,6 +213,11 @@ nonisolated struct UploadServerProblem: Sendable, Equatable {
 
     private static func parsePlainText(_ data: Data) -> UploadServerProblem? {
         guard let text = String(data: data, encoding: .utf8) else { return nil }
+        return oneLineProblem(text)
+    }
+
+    /// `text` on one line, with runs of whitespace collapsed, capped in length.
+    private static func oneLineProblem(_ text: String) -> UploadServerProblem? {
         let oneLine = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !oneLine.isEmpty else { return nil }
         return UploadServerProblem(message: String(oneLine.prefix(maxPlainTextLength)), fieldErrors: [:])
