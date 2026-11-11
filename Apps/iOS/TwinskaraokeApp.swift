@@ -62,7 +62,7 @@ struct TwinskaraokeApp: App {
             }
             // Likewise for song uploads, which run in their own session.
             .backgroundTask(.urlSession(UploadTransport.sessionIdentifier)) {
-                await UploadTransport.live.handleBackgroundEvents()
+                await SongUploadController.shared.handleBackgroundEvents()
             }
         #endif
     }

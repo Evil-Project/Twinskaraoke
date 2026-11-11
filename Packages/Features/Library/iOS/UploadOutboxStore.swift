@@ -11,16 +11,17 @@ nonisolated struct PendingUpload: Codable, Sendable, Equatable, Identifiable {
     var title: String
     var fileBytes: Int64
     var startedAt: Date
-    /// The user's upload ids before this one started. The server's answer
-    /// carries no id, so a new id in the list afterwards is this upload.
-    var knownSongIDs: Set<String>
+    /// The user's upload ids before this one started, or `nil` when they
+    /// couldn't be loaded. The server's answer carries no id, so a new id in
+    /// the list afterwards is this upload.
+    var knownSongIDs: Set<String>?
     // What a retry needs to send the staged body again.
     var bodyBytes: Int64
     var filename: String
     var contentType: String
     var boundary: String
 
-    init(staged: StagedUpload, taskID: Int?, title: String, startedAt: Date, knownSongIDs: Set<String>) {
+    init(staged: StagedUpload, taskID: Int?, title: String, startedAt: Date, knownSongIDs: Set<String>?) {
         id = staged.id
         self.taskID = taskID
         self.title = title

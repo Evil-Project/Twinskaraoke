@@ -1,0 +1,110 @@
+import Foundation
+
+/// How an upload ends: the server's answer, a transport failure, or neither.
+extension SongUploadController {
+    /// The server answered the upload. Success has an empty body and no id.
+    func settleAnswer(_ id: UUID, status: Int, body: Data, contentType: String?, retryAfter: TimeInterval?) async {
+        DebugLogger.log("Upload answered: HTTP \(status), \(body.count) bytes", category: .network)
+        switch status {
+        case 200..<300:
+            await succeed(id, title: title(of: id))
+        case 401:
+            setPhase(id, .finishing)
+            let resolved = await unauthorizedFailure(UploadServerProblem.parse(data: body, contentType: contentType))
+            fail(id, resolved)
+        case 429:
+            fail(id, .rateLimited(retryAfter: retryAfter))
+        default:
+            fail(id, .server(status: status, problem: UploadServerProblem.parse(data: body, contentType: contentType)))
+        }
+    }
+
+    /// The transfer ended without an answer.
+    func settleTransportFailure(_ id: UUID, _ failure: UploadTransport.Failure) async {
+        switch failure {
+        case .urlError(.notConnectedToInternet), .urlError(.dataNotAllowed), .urlError(.internationalRoamingOff),
+             .urlError(.cannotFindHost), .urlError(.dnsLookupFailed):
+            DebugLogger.log("Upload failed offline", category: .network)
+            fail(id, .offline)
+        case .urlError(.timedOut):
+            DebugLogger.log("Upload timed out", category: .network)
+            await settleAmbiguous(id, failure: .timedOut)
+        case let .urlError(code):
+            DebugLogger.log("Upload lost: URLError \(code.rawValue)", category: .network)
+            await settleAmbiguous(id, failure: .interrupted)
+        case .cancelled:
+            // Not the user: they remove the upload before cancelling it.
+            await settleAmbiguous(id, failure: .interrupted)
+        }
+    }
+
+    /// The body may or may not have arrived. The server's answer carries no
+    /// id, so a song in the user's uploads that wasn't there before means it
+    /// did; otherwise the user can try again.
+    func settleAmbiguous(_ id: UUID, failure: SongUploadFailure) async {
+        setPhase(id, .finishing)
+        if let known = records[id]?.knownSongIDs,
+           let current = try? await service.uploadedSongIDs(),
+           !current.subtracting(known).isEmpty
+        {
+            return await succeed(id, title: title(of: id))
+        }
+        fail(id, failure)
+    }
+
+    /// A 401 can be an expired session or the upload host refusing the
+    /// token. One read on the main API tells: if that is refused too, the
+    /// shared session-expiry path signs the user out.
+    func unauthorizedFailure(_ problem: UploadServerProblem?) async -> SongUploadFailure {
+        do {
+            _ = try await service.limits()
+            return .server(status: 401, problem: problem)
+        } catch KaraokeAPIClient.APIError.httpStatus(401), SongUploadFailure.signedOut {
+            return .signedOut
+        } catch {
+            return .server(status: 401, problem: problem)
+        }
+    }
+
+    func succeed(_ id: UUID, title: String) async {
+        guard records[id] != nil else { return }
+        clearTransfer(id, discardingStage: true)
+        await service.invalidateUploads()
+        guard records[id] != nil else { return }
+        setPhase(id, .succeeded(title: title))
+        noteCompletion(Completion(itemID: id, title: title, succeeded: true))
+        DebugLogger.log("Upload succeeded", category: .network)
+        finishRun(id)
+    }
+
+    /// Keeps the staged body, so a retry can send it again.
+    func fail(_ id: UUID, _ failure: SongUploadFailure) {
+        guard records[id] != nil else { return }
+        clearTransfer(id, discardingStage: false)
+        setPhase(id, .failed(failure))
+        noteCompletion(Completion(itemID: id, title: title(of: id), succeeded: false))
+        DebugLogger.log("Upload failed: \(Self.logReason(failure))", category: .network)
+        finishRun(id)
+    }
+
+    private func clearTransfer(_ id: UUID, discardingStage: Bool) {
+        records[id]?.taskID = nil
+        guard let staged = records[id]?.staged else { return }
+        service.outbox.remove(id: staged.id)
+        if discardingStage {
+            service.discard(staged)
+            records[id]?.staged = nil
+        }
+    }
+
+    /// Status codes and kinds only; server messages may echo user data.
+    private static func logReason(_ failure: SongUploadFailure) -> String {
+        switch failure {
+        case let .server(status, _): "HTTP \(status)"
+        case .quotaSongs: "song quota"
+        case .quotaStorage: "storage quota"
+        case .unsupportedLink: "unsupported link"
+        default: "\(failure)"
+        }
+    }
+}

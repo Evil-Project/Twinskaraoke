@@ -235,6 +235,8 @@ nonisolated enum SongUploadFailure: Error, Equatable {
     case interrupted
     case server(status: Int, problem: UploadServerProblem?)
     case rateLimited(retryAfter: TimeInterval?)
+    /// A link the server can't import; refused before any request.
+    case unsupportedLink(SongLinkImport.LinkProblem)
     case unknown
 
     /// Whether trying the same request again later can succeed without the
@@ -245,7 +247,7 @@ nonisolated enum SongUploadFailure: Error, Equatable {
             true
         case let .server(status, _):
             status >= 500
-        case .signedOut, .quotaSongs, .quotaStorage, .fileUnreadable, .unknown:
+        case .signedOut, .quotaSongs, .quotaStorage, .fileUnreadable, .unsupportedLink, .unknown:
             false
         }
     }
