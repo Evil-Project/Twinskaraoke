@@ -71,6 +71,57 @@ final class UploadsUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { status.label.contains("Added") }, "Got: \(status.label)")
     }
 
+    func testSwipeDeleteAsksForConfirmation() throws {
+        let app = openUploaded()
+        let song = row("Moonlight Densetsu", in: app)
+        XCTAssertTrue(song.waitForExistence(timeout: 8))
+        song.swipeLeft()
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "Expected Delete among the swipe actions.")
+        XCTAssertTrue(app.buttons["Edit"].exists, "Expected Edit among the swipe actions.")
+        delete.tap()
+
+        let confirm = app.buttons["Delete Song"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Expected a confirmation before deleting.")
+        XCTAssertTrue(
+            app.staticTexts["The song is deleted permanently and removed from all your playlists."].exists,
+            "Expected the confirmation to say the delete is permanent."
+        )
+        XCTAssertTrue(app.staticTexts["Delete “Moonlight Densetsu”?"].exists, "Expected the song's name in the confirmation.")
+        // iOS shows the dialog as a popover here, which has no Cancel
+        // button; tapping outside it cancels.
+        let cancel = app.buttons["Cancel"].firstMatch
+        if cancel.exists { cancel.tap() } else { app.otherElements["PopoverDismissRegion"].tap() }
+        XCTAssertTrue(waitUntil(timeout: 3) { !confirm.exists })
+        XCTAssertTrue(song.exists, "Cancelling keeps the song.")
+    }
+
+    func testEditSheetPrefillsTitleAndDisablesSaveWhenEmpty() throws {
+        let app = openUploaded()
+        let song = row("Moonlight Densetsu", in: app)
+        XCTAssertTrue(song.waitForExistence(timeout: 8))
+        song.swipeLeft()
+        let edit = app.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+
+        let title = app.textFields["EditUpload.Title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "Expected the edit sheet.")
+        XCTAssertEqual(title.value as? String, "Moonlight Densetsu")
+        XCTAssertEqual(app.textFields["EditUpload.Artist"].value as? String, "DALI")
+        let save = app.buttons["EditUpload.Save"]
+        XCTAssertFalse(save.isEnabled, "Nothing changed yet.")
+
+        title.tap()
+        XCTAssertTrue(waitUntil(timeout: 5) { app.keyboards.firstMatch.exists })
+        title.typeText("!")
+        XCTAssertTrue(waitUntil(timeout: 3) { save.isEnabled }, "A changed title can be saved.")
+        clear(title)
+        XCTAssertTrue(waitUntil(timeout: 3) { !save.isEnabled }, "An empty title can't be saved.")
+        let hint = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Enter a title.")).firstMatch
+        XCTAssertTrue(hint.exists, "Expected the empty title to be explained.")
+    }
+
     // MARK: - Helpers
 
     private func openUploaded() -> XCUIApplication {

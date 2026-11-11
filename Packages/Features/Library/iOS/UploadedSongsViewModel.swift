@@ -30,7 +30,8 @@ final class UploadedSongsViewModel {
         }
     }
 
-    private(set) var songs: [Song] = [] {
+    /// Settable for the edit and delete extension, which changes rows in place.
+    var songs: [Song] = [] {
         didSet { songsGeneration &+= 1 }
     }
     private(set) var displayedSongs: [Song] = []
@@ -48,6 +49,7 @@ final class UploadedSongsViewModel {
 
     private var hasLoaded = false
     @ObservationIgnored private let service: Service
+    @ObservationIgnored let manage: ManageService
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     private var requestGeneration = 0
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
@@ -69,8 +71,12 @@ final class UploadedSongsViewModel {
         }
     }
 
-    init(service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live) {
+    init(
+        service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
+        manage: ManageService = AppRuntime.isUITestMode ? .uiTestFixture : .live
+    ) {
         self.service = service
+        self.manage = manage
     }
 
     func loadIfNeeded() {
@@ -172,7 +178,7 @@ final class UploadedSongsViewModel {
         return sorted
     }
 
-    private func rebuildDisplayedSongs() {
+    func rebuildDisplayedSongs() {
         let sorted = sortedSongs
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)

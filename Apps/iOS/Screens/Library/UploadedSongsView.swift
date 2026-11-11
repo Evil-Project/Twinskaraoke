@@ -5,6 +5,8 @@ struct UploadedSongsView: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @State private var prefetchedIDs: [String] = []
     @State private var isAddingSong = false
+    @State private var editingSong: Song?
+    @State private var deletingSong: Song?
 
     /// Created here, on first use, rather than at launch.
     private var uploads: SongUploadController { .shared }
@@ -52,6 +54,17 @@ struct UploadedSongsView: View {
                         .id(song.id)
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
+                        .modifier(UploadedSongRowActions(
+                            song: song,
+                            edit: { song in
+                                AppHaptic.selection.play()
+                                editingSong = song
+                            },
+                            delete: { song in
+                                AppHaptic.selection.play()
+                                deletingSong = song
+                            }
+                        ))
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         .listRowBackground(Color.clear)
                     }
@@ -93,6 +106,7 @@ struct UploadedSongsView: View {
             Task { await viewModel.refresh() }
         }
         .modifier(UploadCompletionFeedback(controller: uploads))
+        .modifier(UploadedSongManagement(viewModel: viewModel, editing: $editingSong, deleting: $deletingSong))
         .refreshableWithTick { await viewModel.refresh() }
         .task {
             viewModel.loadIfNeeded()
