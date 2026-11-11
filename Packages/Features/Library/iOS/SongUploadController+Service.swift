@@ -18,6 +18,10 @@ extension SongUploadController {
         var invalidateUploads: @MainActor () async -> Void
         /// Removes old staged bodies that none of `keeping` names.
         var sweepStaged: @MainActor (_ keeping: Set<UUID>) -> Void
+        /// Who is signed in ("guest" when signed out), or `nil` when the
+        /// Keychain can't tell. Read from storage, as the video resume store
+        /// does; nothing here changes the session.
+        var currentAccount: @MainActor () -> String?
 
         static var live: Service {
             Service(
@@ -37,7 +41,8 @@ extension SongUploadController {
                     return (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
                 },
                 invalidateUploads: { await KaraokeAPIClient.invalidateUploadedSongs() },
-                sweepStaged: { keeping in UploadStaging.sweepStale(keeping: keeping) }
+                sweepStaged: { keeping in UploadStaging.sweepStale(keeping: keeping) },
+                currentAccount: { VideoResumeStore.accountIdentity(for: AuthManager.persistedDescriptor()) }
             )
         }
 
@@ -83,7 +88,8 @@ extension SongUploadController {
                 discard: { _ in },
                 fileSize: { _ in 1000 },
                 invalidateUploads: {},
-                sweepStaged: { _ in }
+                sweepStaged: { _ in },
+                currentAccount: { "ui-test" }
             )
         }
     }

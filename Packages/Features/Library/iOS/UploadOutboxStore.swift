@@ -15,19 +15,30 @@ nonisolated struct PendingUpload: Codable, Sendable, Equatable, Identifiable {
     /// couldn't be loaded. The server's answer carries no id, so a new id in
     /// the list afterwards is this upload.
     var knownSongIDs: Set<String>?
+    /// The account that started the upload, or `nil` when it couldn't be
+    /// told. A relaunch keeps the upload tied to it.
+    var account: String?
     // What a retry needs to send the staged body again.
     var bodyBytes: Int64
     var filename: String
     var contentType: String
     var boundary: String
 
-    init(staged: StagedUpload, taskID: Int?, title: String, startedAt: Date, knownSongIDs: Set<String>?) {
+    init(
+        staged: StagedUpload,
+        taskID: Int?,
+        title: String,
+        startedAt: Date,
+        knownSongIDs: Set<String>?,
+        account: String? = nil
+    ) {
         id = staged.id
         self.taskID = taskID
         self.title = title
         fileBytes = staged.sourceBytes
         self.startedAt = startedAt
         self.knownSongIDs = knownSongIDs
+        self.account = account
         bodyBytes = staged.bodyBytes
         filename = staged.filename
         contentType = staged.contentType
