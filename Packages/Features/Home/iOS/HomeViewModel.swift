@@ -161,13 +161,19 @@ final class HomeViewModel {
             async let topPicksResult = fetchTopPicks(startIndex: 0)
             async let releasesResult = try? requests.releases()
 
-            let (loadedTrending, loadedSuggestions, loadedTopPicks, loadedReleases) = await (
+            let (loadedTrending, suggestionsAnswer, loadedTopPicks, loadedReleases) = await (
                 trendingResult,
                 suggestionsResult,
                 topPicksResult,
                 releasesResult
             )
+            // The token can change while the requests run, before the session
+            // notification arrives, so Made for You may be either account's:
+            // it is neither shown nor saved. A read that can't tell keeps it.
+            let accountNow = await accountIdentity()
             guard !Task.isCancelled, dataGeneration == generation else { return }
+            let accountChanged = accountNow != nil && accountNow != account
+            let loadedSuggestions = accountChanged ? nil : suggestionsAnswer
 
             if let loadedTrending { trending = loadedTrending }
             if let loadedSuggestions { suggestions = loadedSuggestions }
@@ -287,11 +293,13 @@ final class HomeViewModel {
         }
     }
 
-    /// Reloads for the new account when it changed. Its first act is a new
-    /// generation, so a response still on its way for the previous account is
-    /// dropped, and never shown or saved under the new one.
+    /// Reloads for the new account when it changed, or when the first load
+    /// couldn't tell the account (locked Keychain) and it can be told now.
+    /// Its first act is a new generation, so a response still on its way for
+    /// the previous account is dropped, and never shown or saved under the
+    /// new one. An account that still can't be told changes nothing.
     func accountMayHaveChanged() async {
-        guard let identity = await accountIdentity(), let account, identity != account else { return }
+        guard let identity = await accountIdentity(), identity != account else { return }
         self.account = identity
         dataGeneration += 1
         suggestions = []

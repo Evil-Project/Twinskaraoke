@@ -33,6 +33,12 @@ nonisolated struct HomeFeedSnapshot: Codable, Sendable {
 
     var version = Self.currentVersion
     var savedAt: Date
+    /// When each shelf was saved. A save carries stored shelves forward with
+    /// their own dates, so each shelf ages on its own; nil means `savedAt`.
+    var trendingSavedAt: Date?
+    var newReleasesSavedAt: Date?
+    var topPicksSavedAt: Date?
+    var latestSetlistSavedAt: Date?
     /// The API the songs' media paths belong to. A host override (the China
     /// mirrors) makes the snapshot unusable.
     var apiHost: String
@@ -63,6 +69,11 @@ nonisolated struct HomeFeedSnapshot: Codable, Sendable {
 
     var isEmpty: Bool {
         trending == nil && newReleases == nil && topPicks == nil && latestSetlist == nil
+    }
+
+    /// When `shelf` was saved, or nil when it is absent.
+    func savedAt<Value>(_ shelf: KeyPath<Self, Value?>, dated date: KeyPath<Self, Date?>) -> Date? {
+        self[keyPath: shelf] == nil ? nil : self[keyPath: date] ?? savedAt
     }
 }
 
@@ -121,8 +132,12 @@ nonisolated struct HomeFeedStore: Sendable {
         )
     }
 
-    static func disk(directory: URL, apiHost: @escaping @Sendable () -> String = { StorageHost.api }) -> HomeFeedStore {
-        let disk = HomeFeedDisk(directory: directory, apiHost: apiHost)
+    static func disk(
+        directory: URL,
+        apiHost: @escaping @Sendable () -> String = { StorageHost.api },
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) -> HomeFeedStore {
+        let disk = HomeFeedDisk(directory: directory, apiHost: apiHost, now: now)
         return HomeFeedStore(
             loadPublic: { await disk.run { disk.readPublic() } },
             savePublic: { snapshot in await disk.run { disk.writePublic(snapshot) } },
@@ -166,18 +181,71 @@ nonisolated struct HomeFeedStore: Sendable {
         return result
     }
 
-    /// `update`'s shelves over `stored`'s; top picks keep their source.
+    /// `update`'s shelves over `stored`'s, each with its own saved date. A
+    /// stored shelf stays when the update lacks it or is older than it, so a
+    /// save that arrives late can't replace newer content. Top picks keep
+    /// their source.
     static func merged(_ update: HomeFeedSnapshot, over stored: HomeFeedSnapshot?) -> HomeFeedSnapshot {
-        guard let stored else { return update }
+        let stored = stored ?? HomeFeedSnapshot(savedAt: .distantPast, apiHost: update.apiHost)
         var result = update
-        result.trending = update.trending ?? stored.trending
-        result.newReleases = update.newReleases ?? stored.newReleases
-        if update.topPicks == nil {
-            result.topPicks = stored.topPicks
+        carry(\.trending, dated: \.trendingSavedAt, from: stored, into: &result)
+        carry(\.newReleases, dated: \.newReleasesSavedAt, from: stored, into: &result)
+        if carry(\.topPicks, dated: \.topPicksSavedAt, from: stored, into: &result) {
             result.topPicksSource = stored.topPicksSource
         }
-        result.latestSetlist = update.latestSetlist ?? stored.latestSetlist
+        carry(\.latestSetlist, dated: \.latestSetlistSavedAt, from: stored, into: &result)
+        let dates = [
+            result.trendingSavedAt, result.newReleasesSavedAt, result.topPicksSavedAt, result.latestSetlistSavedAt,
+        ]
+        result.savedAt = dates.compactMap(\.self).max() ?? update.savedAt
         return result
+    }
+
+    /// Dates `result`'s shelf, and puts `stored`'s in its place when the
+    /// update lacks it or is older. Returns whether the stored one was kept.
+    @discardableResult
+    private static func carry<Value>(
+        _ shelf: WritableKeyPath<HomeFeedSnapshot, Value?>,
+        dated date: WritableKeyPath<HomeFeedSnapshot, Date?>,
+        from stored: HomeFeedSnapshot,
+        into result: inout HomeFeedSnapshot
+    ) -> Bool {
+        let updateDate = result.savedAt(shelf, dated: date)
+        result[keyPath: date] = updateDate
+        guard let storedDate = stored.savedAt(shelf, dated: date),
+              updateDate.map({ $0 < storedDate }) ?? true
+        else { return false }
+        result[keyPath: shelf] = stored[keyPath: shelf]
+        result[keyPath: date] = storedDate
+        return true
+    }
+
+    /// `snapshot` without the shelves saved more than `maximumAge` before
+    /// `now`; nil when none is left.
+    static func fresh(_ snapshot: HomeFeedSnapshot, now: Date) -> HomeFeedSnapshot? {
+        var result = snapshot
+        dropIfExpired(\.trending, dated: \.trendingSavedAt, in: &result, now: now)
+        dropIfExpired(\.newReleases, dated: \.newReleasesSavedAt, in: &result, now: now)
+        if dropIfExpired(\.topPicks, dated: \.topPicksSavedAt, in: &result, now: now) {
+            result.topPicksSource = nil
+        }
+        dropIfExpired(\.latestSetlist, dated: \.latestSetlistSavedAt, in: &result, now: now)
+        return result.isEmpty ? nil : result
+    }
+
+    @discardableResult
+    private static func dropIfExpired<Value>(
+        _ shelf: WritableKeyPath<HomeFeedSnapshot, Value?>,
+        dated date: WritableKeyPath<HomeFeedSnapshot, Date?>,
+        in snapshot: inout HomeFeedSnapshot,
+        now: Date
+    ) -> Bool {
+        guard let saved = snapshot.savedAt(shelf, dated: date),
+              now.timeIntervalSince(saved) > maximumAge
+        else { return false }
+        snapshot[keyPath: shelf] = nil
+        snapshot[keyPath: date] = nil
+        return true
     }
 
     static func withoutPlaceholders(_ songs: [Song]?) -> [Song]? {
@@ -214,11 +282,13 @@ nonisolated extension Playlist {
 private nonisolated final class HomeFeedDisk: Sendable {
     let directory: URL
     let apiHost: @Sendable () -> String
+    let now: @Sendable () -> Date
     private let queue = DispatchQueue(label: "HomeFeedStore", qos: .utility)
 
-    init(directory: URL, apiHost: @escaping @Sendable () -> String) {
+    init(directory: URL, apiHost: @escaping @Sendable () -> String, now: @escaping @Sendable () -> Date) {
         self.directory = directory
         self.apiHost = apiHost
+        self.now = now
     }
 
     func run<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
@@ -232,11 +302,13 @@ private nonisolated final class HomeFeedDisk: Sendable {
     func readPublic() -> HomeFeedSnapshot? {
         let url = HomeFeedStore.publicFileURL(in: directory)
         guard let snapshot = read(HomeFeedSnapshot.self, at: url) else { return nil }
-        guard isUsable(version: snapshot.version, savedAt: snapshot.savedAt, apiHost: snapshot.apiHost) else {
+        guard isUsable(version: snapshot.version, apiHost: snapshot.apiHost),
+              let fresh = HomeFeedStore.fresh(snapshot, now: now())
+        else {
             discard(url, reason: "out of date")
             return nil
         }
-        return snapshot
+        return fresh
     }
 
     func writePublic(_ update: HomeFeedSnapshot) {
@@ -261,7 +333,9 @@ private nonisolated final class HomeFeedDisk: Sendable {
     func readSuggestions(account: String) -> HomeSuggestionsSnapshot? {
         let url = HomeFeedStore.suggestionsFileURL(in: directory, account: account)
         guard let snapshot = read(HomeSuggestionsSnapshot.self, at: url) else { return nil }
-        guard isUsable(version: snapshot.version, savedAt: snapshot.savedAt, apiHost: snapshot.apiHost) else {
+        guard isUsable(version: snapshot.version, apiHost: snapshot.apiHost),
+              now().timeIntervalSince(snapshot.savedAt) <= HomeFeedStore.maximumAge
+        else {
             discard(url, reason: "out of date")
             return nil
         }
@@ -270,6 +344,8 @@ private nonisolated final class HomeFeedDisk: Sendable {
 
     func writeSuggestions(_ snapshot: HomeSuggestionsSnapshot, account: String) {
         guard let songs = HomeFeedStore.withoutPlaceholders(snapshot.songs) else { return }
+        // A save that arrives after a newer one for the same account is stale.
+        if let stored = readSuggestions(account: account), stored.savedAt > snapshot.savedAt { return }
         var snapshot = snapshot
         snapshot.songs = songs
         guard let data = encode(snapshot) else { return }
@@ -302,10 +378,8 @@ private nonisolated final class HomeFeedDisk: Sendable {
 
     // MARK: Files
 
-    private func isUsable(version: Int, savedAt: Date, apiHost: String) -> Bool {
-        version == HomeFeedSnapshot.currentVersion
-            && apiHost == self.apiHost()
-            && Date().timeIntervalSince(savedAt) <= HomeFeedStore.maximumAge
+    private func isUsable(version: Int, apiHost: String) -> Bool {
+        version == HomeFeedSnapshot.currentVersion && apiHost == self.apiHost()
     }
 
     private func read<T: Decodable>(_ type: T.Type, at url: URL) -> T? {
@@ -345,17 +419,22 @@ private nonisolated final class HomeFeedDisk: Sendable {
 // MARK: - Memory
 
 private actor HomeFeedMemory {
-    private(set) var publicSnapshot: HomeFeedSnapshot?
+    private var storedPublic: HomeFeedSnapshot?
     private(set) var suggestions: [String: HomeSuggestionsSnapshot] = [:]
+
+    var publicSnapshot: HomeFeedSnapshot? {
+        storedPublic.flatMap { HomeFeedStore.fresh($0, now: Date()) }
+    }
 
     func savePublic(_ update: HomeFeedSnapshot) {
         let update = HomeFeedStore.sanitized(update)
         guard !update.isEmpty else { return }
-        publicSnapshot = HomeFeedStore.merged(update, over: publicSnapshot)
+        storedPublic = HomeFeedStore.merged(update, over: publicSnapshot)
     }
 
     func saveSuggestions(_ snapshot: HomeSuggestionsSnapshot, account: String) {
         guard let songs = HomeFeedStore.withoutPlaceholders(snapshot.songs) else { return }
+        if let stored = suggestions[account], stored.savedAt > snapshot.savedAt { return }
         var snapshot = snapshot
         snapshot.songs = songs
         suggestions[account] = snapshot

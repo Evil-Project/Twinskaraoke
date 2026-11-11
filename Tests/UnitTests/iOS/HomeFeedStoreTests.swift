@@ -114,6 +114,60 @@ struct HomeFeedStoreTests {
         #expect(await store.loadPublic() != nil)
     }
 
+    @Test("A shelf carried forward by a later save keeps its own age")
+    func carriedForwardShelfKeepsItsOwnAge() async throws {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let day: TimeInterval = 24 * 60 * 60
+        await HomeFeedStore.disk(directory: directory, now: { start }).savePublic(snapshot(savedAt: start))
+        let later = start.addingTimeInterval(29 * day)
+        await HomeFeedStore.disk(directory: directory, now: { later })
+            .savePublic(HomeFeedSnapshot(savedAt: later, trending: songs("fresh", count: 1)))
+
+        let reader = HomeFeedStore.disk(directory: directory, now: { start.addingTimeInterval(31 * day) })
+        let loaded = try #require(await reader.loadPublic())
+        #expect(loaded.trending?.map(\.id) == ["fresh-0"])
+        #expect(loaded.newReleases == nil)
+        #expect(loaded.topPicks == nil)
+        #expect(loaded.topPicksSource == nil)
+        #expect(loaded.latestSetlist == nil)
+    }
+
+    @Test("A save older than the stored shelf doesn't replace it")
+    func olderSaveDoesNotReplaceNewerShelf() async throws {
+        let newer = Date()
+        let older = newer.addingTimeInterval(-60)
+        await store.savePublic(HomeFeedSnapshot(savedAt: newer, trending: songs("newer", count: 1)))
+        await store.savePublic(HomeFeedSnapshot(
+            savedAt: older,
+            trending: songs("older", count: 1),
+            newReleases: songs("release", count: 1)
+        ))
+
+        let loaded = try #require(await store.loadPublic())
+        #expect(loaded.trending?.map(\.id) == ["newer-0"])
+        // A shelf the newer save didn't carry still comes from the older one.
+        #expect(loaded.newReleases?.map(\.id) == ["release-0"])
+
+        let memory = HomeFeedStore.inMemory()
+        await memory.savePublic(HomeFeedSnapshot(savedAt: newer, trending: songs("newer", count: 1)))
+        await memory.savePublic(HomeFeedSnapshot(savedAt: older, trending: songs("older", count: 1)))
+        #expect(await memory.loadPublic()?.trending?.map(\.id) == ["newer-0"])
+    }
+
+    @Test("An account's Made for You isn't replaced by an older save")
+    func olderSuggestionsSaveIsIgnored() async throws {
+        let newer = Date()
+        let older = newer.addingTimeInterval(-60)
+        await store.saveSuggestions("a", HomeSuggestionsSnapshot(savedAt: newer, songs: songs("newer", count: 1)))
+        await store.saveSuggestions("a", HomeSuggestionsSnapshot(savedAt: older, songs: songs("older", count: 1)))
+        #expect(await store.loadSuggestions("a")?.songs.map(\.id) == ["newer-0"])
+
+        let memory = HomeFeedStore.inMemory()
+        await memory.saveSuggestions("a", HomeSuggestionsSnapshot(savedAt: newer, songs: songs("newer", count: 1)))
+        await memory.saveSuggestions("a", HomeSuggestionsSnapshot(savedAt: older, songs: songs("older", count: 1)))
+        #expect(await memory.loadSuggestions("a")?.songs.map(\.id) == ["newer-0"])
+    }
+
     @Test("A snapshot saved for another API host is ignored")
     func otherAPIHostIsIgnored() async {
         await store.savePublic(snapshot(apiHost: "https://api.example.invalid"))
