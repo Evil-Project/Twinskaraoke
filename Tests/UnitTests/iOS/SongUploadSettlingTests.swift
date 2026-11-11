@@ -80,6 +80,37 @@ struct SongUploadSettlingTests {
         #expect(failedWithServerError(phase(controller, id), status: 400))
     }
 
+    // MARK: - Cancel
+
+    @Test("Cancel is ignored once the server's answer arrived")
+    func cancelIsIgnoredOnceTheAnswerArrived() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        var release: CheckedContinuation<Void, Never>?
+        harness.invalidationHold = { await withCheckedContinuation { release = $0 } }
+        harness.transport.send(.finished(taskID: taskID, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { release != nil }
+
+        controller.cancel(try #require(id))
+        #expect(phase(controller, id) == .finishing)
+        release?.resume()
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(controller.completedUploads == 1)
+        #expect(harness.transport.state.withLock { $0.cancelled }.isEmpty)
+    }
+
+    // MARK: - Background wake
+
+    @Test("A background wake with an empty outbox acknowledges orphan events")
+    func backgroundWakeWithEmptyOutboxAcknowledgesOrphanEvents() async {
+        harness.transport.send(.finished(taskID: 9, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        let controller = harness.controller()
+        await controller.handleBackgroundEvents()
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [9] }
+        #expect(controller.uploads.isEmpty)
+    }
+
     // MARK: - Link imports
 
     @Test("An interrupted link import that landed counts as success")

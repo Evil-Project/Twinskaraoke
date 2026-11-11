@@ -359,6 +359,9 @@ final class SongUploadController {
         service.sweepStaged(Set(entries.map(\.id)))
         guard !entries.isEmpty else {
             hasResumed = true
+            // A background wake can bring events for tasks no entry names;
+            // acknowledging them lets the wake end.
+            dropUnclaimedEvents()
             return
         }
         startEventLoop()
@@ -429,12 +432,15 @@ final class SongUploadController {
             setPhase(id, fraction >= 1 ? .finishing : .uploading(fraction))
         case let .finished(_, status, body, contentType, retryAfter):
             records[id]?.settling = true
+            // From here the server has answered: cancel must not remove it.
+            if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
                 await self?.settleAnswer(id, status: status, body: body, contentType: contentType, retryAfter: retryAfter)
                 self?.service.transport.acknowledge(taskID)
             }
         case let .failed(_, failure):
             records[id]?.settling = true
+            if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
                 await self?.settleTransportFailure(id, failure)
                 self?.service.transport.acknowledge(taskID)
