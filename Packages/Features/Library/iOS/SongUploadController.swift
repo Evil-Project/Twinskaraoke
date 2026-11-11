@@ -43,6 +43,12 @@ final class SongUploadController {
         var knownSongIDs: Set<String>?
         /// A finished or failed event is being handled.
         var settling = false
+        /// The account that started the upload; `nil` when it couldn't be
+        /// told. It is never sent, imported or retried for another one.
+        var account: String?
+        /// Started by an account that has since signed out: the upload is
+        /// dropped from the list when it ends.
+        var leavesListWhenEnded = false
     }
 
     @ObservationIgnored let service: Service
@@ -57,6 +63,7 @@ final class SongUploadController {
     /// task's id is on its way back from `start`.
     @ObservationIgnored private var unclaimedEvents: [Int: [UploadTransport.Event]] = [:]
     @ObservationIgnored private var cancelledTaskIDs: Set<Int> = []
+    @ObservationIgnored private var sessionObserver: NSObjectProtocol?
 
     /// `vanishedGrace` is how long a restored upload whose task is gone may
     /// wait for the session's event before the server is asked instead.
@@ -66,6 +73,13 @@ final class SongUploadController {
     ) {
         self.service = service
         self.vanishedGrace = vanishedGrace
+        sessionObserver = NotificationCenter.default.addObserver(
+            forName: WatchSessionLink.sessionChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.accountMayHaveChanged() }
+        }
         Task { [weak self] in await self?.resume() }
     }
 
@@ -73,6 +87,7 @@ final class SongUploadController {
         work?.task.cancel()
         eventLoop?.cancel()
         resumeTask?.cancel()
+        if let sessionObserver { NotificationCenter.default.removeObserver(sessionObserver) }
     }
 
     // MARK: - Starting
@@ -100,7 +115,7 @@ final class SongUploadController {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let link = SongLinkImport.supportedLink(trimmed) else {
             let id = UUID()
-            records[id] = Record(source: nil, key: "")
+            records[id] = Record(source: nil, key: "", account: service.currentAccount())
             let problem = SongLinkImport.problem(with: trimmed) ?? .unsupportedSite
             uploads.append(Item(id: id, title: trimmed, kind: .link, phase: .failed(.unsupportedLink(problem))))
             return id
@@ -113,6 +128,8 @@ final class SongUploadController {
 
     private func enqueue(_ kind: Item.Kind, title: String, record: Record) -> UUID {
         let id = UUID()
+        var record = record
+        record.account = service.currentAccount()
         records[id] = record
         uploads.append(Item(id: id, title: title, kind: kind, phase: .waiting))
         startNext()
@@ -140,6 +157,7 @@ final class SongUploadController {
     }
 
     private func run(_ id: UUID) async {
+        guard !refuseForAnotherAccount(id) else { return }
         switch records[id]?.source {
         case let .file(source, metadata):
             await runFile(id, source: source, metadata: metadata)
@@ -184,7 +202,7 @@ final class SongUploadController {
 
     /// Hands the staged body to the transport with a fresh token.
     private func send(_ id: UUID) async {
-        guard let staged = records[id]?.staged else { return }
+        guard let staged = records[id]?.staged, !refuseForAnotherAccount(id) else { return }
         let request: URLRequest
         do {
             request = try service.makeUploadRequest(staged)
@@ -214,7 +232,8 @@ final class SongUploadController {
             taskID: taskID,
             title: title(of: id),
             startedAt: Date(),
-            knownSongIDs: records[id]?.knownSongIDs
+            knownSongIDs: records[id]?.knownSongIDs,
+            account: records[id]?.account
         ))
         DebugLogger.log("Upload started: \(staged.bodyBytes) bytes", category: .network)
         replayUnclaimedEvents(for: taskID)
@@ -225,6 +244,10 @@ final class SongUploadController {
 
     private func runLink(_ id: UUID, link: URL, playlistID: String?) async {
         setPhase(id, .importing)
+        // An import that ends without an answer may still have landed; the
+        // list from before tells.
+        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
+        guard isCurrent(id), !refuseForAnotherAccount(id) else { return }
         do {
             let result = try await service.importLink(SongLinkImport(url: link.absoluteString, playlistID: playlistID))
             guard records[id] != nil else { return }
@@ -238,12 +261,15 @@ final class SongUploadController {
                     let resolved = await unauthorizedFailure(problem)
                     return fail(id, resolved)
                 }
+                if Self.mayHaveLanded(failure) { return await settleAmbiguous(id, failure: failure) }
                 return fail(id, failure)
             }
             // Cancelled without the user asking: the app was suspended or
-            // the request was torn down. The user can try again.
+            // the request was torn down. The user can try again unless the
+            // import landed anyway.
             let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
-            fail(id, cancelled ? .interrupted : .unknown)
+            guard cancelled else { return fail(id, .unknown) }
+            await settleAmbiguous(id, failure: .interrupted)
         }
     }
 
@@ -285,6 +311,10 @@ final class SongUploadController {
               let record = records[id], record.source != nil || record.staged != nil
         else { return }
         if let key = record.source.map({ _ in record.key }), isActive(key: key) { return }
+        if belongsToAnotherAccount(id, current: service.currentAccount()) {
+            uploads[index].phase = .failed(.signedOut)
+            return
+        }
         records[id]?.settling = false
         uploads[index].phase = .waiting
         startNext()
@@ -329,6 +359,9 @@ final class SongUploadController {
         service.sweepStaged(Set(entries.map(\.id)))
         guard !entries.isEmpty else {
             hasResumed = true
+            // A background wake can bring events for tasks no entry names;
+            // acknowledging them lets the wake end.
+            dropUnclaimedEvents()
             return
         }
         startEventLoop()
@@ -340,7 +373,8 @@ final class SongUploadController {
                 key: "staged:\(entry.id)",
                 staged: entry.staged(),
                 taskID: entry.taskID,
-                knownSongIDs: entry.knownSongIDs
+                knownSongIDs: entry.knownSongIDs,
+                account: entry.account
             )
             let running = entry.taskID.map(active.contains) ?? false
             uploads.append(Item(id: entry.id, title: entry.title, kind: .file, phase: running ? .uploading(0) : .finishing))
@@ -398,12 +432,15 @@ final class SongUploadController {
             setPhase(id, fraction >= 1 ? .finishing : .uploading(fraction))
         case let .finished(_, status, body, contentType, retryAfter):
             records[id]?.settling = true
+            // From here the server has answered: cancel must not remove it.
+            if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
                 await self?.settleAnswer(id, status: status, body: body, contentType: contentType, retryAfter: retryAfter)
                 self?.service.transport.acknowledge(taskID)
             }
         case let .failed(_, failure):
             records[id]?.settling = true
+            if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
                 await self?.settleTransportFailure(id, failure)
                 self?.service.transport.acknowledge(taskID)
@@ -451,6 +488,17 @@ final class SongUploadController {
     /// Called when an upload has ended either way.
     func finishRun(_ id: UUID) {
         if work?.itemID == id { work = nil }
+        if records[id]?.leavesListWhenEnded == true { removeItem(id) }
         startNext()
+    }
+
+    /// Drops an upload from the list with its staged body and outbox entry,
+    /// whatever its phase; the caller has made sure nothing of it still runs.
+    func removeItem(_ id: UUID) {
+        uploads.removeAll { $0.id == id }
+        if latestCompletion?.itemID == id { latestCompletion = nil }
+        guard let staged = records.removeValue(forKey: id)?.staged else { return }
+        service.discard(staged)
+        service.outbox.remove(id: staged.id)
     }
 }

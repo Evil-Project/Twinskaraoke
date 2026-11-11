@@ -70,6 +70,9 @@ struct SongUploadControllerTests {
         var tokenCount = 0
         var importResult: () throws -> SongLinkImportResult? = { nil }
         var importCalls = 0
+        var account: String? = "account-a"
+        /// Awaited by `invalidateUploads`, to hold a success in progress.
+        var invalidationHold: (() async -> Void)?
 
         nonisolated static func limits(remainingSongs: Int, remainingBytes: Int64 = 1_000_000) -> UploadLimits {
             UploadLimits(
@@ -121,8 +124,12 @@ struct SongUploadControllerTests {
                 },
                 discard: { [self] upload in discarded.append(upload.id) },
                 fileSize: { _ in 1000 },
-                invalidateUploads: { [self] in invalidations += 1 },
-                sweepStaged: { _ in }
+                invalidateUploads: { [self] in
+                    invalidations += 1
+                    await invalidationHold?()
+                },
+                sweepStaged: { _ in },
+                currentAccount: { [self] in account }
             )
         }
 
