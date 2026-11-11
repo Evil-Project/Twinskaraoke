@@ -30,6 +30,35 @@ struct AccessibilityShelfLayoutTests {
         #expect(AM.Layout.mediaShelfHeight(tileWidth: 160, labelAllowance: 90, accessibilityText: true) == standard + 34)
     }
 
+    @Test func aPlaylistShelfMakesRoomForASecondTitleLine() {
+        let standard = AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: 90, accessibilityText: false, twoLineTitles: true
+        )
+        let accessibility = AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: 90, accessibilityText: true, twoLineTitles: true
+        )
+        #expect(abs(standard - 270) < 0.001, "Got \(standard)")
+        #expect(abs(accessibility - 284) < 0.001, "Got \(accessibility)")
+    }
+
+    @Test func aSongShelfKeepsOneTitleLine() {
+        let standard = AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: 90, accessibilityText: false, twoLineTitles: false
+        )
+        let accessibility = AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: 90, accessibilityText: true, twoLineTitles: false
+        )
+        #expect(abs(standard - 250) < 0.001, "Got \(standard)")
+        #expect(abs(accessibility - 284) < 0.001, "Got \(accessibility)")
+    }
+
+    @Test func tileTitleLineLimitByKindAndSize() {
+        #expect(AM.Layout.tileTitleLineLimit(twoLineTitles: true, accessibilityText: false) == 2)
+        #expect(AM.Layout.tileTitleLineLimit(twoLineTitles: false, accessibilityText: false) == 1)
+        #expect(AM.Layout.tileTitleLineLimit(twoLineTitles: false, accessibilityText: true) == 2)
+        #expect(AM.Layout.tileTitleLineLimit(twoLineTitles: true, accessibilityText: true) == 2)
+    }
+
     @Test func aPlaylistTileTitleWrapsAtAnAccessibilitySize() {
         func tile(_ name: String) -> some View {
             PlaylistGridCell(
