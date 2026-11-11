@@ -86,4 +86,9 @@ struct UploadOutboxStoreTests {
         memory.remove(id: done.id)
         #expect(memory.entries().isEmpty)
     }
+
+    @Test("The live store is one shared instance")
+    func liveStoreIsShared() {
+        #expect(UploadOutboxStore.live === UploadOutboxStore.live)
+    }
 }
