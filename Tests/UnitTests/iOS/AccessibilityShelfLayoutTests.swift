@@ -59,18 +59,52 @@ struct AccessibilityShelfLayoutTests {
         #expect(AM.Layout.tileTitleLineLimit(twoLineTitles: true, accessibilityText: true) == 2)
     }
 
-    @Test func aPlaylistTileTitleWrapsAtAnAccessibilitySize() {
-        func tile(_ name: String) -> some View {
-            PlaylistGridCell(
-                playlist: Playlist(id: name, name: name, songCount: 3, mosaicMedia: nil, songListDTOs: nil),
-                width: 270
-            )
+    /// The label allowance a shelf scales with `@ScaledMetric(relativeTo: .subheadline)`.
+    private func labelAllowance(at size: DynamicTypeSize) -> CGFloat {
+        UIFontMetrics(forTextStyle: .subheadline).scaledValue(
+            for: AM.Layout.shelfLabelAllowance,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+        )
+    }
+
+    private func playlistTile(_ name: String, width: CGFloat) -> some View {
+        PlaylistGridCell(
+            playlist: Playlist(id: name, name: name, songCount: 3, mosaicMedia: nil, songListDTOs: nil),
+            width: width
+        )
+    }
+
+    private func songTile(_ title: String, width: CGFloat) -> some View {
+        MusicGridCard(
+            song: UITestFixtures.song(id: title, title: title, artist: "Artist"),
+            context: [],
+            width: width
+        )
+    }
+
+    @Test(arguments: [DynamicTypeSize.xSmall, .large, .xxxLarge])
+    func aPlaylistTileTakesTwoTitleLinesWithinItsShelf(size: DynamicTypeSize) {
+        let delta = height(of: playlistTile("Evil", width: 160), width: 160, at: size)
+            - height(of: songTile("Riot", width: 160), width: 160, at: size)
+        let allowance = labelAllowance(at: size)
+        let room = AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: allowance, accessibilityText: false, twoLineTitles: true
+        ) - AM.Layout.mediaShelfHeight(
+            tileWidth: 160, labelAllowance: allowance, accessibilityText: false, twoLineTitles: false
+        )
+        #expect(delta > 12, "Expected a reserved second title line at \(size): \(delta)")
+        #expect(delta <= room + 1, "The second line takes \(delta) at \(size); the shelf adds \(room)")
+    }
+
+    @Test func aPlaylistTileReservesTwoTitleLinesAtEverySize() {
+        for (size, width) in [(DynamicTypeSize.large, CGFloat(160)), (.accessibility5, 270)] {
+            let short = height(of: playlistTile("Evil", width: width), width: width, at: size)
+            let long = height(of: playlistTile("Evil Halloween Karaoke - October 29", width: width), width: width, at: size)
+            #expect(long == short, "Expected the same height at \(size): \(long) against \(short)")
         }
-        let short = height(of: tile("Evil"), width: 270, at: .accessibility5)
-        let long = height(of: tile("Evil Halloween Karaoke"), width: 270, at: .accessibility5)
-        #expect(long > short + 20, "Expected a second title line: \(long) against \(short)")
-        #expect(height(of: tile("Evil Halloween Karaoke - October 29"), width: 160, at: .large)
-            == height(of: tile("Evil"), width: 160, at: .large))
+        let playlist = height(of: playlistTile("Evil", width: 270), width: 270, at: .accessibility5)
+        let song = height(of: songTile("Riot", width: 270), width: 270, at: .accessibility5)
+        #expect(playlist > song + 20, "Expected a reserved second title line: \(playlist) against \(song)")
     }
 
     @Test func aSongTileTitleWrapsAtAnAccessibilitySize() {
@@ -84,5 +118,25 @@ struct AccessibilityShelfLayoutTests {
         let short = height(of: tile("Riot"), width: 270, at: .accessibility5)
         let long = height(of: tile("Five Nights at Freddy's"), width: 270, at: .accessibility5)
         #expect(long > short + 20, "Expected a second title line: \(long) against \(short)")
+    }
+
+    @Test func aSongTileTitleStaysOneLineAtAStandardSize() {
+        let short = height(of: songTile("Riot", width: 160), width: 160, at: .large)
+        let long = height(of: songTile("Five Nights at Freddy's - Neuro Karaoke Version", width: 160), width: 160, at: .large)
+        #expect(long == short, "Expected one title line: \(long) against \(short)")
+    }
+
+    @Test func theHomePlaceholderGrowsLikeItsPlaylistShelves() {
+        let width: CGFloat = 390
+        let two = height(of: HomeSkeletonView(availableWidth: width, playlistShelfCount: 2), width: width, at: .large)
+        let none = height(of: HomeSkeletonView(availableWidth: width, playlistShelfCount: 0), width: width, at: .large)
+        let tileWidth = AM.Layout.shelfTileWidth(for: width, accessibilityText: false)
+        let allowance = labelAllowance(at: .large)
+        let step = AM.Layout.mediaShelfHeight(
+            tileWidth: tileWidth, labelAllowance: allowance, accessibilityText: false, twoLineTitles: true
+        ) - AM.Layout.mediaShelfHeight(
+            tileWidth: tileWidth, labelAllowance: allowance, accessibilityText: false, twoLineTitles: false
+        )
+        #expect(abs((two - none) - 2 * step) < 0.01, "Grew by \(two - none); two shelves add \(2 * step)")
     }
 }
