@@ -25,8 +25,13 @@ struct NewView: View {
                             .frame(minHeight: proxy.size.height * 0.6)
                             .transition(.opacity)
                         } else {
-                            newOverview(availableWidth: proxy.size.width)
-                                .transition(.opacity)
+                            VStack(alignment: .leading, spacing: AM.Spacing.l) {
+                                if viewModel.isShowingSavedContent {
+                                    HomeSavedContentNotice()
+                                }
+                                newOverview(availableWidth: proxy.size.width)
+                            }
+                            .transition(.opacity)
                         }
                     }
                     .animation(loadingAnimation, value: viewModel.isLoading)
