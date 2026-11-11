@@ -60,6 +60,10 @@ struct TwinskaraokeApp: App {
             .backgroundTask(.urlSession(BackgroundDownloadTransport.identifier)) {
                 await DownloadManager.shared.handleBackgroundEvents()
             }
+            // Likewise for song uploads, which run in their own session.
+            .backgroundTask(.urlSession(UploadTransport.sessionIdentifier)) {
+                await UploadTransport.live.handleBackgroundEvents()
+            }
         #endif
     }
 
