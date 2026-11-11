@@ -244,6 +244,10 @@ final class SongUploadController {
 
     private func runLink(_ id: UUID, link: URL, playlistID: String?) async {
         setPhase(id, .importing)
+        // An import that ends without an answer may still have landed; the
+        // list from before tells.
+        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
+        guard isCurrent(id), !refuseForAnotherAccount(id) else { return }
         do {
             let result = try await service.importLink(SongLinkImport(url: link.absoluteString, playlistID: playlistID))
             guard records[id] != nil else { return }
@@ -257,12 +261,15 @@ final class SongUploadController {
                     let resolved = await unauthorizedFailure(problem)
                     return fail(id, resolved)
                 }
+                if Self.mayHaveLanded(failure) { return await settleAmbiguous(id, failure: failure) }
                 return fail(id, failure)
             }
             // Cancelled without the user asking: the app was suspended or
-            // the request was torn down. The user can try again.
+            // the request was torn down. The user can try again unless the
+            // import landed anyway.
             let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
-            fail(id, cancelled ? .interrupted : .unknown)
+            guard cancelled else { return fail(id, .unknown) }
+            await settleAmbiguous(id, failure: .interrupted)
         }
     }
 

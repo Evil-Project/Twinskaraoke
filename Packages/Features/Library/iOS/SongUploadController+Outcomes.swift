@@ -14,8 +14,22 @@ extension SongUploadController {
             fail(id, resolved)
         case 429:
             fail(id, .rateLimited(retryAfter: retryAfter))
+        case 500...:
+            // A gateway can time out after the server stored the song.
+            let problem = UploadServerProblem.parse(data: body, contentType: contentType)
+            await settleAmbiguous(id, failure: .server(status: status, problem: problem))
         default:
             fail(id, .server(status: status, problem: UploadServerProblem.parse(data: body, contentType: contentType)))
+        }
+    }
+
+    /// A failure after which the song may still have been added: the request
+    /// was lost or timed out, or a gateway answered for the server.
+    static func mayHaveLanded(_ failure: SongUploadFailure) -> Bool {
+        switch failure {
+        case .timedOut, .interrupted: true
+        case let .server(status, _): status >= 500
+        default: false
         }
     }
 
