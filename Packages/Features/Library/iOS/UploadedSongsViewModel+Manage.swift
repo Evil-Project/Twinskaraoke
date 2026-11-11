@@ -5,7 +5,8 @@ extension UploadedSongsViewModel {
     struct ManageService {
         var update: @MainActor (_ id: String, _ edit: UploadedSongEdit) async throws -> Void
         var delete: @MainActor (_ id: String) async throws -> Void
-        /// Drops the song's offline copy, if there is one.
+        /// Drops the song's offline copy, and stops a download of it that is
+        /// queued or running.
         var removeDownload: @MainActor (_ id: String) -> Void
 
         static var live: ManageService {
@@ -13,10 +14,19 @@ extension UploadedSongsViewModel {
                 update: { id, edit in try await KaraokeAPIClient.updateUploadedSong(id: id, edit: edit) },
                 delete: { id in try await KaraokeAPIClient.deleteUploadedSong(id: id) },
                 removeDownload: { id in
-                    guard DownloadManager.shared.isDownloaded(id) else { return }
-                    DownloadManager.shared.remove(songID: id)
+                    let downloads = DownloadManager.shared
+                    guard hasOfflineWork(downloads.status(for: id)) else { return }
+                    // Cancels queued and running work as well as removing files.
+                    downloads.remove(songID: id)
                 }
             )
+        }
+
+        /// Whether a deleted song has anything in Downloads: a finished copy,
+        /// or a download that is queued or running and would otherwise
+        /// finish after the delete and keep the song there.
+        nonisolated static func hasOfflineWork(_ status: SongDownloadStatus) -> Bool {
+            status.isDownloaded || status.isDownloading
         }
 
         /// Accepts every edit and delete without a request, for UI tests

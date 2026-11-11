@@ -101,6 +101,14 @@ struct UploadedSongsManageTests {
         #expect(fake.removedDownloads.isEmpty)
     }
 
+    @Test func deleteAlsoStopsAQueuedOrRunningDownload() {
+        typealias Manage = UploadedSongsViewModel.ManageService
+        #expect(Manage.hasOfflineWork(SongDownloadStatus(isDownloaded: true, isDownloading: false)))
+        // Queued and running downloads both count as downloading.
+        #expect(Manage.hasOfflineWork(SongDownloadStatus(isDownloaded: false, isDownloading: true)))
+        #expect(!Manage.hasOfflineWork(SongDownloadStatus(isDownloaded: false, isDownloading: false)))
+    }
+
     @Test func editRefreshesFromServer() async {
         let fake = Fake(songs: Self.songs)
         let model = await loaded(fake)
