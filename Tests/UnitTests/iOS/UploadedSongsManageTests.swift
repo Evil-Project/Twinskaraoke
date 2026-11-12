@@ -203,6 +203,21 @@ struct UploadedSongsManageTests {
         #expect(fake.listCalls == callsBefore)
     }
 
+    @Test("The edit form's general message shows unless a field it shows has the server's error")
+    func generalEditMessageShowsUnlessAShownFieldHasTheError() {
+        typealias Model = UploadedSongsViewModel
+        func server(_ fieldErrors: [String: [String]]) -> SongUploadFailure {
+            .server(status: 400, problem: UploadServerProblem(message: "Could not save.", fieldErrors: fieldErrors))
+        }
+        #expect(Model.generalEditMessage(for: nil) == nil)
+        #expect(Model.generalEditMessage(for: .offline) == SongUploadFailure.offline.userMessage)
+        #expect(Model.generalEditMessage(for: server([:])) == "Could not save.")
+        // A field the form doesn't show: only the general message tells.
+        #expect(Model.generalEditMessage(for: server(["Genre": ["Bad."]])) == "Could not save.")
+        #expect(Model.generalEditMessage(for: server(["title": ["Taken."]])) == nil)
+        #expect(Model.generalEditMessage(for: server(["Artist": ["Too long."], "Genre": ["Bad."]])) == nil)
+    }
+
     @Test func failedEditKeepsTheServerProblem() async {
         let fake = Fake(songs: Self.songs)
         let problem = UploadServerProblem(message: nil, fieldErrors: ["title": ["Too long."]])

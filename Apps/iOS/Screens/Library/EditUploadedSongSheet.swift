@@ -64,8 +64,8 @@ struct EditUploadedSongSheet: View {
                 } footer: {
                     if let message = serverProblem?.message(forField: "Artist") {
                         problemText(message)
-                    } else if let failure, serverProblem?.fieldErrors.isEmpty != false {
-                        problemText(failure.userMessage)
+                    } else if let message = UploadedSongsViewModel.generalEditMessage(for: failure) {
+                        problemText(message)
                     }
                 }
             }
