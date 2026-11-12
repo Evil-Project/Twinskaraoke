@@ -17,8 +17,13 @@ struct HomeView: View {
                 ScrollView {
                     Group {
                         if viewModel.isLoading {
-                            HomeSkeletonView(availableWidth: proxy.size.width)
-                                .transition(.opacity)
+                            // Top Picks, then Recently Played when it has
+                            // entries: the shelves that hold playlists.
+                            HomeSkeletonView(
+                                availableWidth: proxy.size.width,
+                                playlistShelfCount: recentlyPlayed.playlists.isEmpty ? 1 : 2
+                            )
+                            .transition(.opacity)
                         } else if viewModel.homeIsEmpty {
                             VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
                                 HomeLoadFailedView {

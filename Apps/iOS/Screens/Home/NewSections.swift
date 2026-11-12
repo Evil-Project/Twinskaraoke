@@ -347,7 +347,8 @@ struct NewPlaylistRail: View {
         .frame(height: AM.Layout.mediaShelfHeight(
             tileWidth: AM.Layout.shelfTileWidth(for: availableWidth, accessibilityText: dynamicTypeSize.isAccessibilitySize),
             labelAllowance: labelAllowance,
-            accessibilityText: dynamicTypeSize.isAccessibilitySize
+            accessibilityText: dynamicTypeSize.isAccessibilitySize,
+            twoLineTitles: true
         ))
     }
 }

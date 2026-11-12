@@ -2,9 +2,16 @@ import SwiftUI
 
 struct HomeSkeletonView: View {
     var availableWidth: CGFloat = 390
+    /// How many of the leading shelves hold playlists; see
+    /// `BrowseLoadingPlaceholder.playlistShelfCount`.
+    var playlistShelfCount = 0
 
     var body: some View {
-        BrowseLoadingPlaceholder(availableWidth: availableWidth, label: String(localized: "Loading Home"))
+        BrowseLoadingPlaceholder(
+            availableWidth: availableWidth,
+            label: String(localized: "Loading Home"),
+            playlistShelfCount: playlistShelfCount
+        )
     }
 }
 
@@ -21,6 +28,9 @@ private struct BrowseLoadingPlaceholder: View {
     let availableWidth: CGFloat
     let label: String
     var featured = false
+    /// The leading shelves that stand in for playlist shelves, whose tiles
+    /// reserve a second title line.
+    var playlistShelfCount = 0
     @ScaledMetric(relativeTo: .subheadline) private var labelAllowance: CGFloat = AM.Layout.shelfLabelAllowance
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -33,11 +43,12 @@ private struct BrowseLoadingPlaceholder: View {
         )
     }
 
-    private var tileHeight: CGFloat {
+    private func tileHeight(forShelf index: Int) -> CGFloat {
         AM.Layout.mediaShelfHeight(
             tileWidth: tileWidth,
             labelAllowance: labelAllowance,
-            accessibilityText: dynamicTypeSize.isAccessibilitySize
+            accessibilityText: dynamicTypeSize.isAccessibilitySize,
+            twoLineTitles: index < playlistShelfCount
         )
     }
 
@@ -75,7 +86,7 @@ private struct BrowseLoadingPlaceholder: View {
                                 MusicSkeletonLine(width: tileWidth * 0.82)
                                 MusicSkeletonLine(width: tileWidth * 0.56, height: 11, tone: .tertiary)
                             }
-                            .frame(width: tileWidth, height: tileHeight, alignment: .topLeading)
+                            .frame(width: tileWidth, height: tileHeight(forShelf: index), alignment: .topLeading)
                         }
                     }
                     .fixedSize(horizontal: true, vertical: false)
