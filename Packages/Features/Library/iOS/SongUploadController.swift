@@ -356,7 +356,8 @@ final class SongUploadController {
 
     private func restore() async {
         let entries = service.outbox.entries()
-        service.sweepStaged(Set(entries.map(\.id)))
+        // `keeping` is read first; a body staged since is too new to sweep.
+        await service.sweepStaged(Set(entries.map(\.id)))
         guard !entries.isEmpty else {
             hasResumed = true
             // A background wake can bring events for tasks no entry names;

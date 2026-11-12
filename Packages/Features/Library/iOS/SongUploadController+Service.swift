@@ -16,8 +16,9 @@ extension SongUploadController {
         /// The size of a picked file, or `nil` when it can't be read.
         var fileSize: @MainActor (_ source: URL) -> Int64?
         var invalidateUploads: @MainActor () async -> Void
-        /// Removes old staged bodies that none of `keeping` names.
-        var sweepStaged: @MainActor (_ keeping: Set<UUID>) -> Void
+        /// Removes old staged bodies that none of `keeping` names, off the
+        /// main actor.
+        var sweepStaged: @MainActor (_ keeping: Set<UUID>) async -> Void
         /// Who is signed in ("guest" when signed out), or `nil` when the
         /// Keychain can't tell. Read from storage, as the video resume store
         /// does; nothing here changes the session.
@@ -41,7 +42,7 @@ extension SongUploadController {
                     return (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
                 },
                 invalidateUploads: { await KaraokeAPIClient.invalidateUploadedSongs() },
-                sweepStaged: { keeping in UploadStaging.sweepStale(keeping: keeping) },
+                sweepStaged: { keeping in await UploadStaging.sweepStale(keeping: keeping) },
                 currentAccount: { VideoResumeStore.accountIdentity(for: AuthManager.persistedDescriptor()) }
             )
         }
