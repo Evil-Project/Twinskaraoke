@@ -63,6 +63,8 @@ extension SongUploadController {
     /// that list a retry could add the song twice, so when it can't be
     /// loaded `id` fails before anything is sent. Returns whether it loaded.
     func loadBaseline(_ id: UUID) async -> Bool {
+        // The list is the signed-in account's: not one to compare with later.
+        guard !refuseForAnotherAccount(id) else { return false }
         do {
             let known = try await Set(service.uploadedSongTitles().keys)
             guard records[id] != nil else { return false }
@@ -98,6 +100,7 @@ extension SongUploadController {
     /// `isThisUpload` matches, means it did; otherwise the user can try again.
     func settleAmbiguous(_ id: UUID, failure: SongUploadFailure) async {
         setPhase(id, .finishing)
+        guard mayReconcile(id) else { return }
         if let known = records[id]?.knownSongIDs,
            let current = try? await service.uploadedSongTitles(),
            isThisUpload(id, added: current.filter { !known.contains($0.key) }.map(\.value))
@@ -135,10 +138,12 @@ extension SongUploadController {
     }
 
     func succeed(_ id: UUID, title: String) async {
-        guard records[id] != nil else { return }
+        guard let record = records[id] else { return }
+        guard !record.endsUnseen else { return endUnseen(id) }
         clearTransfer(id, discardingStage: true)
         await service.invalidateUploads()
-        guard records[id] != nil else { return }
+        guard let record = records[id] else { return }
+        guard !record.endsUnseen else { return endUnseen(id) }
         setPhase(id, .succeeded(title: title))
         noteCompletion(Completion(itemID: id, title: title, succeeded: true))
         DebugLogger.log("Upload succeeded", category: .network)
@@ -147,7 +152,8 @@ extension SongUploadController {
 
     /// Keeps the staged body, so a retry can send it again.
     func fail(_ id: UUID, _ failure: SongUploadFailure) {
-        guard records[id] != nil else { return }
+        guard let record = records[id] else { return }
+        guard !record.endsUnseen else { return endUnseen(id) }
         clearTransfer(id, discardingStage: false)
         setPhase(id, .failed(failure))
         noteCompletion(Completion(itemID: id, title: title(of: id), succeeded: false))

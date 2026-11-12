@@ -48,10 +48,7 @@ final class SongUploadController {
         /// an earlier build's outbox, or one refused because it couldn't be
         /// told.
         var account: String?
-        /// Started by an account that has since signed out: the upload is
-        /// dropped from the list when it ends.
-        var leavesListWhenEnded = false
-        /// Restored for an account other than the current one: never listed,
+        /// Belongs to an account other than the current one: never listed,
         /// and it ends without a message.
         var endsUnseen = false
     }
@@ -150,7 +147,7 @@ final class SongUploadController {
     }
 
     /// Starts the first waiting upload unless one is already running.
-    private func startNext() {
+    func startNext() {
         guard hasResumed else {
             Task { [weak self] in
                 await self?.resume()
@@ -294,10 +291,7 @@ final class SongUploadController {
               let record = records.removeValue(forKey: id)
         else { return }
         uploads.remove(at: index)
-        if work?.itemID == id {
-            work?.task.cancel()
-            work = nil
-        }
+        stopRun(id)
         if let taskID = record.taskID {
             cancelledTaskIDs.insert(taskID)
             Task { await service.transport.cancel(taskID) }
@@ -414,7 +408,8 @@ final class SongUploadController {
     /// server's list tells whether it arrived.
     private func settleVanished(_ id: UUID) async {
         try? await Task.sleep(for: vanishedGrace)
-        guard let record = records[id], !record.settling, item(id)?.isActive == true else { return }
+        // One an account change hid is still settled, to end it unseen.
+        guard let record = records[id], !record.settling, item(id)?.isActive == true || record.endsUnseen else { return }
         records[id]?.settling = true
         await settleAmbiguous(id, failure: .interrupted)
     }
@@ -513,17 +508,28 @@ final class SongUploadController {
     /// Called when an upload has ended either way.
     func finishRun(_ id: UUID) {
         if work?.itemID == id { work = nil }
-        if records[id]?.leavesListWhenEnded == true { removeItem(id) }
         startNext()
+    }
+
+    /// Cancels the run of `id` if it is the one running.
+    func stopRun(_ id: UUID) {
+        guard work?.itemID == id else { return }
+        work?.task.cancel()
+        work = nil
     }
 
     /// Drops an upload from the list with its staged body and outbox entry,
     /// whatever its phase; the caller has made sure nothing of it still runs.
     func removeItem(_ id: UUID) {
-        uploads.removeAll { $0.id == id }
-        if latestCompletion?.itemID == id { latestCompletion = nil }
+        removeFromList(id)
         guard let staged = records.removeValue(forKey: id)?.staged else { return }
         service.discard(staged)
         service.outbox.remove(id: staged.id)
+    }
+
+    /// Takes `id` out of the list and the banner; its record stays.
+    func removeFromList(_ id: UUID) {
+        uploads.removeAll { $0.id == id }
+        if latestCompletion?.itemID == id { latestCompletion = nil }
     }
 }

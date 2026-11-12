@@ -80,28 +80,62 @@ extension SongUploadController {
         return true
     }
 
-    /// The transfer of an upload set aside for another account ended: no
-    /// banner, notification or retry, just its body and outbox entry gone.
+    /// The transfer of an upload set aside for another account ended.
     func endUnseen(_ id: UUID, taskID: Int) {
-        if let staged = records.removeValue(forKey: id)?.staged {
-            service.discard(staged)
-            service.outbox.remove(id: staged.id)
-        }
+        endUnseen(id)
         service.transport.acknowledge(taskID)
     }
 
+    /// Ends an upload of another account: no banner, notification, retry or
+    /// cache refresh, just its body and outbox entry gone.
+    func endUnseen(_ id: UUID) {
+        DebugLogger.log("Upload of another account ended unseen", category: .network)
+        removeItem(id)
+        finishRun(id)
+    }
+
     /// After a sign-in, sign-out or account switch, the previous account's
-    /// waiting and ended uploads leave the list with their staged bodies. One
-    /// already running finishes under the token it was sent with (or is
-    /// refused before it sends) and leaves the list when it ends.
+    /// uploads leave the list at once. Waiting and ended ones go with their
+    /// staged bodies, and one not yet sent stops. One already sent (or a link
+    /// import the server is working on) can't be called back: it finishes
+    /// under the token it was sent with, unseen, and its result is dropped.
     func accountMayHaveChanged() {
         let current = service.currentAccount()
         for item in uploads where belongsToAnotherAccount(item.id, current: current) {
-            if item.phase == .waiting || !item.isActive {
-                removeItem(item.id)
+            guard let record = records[item.id] else { continue }
+            let reachedServer = record.taskID != nil || record.settling || item.kind == .link
+            if item.isActive, item.phase != .waiting, reachedServer {
+                records[item.id]?.endsUnseen = true
+                removeFromList(item.id)
             } else {
-                records[item.id]?.leavesListWhenEnded = true
+                stopRun(item.id)
+                removeItem(item.id)
             }
         }
+        startNext()
+    }
+
+    /// Before `id` is matched against the uploads list, which is the
+    /// signed-in account's: an upload of another account ends unseen, and
+    /// one whose account is known fails as interrupted while the current one
+    /// can't be read. Returns whether it may be matched.
+    func mayReconcile(_ id: UUID) -> Bool {
+        guard let record = records[id] else { return false }
+        guard !record.endsUnseen else {
+            endUnseen(id)
+            return false
+        }
+        // Restored from an earlier build's outbox: nothing to compare.
+        guard let owner = record.account else { return true }
+        guard let current = service.currentAccount() else {
+            DebugLogger.log("Upload not settled: the signed-in account can't be read", category: .network)
+            fail(id, .interrupted)
+            return false
+        }
+        guard owner == current else {
+            endUnseen(id)
+            return false
+        }
+        return true
     }
 }
