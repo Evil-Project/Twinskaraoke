@@ -66,6 +66,11 @@ struct SongUploadControllerTests {
         var songs: [String: String] = ["old": "Old Song"]
         /// Thrown by the list of uploads while set.
         var songListError: Error?
+        /// Awaited by the list of uploads before it answers, to hold one.
+        var songListHold: (() async -> Void)?
+        var songListCalls = 0
+        /// List requests that got past the hold.
+        var songListAnswers = 0
         var stageCalls = 0
         var staged: [StagedUpload] = []
         var discarded: [UUID] = []
@@ -73,6 +78,8 @@ struct SongUploadControllerTests {
         var tokenCount = 0
         var importResult: () throws -> SongLinkImportResult? = { nil }
         var importCalls = 0
+        /// Awaited by a link import before it answers, to hold one.
+        var importHold: (() async -> Void)?
         var account: String? = "account-a"
         /// Awaited by `invalidateUploads`, to hold a success in progress.
         var invalidationHold: (() async -> Void)?
@@ -96,6 +103,9 @@ struct SongUploadControllerTests {
                     return try limits()
                 },
                 uploadedSongTitles: { [self] in
+                    songListCalls += 1
+                    await songListHold?()
+                    songListAnswers += 1
                     if let songListError { throw songListError }
                     return songs
                 },
@@ -109,6 +119,7 @@ struct SongUploadControllerTests {
                 },
                 importLink: { [self] _ in
                     importCalls += 1
+                    await importHold?()
                     return try importResult()
                 },
                 transport: transport.transport,

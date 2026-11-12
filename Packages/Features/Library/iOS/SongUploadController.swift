@@ -43,8 +43,10 @@ final class SongUploadController {
         var knownSongIDs: Set<String>?
         /// A finished or failed event is being handled.
         var settling = false
-        /// The account that started the upload; `nil` when it couldn't be
-        /// told. It is never sent, imported or retried for another one.
+        /// The account that started the upload. It is never sent, imported
+        /// or retried for another one. `nil` only for an upload restored from
+        /// an earlier build's outbox, or one refused because it couldn't be
+        /// told.
         var account: String?
         /// Started by an account that has since signed out: the upload is
         /// dropped from the list when it ends.
@@ -135,6 +137,10 @@ final class SongUploadController {
         record.account = service.currentAccount()
         records[id] = record
         uploads.append(Item(id: id, title: title, kind: kind, phase: .waiting))
+        guard record.account != nil else {
+            refuseWithoutOwner(id)
+            return id
+        }
         startNext()
         return id
     }
@@ -316,6 +322,10 @@ final class SongUploadController {
               let record = records[id], record.source != nil || record.staged != nil
         else { return }
         if let key = record.source.map({ _ in record.key }), isActive(key: key) { return }
+        guard claimOwnerForRetry(id) else {
+            uploads[index].phase = .failed(.interrupted)
+            return
+        }
         if belongsToAnotherAccount(id, current: service.currentAccount()) {
             uploads[index].phase = .failed(.signedOut)
             return

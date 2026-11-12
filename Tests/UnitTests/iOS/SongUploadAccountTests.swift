@@ -152,12 +152,49 @@ struct SongUploadAccountTests {
         #expect(harness.transport.started.count == 1)
     }
 
-    @Test("An account that can't be told doesn't block the upload")
-    func unknownAccountDoesNotBlock() async {
+    @Test("An upload whose account can't be read fails at once, and a retry records the account")
+    func unknownAccountFailsAtOnceAndRetryRecordsIt() async throws {
         harness.account = nil
         let controller = harness.controller()
-        let (id, _) = await startedUpload(controller)
-        #expect(phase(controller, id) == .uploading(0))
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        // Refused synchronously: nothing was queued that could send later.
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(controller.records[try #require(id)]?.account == nil)
+
+        // Still unreadable: the retry is refused the same way.
+        controller.retry(try #require(id))
+        #expect(phase(controller, id) == .failed(.interrupted))
+
+        harness.account = "account-a"
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 1 && controller.records[id ?? UUID()]?.taskID != nil }
+        #expect(controller.records[try #require(id)]?.account == "account-a")
+        #expect(harness.outbox.entries().first?.account == "account-a")
+        #expect(harness.limitsCalls == 1)
+        #expect(harness.stageCalls == 1)
+    }
+
+    @Test("A link whose account can't be read fails at once")
+    func unknownAccountFailsLinkAtOnce() async {
+        harness.account = nil
+        let controller = harness.controller()
+        let link = controller.importLink("https://youtu.be/a")
+        #expect(phase(controller, link) == .failed(.interrupted))
+        #expect(!controller.uploads.contains { $0.isActive })
+        #expect(harness.importCalls == 0)
+        #expect(harness.songListCalls == 0)
+    }
+
+    @Test("A restored upload saved without an account is still sent on retry")
+    func restoredUploadWithoutAccountStaysTolerant() async throws {
+        harness.outbox.save(pending(taskID: 9, account: nil))
+        harness.account = nil
+        let controller = harness.controller()
+        await controller.resume()
+        await waitUntil { controller.uploads.first?.phase.isFinished == true }
+        #expect(controller.uploads.first?.phase == .failed(.interrupted))
+        controller.retry(try #require(controller.uploads.first).id)
+        await waitUntil { harness.transport.started.count == 1 }
     }
 
     @Test("An upload isn't sent while the signed-in account can't be read, and can be retried")

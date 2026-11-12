@@ -21,6 +21,10 @@ extension SongUploadController {
     /// fails as interrupted, which the user can retry once it can be read.
     func refuseForAnotherAccount(_ id: UUID) -> Bool {
         let current = service.currentAccount()
+        if records[id]?.source != nil, records[id]?.account == nil {
+            refuseWithoutOwner(id)
+            return true
+        }
         if current == nil, records[id]?.account != nil {
             DebugLogger.log("Upload not sent: the signed-in account can't be read", category: .network)
             fail(id, .interrupted)
@@ -29,6 +33,26 @@ extension SongUploadController {
         guard belongsToAnotherAccount(id, current: current) else { return false }
         DebugLogger.log("Upload not sent: another account is signed in", category: .network)
         fail(id, .signedOut)
+        return true
+    }
+
+    /// An upload started while the signed-in account can't be read has no
+    /// owner to check later, so it could go out under whichever token is
+    /// current by then. It fails at once, before anything is staged or sent,
+    /// as interrupted: the user can retry once the account can be read.
+    func refuseWithoutOwner(_ id: UUID) {
+        DebugLogger.log("Upload not queued: the signed-in account can't be read", category: .network)
+        fail(id, .interrupted)
+    }
+
+    /// Before a retry: an upload started this launch without a readable
+    /// account takes the one signed in now. Returns `false` when that still
+    /// can't be read. An upload restored from an earlier build's outbox
+    /// without an account keeps none, as before.
+    func claimOwnerForRetry(_ id: UUID) -> Bool {
+        guard let record = records[id], record.source != nil, record.account == nil else { return true }
+        guard let current = service.currentAccount() else { return false }
+        records[id]?.account = current
         return true
     }
 
