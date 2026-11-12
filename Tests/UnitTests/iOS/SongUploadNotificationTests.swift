@@ -40,6 +40,11 @@ struct SongUploadNotificationTests {
         return (id, controller.records[id ?? UUID()]?.taskID ?? -1)
     }
 
+    @MainActor
+    private final class Flag {
+        var value = false
+    }
+
     private func finish(_ taskID: Int, status: Int = 200) {
         harness.transport.send(.finished(taskID: taskID, status: status, body: Data(), contentType: nil, retryAfter: nil))
     }
@@ -129,7 +134,8 @@ struct SongUploadNotificationTests {
     @Test("An upload settled during a background wake notifies before the wake ends")
     func backgroundWakeCompletionNotifies() async {
         harness.appIsActive = false
-        harness.notificationDelay = .milliseconds(300)
+        var release: CheckedContinuation<Void, Never>?
+        harness.deliveryHold = { await withCheckedContinuation { release = $0 } }
         let id = UUID()
         let staged = StagedUpload(
             id: id,
@@ -145,10 +151,21 @@ struct SongUploadNotificationTests {
         ))
         harness.transport.send(.finished(taskID: 8, status: 200, body: Data(), contentType: nil, retryAfter: nil))
         let controller = harness.controller(vanishedGrace: .seconds(1))
-        await waitUntil { controller.uploads.first?.phase.isFinished == true }
+        await waitUntil { controller.uploads.first?.phase.isFinished == true && release != nil }
+
         // Still being posted: the wake waits for it before it ends.
+        let wakeEnded = Flag()
+        let wake = Task {
+            await controller.handleBackgroundEvents()
+            wakeEnded.value = true
+        }
+        await waitUntil { harness.transport.state.withLock { $0.backgroundEventsHandled } == 1 }
+        #expect(!wakeEnded.value)
         #expect(harness.notifications.isEmpty)
-        await controller.handleBackgroundEvents()
+
+        release?.resume()
+        await wake.value
+        #expect(wakeEnded.value)
         #expect(harness.notifications.count == 1)
         #expect(harness.notifications.first?.body.contains("Away") == true)
     }
