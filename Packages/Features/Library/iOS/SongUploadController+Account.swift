@@ -14,8 +14,19 @@ extension SongUploadController {
 
     /// Fails `id` as signed out when another account is signed in now, so
     /// nothing is sent for it. Returns whether it did.
+    ///
+    /// Unlike `belongsToAnotherAccount`, this fails closed: an upload whose
+    /// account is known isn't sent while the current one can't be read (the
+    /// Keychain is locked, say), since the token sent could be anyone's. It
+    /// fails as interrupted, which the user can retry once it can be read.
     func refuseForAnotherAccount(_ id: UUID) -> Bool {
-        guard belongsToAnotherAccount(id, current: service.currentAccount()) else { return false }
+        let current = service.currentAccount()
+        if current == nil, records[id]?.account != nil {
+            DebugLogger.log("Upload not sent: the signed-in account can't be read", category: .network)
+            fail(id, .interrupted)
+            return true
+        }
+        guard belongsToAnotherAccount(id, current: current) else { return false }
         DebugLogger.log("Upload not sent: another account is signed in", category: .network)
         fail(id, .signedOut)
         return true

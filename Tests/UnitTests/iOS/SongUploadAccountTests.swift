@@ -88,6 +88,30 @@ struct SongUploadAccountTests {
         #expect(phase(controller, id) == .uploading(0))
     }
 
+    @Test("An upload isn't sent while the signed-in account can't be read, and can be retried")
+    func unreadableAccountAtSendFailsRetryably() async throws {
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        // Started by account-a; by the time it would send, the Keychain can't tell.
+        harness.account = nil
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(SongUploadFailure.interrupted.isRetryable)
+        #expect(harness.stageCalls == 0)
+        #expect(harness.transport.started.isEmpty)
+
+        harness.account = "account-a"
+        let link = controller.importLink("https://youtu.be/a")
+        harness.account = nil
+        await waitUntil { isFinished(controller, link) }
+        #expect(phase(controller, link) == .failed(.interrupted))
+        #expect(harness.importCalls == 0)
+
+        harness.account = "account-a"
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 1 }
+    }
+
     @Test("A session change drops the previous account's ended and waiting uploads")
     func accountChangeDropsPreviousAccountsEndedUploads() async throws {
         let controller = harness.controller()
