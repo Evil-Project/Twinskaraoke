@@ -8,6 +8,72 @@ import Testing
 @Suite("Watch playback regressions")
 struct WatchPlaybackRegressionTests {
     @MainActor
+    @Test("The latest song or radio request owns one in-flight activation")
+    func activationCoalescesPlaybackRequests() {
+        let activation = WatchActivationProbe()
+        let session = activation.makeSession()
+        var settled: [String] = []
+        session.request { _ in settled.append("song") }
+        session.request { _ in settled.append("next song") }
+        session.request { _ in settled.append("radio") }
+        #expect(activation.completions.count == 1)
+        activation.completions.first?(.success(()))
+        #expect(settled == ["radio"])
+        #expect(session.isActive)
+        session.request { _ in settled.append("resume") }
+        #expect(settled == ["radio", "resume"])
+        #expect(activation.completions.count == 1)
+    }
+
+    @MainActor
+    @Test("Pause or replacement drops the old request and a failed activation can retry")
+    func activationCancellationAndRetry() throws {
+        let activation = WatchActivationProbe()
+        let session = activation.makeSession()
+        var failure: NSError?
+        session.request { _ in Issue.record("The paused player received an activation result") }
+        session.cancelPendingPlayback()
+        let error = NSError(domain: "Activation test", code: 42)
+        let cancelled = try #require(activation.completions.first)
+        cancelled(.failure(error))
+        #expect(!session.isActive)
+
+        session.request { result in
+            if case let .failure(error) = result { failure = error as NSError }
+        }
+        let failed = try #require(activation.completions.dropFirst().first)
+        failed(.failure(error))
+        #expect(failure == error)
+        session.request { _ in }
+        let retried = try #require(activation.completions.dropFirst(2).first)
+        retried(.success(()))
+        #expect(session.isActive)
+    }
+
+    @MainActor
+    @Test("Invalidation discards stale success and failure before activating for a new request")
+    func activationInvalidation() throws {
+        for staleResult: Result<Void, Error> in [.success(()), .failure(CancellationError())] {
+            let activation = WatchActivationProbe()
+            let session = activation.makeSession()
+            session.request { _ in Issue.record("An invalidated player received an activation result") }
+            session.invalidate()
+            var settled = false
+            session.request { _ in settled = true }
+            #expect(activation.completions.count == 1)
+            let stale = try #require(activation.completions.first)
+            stale(staleResult)
+            #expect(!session.isActive)
+            #expect(!settled)
+            #expect(activation.completions.count == 2)
+            let current = try #require(activation.completions.dropFirst().first)
+            current(.success(()))
+            #expect(session.isActive)
+            #expect(settled)
+        }
+    }
+
+    @MainActor
     @Test("Stale-account cancellation never falls back to a direct playlist fetch")
     func playlistCancellation() async {
         do {
@@ -121,6 +187,15 @@ struct WatchPlaybackRegressionTests {
         timer.startEndOfSong()
         #expect(timer.consumeEndOfSong())
         #expect(!timer.consumeEndOfSong())
+    }
+}
+
+@MainActor
+private final class WatchActivationProbe {
+    var completions: [WatchAudioSessionCoordinator.Completion] = []
+
+    func makeSession() -> WatchAudioSessionCoordinator {
+        WatchAudioSessionCoordinator(activate: { self.completions.append($0) })
     }
 }
 
