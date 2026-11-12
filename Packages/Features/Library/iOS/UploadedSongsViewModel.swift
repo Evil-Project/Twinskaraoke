@@ -5,12 +5,39 @@ import Observation
 @MainActor
 @Observable
 final class UploadedSongsViewModel {
+    struct Service {
+        var credential: @MainActor () -> CredentialStore.TokenReadResult
+        var songs: @MainActor () async throws -> [Song]
+
+        static var live: Service {
+            Service(
+                credential: { CredentialStore.readToken() },
+                songs: { try await KaraokeAPIClient.uploadedSongs() }
+            )
+        }
+
+        /// A signed-in user with `UITestFixtures.uploadedSongs`, for UI tests
+        /// launched with `-UITestMode`. Once a fixture upload has finished,
+        /// the server's list leads with the song it added.
+        static var uiTestFixture: Service {
+            Service(
+                credential: { .available("ui-test") },
+                songs: {
+                    let added = SongUploadController.shared.completedUploads > 0
+                    return (added ? [UITestFixtures.importedUpload] : []) + UITestFixtures.uploadedSongs
+                }
+            )
+        }
+    }
+
     private(set) var songs: [Song] = [] {
         didSet { songsGeneration &+= 1 }
     }
     private(set) var displayedSongs: [Song] = []
     private(set) var isLoading = false
     private(set) var requiresSignIn = false
+    /// A token was read, so the user can add songs.
+    private(set) var isSignedIn = false
     private(set) var loadFailed = false
     var sort: LibrarySongSort = .recentlyAdded {
         didSet { rebuildDisplayedSongs() }
@@ -20,6 +47,7 @@ final class UploadedSongsViewModel {
     }
 
     private var hasLoaded = false
+    @ObservationIgnored private let service: Service
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     private var requestGeneration = 0
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
@@ -41,6 +69,10 @@ final class UploadedSongsViewModel {
         }
     }
 
+    init(service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live) {
+        self.service = service
+    }
+
     func loadIfNeeded() {
         guard !hasLoaded else { return }
         startLoad()
@@ -59,7 +91,8 @@ final class UploadedSongsViewModel {
         let generation = requestGeneration
         loadFailed = false
 
-        let credential = CredentialStore.readToken()
+        let credential = service.credential()
+        isSignedIn = credential.token != nil
         if case .unavailable = credential {
             requiresSignIn = false
             isLoading = false
@@ -78,9 +111,10 @@ final class UploadedSongsViewModel {
 
         requiresSignIn = false
         isLoading = true
+        let service = service
         loadTask = Task { [weak self] in
             do {
-                let loadedSongs = try await KaraokeAPIClient.uploadedSongs()
+                let loadedSongs = try await service.songs()
                 let uniqueSongs = Self.removingDuplicateSongs(loadedSongs)
                 try Task.checkCancellation()
                 guard let self, generation == requestGeneration else { return }

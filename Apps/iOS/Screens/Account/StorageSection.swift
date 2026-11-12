@@ -67,7 +67,7 @@ struct StorageSection: View {
     }
 }
 
-private struct StorageMeterRow: View {
+struct StorageMeterRow: View {
     let icon: String
     let label: String
     let valueText: String
