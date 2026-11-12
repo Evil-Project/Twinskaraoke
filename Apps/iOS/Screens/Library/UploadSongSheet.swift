@@ -105,6 +105,8 @@ struct UploadSongSheet: View {
         } footer: {
             if pickFailed {
                 problemText(SongUploadFailure.fileUnreadable.userMessage)
+            } else if form.isAlreadyUploading {
+                alreadyUploadingText
             } else if let quotaMessage = form.quotaMessage {
                 problemText(quotaMessage)
             }
@@ -153,7 +155,9 @@ struct UploadSongSheet: View {
             Text("Link")
         } footer: {
             VStack(alignment: .leading, spacing: AM.Spacing.s) {
-                if let problem = form.linkProblem {
+                if form.isAlreadyUploading {
+                    alreadyUploadingText
+                } else if let problem = form.linkProblem {
                     problemText(SongUploadFailure.unsupportedLink(problem).userMessage)
                         .accessibilityIdentifier("UploadSong.LinkProblem")
                 } else if let quotaMessage = form.quotaMessage {
@@ -209,21 +213,30 @@ struct UploadSongSheet: View {
         .accessibilityElement(children: .combine)
     }
 
+    private static var alreadyUploadingMessage: String {
+        String(localized: "This is already uploading. Its progress shows under Uploaded.")
+    }
+
+    private var alreadyUploadingText: some View {
+        problemText(Self.alreadyUploadingMessage)
+            .accessibilityIdentifier("UploadSong.AlreadyUploading")
+    }
+
     private static func ratio(_ value: Double, _ limit: Double) -> Double {
         limit > 0 ? value / limit : 0
     }
 
     private func submit() {
         guard let submission = form.submission else { return }
-        let controller = SongUploadController.shared
-        let announcement: String
-        switch submission {
-        case let .file(url, metadata):
-            controller.uploadFile(at: url, metadata: metadata)
-            announcement = String(localized: "Upload started.")
-        case let .link(link):
-            controller.importLink(link)
-            announcement = String(localized: "Import started.")
+        // The same file or link already on its way is ignored: say so and
+        // stay open instead of announcing a start.
+        guard form.submit(to: SongUploadController.shared) else {
+            AccessibilityNotification.Announcement(Self.alreadyUploadingMessage).post()
+            return
+        }
+        let announcement = switch submission {
+        case .file: String(localized: "Upload started.")
+        case .link: String(localized: "Import started.")
         }
         AppHaptic.commit.play()
         AccessibilityNotification.Announcement(announcement).post()

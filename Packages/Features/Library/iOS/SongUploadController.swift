@@ -49,6 +49,9 @@ final class SongUploadController {
         /// Started by an account that has since signed out: the upload is
         /// dropped from the list when it ends.
         var leavesListWhenEnded = false
+        /// Restored for an account other than the current one: never listed,
+        /// and it ends without a message.
+        var endsUnseen = false
     }
 
     @ObservationIgnored let service: Service
@@ -167,7 +170,12 @@ final class SongUploadController {
         case let .link(link, playlistID):
             await runLink(id, link: link, playlistID: playlistID)
         case nil:
-            if records[id]?.staged != nil { await send(id) }
+            guard records[id]?.staged != nil else { return }
+            // A restored body saved without the list from before gets one now.
+            if records[id]?.knownSongIDs == nil {
+                guard await loadBaseline(id) else { return }
+            }
+            await send(id)
         }
     }
 
@@ -181,15 +189,13 @@ final class SongUploadController {
         guard records[id]?.staged == nil else { return await send(id) }
         setPhase(id, .checkingQuota)
         // Limits that can't be loaded don't block: the server decides.
-        if let size = service.fileSize(source),
+        if let size = await service.fileSize(source),
            let limits = try? await service.limits(),
            let blocked = limits.blocking(fileSize: size)
         {
             return fail(id, blocked)
         }
-        guard isCurrent(id) else { return }
-        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
-        guard isCurrent(id) else { return }
+        guard isCurrent(id), await loadBaseline(id), isCurrent(id) else { return }
         setPhase(id, .preparing)
         let staged: StagedUpload
         do {
@@ -249,8 +255,7 @@ final class SongUploadController {
         setPhase(id, .importing)
         // An import that ends without an answer may still have landed; the
         // list from before tells.
-        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
-        guard isCurrent(id), !refuseForAnotherAccount(id) else { return }
+        guard await loadBaseline(id), isCurrent(id), !refuseForAnotherAccount(id) else { return }
         do {
             let result = try await service.importLink(SongLinkImport(url: link.absoluteString, playlistID: playlistID))
             guard records[id] != nil else { return }
@@ -361,7 +366,8 @@ final class SongUploadController {
 
     private func restore() async {
         let entries = service.outbox.entries()
-        service.sweepStaged(Set(entries.map(\.id)))
+        // `keeping` is read first; a body staged since is too new to sweep.
+        await service.sweepStaged(Set(entries.map(\.id)))
         guard !entries.isEmpty else {
             hasResumed = true
             // A background wake can bring events for tasks no entry names;
@@ -372,7 +378,13 @@ final class SongUploadController {
         startEventLoop()
         let active = await service.transport.activeTaskIDs()
         var vanished: [UUID] = []
+        let current = service.currentAccount()
         for entry in entries where records[entry.id] == nil {
+            let running = entry.taskID.map(active.contains) ?? false
+            if setAsideForAnotherAccount(entry, current: current, running: running) {
+                if running, let taskID = entry.taskID { replayUnclaimedEvents(for: taskID) }
+                continue
+            }
             records[entry.id] = Record(
                 source: nil,
                 key: "staged:\(entry.id)",
@@ -381,7 +393,6 @@ final class SongUploadController {
                 knownSongIDs: entry.knownSongIDs,
                 account: entry.account
             )
-            let running = entry.taskID.map(active.contains) ?? false
             uploads.append(Item(id: entry.id, title: entry.title, kind: .file, phase: running ? .uploading(0) : .finishing))
             if let taskID = entry.taskID { replayUnclaimedEvents(for: taskID) }
             if !running { vanished.append(entry.id) }
@@ -430,6 +441,10 @@ final class SongUploadController {
             }
             unclaimedEvents[taskID, default: []].append(event)
             return
+        }
+        if records[id]?.endsUnseen == true {
+            if case .progress = event { return }
+            return endUnseen(id, taskID: taskID)
         }
         switch event {
         case let .progress(_, fraction):

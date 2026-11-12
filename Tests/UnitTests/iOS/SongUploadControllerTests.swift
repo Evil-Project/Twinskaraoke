@@ -62,7 +62,10 @@ struct SongUploadControllerTests {
         let outbox = UploadOutboxStore.inMemory()
         var limits: () throws -> UploadLimits = { Harness.limits(remainingSongs: 10) }
         var limitsCalls = 0
-        var songIDs: Set<String> = ["old"]
+        /// The user's uploads, id to title.
+        var songs: [String: String] = ["old": "Old Song"]
+        /// Thrown by the list of uploads while set.
+        var songListError: Error?
         var stageCalls = 0
         var staged: [StagedUpload] = []
         var discarded: [UUID] = []
@@ -97,7 +100,10 @@ struct SongUploadControllerTests {
                     limitsCalls += 1
                     return try limits()
                 },
-                uploadedSongIDs: { [self] in songIDs },
+                uploadedSongTitles: { [self] in
+                    if let songListError { throw songListError }
+                    return songs
+                },
                 makeUploadRequest: { [self] staged in
                     tokenCount += 1
                     var request = URLRequest(url: URL(fileURLWithPath: "/upload"))
@@ -289,7 +295,7 @@ struct SongUploadControllerTests {
         let controller = harness.controller()
         let (first, taskID) = await startedUpload(controller)
         let second = controller.uploadFile(at: URL(fileURLWithPath: "/picked/Other.m4a"), metadata: metadata)
-        try? await Task.sleep(for: .milliseconds(20))
+        // Queueing is synchronous: the second upload can't have started.
         #expect(phase(controller, second) == .waiting)
         #expect(harness.transport.started.count == 1)
         harness.transport.send(.finished(taskID: taskID, status: 200, body: Data(), contentType: nil, retryAfter: nil))
@@ -371,7 +377,7 @@ struct SongUploadControllerTests {
     func ambiguousTimeoutWithNewServerSongCountsAsSuccess() async {
         let controller = harness.controller()
         let (id, taskID) = await startedUpload(controller)
-        harness.songIDs = ["old", "new"]
+        harness.songs["new"] = "Song"
         harness.transport.send(.failed(taskID: taskID, .urlError(.timedOut)))
         await waitUntil { isFinished(controller, id) }
         #expect(phase(controller, id) == .succeeded(title: "Song"))
@@ -387,6 +393,15 @@ struct SongUploadControllerTests {
         #expect(phase(controller, id) == .failed(.timedOut))
         #expect(SongUploadFailure.timedOut.isRetryable)
         #expect(controller.completedUploads == 0)
+    }
+
+    @Test("A host that refuses the connection counts as offline")
+    func cannotConnectToHostIsOffline() async {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.transport.send(.failed(taskID: taskID, .urlError(.cannotConnectToHost)))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.offline))
     }
 
     @Test("A 429 carries the server's Retry-After")
@@ -407,7 +422,9 @@ struct SongUploadControllerTests {
         let (other, otherTask) = await startedUpload(controller, file: URL(fileURLWithPath: "/picked/B.mp3"))
         harness.transport.send(.failed(taskID: otherTask, .urlError(.networkConnectionLost)))
         await waitUntil { isFinished(controller, other) }
-        try? await Task.sleep(for: .milliseconds(50))
+        // Settled once both answers are acknowledged; a retry would have
+        // started by then.
+        await waitUntil { Set(harness.transport.state.withLock { $0.acknowledged }) == [taskID, otherTask] }
         #expect(harness.transport.started.count == 2)
         #expect(phase(controller, other) == .failed(.interrupted))
     }
@@ -432,7 +449,8 @@ struct SongUploadControllerTests {
         let controller = harness.controller()
         let id = controller.importLink("https://discord.com/channels/1/2/3")
         #expect(phase(controller, id) == .failed(.unsupportedLink(.discordMessageLink)))
-        try? await Task.sleep(for: .milliseconds(20))
+        // Refused synchronously: nothing was queued that could send later.
+        #expect(!controller.uploads.contains { $0.isActive })
         #expect(harness.importCalls == 0)
         #expect(harness.limitsCalls == 0)
     }

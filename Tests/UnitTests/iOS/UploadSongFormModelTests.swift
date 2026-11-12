@@ -43,6 +43,61 @@ struct UploadSongFormModelTests {
         #expect(form.submission == .file(file, SongUploadMetadata(title: "My Song", artist: "", playlistID: nil)))
     }
 
+    @Test("Submitting a file or link that is already uploading keeps the form open and says so")
+    func submittingDuplicateIsRefused() async {
+        let harness = SongUploadControllerTests.Harness()
+        let controller = harness.controller()
+        let form = model()
+        await form.loadLimits()
+        await form.pick(file)
+        #expect(form.submit(to: controller))
+        #expect(!form.isAlreadyUploading)
+        #expect(!form.submit(to: controller))
+        #expect(form.isAlreadyUploading)
+        #expect(controller.uploads.count == 1)
+
+        // A new choice clears the message.
+        form.mode = .link
+        #expect(!form.isAlreadyUploading)
+        form.linkText = "https://youtu.be/abc"
+        #expect(form.submit(to: controller))
+        #expect(!form.submit(to: controller))
+        #expect(form.isAlreadyUploading)
+        form.linkText = "https://youtu.be/other"
+        #expect(!form.isAlreadyUploading)
+        #expect(controller.uploads.count == 2)
+    }
+
+    @Test("A slow size read of an earlier file doesn't replace a later pick")
+    func laterPickWinsOverSlowSizeRead() async {
+        let first = URL(fileURLWithPath: "/picked/First.mp3")
+        let gate = AsyncStream<Void>.makeStream()
+        let reading = ReadFlag()
+        let form = UploadSongFormModel(service: UploadSongFormModel.Service(
+            limits: { Self.limits() },
+            fileSize: { url in
+                if url == first {
+                    reading.started = true
+                    for await _ in gate.stream { break }
+                }
+                return 1000
+            },
+            tags: { _ in .init() }
+        ))
+        let slow = Task { await form.pick(first) }
+        while !reading.started { await Task.yield() }
+        await form.pick(file)
+        gate.continuation.yield()
+        await slow.value
+        #expect(form.file?.url == file)
+        #expect(form.title == "My Song")
+    }
+
+    @MainActor
+    private final class ReadFlag {
+        var started = false
+    }
+
     @Test func submitDisabledWithUnsupportedLink() async {
         let form = model()
         await form.loadLimits()

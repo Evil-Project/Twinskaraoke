@@ -140,13 +140,15 @@ nonisolated enum UploadStaging {
 
     /// Removes staged bodies older than `age` that no pending upload names,
     /// such as one left by an upload the app lost track of. Files in
-    /// `keeping` are never removed, however old.
+    /// `keeping` are never removed, however old. Lists and reads the folder
+    /// off the main actor.
+    @concurrent
     static func sweepStale(
         olderThan age: TimeInterval = defaultStaleAge,
         keeping: Set<UUID>,
         directory: URL = defaultDirectory,
         now: Date = Date()
-    ) {
+    ) async {
         let keys: [URLResourceKey] = [.contentModificationDateKey]
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory,
