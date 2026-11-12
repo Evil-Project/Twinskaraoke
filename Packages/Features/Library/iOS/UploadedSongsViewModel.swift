@@ -30,7 +30,8 @@ final class UploadedSongsViewModel {
         }
     }
 
-    private(set) var songs: [Song] = [] {
+    /// Settable for the edit and delete extension, which changes rows in place.
+    var songs: [Song] = [] {
         didSet { songsGeneration &+= 1 }
     }
     private(set) var displayedSongs: [Song] = []
@@ -48,6 +49,11 @@ final class UploadedSongsViewModel {
 
     private var hasLoaded = false
     @ObservationIgnored private let service: Service
+    @ObservationIgnored let manage: ManageService
+    /// Songs deleted while this list is shown. Kept for the view model's
+    /// lifetime: a deleted upload's id never comes back, so filtering it out
+    /// of every load is always right, and no load can bring it back.
+    @ObservationIgnored var deletedSongIDs: Set<String> = []
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     private var requestGeneration = 0
     @ObservationIgnored private var searchDebounceTask: Task<Void, Never>?
@@ -69,8 +75,12 @@ final class UploadedSongsViewModel {
         }
     }
 
-    init(service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live) {
+    init(
+        service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
+        manage: ManageService = AppRuntime.isUITestMode ? .uiTestFixture : .live
+    ) {
         self.service = service
+        self.manage = manage
     }
 
     func loadIfNeeded() {
@@ -119,7 +129,7 @@ final class UploadedSongsViewModel {
                 try Task.checkCancellation()
                 guard let self, generation == requestGeneration else { return }
 
-                songs = uniqueSongs
+                songs = uniqueSongs.filter { !deletedSongIDs.contains($0.id) }
                 hasLoaded = true
                 isLoading = false
                 rebuildDisplayedSongs()
@@ -129,7 +139,7 @@ final class UploadedSongsViewModel {
                 try Task.checkCancellation()
                 guard generation == requestGeneration else { return }
 
-                songs = songsWithDurations
+                songs = songsWithDurations.filter { !deletedSongIDs.contains($0.id) }
                 loadTask = nil
                 rebuildDisplayedSongs()
             } catch {
@@ -172,7 +182,7 @@ final class UploadedSongsViewModel {
         return sorted
     }
 
-    private func rebuildDisplayedSongs() {
+    func rebuildDisplayedSongs() {
         let sorted = sortedSongs
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
