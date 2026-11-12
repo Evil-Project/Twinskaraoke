@@ -9,7 +9,7 @@ final class TransitionCoordinator {
 
     enum State {
         case idle
-        case preparing(nextSong: Song)
+        case preparing(target: PlaybackQueueState.Entry)
         case ready(plan: TransitionPlan)
         case crossfading(plan: TransitionPlan)
 
@@ -25,7 +25,9 @@ final class TransitionCoordinator {
     }
 
     struct TransitionPlan {
-        let nextSong: Song
+        let id = UUID()
+        let target: PlaybackQueueState.Entry
+        var nextSong: Song { target.song }
         let nextFileURL: URL
         let outgoingBPM: Double?
         let incomingBPM: Double?
@@ -34,6 +36,13 @@ final class TransitionCoordinator {
     }
 
     private(set) var state: State = .idle
+    var pendingPlan: TransitionPlan? {
+        switch state {
+        case let .ready(plan), let .crossfading(plan): plan
+        case .idle, .preparing: nil
+        }
+    }
+
     private var bpmTask: Task<Void, Never>?
     private var predownloadSession: PredownloadSession?
     // Retry-storm guard: when preparing the upcoming song fails, poll ticks
@@ -87,7 +96,7 @@ final class TransitionCoordinator {
         currentTime: TimeInterval,
         totalDuration: TimeInterval,
         currentSong: Song?,
-        queue: [Song],
+        target: @autoclosure () -> PlaybackQueueState.Entry?,
         autoMixEnabled: Bool,
         crossfadeEnabled: Bool,
         crossfadeSeconds: Double,
@@ -109,10 +118,10 @@ final class TransitionCoordinator {
         switch state {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
-            if let nextSong = nextSongInQueue(current: currentSong, queue: queue) {
-                guard failedPreparationNextSongID != nextSong.id else { return }
+            if let target = target() {
+                guard failedPreparationNextSongID != target.song.id else { return }
                 beginPreparing(
-                    nextSong: nextSong, currentSong: currentSong,
+                    target: target, currentSong: currentSong,
                     autoMixEnabled: autoMixEnabled, crossfadeSeconds: crossfadeSeconds,
                     aiEffectActive: aiEffectActive
                 )
@@ -133,15 +142,16 @@ final class TransitionCoordinator {
     }
 
     private func beginPreparing(
-        nextSong: Song, currentSong: Song,
+        target: PlaybackQueueState.Entry, currentSong: Song,
         autoMixEnabled: Bool, crossfadeSeconds: Double,
         aiEffectActive: Bool
     ) {
+        let nextSong = target.song
         DebugLogger.log(
             "Preparing transition current=\(currentSong.id) next=\(nextSong.id), autoMix=\(autoMixEnabled), crossfadeSeconds=\(crossfadeSeconds), aiEffectActive=\(aiEffectActive)",
             category: .playback
         )
-        state = .preparing(nextSong: nextSong)
+        state = .preparing(target: target)
         onUpcomingSongDetermined?(nextSong)
 
         bpmTask?.cancel()
@@ -167,17 +177,15 @@ final class TransitionCoordinator {
 
             let nextFileURL = await Self.audioFileURL(for: nextSong)
             let shouldAnalyzeBPM = autoMixEnabled && !aiEffectActive
-            let outBPM: Double?
-            let inBPM: Double?
+            let bpm: (Double?, Double?)
             if shouldAnalyzeBPM {
                 async let outBPMResult = detectBPM(for: currentSong, fileURL: currentURL)
                 async let inBPMResult = detectBPM(for: nextSong, fileURL: nextFileURL)
-                outBPM = await outBPMResult
-                inBPM = await inBPMResult
+                bpm = await (outBPMResult, inBPMResult)
             } else {
-                outBPM = nil
-                inBPM = nil
+                bpm = (nil, nil)
             }
+            let (outBPM, inBPM) = bpm
 
             if Task.isCancelled { return }
 
@@ -204,7 +212,7 @@ final class TransitionCoordinator {
                     guard let self else { return }
                     // Only record the failure (and reset) if this preparation
                     // is still the active one.
-                    guard case let .preparing(s) = state, s.id == nextSong.id else { return }
+                    guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
                     failedPreparationCurrentSongID = currentSong.id
                     failedPreparationNextSongID = nextSong.id
                     reset()
@@ -213,21 +221,18 @@ final class TransitionCoordinator {
             }
 
             let plan = TransitionPlan(
-                nextSong: nextSong,
+                target: target,
                 nextFileURL: fileURL,
                 outgoingBPM: outBPM,
                 incomingBPM: inBPM,
                 fadeDuration: fadeDuration,
                 rampStyle: rampStyle
             )
-            let outBPMText = outBPM.map { String(format: "%.2f", $0) } ?? "nil"
-            let inBPMText = inBPM.map { String(format: "%.2f", $0) } ?? "nil"
-
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                guard case let .preparing(s) = state, s.id == nextSong.id else { return }
+                guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
                 DebugLogger.log(
-                    "Transition prepared next=\(nextSong.id), file=\(fileURL.lastPathComponent), outBPM=\(outBPMText), inBPM=\(inBPMText), fade=\(fadeDuration), ramp=\(rampStyle)",
+                    "Transition prepared next=\(nextSong.id), file=\(fileURL.lastPathComponent), outBPM=\(outBPM ?? 0), inBPM=\(inBPM ?? 0), fade=\(fadeDuration), ramp=\(rampStyle)",
                     category: .playback
                 )
                 state = .ready(plan: plan)
@@ -241,7 +246,7 @@ final class TransitionCoordinator {
 
     func beginPreparedTransition(_ plan: TransitionPlan) {
         guard case let .ready(currentPlan) = state,
-              currentPlan.nextSong.id == plan.nextSong.id
+              currentPlan.id == plan.id
         else { return }
         DebugLogger.log(
             "Transition deadline reached -> crossfading next=\(plan.nextSong.id), fade=\(plan.fadeDuration), ramp=\(plan.rampStyle)",
@@ -297,13 +302,6 @@ final class TransitionCoordinator {
         return AudioCacheStore.playableMainURL(for: song.id, expectedRemoteURL: song.audioURL, expectedDuration: expectedDuration)
     }
 
-    /// The manager polls only with repeat off, so the next song is simply the
-    /// one after this in the queue.
-    private func nextSongInQueue(current: Song, queue: [Song]) -> Song? {
-        guard let idx = queue.firstIndex(where: { $0.id == current.id }), idx + 1 < queue.count else { return nil }
-        return queue[idx + 1]
-    }
-
     private func predownload(song: Song, from remoteURL: URL) async {
         let session = PredownloadSession(
             songID: song.id,
@@ -353,7 +351,7 @@ final class TransitionCoordinator {
         case .idle:
             "idle"
         case let .preparing(song):
-            "preparing(\(song.id))"
+            "preparing(\(song.song.id))"
         case let .ready(plan):
             "ready(\(plan.nextSong.id), fade=\(plan.fadeDuration))"
         case let .crossfading(plan):

@@ -105,10 +105,10 @@ struct QueueView: View {
                                 position: entry.position,
                                 isPlayingNext: entry.position == 1,
                                 onPlay: {
-                                    playQueuedSong(entry.song)
+                                    playQueuedSong(entry)
                                 },
                                 onRemove: {
-                                    removeUpNextSong(at: entry.position - 1)
+                                    removeUpNextSongs(ids: [entry.id])
                                 }
                             )
                             .listRowBackground(Color.clear)
@@ -116,7 +116,7 @@ struct QueueView: View {
                             .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 14))
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    removeUpNextSong(at: entry.position - 1)
+                                    removeUpNextSongs(ids: [entry.id])
                                 } label: {
                                     Label("Remove", systemImage: "trash")
                                 }
@@ -133,13 +133,14 @@ struct QueueView: View {
                             .transition(rowTransition)
                         }
                         .onMove { source, destination in
+                            guard upNext.map(\.id) == audioManager.upNextEntries.map(\.id) else { return }
                             AppHaptic.commit.play()
                             withOptionalAnimation(queueMutationAnimation) {
                                 audioManager.moveInUpNext(from: source, to: destination)
                             }
                         }
                         .onDelete { indices in
-                            removeUpNextSongs(at: indices)
+                            removeUpNextSongs(ids: Set(indices.compactMap { upNext.indices.contains($0) ? upNext[$0].id : nil }))
                         }
                     }
                     .listStyle(.plain)
@@ -158,8 +159,7 @@ struct QueueView: View {
         // Snapshot up-next only when the queue or current song changes, so
         // unrelated AudioPlayerManager publishes don't redo the O(n) slice.
         .onAppear { refreshUpNextSongs() }
-        .onChange(of: audioManager.queue) { _, _ in refreshUpNextSongs() }
-        .onChange(of: audioManager.currentSong?.id) { _, _ in refreshUpNextSongs() }
+        .onChange(of: audioManager.upNextEntries) { _, _ in refreshUpNextSongs() }
         .onChange(of: upNextEntries.isEmpty) { _, isEmpty in
             if isEmpty { isReordering = false }
         }
@@ -320,53 +320,29 @@ struct QueueView: View {
         }
     }
 
-    private func removeUpNextSong(at index: Int) {
-        removeUpNextSongs(at: IndexSet(integer: index))
-    }
-
-    private func removeUpNextSongs(at indices: IndexSet) {
+    private func removeUpNextSongs(ids: Set<UUID>) {
         AppHaptic.dismiss.play()
         withOptionalAnimation(queueMutationAnimation) {
-            audioManager.removeFromUpNext(at: indices)
+            audioManager.removeFromUpNext(ids: ids)
         }
     }
 
-    private func playQueuedSong(_ song: Song) {
+    private func playQueuedSong(_ entry: UpNextEntry) {
         AppHaptic.commit.play()
-        audioManager.skipToQueuedSong(song)
+        audioManager.skipToQueuedEntry(.init(id: entry.id, song: entry.song))
     }
 
     private func refreshUpNextSongs() {
-        // Match by id: applyEnrichedMetadata replaces currentSong with a fresh
-        // instance that no longer == the queue copy.
-        guard let current = audioManager.currentSong,
-              let idx = audioManager.queue.firstIndex(where: { $0.id == current.id }),
-              idx + 1 < audioManager.queue.count
-        else {
+        let entries = audioManager.upNextEntries
+        guard !entries.isEmpty else {
             ArtworkPrefetcher.shared.cancel(reason: "queue up next")
             upNextEntries = []
             return
         }
-        let songs = Array(audioManager.queue[(idx + 1)...])
-        // Stable identities across refreshes: match each occurrence to the
-        // previous entry with the same (song id, occurrence index) pair, so
-        // identity follows the song occurrence rather than the position — a
-        // moved row keeps its UUID, and minting fresh UUIDs here would destroy
-        // every row (killing sheets/drags) on each track advance.
-        var previousIDs: [String: UUID] = [:]
-        var previousCounts: [String: Int] = [:]
-        for entry in upNextEntries {
-            let occurrence = previousCounts[entry.song.id, default: 0]
-            previousCounts[entry.song.id] = occurrence + 1
-            previousIDs["\(entry.song.id)#\(occurrence)"] = entry.id
+        upNextEntries = entries.enumerated().map { offset, entry in
+            UpNextEntry(id: entry.id, song: entry.song, position: offset + 1)
         }
-        var newCounts: [String: Int] = [:]
-        upNextEntries = songs.enumerated().map { offset, song in
-            let occurrence = newCounts[song.id, default: 0]
-            newCounts[song.id] = occurrence + 1
-            let id = previousIDs["\(song.id)#\(occurrence)"] ?? UUID()
-            return UpNextEntry(id: id, song: song, position: offset + 1)
-        }
+        let songs = entries.map(\.song)
         // Rows otherwise rely on the source list having warmed these; the queue
         // can outlive that list, so warm the row variants here too.
         ArtworkPrefetcher.shared.prefetchSongs(

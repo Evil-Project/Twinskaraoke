@@ -174,6 +174,223 @@ struct SystemIntentPlaybackTests {
         }
     }
 
+    @Test(
+        "Downloaded songs overlap across Repeat All while the countdown runs",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device."),
+        arguments: [false, true]
+    )
+    func downloadedRepeatAllTransition(autoMix: Bool) async throws {
+        let player = AudioPlayerManager.shared
+        let downloads = DownloadManager.shared
+        let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
+        let songs = try (0..<2).map { try cachedSong(index: $0, seconds: 4) }
+        defer {
+            player.pauseIfPlaying()
+            player.setSleepTimer()
+            player.repeatMode = .off
+            (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds) = previous
+            downloads.remove(songIDs: songs.map(\.id))
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+
+        for song in songs {
+            let source = try #require(AudioCacheStore.immediatelyPlayableMainURL(
+                for: song.id, expectedRemoteURL: nil, expectedDuration: TimeInterval(song.duration)
+            ))
+            let directory = downloads.localURL(for: song.id).deletingLastPathComponent()
+            let destination = directory.appendingPathComponent("main.wav")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: source, to: destination)
+            let resolved = try await downloads.resolvedPlaybackURL(for: song)
+            #expect(resolved == destination)
+            AudioCacheStore.removeSongCache(for: song.id)
+        }
+
+        player.aiEnabled = false
+        player.autoMixEnabled = autoMix
+        player.crossfadeEnabled = !autoMix
+        player.crossfadeSeconds = 1
+        player.repeatMode = .all
+        player.setSleepTimer(minutes: 5)
+        player.playInOrder(song: songs[1], context: songs)
+
+        try await waitForPlayback { player.hasAudibleCrossfadeForTesting && player.currentSong?.id == songs[1].id }
+        let wrapDeadline = ContinuousClock.now + .seconds(8)
+        while player.currentSong?.id == songs[1].id, ContinuousClock.now < wrapDeadline {
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        try #require(player.currentSong?.id == songs[0].id)
+        #expect(player.playbackTime > 0.2)
+        #expect(player.sleepTimer.deadline != nil)
+
+        player.startSleepTimerAtEndOfSong()
+        let stopDeadline = ContinuousClock.now + .seconds(8)
+        while player.isPlaying, ContinuousClock.now < stopDeadline {
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        #expect(!player.isPlaying)
+        #expect(player.currentSong?.id == songs[0].id)
+        #expect(!player.sleepTimer.isActive)
+    }
+
+    @Test func repeatAllAdvancesThroughDuplicatePlaylistEntries() throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        player.aiEnabled = false
+        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 4) }
+        let queue = [songs[0], songs[1], songs[0], songs[2]]
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.repeatMode = .all
+        player.playInOrder(song: queue[0], context: queue)
+        for song in queue.dropFirst() + [queue[0]] {
+            player.playNextOrRandom()
+            #expect(player.currentSong?.id == song.id)
+        }
+        #expect(player.queue == queue)
+    }
+
+    @Test(arguments: [true, false])
+    func selectingUpNextPreservesRepeatAll(selectByEntry: Bool) throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        let songs = try (0..<3).map { try cachedSong(index: $0) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.repeatMode = .all
+        player.playInOrder(song: songs[0], context: songs)
+        let selected = try #require(player.upNextEntries.last)
+        if selectByEntry {
+            player.skipToQueuedEntry(selected)
+        } else {
+            player.skipToQueuedSong(selected.song)
+        }
+        #expect(player.currentSong?.id == songs[2].id)
+        player.playNextOrRandom()
+        #expect(player.currentSong?.id == songs[0].id)
+    }
+
+    @Test(
+        "Removing an audible crossfade target keeps the remaining queue",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func removesAudibleCrossfadeTarget() async throws {
+        let player = AudioPlayerManager.shared
+        let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
+        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 5) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds) = previous
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.crossfadeEnabled = true
+        player.crossfadeSeconds = 2
+        player.repeatMode = .all
+        player.playInOrder(song: songs[0], context: songs)
+        try await waitForPlayback { player.currentSong?.id == songs[0].id && player.hasAudibleCrossfadeForTesting }
+        try #require(player.upcomingSong?.id == songs[1].id)
+        player.removeFromUpNext(at: IndexSet(integer: 0))
+        try await waitForPlayback { player.currentSong?.id != songs[0].id }
+        #expect(player.currentSong?.id == songs[2].id)
+    }
+
+    @Test(
+        "Natural end promotes a ready deck only while its queue occurrence is valid",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device."),
+        arguments: [false, true]
+    )
+    func naturalEndRespectsCurrentQueueTarget(removeTarget: Bool) async throws {
+        let player = AudioPlayerManager.shared
+        let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
+        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 6) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds) = previous
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.crossfadeEnabled = true
+        player.crossfadeSeconds = 1
+        player.repeatMode = .off
+        player.playInOrder(song: songs[0], context: songs)
+        try await waitForPlayback { player.hasPreparedCrossfadeForTesting }
+        #expect(!player.hasAudibleCrossfadeForTesting)
+        if removeTarget { player.removeFromUpNext(at: [0]) }
+        player.finishOutgoingDeckForTesting()
+        #expect(player.currentSong?.id == songs[removeTarget ? 2 : 1].id)
+    }
+
+    @Test func shuffleDoesNotReplacePendingAutoplayWithPlayback() throws {
+        let player = AudioPlayerManager.shared
+        let previous = (player.autoplayEnabled, player.repeatMode)
+        let songs = try (0..<2).map { try cachedSong(index: $0, seconds: 4) }
+        defer {
+            player.pauseIfPlaying()
+            if player.isShuffled { player.toggleShuffle() }
+            (player.autoplayEnabled, player.repeatMode) = previous
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.autoplayEnabled = true
+        player.repeatMode = .off
+        player.playInOrder(song: songs[1], context: songs)
+        #expect(player.preservesAutoplayRequestForTesting { player.toggleShuffle() })
+        #expect(player.currentSong?.id == songs[1].id)
+    }
+
+    @Test(
+        "Shuffle keeps both audible tracks fixed until handoff",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func shufflePinsAudibleCrossfade() async throws {
+        let player = AudioPlayerManager.shared
+        let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
+        let songs = try (0..<4).map { try cachedSong(index: $0, seconds: 5) }
+        defer {
+            player.pauseIfPlaying()
+            if player.isShuffled { player.toggleShuffle() }
+            player.repeatMode = .off
+            (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds) = previous
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.crossfadeEnabled = true
+        player.crossfadeSeconds = 2
+        player.repeatMode = .all
+        player.playInOrder(song: songs[3], context: songs)
+        try await waitForPlayback { player.hasAudibleCrossfadeForTesting }
+
+        player.toggleShuffle()
+        #expect(player.currentSong?.id == songs[3].id)
+        #expect(player.upNextEntries.first?.song.id == songs[0].id)
+        player.toggleShuffle()
+        #expect(player.upNextEntries.first?.song.id == songs[0].id)
+        player.toggleShuffle()
+        let shuffled = player.queue
+        try await waitForPlayback { player.currentSong?.id == songs[0].id }
+        #expect(player.queue == shuffled)
+        #expect(player.upNextEntries.map(\.song) == Array(shuffled.dropFirst(2)))
+    }
+
+    private func waitForPlayback(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(8)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        try #require(condition())
+    }
+
     @Test func playsFromAPlaylistReportThatPlaylist() async throws {
         let player = AudioPlayerManager.shared
         let reporter = player.playCountReporter
@@ -258,7 +475,7 @@ struct SystemIntentPlaybackTests {
         #expect(await reports.total == 1)
     }
 
-    private func cachedSong(index: Int) throws -> Song {
+    private func cachedSong(index: Int, seconds: Int = 60) throws -> Song {
         let id = "system-intent-test-\(UUID().uuidString)-\(index)"
         _ = AudioCacheStore.ensureSongDirectory(for: id)
         let url = AudioCacheStore.mainAudioURL(for: id, sourceURL: URL(string: "https://example.invalid/silence.wav")!)
@@ -267,8 +484,8 @@ struct SystemIntentPlaybackTests {
         let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44_100)!
         buffer.frameLength = 44_100
         memset(buffer.floatChannelData![0], 0, Int(buffer.frameLength) * MemoryLayout<Float>.size)
-        for _ in 0..<60 { try file.write(from: buffer) }
-        return Song(id: id, title: "Widget Test \(index + 1)", duration: 60, absolutePath: nil, cloudflareID: nil, coverArt: nil, originalArtists: ["Simulator"], coverArtists: nil, userUploaded: true)
+        for _ in 0..<seconds { try file.write(from: buffer) }
+        return Song(id: id, title: "Widget Test \(index + 1)", duration: seconds, absolutePath: nil, cloudflareID: nil, coverArt: nil, originalArtists: ["Simulator"], coverArtists: nil, userUploaded: true)
     }
 }
 
