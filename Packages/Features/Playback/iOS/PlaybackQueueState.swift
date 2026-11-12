@@ -100,6 +100,13 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
         return autoplayEnabled ? .autoplay : .stop
     }
 
+    func crossfadeTarget(after current: Song?, repeatMode: RepeatMode) -> Song? {
+        guard case let .play(next) = advance(after: current, repeatMode: repeatMode, autoplayEnabled: false),
+              next.id != current?.id
+        else { return nil }
+        return next
+    }
+
     /// Where Next goes. Repeat replays a song that ends on its own; a skip is
     /// the listener asking to leave it, so it moves on as if repeat were off.
     /// The repeat mode stays on for the song Next lands on.

@@ -211,13 +211,13 @@ final class AVEnginePlayback {
     private var singleLoadTask: Task<LoadedMediaTransfer<LoadedMedia>, Error>?
     private var stemsLoadTask: Task<LoadedMediaTransfer<LoadedStemTriple>, Error>?
     private var switchToStemsLoadTask: Task<LoadedMediaTransfer<LoadedStemPair>, Error>?
+    private let crossfadeFileLoader: @Sendable (URL) throws -> AVAudioFile
     private var crossfadePreloadTask: Task<LoadedMediaTransfer<LoadedMedia>, Error>?
     private var primaryLoadGeneration: UInt64 = 0
     private var crossfadeLoadGeneration: UInt64 = 0
-    private var preparedCrossfadeMedia: LoadedMedia?
 
     var onCrossfadeCompleted: (() -> Void)?
-    var onCrossfadeStarted: (() -> Void)?
+    var onCrossfadeScheduled: ((TimeInterval) -> Void)?
 
     var onPlaybackEnded: (() -> Void)?
     var onPlaybackError: ((Error) -> Void)?
@@ -240,7 +240,8 @@ final class AVEnginePlayback {
     private nonisolated static let constrainedTransitionTicksPerSecond: Double = 18
     private nonisolated static let defaultTransitionTicksPerSecond: Double = 24
 
-    init() {
+    init(crossfadeFileLoader: (@Sendable (URL) throws -> AVAudioFile)? = nil) {
+        self.crossfadeFileLoader = crossfadeFileLoader ?? { try Self.loadMedia(url: $0, intent: .prefetch) }
         let outputSampleRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let sessionSampleRate = AVAudioSession.sharedInstance().sampleRate
         let graphSampleRate: Double
@@ -870,137 +871,74 @@ final class AVEnginePlayback {
         mainMixer.outputVolume = max(0, min(1, v))
     }
 
+    nonisolated static let crossfadeSchedulingLead: TimeInterval = 0.08
+
     func preloadCrossfade(url: URL) {
-        guard !isCrossfading else { return }
-        guard preloadedCrossfadeURL != url, crossfadePreloadURL != url else { return }
-        DebugLogger.log(
-            "Preloading crossfade media for \(url.lastPathComponent)", category: .playback
-        )
-        crossfadePreloadTask?.cancel()
-        crossfadeLoadGeneration &+= 1
-        let loadGeneration = crossfadeLoadGeneration
-        crossfadePreloadURL = url
-        let loadTask = Task.detached(priority: .utility) {
-            LoadedMediaTransfer(value: try Self.loadMedia(url: url, intent: .prefetch))
-        }
-        crossfadePreloadTask = loadTask
-        Task {
+        guard pendingCrossfadeURL == nil, preloadedCrossfadeURL != url, crossfadePreloadURL != url else { return }
+        cancelCrossfade()
+        let generation = crossfadeLoadGeneration
+        let task = startCrossfadeLoad(url: url, priority: .utility)
+        Task { [weak self] in
             do {
-                let media = try await loadTask.value.value
-                guard self.crossfadeLoadGeneration == loadGeneration else { return }
-                try self.applyMedia(media, to: self.crossfadePlayer)
-                self.preparedCrossfadeMedia = media
-                self.crossfadePreloadTask = nil
-                self.crossfadePreloadURL = nil
-                self.preloadedCrossfadeURL = url
-                self.crossfadePlayer.volume = 0
-                DebugLogger.log(
-                    "Crossfade preload ready for \(url.lastPathComponent): \(Self.describeMedia(media))",
-                    category: .playback
-                )
-            } catch is CancellationError {
-                guard self.crossfadeLoadGeneration == loadGeneration else { return }
-                self.crossfadePreloadTask = nil
-                self.crossfadePreloadURL = nil
-                self.preloadedCrossfadeURL = nil
-                self.preparedCrossfadeMedia = nil
-                DebugLogger.log(
-                    "Crossfade preload cancelled for \(url.lastPathComponent)", category: .playback
-                )
+                let media = try await task.value.value
+                guard let self, crossfadeLoadGeneration == generation else { return }
+                try prepareCrossfadeMedia(media, url: url)
             } catch {
-                guard self.crossfadeLoadGeneration == loadGeneration else { return }
-                self.crossfadePreloadTask = nil
-                self.crossfadePreloadURL = nil
-                self.preloadedCrossfadeURL = nil
-                self.preparedCrossfadeMedia = nil
-                DebugLogger.log(
-                    "Crossfade preload failed for \(url.lastPathComponent): \(error)",
-                    category: .playback
-                )
+                guard let self, crossfadeLoadGeneration == generation else { return }
+                cancelCrossfade()
+                DebugLogger.log("Crossfade preload failed for \(url.lastPathComponent): \(error)", category: .playback)
             }
         }
     }
 
-    func beginCrossfade(url: URL, duration: TimeInterval, ramp: RampStyle) {
-        let alreadyPreloaded = (preloadedCrossfadeURL == url)
-        DebugLogger.log(
-            "Crossfade begin: \(url.lastPathComponent), duration=\(duration), ramp=\(ramp), alreadyPreloaded=\(alreadyPreloaded), mode=\(mode)",
-            category: .playback
-        )
-        let retainedPreparedMedia = alreadyPreloaded ? preparedCrossfadeMedia : nil
-
-        crossfadeRampGeneration &+= 1
-        crossfadeTimer?.cancel()
-        crossfadeTimer = nil
-        if !alreadyPreloaded {
-            crossfadePreloadTask?.cancel()
-        }
+    func beginCrossfade(
+        url: URL,
+        duration: TimeInterval,
+        ramp: RampStyle,
+        remainingTime: (() -> TimeInterval?)? = nil
+    ) {
+        guard pendingCrossfadeURL != url else { return }
+        if preloadedCrossfadeURL != url, crossfadePreloadURL != url { cancelCrossfade() }
+        // Take ownership from the preload observer while retaining its task.
         crossfadeLoadGeneration &+= 1
-        let loadGeneration = crossfadeLoadGeneration
-        if !alreadyPreloaded {
-            crossfadePreloadURL = nil
-            preloadedCrossfadeURL = nil
-            preparedCrossfadeMedia = nil
-        } else {
-            preparedCrossfadeMedia = retainedPreparedMedia
-        }
-        if isCrossfading {
-            isCrossfading = false
-            if !alreadyPreloaded {
-                crossfadePlayer.stop()
-                crossfadePlayer.playerNode.reset()
-                crossfadePlayer.volume = 0
-            }
-            if mode == .single {
-                mainPlayer.volume = 1.0
-            } else if mode == .aiStems {
-                mainPlayer.volume = crossfadeStartMainVol
-                setStemVolumes(
-                    vocals: crossfadeStartVocalsVol,
-                    instrumental: crossfadeStartInstrumentalVol
-                )
-            }
-        }
-
+        let generation = crossfadeLoadGeneration
+        let token = suppressionToken
         pendingCrossfadeURL = url
 
-        let token = suppressionToken
-        Task { [self] in
+        Task { [weak self] in
+            guard let self, crossfadeLoadGeneration == generation, suppressionToken == token else { return }
             do {
-                try await self.ensureCrossfadePrepared(
-                    for: url, token: token, loadGeneration: loadGeneration
-                )
-                guard self.suppressionToken == token, self.crossfadeLoadGeneration == loadGeneration else {
-                    // Superseded before the crossfade could start. Clear the
-                    // pending marker only if it is still ours — a newer
-                    // beginCrossfade owns the marker when it differs.
-                    if self.pendingCrossfadeURL == url {
-                        self.pendingCrossfadeURL = nil
-                        DebugLogger.log(
-                            "Crossfade begin superseded for \(url.lastPathComponent)",
-                            category: .playback
-                        )
-                    }
+                if preloadedCrossfadeURL != url {
+                    let task = crossfadePreloadTask ?? startCrossfadeLoad(url: url, priority: .userInitiated)
+                    let media = try await task.value.value
+                    guard crossfadeLoadGeneration == generation, suppressionToken == token else { return }
+                    try prepareCrossfadeMedia(media, url: url)
+                }
+                let remaining = if let remainingTime { remainingTime() } else { self.duration - currentTime }
+                guard let remaining, remaining.isFinite else {
+                    cancelCrossfade()
                     return
                 }
-                let fadeDuration = max(0.5, duration)
+                let tick = Self.transitionTimerInterval
+                let playbackLeadTime = min(Self.crossfadeSchedulingLead, max(0, remaining - 2 * tick))
+                let fadeDuration = min(duration, remaining - playbackLeadTime, crossfadePlayer.duration - tick)
+                guard fadeDuration >= tick else { return }
+                self.startEngineIfNeeded()
+                guard self.engine.isRunning, self.crossfadeLoadGeneration == generation else { return }
                 self.isCrossfading = true
                 self.crossfadeStartMainVol = self.mainPlayer.volume
                 self.crossfadeStartVocalsVol = self.stemVocals.volume
                 self.crossfadeStartInstrumentalVol = self.stemInstrumental.volume
                 self.crossfadePlayer.volume = 0
-                self.startEngineIfNeeded()
-                let playbackLeadTime: TimeInterval = 0.08
                 let scheduledStart = self.synchronizedStartTime(leadTime: playbackLeadTime)
+                let startUptime = ProcessInfo.processInfo.systemUptime + playbackLeadTime
                 self.crossfadePlayer.play(from: 0, at: scheduledStart)
-                self.onCrossfadeStarted?()
                 DebugLogger.log(
-                    "Crossfade playback started for \(url.lastPathComponent), source=\(Self.describeMedia(self.preparedCrossfadeMedia))",
+                    "Crossfade playback scheduled for \(url.lastPathComponent), fade=\(fadeDuration)",
                     category: .playback
                 )
                 self.crossfadeRampGeneration &+= 1
                 let rampGeneration = self.crossfadeRampGeneration
-                let startUptime = ProcessInfo.processInfo.systemUptime + playbackLeadTime
                 let mainNode = self.mainPlayer.playerNode
                 let vocalsNode = self.stemVocals.playerNode
                 let instrumentalNode = self.stemInstrumental.playerNode
@@ -1014,10 +952,9 @@ final class AVEnginePlayback {
                 let timer = DispatchSource.makeTimerSource(queue: .main)
                 timer.schedule(
                     deadline: .now() + playbackLeadTime,
-                    repeating: Self.transitionTimerInterval,
+                    repeating: min(tick, fadeDuration / 4),
                     leeway: .milliseconds(2)
                 )
-                var completionDispatched = false
                 timer.setEventHandler { [weak self] in
                     guard let self,
                           self.crossfadeRampGeneration == rampGeneration,
@@ -1042,33 +979,39 @@ final class AVEnginePlayback {
                         instrumentalNode.volume = max(0, startInstrumentalVolume * outVolume)
                     }
                     incomingNode.volume = max(0, inVolume)
-                    guard t >= 1, !completionDispatched else { return }
-                    completionDispatched = true
+                    guard t >= 1 else { return }
                     self.finalizeCrossfade()
                 }
                 self.crossfadeTimer = timer
                 timer.resume()
-            } catch is CancellationError {
-                guard self.crossfadeLoadGeneration == loadGeneration else { return }
-                self.crossfadePreloadTask = nil
-                self.pendingCrossfadeURL = nil
-                DebugLogger.log(
-                    "Crossfade begin cancelled for \(url.lastPathComponent)", category: .playback
-                )
+                self.onCrossfadeScheduled?(playbackLeadTime + fadeDuration)
             } catch {
-                guard self.suppressionToken == token, self.crossfadeLoadGeneration == loadGeneration else {
-                    return
-                }
-                self.crossfadePreloadTask = nil
-                self.isCrossfading = false
-                self.pendingCrossfadeURL = nil
-                self.releasePlayerMedia(self.crossfadePlayer)
-                DebugLogger.log(
-                    "Crossfade begin failed for \(url.lastPathComponent): \(error)", category: .playback
-                )
-                self.onPlaybackError?(error)
+                guard self.crossfadeLoadGeneration == generation, self.suppressionToken == token else { return }
+                self.cancelCrossfade()
+                DebugLogger.log("Crossfade load failed for \(url.lastPathComponent): \(error)", category: .playback)
             }
         }
+    }
+
+    var hasAudibleCrossfade: Bool {
+        isCrossfading && crossfadePlayer.hasScheduledMedia
+            && crossfadePlayer.currentTime > 0 && crossfadePlayer.volume > 0
+    }
+
+    @discardableResult
+    func finishPreparedCrossfade(to url: URL) -> Bool {
+        guard preloadedCrossfadeURL == url, crossfadePlayer.duration > 0.1, engine.isRunning,
+              !isCrossfading || crossfadePlayer.hasScheduledMedia
+        else { return false }
+
+        // Preserve the position of a deck that already started rendering.
+        if !isCrossfading || crossfadePlayer.currentTime <= 0 {
+            crossfadePlayer.volume = 1
+            crossfadePlayer.play(from: 0)
+        }
+        pendingCrossfadeURL = url
+        finalizeCrossfade()
+        return true
     }
 
     func cancelCrossfade() {
@@ -1146,7 +1089,6 @@ final class AVEnginePlayback {
         crossfadePreloadTask?.cancel()
         crossfadePreloadTask = nil
         crossfadePreloadURL = nil
-        preparedCrossfadeMedia = nil
     }
 
     private func releasePlayerMedia(_ player: SimpleAudioPlayer, resetVolumeTo volume: Float = 0) {
@@ -1166,58 +1108,29 @@ final class AVEnginePlayback {
     private var crossfadeStartVocalsVol: Float = 0
     private var crossfadeStartInstrumentalVol: Float = 0
 
-    private func ensureCrossfadePrepared(
-        for url: URL,
-        token: UInt64,
-        loadGeneration: UInt64
-    ) async throws {
-        if preloadedCrossfadeURL == url { return }
-
-        if crossfadePreloadURL == url, let existingTask = crossfadePreloadTask {
-            DebugLogger.log(
-                "Awaiting in-flight crossfade preload for \(url.lastPathComponent)", category: .playback
-            )
-            let media = try await existingTask.value.value
-            guard suppressionToken == token, crossfadeLoadGeneration == loadGeneration else { return }
-            try applyMedia(media, to: crossfadePlayer)
-            preparedCrossfadeMedia = media
-            crossfadePreloadTask = nil
-            crossfadePreloadURL = nil
-            preloadedCrossfadeURL = url
-            crossfadePlayer.volume = 0
-            DebugLogger.log(
-                "Reused in-flight preload for \(url.lastPathComponent): \(Self.describeMedia(media))",
-                category: .playback
-            )
-            return
+    private func startCrossfadeLoad(
+        url: URL,
+        priority: TaskPriority
+    ) -> Task<LoadedMediaTransfer<LoadedMedia>, Error> {
+        let loader = crossfadeFileLoader
+        let task = Task.detached(priority: priority) {
+            try Task.checkCancellation()
+            return LoadedMediaTransfer(value: try loader(url))
         }
-
-        crossfadePreloadTask?.cancel()
         crossfadePreloadURL = url
-        DebugLogger.log(
-            "Loading crossfade media on demand for \(url.lastPathComponent)", category: .playback
-        )
-        let loadTask = Task.detached(priority: .userInitiated) {
-            LoadedMediaTransfer(value: try Self.loadMedia(url: url, intent: .prefetch))
-        }
-        crossfadePreloadTask = loadTask
-        let media = try await loadTask.value.value
-        guard suppressionToken == token, crossfadeLoadGeneration == loadGeneration else { return }
+        crossfadePreloadTask = task
+        return task
+    }
+
+    private func prepareCrossfadeMedia(_ media: LoadedMedia, url: URL) throws {
         try applyMedia(media, to: crossfadePlayer)
-        preparedCrossfadeMedia = media
         crossfadePreloadTask = nil
         crossfadePreloadURL = nil
         preloadedCrossfadeURL = url
         crossfadePlayer.volume = 0
-        DebugLogger.log(
-            "On-demand crossfade media ready for \(url.lastPathComponent): \(Self.describeMedia(media))",
-            category: .playback
-        )
     }
 
-    private static func describeMedia(_ media: LoadedMedia?) -> String {
-        guard let media else { return "none" }
-        let format = media.processingFormat
-        return "file(\(Int(format.sampleRate))Hz/\(format.channelCount)ch)"
-    }
+    #if DEBUG
+        var crossfadeMixerForTesting: AVAudioMixerNode { mainMixer }
+    #endif
 }

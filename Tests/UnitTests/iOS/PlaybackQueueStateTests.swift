@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Playback queue state")
 struct PlaybackQueueStateTests {
+    @Test("Crossfade follows Repeat All through a collection and skips same-song replays")
+    func crossfadeTargetFollowsQueue() {
+        let songs = fixtures(2)
+        var queue = PlaybackQueueState()
+        queue.beginInOrder(context: songs)
+
+        #expect(queue.crossfadeTarget(after: songs[0], repeatMode: .all) == songs[1])
+        #expect(queue.crossfadeTarget(after: songs[1], repeatMode: .all) == songs[0])
+        #expect(queue.crossfadeTarget(after: songs[1], repeatMode: .off) == nil)
+        #expect(queue.crossfadeTarget(after: songs[0], repeatMode: .one) == nil)
+
+        queue.selectSingleSong()
+        #expect(queue.crossfadeTarget(after: songs[0], repeatMode: .all) == nil)
+        queue.beginInOrder(context: [songs[0]])
+        #expect(queue.crossfadeTarget(after: songs[0], repeatMode: .all) == nil)
+    }
+
     @Test("Playback session preserves position, shuffle order and unshuffle context")
     func sessionRoundTrip() throws {
         let songs = fixtures(4)
