@@ -44,10 +44,9 @@ struct UploadNotifier {
     /// The notification for `completion`, in the app's chosen language. Its
     /// identifier is the upload's, so one upload never stacks two.
     static func content(for completion: SongUploadCompletion, defaults: UserDefaults = .standard) -> Content {
-        let language = AppLanguage(rawValue: defaults.string(forKey: AppLanguage.storageKey) ?? "system") ?? .system
-        let locale = Locale(identifier: language.localeIdentifier)
         // As for downloads: outside SwiftUI the bundle picks the translation.
-        let bundle = language.localizationBundle
+        let localization = UploadLocalization.current(defaults)
+        let (bundle, locale) = (localization.bundle, localization.locale)
         let song = completion.title
         let body = switch (completion.succeeded, song.isEmpty) {
         case (true, false): String(localized: "Added “\(song)” to your uploads.", bundle: bundle, locale: locale)
