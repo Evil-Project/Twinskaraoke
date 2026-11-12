@@ -60,7 +60,7 @@ struct BadgeMedia: Decodable, Sendable {
     let cloudflareId: String?
 }
 
-struct UploadLimits: Decodable, Sendable {
+nonisolated struct UploadLimits: Decodable, Sendable {
     let maxSongs: Int
     let maxStorageBytes: Int64
     let usedStorageBytes: Int64
@@ -68,4 +68,39 @@ struct UploadLimits: Decodable, Sendable {
     let currentPlaylistCount: Int
     let playlistLimit: Int
     let songPerPlaylistLimit: Int
+    /// Whether the server reported both `maxSongs` and `currentSongCount`.
+    /// Every field is optional in the API; a figure it leaves out reads 0.
+    var songQuotaKnown = true
+    /// Whether the server reported both `maxStorageBytes` and
+    /// `usedStorageBytes`.
+    var storageQuotaKnown = true
+}
+
+nonisolated extension UploadLimits {
+    private enum CodingKeys: String, CodingKey {
+        case maxSongs, maxStorageBytes, usedStorageBytes, currentSongCount
+        case currentPlaylistCount, playlistLimit, songPerPlaylistLimit
+    }
+
+    /// The API marks every field optional. A missing figure reads 0, and a
+    /// quota missing either of its two figures is unknown, so it never
+    /// blocks an upload: the server decides.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let maxSongs = try container.decodeIfPresent(Int.self, forKey: .maxSongs)
+        let currentSongCount = try container.decodeIfPresent(Int.self, forKey: .currentSongCount)
+        let maxStorageBytes = try container.decodeIfPresent(Int64.self, forKey: .maxStorageBytes)
+        let usedStorageBytes = try container.decodeIfPresent(Int64.self, forKey: .usedStorageBytes)
+        self.init(
+            maxSongs: maxSongs ?? 0,
+            maxStorageBytes: maxStorageBytes ?? 0,
+            usedStorageBytes: usedStorageBytes ?? 0,
+            currentSongCount: currentSongCount ?? 0,
+            currentPlaylistCount: try container.decodeIfPresent(Int.self, forKey: .currentPlaylistCount) ?? 0,
+            playlistLimit: try container.decodeIfPresent(Int.self, forKey: .playlistLimit) ?? 0,
+            songPerPlaylistLimit: try container.decodeIfPresent(Int.self, forKey: .songPerPlaylistLimit) ?? 0,
+            songQuotaKnown: maxSongs != nil && currentSongCount != nil,
+            storageQuotaKnown: maxStorageBytes != nil && usedStorageBytes != nil
+        )
+    }
 }

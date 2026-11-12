@@ -312,10 +312,10 @@ nonisolated enum KaraokeAPIClient {
         subsystem: "com.xiaoyuan151.Twinskaraoke",
         category: "Network"
     )
-    private static let uploadedSongMetadataCache = UploadedSongMetadataCache(lifetime: 60)
-    private static let playlistDetailCache = PlaylistDetailCache(lifetime: 60)
+    static let uploadedSongMetadataCache = UploadedSongMetadataCache(lifetime: 60)
+    static let playlistDetailCache = PlaylistDetailCache(lifetime: 60)
     private static let favoriteCatalogMetadataCache = FavoriteCatalogMetadataCache(lifetime: 60)
-    private static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
+    static let favoriteSongsCache = FavoriteSongsCache(lifetime: 60)
 
     static func playlists(
         startIndex: Int,

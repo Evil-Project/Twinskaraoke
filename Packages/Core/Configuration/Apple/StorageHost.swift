@@ -17,6 +17,10 @@ nonisolated enum StorageHost {
         isChinaRegion ? "https://idk.neurokaraoke.com.cn" : "https://idk.neurokaraoke.com"
     }
 
+    /// Song uploads. There is no China mirror for these, so every region
+    /// uses the global host.
+    static let upload = "https://idk.neurokaraoke.com"
+
     /// The web player, whose pages are what a shared link opens. Song pages
     /// carry their own link preview (title, artwork, description).
     static let webPlayer = "https://twinskaraoke.com"
