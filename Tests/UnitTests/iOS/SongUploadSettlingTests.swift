@@ -104,6 +104,100 @@ struct SongUploadSettlingTests {
         #expect(failedWithServerError(phase(controller, id), status: 400))
     }
 
+    // MARK: - One settlement at a time
+
+    @Test("A real answer that arrives during a vanished upload's reconciliation wins, once")
+    func lateAnswerWinsOverVanishedReconciliation() async throws {
+        let id = UUID()
+        let staged = StagedUpload(
+            id: id,
+            fileURL: URL(fileURLWithPath: "/staged/\(id.uuidString).upload"),
+            bodyBytes: 1200,
+            sourceBytes: 1000,
+            filename: "Song.mp3",
+            contentType: "audio/mpeg",
+            boundary: "B"
+        )
+        harness.outbox.save(PendingUpload(
+            staged: staged, taskID: 9, title: "Away", startedAt: Date(), knownSongIDs: ["old"], account: "account-a"
+        ))
+        var release: CheckedContinuation<Void, Never>?
+        harness.songListHold = { await withCheckedContinuation { release = $0 } }
+        let controller = harness.controller()
+        await controller.resume()
+        // The task is gone, so the list is asked; hold it there.
+        await waitUntil { release != nil }
+
+        harness.transport.send(.finished(taskID: 9, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { controller.uploads.first?.phase.isFinished == true }
+        #expect(controller.uploads.first?.phase == .succeeded(title: "Away"))
+
+        // The list, without the song, comes back late: it changes nothing.
+        harness.songListHold = nil
+        release?.resume()
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [9] }
+        // The list's caller runs on to its end without suspending again.
+        await waitUntil { harness.songListAnswers == 1 }
+        #expect(controller.uploads.first?.phase == .succeeded(title: "Away"))
+        #expect(controller.completedUploads == 1)
+        #expect(controller.latestCompletion?.succeeded == true)
+        #expect(harness.invalidations == 1)
+    }
+
+    // MARK: - Unconfirmed endings
+
+    /// An upload whose 503 couldn't be checked against the list.
+    private func unconfirmedUpload(_ controller: SongUploadController) async -> UUID? {
+        let (id, taskID) = await startedUpload(controller)
+        harness.songListError = URLError(.notConnectedToInternet)
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        return id
+    }
+
+    @Test("When the list can't tell, a retry finds the song and sends nothing")
+    func unconfirmedRetryFindsSongWithoutResending() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        harness.songListError = nil
+        harness.songs["new"] = "Song"
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(harness.transport.started.count == 1)
+        #expect(controller.completedUploads == 1)
+    }
+
+    @Test("When the list can't tell, a retry that finds nothing sends once")
+    func unconfirmedRetryWithoutSongSendsOnce() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 2 && controller.records[id ?? UUID()]?.taskID != nil }
+        #expect(phase(controller, id) == .uploading(0))
+        #expect(harness.stageCalls == 1)
+    }
+
+    @Test("While the list keeps failing, a retry sends nothing")
+    func unconfirmedRetryWhileListFailsSendsNothing() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        let calls = harness.songListCalls
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        #expect(harness.songListCalls == calls + 1)
+        #expect(harness.transport.started.count == 1)
+
+        // Still unconfirmed: the next retry asks again.
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 2 }
+        #expect(harness.songListCalls == calls + 2)
+    }
+
     // MARK: - Baseline
 
     @Test("Without the list of uploads from before, no file is sent and no link imported")
