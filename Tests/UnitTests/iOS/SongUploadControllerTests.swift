@@ -276,7 +276,7 @@ struct SongUploadControllerTests {
         let controller = harness.controller()
         let (first, taskID) = await startedUpload(controller)
         let second = controller.uploadFile(at: URL(fileURLWithPath: "/picked/Other.m4a"), metadata: metadata)
-        try? await Task.sleep(for: .milliseconds(20))
+        // Queueing is synchronous: the second upload can't have started.
         #expect(phase(controller, second) == .waiting)
         #expect(harness.transport.started.count == 1)
         harness.transport.send(.finished(taskID: taskID, status: 200, body: Data(), contentType: nil, retryAfter: nil))
@@ -394,7 +394,9 @@ struct SongUploadControllerTests {
         let (other, otherTask) = await startedUpload(controller, file: URL(fileURLWithPath: "/picked/B.mp3"))
         harness.transport.send(.failed(taskID: otherTask, .urlError(.networkConnectionLost)))
         await waitUntil { isFinished(controller, other) }
-        try? await Task.sleep(for: .milliseconds(50))
+        // Settled once both answers are acknowledged; a retry would have
+        // started by then.
+        await waitUntil { Set(harness.transport.state.withLock { $0.acknowledged }) == [taskID, otherTask] }
         #expect(harness.transport.started.count == 2)
         #expect(phase(controller, other) == .failed(.interrupted))
     }
@@ -419,7 +421,8 @@ struct SongUploadControllerTests {
         let controller = harness.controller()
         let id = controller.importLink("https://discord.com/channels/1/2/3")
         #expect(phase(controller, id) == .failed(.unsupportedLink(.discordMessageLink)))
-        try? await Task.sleep(for: .milliseconds(20))
+        // Refused synchronously: nothing was queued that could send later.
+        #expect(!controller.uploads.contains { $0.isActive })
         #expect(harness.importCalls == 0)
         #expect(harness.limitsCalls == 0)
     }
