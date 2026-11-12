@@ -123,6 +123,9 @@ extension UploadedSongsViewModel {
             }
             return error as? SongUploadFailure ?? .unknown
         }
+        // Every load from here on leaves it out, including one that started
+        // before the delete and finishes after it.
+        deletedSongIDs.insert(song.id)
         // A reload while the request ran may have put the row back.
         if songs.contains(where: { $0.id == song.id }) {
             songs.removeAll { $0.id == song.id }

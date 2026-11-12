@@ -127,6 +127,24 @@ struct UploadedSongsManageTests {
         #expect(fake.removedDownloads == ["b"])
     }
 
+    @Test func loadFinishingAfterADeleteKeepsTheRowOut() async {
+        let fake = Fake(songs: Self.songs)
+        let model = await loaded(fake)
+        fake.holdsList = true
+        let reload = Task { await model.refresh() }
+        while fake.pendingList == nil { await Task.yield() }
+        // The delete lands while a load that started before it is on the way.
+        #expect(await model.delete(Self.songs[1]) == nil)
+        #expect(model.songs.map(\.id) == ["a", "c"])
+        fake.pendingList?.resume()
+        await reload.value
+        #expect(model.songs.map(\.id) == ["a", "c"])
+        #expect(model.displayedSongs.map(\.id) == ["a", "c"])
+        // A later load that still lists it keeps it out too.
+        await model.refresh()
+        #expect(model.songs.map(\.id) == ["a", "c"])
+    }
+
     @Test func deleteAlsoStopsAQueuedOrRunningDownload() {
         typealias Manage = UploadedSongsViewModel.ManageService
         #expect(Manage.hasOfflineWork(SongDownloadStatus(isDownloaded: true, isDownloading: false)))
