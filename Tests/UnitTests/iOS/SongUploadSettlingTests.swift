@@ -50,12 +50,36 @@ struct SongUploadSettlingTests {
     func serverErrorWithNewSongCountsAsSuccess() async throws {
         let controller = harness.controller()
         let (id, taskID) = await startedUpload(controller)
-        harness.songIDs = ["old", "new"]
+        harness.songs["new"] = "Song"
         harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
         await waitUntil { isFinished(controller, id) }
         #expect(phase(controller, id) == .succeeded(title: "Song"))
         #expect(harness.discarded == [try #require(harness.staged.first).id])
         #expect(controller.completedUploads == 1)
+    }
+
+    @Test("A new song with another title, such as one added from another device, isn't this upload")
+    func newSongWithAnotherTitleIsNotThisUpload() async {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.songs["other"] = "From Another Device"
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        #expect(controller.completedUploads == 0)
+    }
+
+    @Test("The title is compared as it was sent, without surrounding spaces")
+    func newSongMatchesTrimmedTitle() async {
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: SongUploadMetadata(title: "  My Song ", artist: "", playlistID: nil))
+        await waitUntil { harness.transport.started.count == 1 && controller.records[id ?? UUID()]?.taskID != nil }
+        let taskID = controller.records[id ?? UUID()]?.taskID ?? -1
+        harness.songs["other"] = "Another"
+        harness.songs["new"] = "My Song"
+        harness.transport.send(.failed(taskID: taskID, .urlError(.timedOut)))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "  My Song "))
     }
 
     @Test("A 5xx without a new song fails and keeps the body for a retry")
@@ -74,7 +98,7 @@ struct SongUploadSettlingTests {
     func clientErrorFailsAtOnce() async {
         let controller = harness.controller()
         let (id, taskID) = await startedUpload(controller)
-        harness.songIDs = ["old", "new"]
+        harness.songs["new"] = "Song"
         harness.transport.send(.finished(taskID: taskID, status: 400, body: Data(), contentType: nil, retryAfter: nil))
         await waitUntil { isFinished(controller, id) }
         #expect(failedWithServerError(phase(controller, id), status: 400))
@@ -148,7 +172,7 @@ struct SongUploadSettlingTests {
     @Test("An interrupted link import that landed counts as success")
     func interruptedLinkImportThatLandedSucceeds() async {
         harness.importResult = { [harness] in
-            harness.songIDs.insert("new")
+            harness.songs["new"] = "Linked Song"
             throw URLError(.cancelled)
         }
         let controller = harness.controller()
@@ -171,9 +195,9 @@ struct SongUploadSettlingTests {
     @Test("A timed-out or 5xx link import that landed counts as success")
     func timedOutLinkImportThatLandedSucceeds() async {
         for failure in [SongUploadFailure.timedOut, .server(status: 504, problem: nil)] {
-            harness.songIDs = ["old"]
+            harness.songs = ["old": "Old Song"]
             harness.importResult = { [harness] in
-                harness.songIDs.insert("new")
+                harness.songs["new"] = "Linked Song"
                 throw failure
             }
             let controller = harness.controller()
@@ -186,7 +210,7 @@ struct SongUploadSettlingTests {
     @Test("A link import the server refused fails without asking the list")
     func refusedLinkImportFails() async {
         harness.importResult = { [harness] in
-            harness.songIDs.insert("new")
+            harness.songs["new"] = "Linked Song"
             throw SongUploadFailure.server(status: 400, problem: nil)
         }
         let controller = harness.controller()

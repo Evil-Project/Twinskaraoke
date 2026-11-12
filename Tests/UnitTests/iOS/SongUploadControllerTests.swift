@@ -62,7 +62,8 @@ struct SongUploadControllerTests {
         let outbox = UploadOutboxStore.inMemory()
         var limits: () throws -> UploadLimits = { Harness.limits(remainingSongs: 10) }
         var limitsCalls = 0
-        var songIDs: Set<String> = ["old"]
+        /// The user's uploads, id to title.
+        var songs: [String: String] = ["old": "Old Song"]
         /// Thrown by the list of uploads while set.
         var songListError: Error?
         var stageCalls = 0
@@ -94,9 +95,9 @@ struct SongUploadControllerTests {
                     limitsCalls += 1
                     return try limits()
                 },
-                uploadedSongIDs: { [self] in
+                uploadedSongTitles: { [self] in
                     if let songListError { throw songListError }
-                    return songIDs
+                    return songs
                 },
                 makeUploadRequest: { [self] staged in
                     tokenCount += 1
@@ -363,7 +364,7 @@ struct SongUploadControllerTests {
     func ambiguousTimeoutWithNewServerSongCountsAsSuccess() async {
         let controller = harness.controller()
         let (id, taskID) = await startedUpload(controller)
-        harness.songIDs = ["old", "new"]
+        harness.songs["new"] = "Song"
         harness.transport.send(.failed(taskID: taskID, .urlError(.timedOut)))
         await waitUntil { isFinished(controller, id) }
         #expect(phase(controller, id) == .succeeded(title: "Song"))

@@ -4,8 +4,8 @@ extension SongUploadController {
     /// Everything the controller reaches outside itself, replaced in tests.
     struct Service {
         var limits: @MainActor () async throws -> UploadLimits
-        /// The ids of the user's uploads, to tell which song an upload added.
-        var uploadedSongIDs: @MainActor () async throws -> Set<String>
+        /// The user's uploads, id to title, to tell which song an upload added.
+        var uploadedSongTitles: @MainActor () async throws -> [String: String]
         /// The upload request for a staged body, with the current token.
         var makeUploadRequest: @MainActor (_ staged: StagedUpload) throws -> URLRequest
         var importLink: @MainActor (_ link: SongLinkImport) async throws -> SongLinkImportResult?
@@ -27,7 +27,12 @@ extension SongUploadController {
         static var live: Service {
             Service(
                 limits: { try await KaraokeAPIClient.uploadLimits() },
-                uploadedSongIDs: { try await Set(KaraokeAPIClient.uploadedSongs().map(\.id)) },
+                uploadedSongTitles: {
+                    try await Dictionary(
+                        KaraokeAPIClient.uploadedSongs().map { ($0.id, $0.title) },
+                        uniquingKeysWith: { first, _ in first }
+                    )
+                },
                 makeUploadRequest: { staged in
                     try KaraokeAPIClient.songUploadRequest(boundary: staged.boundary)
                 },
@@ -64,7 +69,7 @@ extension SongUploadController {
                         songPerPlaylistLimit: 100
                     )
                 },
-                uploadedSongIDs: { [] },
+                uploadedSongTitles: { [:] },
                 makeUploadRequest: { staged in
                     var request = URLRequest(url: URL(fileURLWithPath: "/ui-test-upload"))
                     request.httpMethod = "POST"

@@ -64,7 +64,7 @@ extension SongUploadController {
     /// loaded `id` fails before anything is sent. Returns whether it loaded.
     func loadBaseline(_ id: UUID) async -> Bool {
         do {
-            let known = try await service.uploadedSongIDs()
+            let known = try await Set(service.uploadedSongTitles().keys)
             guard records[id] != nil else { return false }
             records[id]?.knownSongIDs = known
             return true
@@ -94,17 +94,30 @@ extension SongUploadController {
     }
 
     /// The body may or may not have arrived. The server's answer carries no
-    /// id, so a song in the user's uploads that wasn't there before means it
-    /// did; otherwise the user can try again.
+    /// id, so a song in the user's uploads that wasn't there before, and that
+    /// `isThisUpload` matches, means it did; otherwise the user can try again.
     func settleAmbiguous(_ id: UUID, failure: SongUploadFailure) async {
         setPhase(id, .finishing)
         if let known = records[id]?.knownSongIDs,
-           let current = try? await service.uploadedSongIDs(),
-           !current.subtracting(known).isEmpty
+           let current = try? await service.uploadedSongTitles(),
+           isThisUpload(id, added: current.filter { !known.contains($0.key) }.map(\.value))
         {
             return await succeed(id, title: title(of: id))
         }
         fail(id, failure)
+    }
+
+    /// Whether `added`, the titles of songs new since `id` started, holds it.
+    /// A file upload sends its title, so only a song with that title counts,
+    /// not one another device added meanwhile. A link's title isn't known
+    /// until the server answers, so for a link (or a file sent without a
+    /// title) any new song counts.
+    private func isThisUpload(_ id: UUID, added: [String]) -> Bool {
+        guard !added.isEmpty else { return false }
+        let sent = SongUploadMetadata(title: title(of: id), artist: "", playlistID: nil)
+            .formFields.first { $0.name == "Title" }?.value
+        guard item(id)?.kind == .file, let sent else { return true }
+        return added.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == sent }
     }
 
     /// A 401 can be an expired session or the upload host refusing the
