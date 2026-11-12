@@ -38,18 +38,15 @@ final class UploadSongFormModel {
 
     struct Service {
         var limits: @MainActor () async throws -> UploadLimits
-        /// The picked file's size, read under its security scope.
-        var fileSize: @MainActor (_ file: URL) -> Int64?
+        /// The picked file's size, read under its security scope and off
+        /// the main actor.
+        var fileSize: @MainActor (_ file: URL) async -> Int64?
         var tags: @MainActor (_ file: URL) async -> FileTags
 
         static var live: Service {
             Service(
                 limits: { try await KaraokeAPIClient.uploadLimits() },
-                fileSize: { file in
-                    let scoped = file.startAccessingSecurityScopedResource()
-                    defer { if scoped { file.stopAccessingSecurityScopedResource() } }
-                    return (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
-                },
+                fileSize: { file in await UploadStaging.fileSize(of: file) },
                 tags: { file in await UploadSongFormModel.readTags(file) }
             )
         }
@@ -89,6 +86,8 @@ final class UploadSongFormModel {
     /// may replace; anything the user typed stays.
     @ObservationIgnored private var filledTitle = ""
     @ObservationIgnored private var filledArtist = ""
+    /// Bumped by every pick, so a slow read of an earlier file is dropped.
+    @ObservationIgnored private var pickGeneration = 0
 
     init(service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live) {
         self.service = service
@@ -108,7 +107,11 @@ final class UploadSongFormModel {
     /// which the server would otherwise leave blank, and the file's tags
     /// then fill the fields the user hasn't typed in.
     func pick(_ url: URL) async {
-        file = PickedFile(url: url, name: url.lastPathComponent, size: service.fileSize(url))
+        pickGeneration &+= 1
+        let generation = pickGeneration
+        let size = await service.fileSize(url)
+        guard generation == pickGeneration else { return }
+        file = PickedFile(url: url, name: url.lastPathComponent, size: size)
         serverProblem = nil
         isAlreadyUploading = false
         fill(title: SongUploadMetadata.defaultTitle(forFilename: url.lastPathComponent) ?? "", artist: "")
