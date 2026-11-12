@@ -16,7 +16,7 @@ private struct PopupHostView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var homeViewModel = HomeViewModel()
+    @State private var homeViewModel = HomeViewModel(store: .live)
     @State private var selectedSection: RootSection?
     @State private var showCaptcha = false
     private let nowPlaying = NowPlayingSnapshotState.shared

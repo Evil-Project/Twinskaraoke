@@ -13991,6 +13991,52 @@
         }
       }
     },
+    "Couldn't Refresh" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktualisierung fehlgeschlagen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Päivitys epäonnistui"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’actualiser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新できませんでした"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося оновити"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法刷新"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法重新整理"
+          }
+        }
+      }
+    },
     "Couldn't refresh radio metadata." : {
       "localizations" : {
         "de" : {
@@ -46654,6 +46700,52 @@
     },
     "Show Update Walkthrough for This Release" : {
 
+    },
+    "Showing what was saved on this device. Pull down to try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du siehst, was auf diesem Gerät gespeichert ist. Zum erneuten Versuchen nach unten ziehen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Näytetään tälle laitteelle tallennettu sisältö. Yritä uudelleen vetämällä alas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affichage du contenu enregistré sur cet appareil. Tirez vers le bas pour réessayer."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスに保存された内容を表示しています。下に引いてもう一度お試しください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показано вміст, збережений на цьому пристрої. Потягніть униз, щоб повторити."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在显示此设备上保存的内容。下拉以重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在顯示此裝置上儲存的內容。下拉以重試。"
+          }
+        }
+      }
     },
     "Shows a QR code to authorize a browser session." : {
       "localizations" : {
