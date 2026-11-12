@@ -96,6 +96,7 @@ final class AudioPlayerManager {
     }()
     private var usesSessionPersistence: Bool { Self.usesSessionPersistence }
     var queue: [Song] { queueState.items }
+    var upNextEntries: [PlaybackQueueState.Entry] { Array(queueState.upNext(after: currentSong)) }
     var isEditingProgress = false
     var volume: Double = 1.0
     var isUserScrubbingVolume: Bool = false
@@ -463,10 +464,7 @@ final class AudioPlayerManager {
     private var quickCutTimer: DispatchSourceTimer?
     private var quickCutGeneration: UInt64 = 0
     private var separationGeneration: UInt64 = 0
-    private var transitionTimeoutGeneration: UInt64 = 0
-    private var transitionStartGeneration: UInt64 = 0
-    @ObservationIgnored private var transitionStartTask: Task<Void, Never>?
-    private var activeCrossfadePlan: TransitionCoordinator.TransitionPlan?
+    @ObservationIgnored private let transition = PlaybackTransition()
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
     private var handlingAudioSessionInterruption = false
@@ -667,35 +665,34 @@ final class AudioPlayerManager {
 
     /// Wires the engine's callbacks and applies the current EQ, which the EQ
     /// observers only push into an engine that already exists.
+    private func finishNaturallyEndedSong() {
+        guard !isRadioMode, isPlaying else { return }
+        guard quickCutTimer == nil else { return }
+        guard !suppressTransitionAfterSeek else { return }
+        guard !isPlaybackEndedCallbackSuppressed else {
+            DebugLogger.log("Ignoring suppressed playback-ended callback", category: .playback)
+            return
+        }
+        if handlePrematurePlaybackEndIfNeeded(source: "AVEngine") { return }
+        if sleepTimer.consumeEndOfSong() {
+            pauseCurrentPlayback(source: "sleepTimer.endOfSong")
+            return
+        }
+        if let plan = transition.activePlan ?? transitionCoordinator.pendingPlan {
+            if transition.promoteAtNaturalEnd(plan: plan, currentTarget: crossfadeTarget?.id, in: avEngine) { return }
+            cancelPendingTransitionWork()
+        }
+        playNextOrRandom()
+    }
+
     private func makeEngine() -> AVEnginePlayback {
         let engine = AVEnginePlayback()
-        engine.onPlaybackEnded = { [weak self] in
-            guard let self, !self.isRadioMode else { return }
-            guard isPlaying else { return }
-            guard quickCutTimer == nil else { return }
-            guard !suppressTransitionAfterSeek else { return }
-            guard !isPlaybackEndedCallbackSuppressed else {
-                DebugLogger.log("Ignoring suppressed playback-ended callback", category: .playback)
-                return
-            }
-            if handlePrematurePlaybackEndIfNeeded(source: "AVEngine") { return }
-            if sleepTimer.consumeEndOfSong() {
-                pauseCurrentPlayback(source: "sleepTimer.endOfSong")
-                return
-            }
-            if let plan = activeCrossfadePlan ?? transitionCoordinator.pendingPlan {
-                if avEngine.hasAudibleCrossfade || crossfadeTarget?.id == plan.nextSong.id {
-                    activeCrossfadePlan = plan
-                    if avEngine.finishPreparedCrossfade(to: plan.nextFileURL) { return }
-                }
-                cancelPendingTransitionWork()
-            }
-            playNextOrRandom()
-        }
+        engine.onPlaybackEnded = { [weak self] in self?.finishNaturallyEndedSong() }
         engine.onCrossfadeCompleted = { [weak self] in
             guard let self else { return }
             transitionCoordinatorDidFinish()
         }
+        engine.onCrossfadeAborted = { [weak self] in self?.recoverFailedCrossfade() }
         engine.onCrossfadeScheduled = { [weak self] scheduledDuration in
             self?.watchScheduledCrossfade(duration: scheduledDuration)
         }
@@ -905,7 +902,6 @@ final class AudioPlayerManager {
         pollTimer?.invalidate()
         quickCutTimer?.cancel()
         streamFadeTimer?.cancel()
-        transitionStartTask?.cancel()
         instrumentalTask?.cancel()
         preparedStemTask?.cancel()
         backgroundAnalysisRetryTask?.cancel()
@@ -991,11 +987,7 @@ final class AudioPlayerManager {
         var ids = Set<String>()
         if let id = currentSong?.id { ids.insert(id) }
         if let id = upcomingSong?.id { ids.insert(id) }
-        if let current = currentSong, let idx = queue.firstIndex(where: { $0.id == current.id }),
-           idx + 1 < queue.count
-        {
-            ids.insert(queue[idx + 1].id)
-        }
+        if let next = queueState.upNext(after: currentSong).first { ids.insert(next.song.id) }
         return ids
     }
 
@@ -1359,11 +1351,7 @@ final class AudioPlayerManager {
     }
 
     private func cancelPendingTransitionWork(resetVolume: Bool = true) {
-        transitionTimeoutGeneration &+= 1
-        transitionStartGeneration &+= 1
-        transitionStartTask?.cancel()
-        transitionStartTask = nil
-        activeCrossfadePlan = nil
+        transition.reset()
         cancelQuickCutTimer(resetVolume: resetVolume)
         loadedEngine?.cancelCrossfade()
         streamFadeGeneration &+= 1
@@ -1379,33 +1367,11 @@ final class AudioPlayerManager {
     }
 
     private func schedulePreparedTransition(_ plan: TransitionCoordinator.TransitionPlan) {
-        transitionStartGeneration &+= 1
-        let generation = transitionStartGeneration
-        transitionStartTask?.cancel()
-
-        let remaining = max(0, playbackDuration - activePlaybackTime(for: currentSong))
+        let remaining = playbackDuration - activePlaybackTime(for: currentSong)
         let lead = anyAIEffectActive ? 0 : AVEnginePlayback.crossfadeSchedulingLead
-        let delay = max(0, remaining - plan.fadeDuration - lead)
-        DebugLogger.log(
-            "Scheduling transition deadline next=\(plan.nextSong.id), in=\(String(format: "%.3f", delay))s",
-            category: .playback
-        )
-
-        transitionStartTask = Task { [weak self] in
-            guard delay.isFinite else { return }
-            if delay > 0 {
-                do {
-                    try await Task.sleep(for: .seconds(delay))
-                } catch {
-                    return
-                }
-            }
-            guard let self,
-                  transitionStartGeneration == generation,
-                  isPlaying
-            else { return }
-            transitionStartTask = nil
-            guard crossfadeTarget?.id == plan.nextSong.id else {
+        transition.scheduleDeadline(after: remaining - plan.fadeDuration - lead) { [weak self] in
+            guard let self, isPlaying, transitionCoordinator.pendingPlan?.id == plan.id else { return }
+            guard crossfadeTarget?.id == plan.target.id else {
                 cancelPendingTransitionWork()
                 return
             }
@@ -1548,14 +1514,16 @@ final class AudioPlayerManager {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    private var crossfadeTarget: Song? {
-        guard !sleepTimer.endsWithCurrentSong, !anyAIEffectActive || repeatMode == .off else { return nil }
-        return queueState.crossfadeTarget(after: currentSong, repeatMode: repeatMode)
+    private var crossfadeTarget: PlaybackQueueState.Entry? {
+        PlaybackTransition.target(in: queueState, after: currentSong, repeatMode: repeatMode,
+                                  endsWithCurrentSong: sleepTimer.endsWithCurrentSong, aiEffectActive: anyAIEffectActive)
     }
+
+    private var hasStartedHandoff: Bool { loadedEngine?.hasAudibleCrossfade == true || quickCutTimer != nil }
 
     private func pollTransition(at time: TimeInterval, duration: TimeInterval) {
         transitionCoordinator.poll(
-            currentTime: time, totalDuration: duration, currentSong: currentSong, nextSong: crossfadeTarget,
+            currentTime: time, totalDuration: duration, currentSong: currentSong, target: crossfadeTarget,
             autoMixEnabled: autoMixEnabled, crossfadeEnabled: crossfadeEnabled, crossfadeSeconds: crossfadeSeconds,
             aiEffectActive: anyAIEffectActive
         )
@@ -1579,7 +1547,8 @@ final class AudioPlayerManager {
         context: [Song] = [],
         resetTransitionVolume: Bool,
         preserveCacheRecoveryState: Bool = false,
-        reportsPlayCount: Bool = true
+        reportsPlayCount: Bool = true,
+        queueEntryID: UUID? = nil
     ) {
         if WatchSessionPublisher.shared.routeToWatch(.play, song: song, queue: context.isEmpty ? queue : context) { return }
         transferredPlayback = nil
@@ -1587,7 +1556,8 @@ final class AudioPlayerManager {
         sessionPersistenceReady = true
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.play(song: song, context: context, resetTransitionVolume: resetTransitionVolume,
-                       preserveCacheRecoveryState: preserveCacheRecoveryState, reportsPlayCount: reportsPlayCount)
+                       preserveCacheRecoveryState: preserveCacheRecoveryState, reportsPlayCount: reportsPlayCount,
+                       queueEntryID: queueEntryID)
         }, replacingPending: true) else { return }
 
         cancelAutoplayRequest()
@@ -1641,6 +1611,7 @@ final class AudioPlayerManager {
             DownloadManager.shared.download(song: song)
         }
         warmPlayerArtwork(for: song)
+        queueState.selectEntry(queueEntryID ?? queueState.currentEntryID)
         queueState.replaceContext(context, current: song)
         checkEasterEgg(for: song)
         // Songs with a remote source use the non-decompressing lookup; a
@@ -2275,7 +2246,9 @@ final class AudioPlayerManager {
             if repeatMode == .one { repeatMode = .off }
             play(song: song, context: [], resetTransitionVolume: true, reportsPlayCount: false)
         case .play(let song):
-            play(song: song, resetTransitionVolume: true)
+            let entry = queueState.nextEntry(after: currentSong, repeatMode: .off)
+                ?? queueState.nextEntry(after: currentSong, repeatMode: .all)
+            play(song: song, resetTransitionVolume: true, queueEntryID: entry?.id)
         case .autoplay:
             fetchAutoplaySongs()
         case .stop:
@@ -2294,18 +2267,18 @@ final class AudioPlayerManager {
     func playPrevious() {
         if WatchSessionPublisher.shared.routeToWatch(.previous) { return }
         if isRadioMode { return }
-        guard let previous = queueState.previous(before: currentSong, elapsed: playbackTime) else {
+        guard let previous = queueState.previousEntry(before: currentSong, elapsed: playbackTime) else {
             seek(to: 0)
             return
         }
-        play(song: previous, resetTransitionVolume: true)
+        play(song: previous.song, resetTransitionVolume: true, queueEntryID: previous.id)
     }
 
     func toggleRepeat() {
         if WatchSessionPublisher.shared.routeToWatch(.repeatMode) { return }
         let nextBefore = queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled)
         repeatMode = repeatMode.next()
-        if loadedEngine?.hasAudibleCrossfade != true, quickCutTimer == nil,
+        if !hasStartedHandoff,
            queueState.advance(after: currentSong, repeatMode: repeatMode, autoplayEnabled: autoplayEnabled) != nextBefore
         {
             nextSongChanged()
@@ -2316,7 +2289,7 @@ final class AudioPlayerManager {
         if WatchSessionPublisher.shared.routeToWatch(.shuffle) { return }
         let targetBefore = crossfadeTarget?.id
         queueState.toggleShuffle(current: currentSong)
-        if loadedEngine?.hasAudibleCrossfade != true, crossfadeTarget?.id != targetBefore { nextSongChanged() }
+        if !hasStartedHandoff, crossfadeTarget?.id != targetBefore { cancelPendingTransitionWork() }
     }
 
     func playInOrder(song: Song, context: [Song], playlistID: String? = nil) {
@@ -2356,7 +2329,13 @@ final class AudioPlayerManager {
     /// where Previous reaches them.
     func skipToQueuedSong(_ song: Song) { // play(song:), keeping the queue's playlist for play counts
         queueState.selectSingleSong()
-        play(song: song, resetTransitionVolume: true)
+        play(song: song, resetTransitionVolume: true, queueEntryID: queueState.entry(for: song)?.id)
+    }
+
+    func skipToQueuedEntry(_ entry: PlaybackQueueState.Entry) {
+        guard queueState.containsEntry(entry.id) else { return }
+        queueState.selectSingleSong()
+        play(song: entry.song, resetTransitionVolume: true, queueEntryID: entry.id)
     }
 
     func toggleAutoplay() {
@@ -2366,14 +2345,25 @@ final class AudioPlayerManager {
     func moveInUpNext(from source: IndexSet, to destination: Int) {
         let targetBefore = crossfadeTarget?.id
         queueState.moveUpNext(after: currentSong, from: source, to: destination)
-        if loadedEngine?.hasAudibleCrossfade != true, crossfadeTarget?.id != targetBefore { nextSongChanged() }
+        if !hasStartedHandoff, crossfadeTarget?.id != targetBefore { cancelPendingTransitionWork() }
         WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
+    }
+
+    func removeFromUpNext(ids: Set<UUID>) {
+        let entries = upNextEntries
+        removeFromUpNext(at: IndexSet(entries.indices.filter { ids.contains(entries[$0].id) }))
     }
 
     func removeFromUpNext(at offsets: IndexSet) {
         let targetBefore = crossfadeTarget?.id
-        queueState.removeUpNext(after: currentSong, at: offsets)
-        if loadedEngine?.hasAudibleCrossfade != true, crossfadeTarget?.id != targetBefore { nextSongChanged() }
+        let removed = queueState.removeUpNext(after: currentSong, at: offsets)
+        guard !removed.isEmpty else { return }
+        if PlaybackTransition.shouldInvalidate(previousTarget: targetBefore, nextTarget: crossfadeTarget?.id,
+                                               activeTarget: transition.activePlan?.target.id,
+                                               removed: removed, hasStarted: hasStartedHandoff)
+        {
+            cancelPendingTransitionWork()
+        }
         WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
     }
 
@@ -3887,7 +3877,7 @@ final class AudioPlayerManager {
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif
-        activeCrossfadePlan = plan
+        transition.activePlan = plan
         DebugLogger.log(
             "Transition begin next=\(plan.nextSong.id), file=\(plan.nextFileURL.lastPathComponent), fade=\(plan.fadeDuration), ramp=\(plan.rampStyle), streamMode=\(isStreamMode), aiEffectActive=\(anyAIEffectActive)",
             category: .playback
@@ -3897,22 +3887,26 @@ final class AudioPlayerManager {
             quickCutToNext(plan: plan)
         } else {
             avEngine.beginCrossfade(url: plan.nextFileURL, duration: plan.fadeDuration, ramp: plan.rampStyle) { [weak self] in
-                guard let self, isPlaying, crossfadeTarget?.id == plan.nextSong.id else { return nil }
+                guard let self, isPlaying, crossfadeTarget?.id == plan.target.id else { return nil }
                 return playbackDuration - activePlaybackTime(for: currentSong)
             }
         }
     }
 
     private func watchScheduledCrossfade(duration: TimeInterval) {
-        guard let plan = activeCrossfadePlan else { return }
         if isStreamMode { fadeOutStreamPlayer(duration: duration) }
-        transitionTimeoutGeneration &+= 1
-        let generation = transitionTimeoutGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 3) { [weak self] in
-            guard let self, transitionTimeoutGeneration == generation, activeCrossfadePlan != nil else { return }
-            if avEngine.finishPreparedCrossfade(to: plan.nextFileURL) { return }
+        transition.watchScheduledHandoff(duration: duration, engine: avEngine) { [weak self] in
+            self?.recoverFailedCrossfade()
+        }
+    }
+
+    private func recoverFailedCrossfade(didSwapDecks: Bool = false) {
+        guard transition.activePlan != nil else { return }
+        // If the outgoing song is still playable, the coordinator keeps the
+        // failed plan until natural end so polling cannot start it again.
+        if transition.recover(engine: avEngine, didSwapDecks: didSwapDecks) {
             cancelPendingTransitionWork()
-            if !avEngine.hasScheduledMedia { playNextOrRandom() }
+            playNextOrRandom()
         }
     }
 
@@ -3956,10 +3950,10 @@ final class AudioPlayerManager {
                         self.quickCutGeneration &+= 1
                         self.quickCutTimer = nil
                         DebugLogger.log("Quick cut transition complete -> play(\(song.id))", category: .playback)
-                        self.activeCrossfadePlan = nil
+                        self.transition.reset()
                         self.transitionCoordinator.reset()
                         self.avEngine.setMasterVolume(0)
-                        self.play(song: song, resetTransitionVolume: false)
+                        self.play(song: song, resetTransitionVolume: false, queueEntryID: plan.target.id)
                         self.avEngine.setMasterVolume(1.0)
                         timer.cancel()
                     }
@@ -3971,31 +3965,14 @@ final class AudioPlayerManager {
     }
 
     private func transitionCoordinatorDidFinish() {
-        let plan: TransitionCoordinator.TransitionPlan
-        if case let .crossfading(currentPlan) = transitionCoordinator.state {
-            plan = currentPlan
-        } else if let retainedPlan = activeCrossfadePlan {
-            plan = retainedPlan
-            DebugLogger.log(
-                "Completing retained crossfade plan for \(retainedPlan.nextSong.id) after coordinator reset",
-                category: .playback
-            )
-        } else {
-            transitionCoordinator.reset()
+        guard let plan = transition.activePlan else { return }
+        guard avEngine.currentURL == plan.nextFileURL, avEngine.hasPlayableMainMedia else {
+            recoverFailedCrossfade(didSwapDecks: true)
             return
         }
-        let handoffReady = avEngine.currentURL?.path == plan.nextFileURL.path
-        let handoffDuration = avEngine.duration
-        let hasPlayableDuration = handoffDuration.isFinite && handoffDuration > 0.1
-        guard handoffReady, avEngine.isPlaying, hasPlayableDuration else {
-            DebugLogger.log(
-                "Transition completion recovery next=\(plan.nextSong.id), audioURL=\(avEngine.currentURL?.lastPathComponent ?? "nil"), expected=\(plan.nextFileURL.lastPathComponent), duration=\(handoffDuration), playing=\(avEngine.isPlaying)",
-                category: .playback
-            )
-            activeCrossfadePlan = nil
-            play(song: plan.nextSong, resetTransitionVolume: true)
-            return
-        }
+        transition.reset()
+        transitionCoordinator.reset()
+        queueState.selectEntry(plan.target.id)
         stopStreamPlayer()
         clearPreferredStreamResumeTime()
         let song = plan.nextSong
@@ -4025,9 +4002,6 @@ final class AudioPlayerManager {
             category: .playback
         )
         updateNowPlayingInfo(reloadArtwork: true)
-        transitionTimeoutGeneration &+= 1
-        activeCrossfadePlan = nil
-        transitionCoordinator.reset()
         let protectedIDs = activeSongIDs()
         CacheManager.shared.enforceMusicCacheLimits(excluding: protectedIDs)
         if anyAIEffectActive {
@@ -4040,6 +4014,28 @@ final class AudioPlayerManager {
             endTrackTransitionBackgroundTask()
         #endif
     }
+    #if DEBUG
+        var hasAudibleCrossfadeForTesting: Bool {
+            loadedEngine?.hasAudibleCrossfade == true && loadedEngine?.hasPlayableMainMedia == true
+        }
+
+        var hasPreparedCrossfadeForTesting: Bool {
+            loadedEngine?.preparedCrossfadeURLForTesting != nil && transitionCoordinator.pendingPlan != nil
+        }
+
+        func finishOutgoingDeckForTesting() {
+            loadedEngine?.finishOutgoingDeckForTesting()
+        }
+
+        func preservesAutoplayRequestForTesting(during edit: () -> Void) -> Bool {
+            let previous = autoplayRequestToken
+            let pending = UUID()
+            autoplayRequestToken = pending
+            defer { autoplayRequestToken = previous }
+            edit()
+            return autoplayRequestToken == pending
+        }
+    #endif
 }
 
 #if canImport(UIKit)

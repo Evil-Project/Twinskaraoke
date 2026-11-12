@@ -127,7 +127,11 @@ struct AVEnginePlaybackRegressionTests {
         let sourceURL = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
         defer { try? FileManager.default.removeItem(at: sourceURL) }
         let missingURL = sourceURL.appendingPathExtension("missing")
-        let engine = AVEnginePlayback()
+        let attempted = Mutex<URL?>(nil)
+        let engine = AVEnginePlayback { url in
+            attempted.withLock { $0 = url }
+            return try AVAudioFile(forReading: url)
+        }
         defer { engine.stop() }
         await withCheckedContinuation { continuation in
             engine.play(url: sourceURL, onReady: { continuation.resume() })
@@ -136,7 +140,7 @@ struct AVEnginePlaybackRegressionTests {
         var playbackErrors = 0
         engine.onPlaybackError = { _ in playbackErrors += 1 }
         engine.beginCrossfade(url: missingURL, duration: 1, ramp: .linear)
-        try await Task.sleep(for: .milliseconds(250))
+        try await waitUntil { attempted.withLock { $0 } == missingURL && !engine.isCrossfadePending }
 
         #expect(playbackErrors == 0)
         #expect(!engine.isCrossfadePending)
@@ -146,7 +150,7 @@ struct AVEnginePlaybackRegressionTests {
 
     @Test("A late crossfade reuses the incoming load and keeps the mixer audible")
     func lateCrossfadeReusesLoad() async throws {
-        let outgoing = try makeSilentWaveFile(duration: 2, sampleRate: 48_000, tone: 440)
+        let outgoing = try makeSilentWaveFile(duration: 3, sampleRate: 48_000, tone: 440)
         let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000, tone: 660)
         let load = GatedLoad()
         let engine = AVEnginePlayback(crossfadeFileLoader: load.open)
@@ -166,21 +170,21 @@ struct AVEnginePlaybackRegressionTests {
             engine.play(url: outgoing, onReady: { continuation.resume() })
         }
         engine.preloadCrossfade(url: incoming)
-        try await waitUntil { load.count == 1 && engine.currentTime >= 1.8 }
+        try await waitUntil { load.count == 1 && engine.currentTime >= 0.5 }
         var scheduledDuration: TimeInterval?
         engine.onCrossfadeScheduled = { scheduledDuration = $0 }
         engine.onPlaybackEnded = { [weak engine] in
             engine?.finishPreparedCrossfade(to: incoming)
         }
-        engine.beginCrossfade(url: incoming, duration: 0.6, ramp: .linear)
+        engine.beginCrossfade(url: incoming, duration: 0.6, ramp: .linear, remainingTime: { 0.35 })
         load.release()
-        try await waitUntil { engine.currentURL == incoming && engine.currentTime >= 0.2 }
+        try await waitUntil { engine.currentURL == incoming && engine.currentTime >= 0.45 }
         #expect(load.count == 1)
         #expect(try #require(scheduledDuration) < 0.6)
         let windows = capture.audibleWindows
         let first = try #require(windows.firstIndex(of: true))
-        let last = try #require(windows.lastIndex(of: true))
-        #expect(windows[first ... last].allSatisfy { $0 })
+        #expect(windows[first...].allSatisfy { $0 })
+        #expect(capture.endsWithTone(660, rejecting: 440))
     }
 
     @Test("A ready incoming deck can be promoted at natural end without scheduling a fade")
@@ -247,6 +251,53 @@ struct AVEnginePlaybackRegressionTests {
         #expect(advances == 1)
     }
 
+    @Test("An exhausted incoming deck cannot replace playable outgoing audio")
+    func exhaustedIncomingDeckAbortsCrossfade() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
+        let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        let engine = AVEnginePlayback()
+        defer {
+            engine.stop()
+            for url in [outgoing, incoming] { try? FileManager.default.removeItem(at: url) }
+        }
+        await withCheckedContinuation { continuation in
+            engine.play(url: outgoing, onReady: { continuation.resume() })
+        }
+        var aborted = 0
+        engine.onCrossfadeAborted = { aborted += 1 }
+        engine.beginCrossfade(url: incoming, duration: 0.5, ramp: .linear)
+        try await waitUntil { engine.hasAudibleCrossfade }
+        engine.expireIncomingDeckForTesting()
+        #expect(aborted == 1)
+        #expect(engine.currentURL == outgoing)
+        #expect(engine.hasPlayableMainMedia)
+        #expect(!engine.finishPreparedCrossfade(to: incoming))
+    }
+
+    @Test("Recovery ignores stale scheduled media and invalidates both old callbacks")
+    func recoveryInvalidatesDeadlineAndWatchdog() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
+        defer { try? FileManager.default.removeItem(at: outgoing) }
+        let engine = AVEnginePlayback()
+        defer { engine.stop() }
+        await withCheckedContinuation { continuation in
+            engine.play(url: outgoing, onReady: { continuation.resume() })
+        }
+
+        let transition = PlaybackTransition()
+        #expect(!transition.recover(engine: engine))
+        engine.pause()
+        try #require(engine.hasScheduledMedia)
+        var staleCallbacks = 0
+        transition.scheduleDeadline(after: 0) { staleCallbacks += 1 }
+        transition.scheduleWatchdog(after: 0) { staleCallbacks += 1 }
+        #expect(transition.recover(engine: engine))
+        await withCheckedContinuation { continuation in
+            transition.scheduleDeadline(after: 0) { continuation.resume() }
+        }
+        #expect(staleCallbacks == 0)
+    }
+
     private func waitUntil(_ predicate: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(4)
         while !predicate(), ContinuousClock.now < deadline {
@@ -304,6 +355,21 @@ private nonisolated final class MixerCapture: Sendable {
     func append(_ buffer: AVAudioPCMBuffer) {
         guard let channel = buffer.floatChannelData?[0] else { return }
         samples.withLock { $0.append(contentsOf: UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))) }
+    }
+
+    func endsWithTone(_ incoming: Double, rejecting outgoing: Double) -> Bool {
+        let tail = samples.withLock { Array($0.suffix(2_400)) }
+        guard tail.count == 2_400 else { return false }
+        func amplitude(at frequency: Double) -> Double {
+            let angularFrequency = 2 * Double.pi * frequency / 48_000
+            let components = tail.enumerated().reduce(into: (sine: 0.0, cosine: 0.0)) { result, pair in
+                let angle = angularFrequency * Double(pair.offset)
+                result.sine += sin(angle) * Double(pair.element)
+                result.cosine += cos(angle) * Double(pair.element)
+            }
+            return 2 * hypot(components.sine, components.cosine) / Double(tail.count)
+        }
+        return amplitude(at: incoming) > 0.05 && amplitude(at: outgoing) < 0.01
     }
 
     var audibleWindows: [Bool] {

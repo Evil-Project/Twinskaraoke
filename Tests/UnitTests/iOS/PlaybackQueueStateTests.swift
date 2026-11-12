@@ -281,6 +281,32 @@ struct PlaybackQueueStateTests {
         #expect(state.advance(after: songs[0], repeatMode: .all, autoplayEnabled: true) == .replayCurrent(songs[0]))
     }
 
+    @Test("Queue identity survives shuffle, removal and a version-one session round trip")
+    func duplicateOccurrenceRoundTrip() throws {
+        let songs = fixtures(3)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: [songs[0], songs[1], songs[0], songs[2]])
+        let first = try #require(state.entry(for: songs[0]))
+        let second = try #require(state.upNext(after: songs[0]).dropFirst().first)
+        state.selectEntry(second.id)
+        state.toggleShuffle(current: songs[0], shuffling: { Array($0.reversed()) })
+        #expect(state.items.filter { $0.id == songs[0].id }.count == 2)
+        state.toggleShuffle(current: songs[0])
+        let restored = try JSONDecoder().decode(PlaybackQueueState.self, from: JSONEncoder().encode(state))
+        #expect(restored.previousEntry(before: songs[0])?.song == songs[1])
+        #expect(restored.crossfadeEntry(after: songs[0], repeatMode: .all)?.song == songs[2])
+
+        state.selectEntry(first.id)
+        #expect(state.removeUpNext(after: songs[0], at: [1]) == [second.id])
+        #expect(state.items == songs)
+
+        state.beginInOrder(context: [songs[0], songs[0]])
+        let next = try #require(state.nextEntry(after: songs[0], repeatMode: .all))
+        #expect(next.id != state.entry(for: songs[0])?.id)
+        #expect(state.crossfadeEntry(after: songs[0], repeatMode: .all) == nil)
+        #expect(state.advance(after: songs[0], repeatMode: .all, autoplayEnabled: false) == .play(songs[0]))
+    }
+
     private func fixtures(_ count: Int) -> [Song] {
         (0..<count).map { index in
             Song(
