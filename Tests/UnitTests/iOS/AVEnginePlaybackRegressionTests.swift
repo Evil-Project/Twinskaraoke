@@ -7,6 +7,26 @@ import Testing
 @Suite("AVEngine playback regressions", .serialized)
 @MainActor
 struct AVEnginePlaybackRegressionTests {
+    @Test("AirPlay comparison uses one file item and leaves queue advancement to the app")
+    func airPlayComparisonPlayer() throws {
+        let source = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let player = AirPlaySongComparison.makePlayer(url: source)
+        #expect(player.items().count == 1)
+        #expect(player.actionAtItemEnd == .pause)
+        #expect(player.allowsExternalPlayback)
+    }
+
+    @Test("AirPlay comparison only switches an ordinary file-backed song")
+    func airPlayComparisonRouteSelection() {
+        let local = URL(fileURLWithPath: "/tmp/song.wav")
+        let remote = URL(string: "https://example.com/song.wav")
+        #expect(AirPlaySongComparison.shouldUsePlayer(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
+        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.builtInSpeaker], url: local, processingActive: false))
+        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.airPlay], url: local, processingActive: true))
+        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.airPlay], url: remote, processingActive: false))
+    }
+
     @Test("Stopping a scheduled player does not report natural playback end")
     func teardownCompletionIsSuppressed() throws {
         let sourceURL = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
