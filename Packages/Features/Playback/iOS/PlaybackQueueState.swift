@@ -169,6 +169,7 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
 
     mutating func toggleShuffle(
         current: Song?,
+        keepingNext incomingID: UUID? = nil,
         shuffling: ([Song]) -> [Song] = { $0.shuffled() }
     ) {
         isShuffled.toggle()
@@ -176,11 +177,23 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
             originalEntries = entries
             guard let current else { return }
             let selected = currentIndex(for: current).map { entries[$0] } ?? Entry(song: current)
-            entries = [selected] + Self.reorder(entries.filter { $0.id != selected.id }, as: shuffling)
+            let incoming = entries.first { $0.id == incomingID && $0.id != selected.id }
+            let fixed = [selected] + (incoming.map { [$0] } ?? [])
+            let remaining = entries.filter { $0.id != selected.id && $0.id != incoming?.id }
+            entries = fixed + Self.reorder(remaining, as: shuffling)
             currentEntryID = selected.id
-        } else if !originalEntries.isEmpty {
-            entries = originalEntries
-            originalEntries = []
+        } else {
+            if !originalEntries.isEmpty {
+                entries = originalEntries
+                originalEntries = []
+            }
+            if let incomingID, let currentIndex = currentIndex(for: current),
+               let incomingIndex = entries.firstIndex(where: { $0.id == incomingID }),
+               incomingIndex != currentIndex, incomingIndex != currentIndex + 1
+            {
+                let incoming = entries.remove(at: incomingIndex)
+                entries.insert(incoming, at: incomingIndex < currentIndex ? currentIndex : currentIndex + 1)
+            }
         }
     }
 

@@ -324,6 +324,40 @@ struct SystemIntentPlaybackTests {
         #expect(player.currentSong?.id == songs[1].id)
     }
 
+    @Test(
+        "Shuffle keeps both audible tracks fixed until handoff",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func shufflePinsAudibleCrossfade() async throws {
+        let player = AudioPlayerManager.shared
+        let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
+        let songs = try (0..<4).map { try cachedSong(index: $0, seconds: 5) }
+        defer {
+            player.pauseIfPlaying()
+            if player.isShuffled { player.toggleShuffle() }
+            player.repeatMode = .off
+            (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds) = previous
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.crossfadeEnabled = true
+        player.crossfadeSeconds = 2
+        player.repeatMode = .all
+        player.playInOrder(song: songs[3], context: songs)
+        try await waitForPlayback { player.hasAudibleCrossfadeForTesting }
+
+        player.toggleShuffle()
+        #expect(player.currentSong?.id == songs[3].id)
+        #expect(player.upNextEntries.first?.song.id == songs[0].id)
+        player.toggleShuffle()
+        #expect(player.upNextEntries.first?.song.id == songs[0].id)
+        player.toggleShuffle()
+        let shuffled = player.queue
+        try await waitForPlayback { player.currentSong?.id == songs[0].id }
+        #expect(player.queue == shuffled)
+        #expect(player.upNextEntries.map(\.song) == Array(shuffled.dropFirst(2)))
+    }
+
     private func waitForPlayback(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(8)
         while !condition(), ContinuousClock.now < deadline {

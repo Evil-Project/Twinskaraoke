@@ -2288,7 +2288,8 @@ final class AudioPlayerManager {
     func toggleShuffle() {
         if WatchSessionPublisher.shared.routeToWatch(.shuffle) { return }
         let targetBefore = crossfadeTarget?.id
-        queueState.toggleShuffle(current: currentSong)
+        let incomingID = hasStartedHandoff ? transition.activePlan?.target.id : nil
+        queueState.toggleShuffle(current: currentSong, keepingNext: incomingID)
         if !hasStartedHandoff, crossfadeTarget?.id != targetBefore { cancelPendingTransitionWork() }
     }
 
