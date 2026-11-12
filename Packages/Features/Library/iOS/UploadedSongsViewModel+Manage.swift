@@ -55,6 +55,23 @@ extension UploadedSongsViewModel {
         (song.originalArtists ?? []).joined(separator: ", ")
     }
 
+    /// The fields the edit form shows, as the server names them.
+    nonisolated static let editFields = ["Title", "Artist"]
+
+    /// The message the edit form shows apart from its fields' own: the
+    /// failure's, unless the server's field errors name a field the form
+    /// shows, whose footer then says it. An error for any other field would
+    /// otherwise leave the form silent.
+    static func generalEditMessage(for failure: SongUploadFailure?) -> String? {
+        guard let failure else { return nil }
+        if case let .server(_, problem?) = failure,
+           editFields.contains(where: { problem.message(forField: $0) != nil })
+        {
+            return nil
+        }
+        return failure.userMessage
+    }
+
     /// `edit` with its fields trimmed.
     nonisolated static func trimmed(_ edit: UploadedSongEdit) -> UploadedSongEdit {
         UploadedSongEdit(

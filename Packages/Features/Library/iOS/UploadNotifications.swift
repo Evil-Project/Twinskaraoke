@@ -70,7 +70,7 @@ extension SongUploadController {
     func notifyIfInBackground(_ completion: Completion) {
         let notifier = service.notifier
         guard notifier.isEnabled(), !notifier.isAppActive(),
-              records[completion.itemID]?.leavesListWhenEnded != true,
+              records[completion.itemID]?.endsUnseen != true,
               notifiedUploads.insert(completion.itemID).inserted
         else { return }
         let content = UploadNotifier.content(for: completion)

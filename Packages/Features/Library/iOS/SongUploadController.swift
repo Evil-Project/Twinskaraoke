@@ -43,13 +43,19 @@ final class SongUploadController {
         var knownSongIDs: Set<String>?
         /// A finished or failed event is being handled.
         var settling = false
-        /// The account that started the upload; `nil` when it couldn't be
-        /// told. It is never sent, imported or retried for another one.
+        /// Bumped by each settlement; only the latest may end the upload.
+        var settlement = 0
+        /// This run has ended; its completion was published.
+        var ended = false
+        /// Ended without the list saying whether the body arrived: the
+        /// failure shown, until a retry asks the list again.
+        var unconfirmed: SongUploadFailure?
+        /// The account that started the upload. It is never sent, imported
+        /// or retried for another one. `nil` only for an upload restored from
+        /// an earlier build's outbox, or one refused because it couldn't be
+        /// told.
         var account: String?
-        /// Started by an account that has since signed out: the upload is
-        /// dropped from the list when it ends.
-        var leavesListWhenEnded = false
-        /// Restored for an account other than the current one: never listed,
+        /// Belongs to an account other than the current one: never listed,
         /// and it ends without a message.
         var endsUnseen = false
     }
@@ -138,6 +144,10 @@ final class SongUploadController {
         record.account = service.currentAccount()
         records[id] = record
         uploads.append(Item(id: id, title: title, kind: kind, phase: .waiting))
+        guard record.account != nil else {
+            refuseWithoutOwner(id)
+            return id
+        }
         startNext()
         return id
     }
@@ -147,7 +157,7 @@ final class SongUploadController {
     }
 
     /// Starts the first waiting upload unless one is already running.
-    private func startNext() {
+    func startNext() {
         guard hasResumed else {
             Task { [weak self] in
                 await self?.resume()
@@ -163,7 +173,7 @@ final class SongUploadController {
     }
 
     private func run(_ id: UUID) async {
-        guard !refuseForAnotherAccount(id) else { return }
+        guard !refuseForAnotherAccount(id), await confirmNotLanded(id), isCurrent(id) else { return }
         switch records[id]?.source {
         case let .file(source, metadata):
             await runFile(id, source: source, metadata: metadata)
@@ -269,7 +279,9 @@ final class SongUploadController {
                     let resolved = await unauthorizedFailure(problem)
                     return fail(id, resolved)
                 }
-                if Self.mayHaveLanded(failure) { return await settleAmbiguous(id, failure: failure) }
+                if Self.mayHaveLanded(failure) {
+                    return await settleAmbiguous(id, failure: failure, settlement: beginSettlement(id))
+                }
                 return fail(id, failure)
             }
             // Cancelled without the user asking: the app was suspended or
@@ -277,7 +289,7 @@ final class SongUploadController {
             // import landed anyway.
             let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
             guard cancelled else { return fail(id, .unknown) }
-            await settleAmbiguous(id, failure: .interrupted)
+            await settleAmbiguous(id, failure: .interrupted, settlement: beginSettlement(id))
         }
     }
 
@@ -291,10 +303,7 @@ final class SongUploadController {
               let record = records.removeValue(forKey: id)
         else { return }
         uploads.remove(at: index)
-        if work?.itemID == id {
-            work?.task.cancel()
-            work = nil
-        }
+        stopRun(id)
         if let taskID = record.taskID {
             cancelledTaskIDs.insert(taskID)
             Task { await service.transport.cancel(taskID) }
@@ -319,11 +328,16 @@ final class SongUploadController {
               let record = records[id], record.source != nil || record.staged != nil
         else { return }
         if let key = record.source.map({ _ in record.key }), isActive(key: key) { return }
+        guard claimOwnerForRetry(id) else {
+            uploads[index].phase = .failed(.interrupted)
+            return
+        }
         if belongsToAnotherAccount(id, current: service.currentAccount()) {
             uploads[index].phase = .failed(.signedOut)
             return
         }
         records[id]?.settling = false
+        records[id]?.ended = false
         notifiedUploads.remove(id)
         uploads[index].phase = .waiting
         startNext()
@@ -409,9 +423,9 @@ final class SongUploadController {
     /// server's list tells whether it arrived.
     private func settleVanished(_ id: UUID) async {
         try? await Task.sleep(for: vanishedGrace)
-        guard let record = records[id], !record.settling, item(id)?.isActive == true else { return }
-        records[id]?.settling = true
-        await settleAmbiguous(id, failure: .interrupted)
+        // One an account change hid is still settled, to end it unseen.
+        guard let record = records[id], !record.settling, item(id)?.isActive == true || record.endsUnseen else { return }
+        await settleAmbiguous(id, failure: .interrupted, settlement: beginSettlement(id))
     }
 
     // MARK: - Events
@@ -451,18 +465,20 @@ final class SongUploadController {
             guard item(id)?.isActive == true, records[id]?.settling == false else { return }
             setPhase(id, fraction >= 1 ? .finishing : .uploading(fraction))
         case let .finished(_, status, body, contentType, retryAfter):
-            records[id]?.settling = true
-            // From here the server has answered: cancel must not remove it.
+            // The server's answer settles it, over any reconciliation
+            // running. From here cancel must not remove it.
+            let settlement = beginSettlement(id)
             if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
-                await self?.settleAnswer(id, status: status, body: body, contentType: contentType, retryAfter: retryAfter)
+                let answer = ServerAnswer(status: status, body: body, contentType: contentType, retryAfter: retryAfter)
+                await self?.settleAnswer(id, settlement: settlement, answer)
                 self?.service.transport.acknowledge(taskID)
             }
         case let .failed(_, failure):
-            records[id]?.settling = true
+            let settlement = beginSettlement(id)
             if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
-                await self?.settleTransportFailure(id, failure)
+                await self?.settleTransportFailure(id, failure, settlement: settlement)
                 self?.service.transport.acknowledge(taskID)
             }
         }
@@ -509,17 +525,28 @@ final class SongUploadController {
     /// Called when an upload has ended either way.
     func finishRun(_ id: UUID) {
         if work?.itemID == id { work = nil }
-        if records[id]?.leavesListWhenEnded == true { removeItem(id) }
         startNext()
+    }
+
+    /// Cancels the run of `id` if it is the one running.
+    func stopRun(_ id: UUID) {
+        guard work?.itemID == id else { return }
+        work?.task.cancel()
+        work = nil
     }
 
     /// Drops an upload from the list with its staged body and outbox entry,
     /// whatever its phase; the caller has made sure nothing of it still runs.
     func removeItem(_ id: UUID) {
-        uploads.removeAll { $0.id == id }
-        if latestCompletion?.itemID == id { latestCompletion = nil }
+        removeFromList(id)
         guard let staged = records.removeValue(forKey: id)?.staged else { return }
         service.discard(staged)
         service.outbox.remove(id: staged.id)
+    }
+
+    /// Takes `id` out of the list and the banner; its record stays.
+    func removeFromList(_ id: UUID) {
+        uploads.removeAll { $0.id == id }
+        if latestCompletion?.itemID == id { latestCompletion = nil }
     }
 }
