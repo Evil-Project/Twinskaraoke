@@ -99,9 +99,7 @@ class AudioManager {
     /// listener has already left behind can't adopt itself when it finishes
     /// coming up on its own queue.
     private var radioStreamToken: UUID?
-    /// Whether the playback session is up. A player told to play against an
-    /// inactive session just sits there, so every `play()` waits on this.
-    private var isSessionActive = false
+    @ObservationIgnored private let audioSession = WatchAudioSessionCoordinator()
     private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
@@ -199,7 +197,7 @@ class AudioManager {
         companionProgressTimer = nil
         isPlaying = false
         isLoading = false
-        isSessionActive = false
+        audioSession.invalidate()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
@@ -266,7 +264,8 @@ class AudioManager {
         }
         // A companion snapshot only updates presentation. It must never open a
         // player on the watch while the phone owns audio.
-        if player != nil { cleanupPlayer() }
+        if player != nil || radioStreamToken != nil { cleanupPlayer() }
+        audioSession.invalidate()
         metadataToken = nil
         playbackRequested = false
         // Position snapshots arrive frequently. Replacing the whole queue and
@@ -457,29 +456,18 @@ class AudioManager {
         updateNowPlayingInfo()
     }
 
-    /// Brings the playback session up away from the main actor, then runs
-    /// `start` back on it.
-    ///
-    /// AVFoundation documents activation as "a synchronous (blocking)
-    /// operation" and warns against running it anywhere a long block is a
-    /// problem. On a watch the main actor is exactly that place: tuning the
-    /// radio stalled the whole app for a beat, right when it had the most
-    /// drawing to do. Once the session is up the hop is skipped, so play/pause
-    /// stays immediate.
-    private func activatePlaybackSession(then start: @escaping @MainActor () -> Void) {
-        if isSessionActive {
-            start()
-            return
-        }
-        Task.detached(priority: .userInitiated) {
-            let activated = await Self.bringUpPlaybackSession()
-            await MainActor.run { [weak self] in
-                self?.isSessionActive = activated
-                guard activated else {
-                    self?.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
-                    return
-                }
-                start()
+    private func activatePlaybackSession(for player: AVPlayer, whenReady: Bool = false) {
+        audioSession.request { [weak self, weak player] result in
+            guard let self, let player, self.player === player,
+                  self.playbackRequested, WatchAuthManager.shared.canPlayLocally else { return }
+            switch result {
+            case .success:
+                if whenReady, player.currentItem?.status != .readyToPlay { return }
+                Self.startPlayer(player)
+                self.refreshPlaybackState()
+                self.updateNowPlayingInfo()
+            case .failure:
+                self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
             }
         }
     }
@@ -489,51 +477,23 @@ class AudioManager {
         player.play()
     }
 
-    private nonisolated static func bringUpPlaybackSession() async -> Bool {
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
-            return await withCheckedContinuation { continuation in
-                session.activate(options: []) { @Sendable success, _ in
-                    continuation.resume(returning: success)
-                }
-            }
-        } catch {
-            return false
-        }
-    }
-
-    /// Opens the live stream without holding onto the main actor.
-    ///
-    /// AVFoundation marks every call in here `NS_SWIFT_NONISOLATED` — building
-    /// the item, building the player, starting it — so none of it belongs on
-    /// the main actor, and on a watch that is not a nicety. Opening a stream
-    /// goes out to the media daemon and back, and doing that from the main
-    /// actor is what froze the whole app for a beat the moment Listen Live was
-    /// tapped. The buffering spinner the radio screen already draws is free to
-    /// animate while this runs.
+    /// Build the radio item and player off the main actor so the buffering
+    /// indicator can animate while AVFoundation opens the stream.
     private func startRadioStream(url: URL) {
         let token = UUID()
         radioStreamToken = token
-        let startingVolume: Float = 1
         Task.detached(priority: .userInitiated) {
             let playerItem = AVPlayerItem(url: url)
             let player = AVPlayer(playerItem: playerItem)
-            player.volume = startingVolume
+            player.volume = 1
             // A live stream is better served by waiting out a stall than by
             // dropping back to the start of the buffer.
             player.automaticallyWaitsToMinimizeStalling = true
             player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-            let activated = await Self.bringUpPlaybackSession()
             await MainActor.run { [weak self] in
                 guard let self, self.radioStreamToken == token, WatchAuthManager.shared.canPlayLocally else { return }
-                self.isSessionActive = activated
-                guard activated else {
-                    self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
-                    return
-                }
                 self.adoptRadioPlayer(player, item: playerItem)
-                if self.playbackRequested { Self.startPlayer(player) }
+                if self.playbackRequested { self.activatePlaybackSession(for: player) }
             }
         }
     }
@@ -548,7 +508,7 @@ class AudioManager {
                 if status == .readyToPlay {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
-                    if playbackRequested, isSessionActive {
+                    if playbackRequested, audioSession.isActive {
                         Self.startPlayer(player)
                     }
                     refreshPlaybackState()
@@ -678,7 +638,7 @@ class AudioManager {
                 if status == .readyToPlay {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
-                    if playbackRequested, isSessionActive {
+                    if playbackRequested, audioSession.isActive {
                         Self.startPlayer(player)
                     }
                     refreshPlaybackState()
@@ -723,16 +683,7 @@ class AudioManager {
         }
         // Whichever of these lands second starts playback: the item may go
         // ready before the session is up, or the other way round.
-        activatePlaybackSession { [weak self] in
-            guard let self,
-                  self.player === player,
-                  self.playbackRequested,
-                  playerItem.status == .readyToPlay
-            else { return }
-            Self.startPlayer(player)
-            self.refreshPlaybackState()
-            self.updateNowPlayingInfo()
-        }
+        activatePlaybackSession(for: player, whenReady: true)
     }
 
     private func refreshPlaybackState() {
@@ -768,6 +719,7 @@ class AudioManager {
         }
         guard player != nil || playbackRequested || isLoading else { return false }
         playbackRequested = false
+        audioSession.cancelPendingPlayback()
         player?.pause()
         isPlaying = false
         if cancelDownload || player != nil {
@@ -808,12 +760,7 @@ class AudioManager {
             return false
         }
         playbackRequested = true
-        activatePlaybackSession { [weak self] in
-            guard let self, self.player === player, self.playbackRequested else { return }
-            Self.startPlayer(player)
-            self.refreshPlaybackState()
-            self.updateNowPlayingInfo()
-        }
+        activatePlaybackSession(for: player)
         refreshPlaybackState()
         updateNowPlayingInfo()
         return true
@@ -969,6 +916,7 @@ class AudioManager {
     }
 
     private func cleanupPlayer() {
+        audioSession.cancelPendingPlayback()
         startupTimeout?.cancel()
         startupTimeout = nil
         // Drop the player's Combine sinks first: a raced second setupPlayer
@@ -1299,7 +1247,7 @@ class AudioManager {
     /// rebuilds through `resumePlayback`: the station again, or the song from
     /// `transferredPosition`.
     private func handleMediaServicesReset() {
-        isSessionActive = false
+        audioSession.invalidate()
         shouldResumeAfterInterruption = false
         if player == nil {
             // Something still loading would start on its own when it lands:
@@ -1374,7 +1322,7 @@ class AudioManager {
     private func audioSessionInterruptionBegan() {
         // The system takes the session away with the interruption, so the
         // next resume has to bring it back up rather than assume it is there.
-        isSessionActive = false
+        audioSession.invalidate()
         let wasRequested = playbackRequested
         if wasRequested {
             pausePlayback(cancelDownload: false)
