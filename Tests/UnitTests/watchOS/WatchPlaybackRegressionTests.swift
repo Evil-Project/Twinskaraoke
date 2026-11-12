@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import MediaPlayer
 import UIKit
@@ -71,6 +72,117 @@ struct WatchPlaybackRegressionTests {
             #expect(session.isActive)
             #expect(settled)
         }
+    }
+
+    @MainActor
+    @Test("A late activation after relinquishing output is deactivated before a new request")
+    func relinquishedActivation() throws {
+        let activation = WatchActivationProbe()
+        var deactivation: (@MainActor () -> Void)?
+        let session = WatchAudioSessionCoordinator(
+            activate: { activation.completions.append($0) },
+            deactivate: { deactivation = $0 }
+        )
+        session.request { _ in Issue.record("The relinquished player received an activation result") }
+        session.relinquish()
+        var resumed = false
+        session.request { _ in resumed = true }
+
+        let stale = try #require(activation.completions.first)
+        stale(.success(()))
+        #expect(activation.completions.count == 1)
+        #expect(!session.isActive)
+        #expect(!resumed)
+
+        let released = try #require(deactivation)
+        released()
+        #expect(activation.completions.count == 2)
+        let current = try #require(activation.completions.dropFirst().first)
+        current(.success(()))
+        #expect(session.isActive)
+        #expect(resumed)
+    }
+
+    @MainActor
+    @Test("Relinquishing an already-active session releases it once")
+    func relinquishActiveSession() throws {
+        let activation = WatchActivationProbe()
+        var deactivations: [@MainActor () -> Void] = []
+        let session = WatchAudioSessionCoordinator(
+            activate: { activation.completions.append($0) },
+            deactivate: { deactivations.append($0) }
+        )
+        session.request { _ in }
+        let active = try #require(activation.completions.first)
+        active(.success(()))
+        session.relinquish()
+        session.relinquish()
+        #expect(!session.isActive)
+        #expect(deactivations.count == 1)
+    }
+
+    @MainActor
+    @Test("Watch radio starts only after activation and pause drops pending playback")
+    func managerRadioWaitsForActivation() async throws {
+        let fixture = try WatchRadioActivationFixture()
+        defer { fixture.cleanUp() }
+
+        try await fixture.tuneIn(activationCount: 1)
+        #expect(fixture.starts == 0)
+        #expect(fixture.manager.togglePlayPause())
+        let first = try #require(fixture.activation.completions.first)
+        first(.failure(URLError(.cancelled)))
+        #expect(fixture.starts == 0)
+        #expect(fixture.manager.playbackError == nil)
+
+        #expect(fixture.manager.togglePlayPause())
+        let second = try #require(fixture.activation.completions.dropFirst().first)
+        second(.success(()))
+        #expect(fixture.starts == 1)
+    }
+
+    @MainActor
+    @Test("An interruption or media reset drops radio activation and permits a fresh request", arguments: [false, true])
+    func managerInvalidatesRadioActivation(reset: Bool) async throws {
+        let fixture = try WatchRadioActivationFixture()
+        defer { fixture.cleanUp() }
+
+        try await fixture.tuneIn(activationCount: 1)
+        if reset { fixture.manager.handleMediaServicesReset() }
+        else { fixture.manager.audioSessionInterruptionBegan() }
+        let stale = try #require(fixture.activation.completions.first)
+        stale(.success(()))
+        #expect(fixture.starts == 0)
+        #expect(!fixture.manager.isPlaying)
+        #expect(!fixture.manager.isLoading)
+
+        #expect(fixture.manager.togglePlayPause())
+        try await fixture.waitForActivation(count: 2)
+        let current = try #require(fixture.activation.completions.dropFirst().first)
+        current(.success(()))
+        #expect(fixture.starts == 1)
+    }
+
+    @MainActor
+    @Test("A phone snapshot replaces pending Watch radio and releases late activation")
+    func managerRelinquishesRadioForSnapshot() async throws {
+        let fixture = try WatchRadioActivationFixture()
+        defer { fixture.cleanUp() }
+
+        try await fixture.tuneIn(activationCount: 1)
+        let song = UITestFixtures.song(id: "phone-song", title: "Phone Song", artist: "Artist")
+        fixture.manager.applyCompanionSnapshot(CompanionPlayback.Snapshot(
+            sessionID: UUID(), revision: 1, owner: .phone, song: song, queue: [song],
+            isPlaying: false, isRadio: false, radioArtworkURL: nil, position: 12,
+            duration: 180, isShuffled: false, repeatSetting: .off, error: nil, updatedAt: .now
+        ))
+        let stale = try #require(fixture.activation.completions.first)
+        stale(.success(()))
+        #expect(fixture.starts == 0)
+        #expect(fixture.deactivations == 1)
+        #expect(fixture.manager.currentSong?.id == song.id)
+        #expect(!fixture.manager.isRadioMode)
+        #expect(!fixture.manager.isLoading)
     }
 
     @MainActor
@@ -196,6 +308,52 @@ private final class WatchActivationProbe {
 
     func makeSession() -> WatchAudioSessionCoordinator {
         WatchAudioSessionCoordinator(activate: { self.completions.append($0) })
+    }
+}
+
+@MainActor
+private final class WatchRadioActivationFixture {
+    let activation = WatchActivationProbe()
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".wav")
+    var starts = 0
+    var deactivations = 0
+    lazy var manager = AudioManager(
+        audioSession: WatchAudioSessionCoordinator(
+            activate: { [weak self] completion in self?.activation.completions.append(completion) },
+            deactivate: { [weak self] completion in
+                self?.deactivations += 1
+                completion()
+            }
+        ),
+        canPlayLocally: { true },
+        startPlayer: { [weak self] _ in self?.starts += 1 }
+    )
+
+    init() throws {
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 8000, channels: 1))
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8000))
+        buffer.frameLength = 8000
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+    }
+
+    func tuneIn(activationCount: Int) async throws {
+        let song = UITestFixtures.song(id: "local-radio", title: "Radio", artist: "Artist")
+        manager.playRadio(streamURL: url, song: song, artworkURL: nil)
+        try await waitForActivation(count: activationCount)
+    }
+
+    func waitForActivation(count: Int) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(3))
+        while activation.completions.count < count, clock.now < deadline {
+            try await clock.sleep(for: .milliseconds(10))
+        }
+        try #require(activation.completions.count == count)
+    }
+
+    func cleanUp() {
+        manager.stopForOutputTransfer()
+        try? FileManager.default.removeItem(at: url)
     }
 }
 
