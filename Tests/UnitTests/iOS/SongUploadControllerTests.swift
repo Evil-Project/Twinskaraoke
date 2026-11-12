@@ -63,6 +63,8 @@ struct SongUploadControllerTests {
         var limits: () throws -> UploadLimits = { Harness.limits(remainingSongs: 10) }
         var limitsCalls = 0
         var songIDs: Set<String> = ["old"]
+        /// Thrown by the list of uploads while set.
+        var songListError: Error?
         var stageCalls = 0
         var staged: [StagedUpload] = []
         var discarded: [UUID] = []
@@ -92,7 +94,10 @@ struct SongUploadControllerTests {
                     limitsCalls += 1
                     return try limits()
                 },
-                uploadedSongIDs: { [self] in songIDs },
+                uploadedSongIDs: { [self] in
+                    if let songListError { throw songListError }
+                    return songIDs
+                },
                 makeUploadRequest: { [self] staged in
                     tokenCount += 1
                     var request = URLRequest(url: URL(fileURLWithPath: "/upload"))

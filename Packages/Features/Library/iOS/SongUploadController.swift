@@ -164,7 +164,12 @@ final class SongUploadController {
         case let .link(link, playlistID):
             await runLink(id, link: link, playlistID: playlistID)
         case nil:
-            if records[id]?.staged != nil { await send(id) }
+            guard records[id]?.staged != nil else { return }
+            // A restored body saved without the list from before gets one now.
+            if records[id]?.knownSongIDs == nil {
+                guard await loadBaseline(id) else { return }
+            }
+            await send(id)
         }
     }
 
@@ -184,9 +189,7 @@ final class SongUploadController {
         {
             return fail(id, blocked)
         }
-        guard isCurrent(id) else { return }
-        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
-        guard isCurrent(id) else { return }
+        guard isCurrent(id), await loadBaseline(id), isCurrent(id) else { return }
         setPhase(id, .preparing)
         let staged: StagedUpload
         do {
@@ -246,8 +249,7 @@ final class SongUploadController {
         setPhase(id, .importing)
         // An import that ends without an answer may still have landed; the
         // list from before tells.
-        records[id]?.knownSongIDs = try? await service.uploadedSongIDs()
-        guard isCurrent(id), !refuseForAnotherAccount(id) else { return }
+        guard await loadBaseline(id), isCurrent(id), !refuseForAnotherAccount(id) else { return }
         do {
             let result = try await service.importLink(SongLinkImport(url: link.absoluteString, playlistID: playlistID))
             guard records[id] != nil else { return }

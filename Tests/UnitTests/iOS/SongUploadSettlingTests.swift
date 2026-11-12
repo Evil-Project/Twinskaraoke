@@ -80,6 +80,38 @@ struct SongUploadSettlingTests {
         #expect(failedWithServerError(phase(controller, id), status: 400))
     }
 
+    // MARK: - Baseline
+
+    @Test("Without the list of uploads from before, no file is sent and no link imported")
+    func missingBaselineFailsBeforeSending() async throws {
+        harness.songListError = URLError(.notConnectedToInternet)
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.offline))
+        #expect(harness.stageCalls == 0)
+        #expect(harness.transport.started.isEmpty)
+
+        harness.songListError = KaraokeAPIClient.APIError.decodeFailed
+        let link = controller.importLink("https://youtu.be/a")
+        await waitUntil { isFinished(controller, link) }
+        #expect(phase(controller, link) == .failed(.interrupted))
+        #expect(harness.importCalls == 0)
+
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 1 }
+    }
+
+    @Test("Limits that can't be loaded still don't block once the list loads")
+    func limitsFailureStillDoesNotBlock() async {
+        harness.limits = { throw URLError(.notConnectedToInternet) }
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        await waitUntil { harness.transport.started.count == 1 }
+        #expect(phase(controller, id) == .uploading(0))
+    }
+
     // MARK: - Cancel
 
     @Test("Cancel is ignored once the server's answer arrived")

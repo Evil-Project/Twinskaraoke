@@ -58,6 +58,41 @@ extension SongUploadController {
         }
     }
 
+    /// Loads the user's uploads before anything is sent, so an ending that
+    /// doesn't say whether the song arrived can be settled later. Without
+    /// that list a retry could add the song twice, so when it can't be
+    /// loaded `id` fails before anything is sent. Returns whether it loaded.
+    func loadBaseline(_ id: UUID) async -> Bool {
+        do {
+            let known = try await service.uploadedSongIDs()
+            guard records[id] != nil else { return false }
+            records[id]?.knownSongIDs = known
+            return true
+        } catch {
+            guard !Task.isCancelled, records[id] != nil else { return false }
+            DebugLogger.log("Upload not sent: the uploads list failed to load", category: .network)
+            fail(id, Self.baselineFailure(error))
+            return false
+        }
+    }
+
+    /// A retryable failure for a list that couldn't be loaded: offline for a
+    /// connectivity error, else the server's status or an interruption.
+    static func baselineFailure(_ error: Error) -> SongUploadFailure {
+        switch error {
+        case let urlError as URLError where offlineCodes.contains(urlError.code):
+            .offline
+        case let urlError as URLError where urlError.code == .timedOut:
+            .timedOut
+        case let failure as SongUploadFailure:
+            failure
+        case let KaraokeAPIClient.APIError.httpStatus(status) where status >= 500:
+            .server(status: status, problem: nil)
+        default:
+            .interrupted
+        }
+    }
+
     /// The body may or may not have arrived. The server's answer carries no
     /// id, so a song in the user's uploads that wasn't there before means it
     /// did; otherwise the user can try again.
