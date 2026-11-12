@@ -263,12 +263,12 @@ extension UploadLimits {
     }
 
     /// The quota a file of `fileSize` bytes would exceed, song count first,
-    /// or `nil` when it fits.
+    /// or `nil` when it fits. A quota the server didn't report never blocks.
     func blocking(fileSize: Int64) -> SongUploadFailure? {
-        if remainingSongs == 0 {
+        if songQuotaKnown, remainingSongs == 0 {
             return .quotaSongs(max: maxSongs)
         }
-        if fileSize > remainingBytes {
+        if storageQuotaKnown, fileSize > remainingBytes {
             return .quotaStorage(remaining: remainingBytes, needed: fileSize)
         }
         return nil
