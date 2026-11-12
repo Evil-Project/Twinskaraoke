@@ -96,6 +96,41 @@ final class UploadsUITests: XCTestCase {
         XCTAssertTrue(song.exists, "Cancelling keeps the song.")
     }
 
+    func testRowMenuOffersEditAndDelete() throws {
+        let app = openUploaded()
+        let song = row("Moonlight Densetsu", in: app)
+        XCTAssertTrue(song.waitForExistence(timeout: 8))
+        song.press(forDuration: 1.2)
+        let edit = app.buttons["Edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "Expected Edit in the row's menu.")
+        XCTAssertTrue(app.buttons["Delete"].exists, "Expected Delete in the row's menu.")
+        XCTAssertTrue(app.buttons["Play Next"].exists, "Edit and Delete join the usual song actions.")
+
+        app.buttons["Delete"].tap()
+        let alert = app.alerts["Delete “Moonlight Densetsu”?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5), "Delete asks first, as the swipe action does.")
+        alert.buttons["Cancel"].tap()
+        XCTAssertTrue(waitUntil(timeout: 3) { !alert.exists })
+
+        song.press(forDuration: 1.2)
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        XCTAssertTrue(app.textFields["EditUpload.Title"].waitForExistence(timeout: 5), "Expected the edit sheet.")
+    }
+
+    func testSongMenuElsewhereHasNoEditOrDelete() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1"]
+        app.launch()
+        let card = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "HomeSongSection.")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 15), "Expected a song on Home.")
+        card.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["Play Next"].waitForExistence(timeout: 5), "Expected the song menu.")
+        XCTAssertFalse(app.buttons["Edit"].exists, "Edit belongs to the Uploaded screen only.")
+        XCTAssertFalse(app.buttons["Delete"].exists, "Delete belongs to the Uploaded screen only.")
+    }
+
     func testEditSheetPrefillsTitleAndDisablesSaveWhenEmpty() throws {
         let app = openUploaded()
         let song = row("Moonlight Densetsu", in: app)

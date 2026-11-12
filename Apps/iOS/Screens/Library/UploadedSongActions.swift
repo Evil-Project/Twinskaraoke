@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Edit and Delete for a row of the Uploaded list: trailing swipe actions
-/// and the same two as accessibility actions. The row's context menu lives
-/// in `SongRow`, which this leaves alone.
+/// and the same two as accessibility actions. The row's menus get them
+/// through `\.uploadedSongMenuActions`.
 struct UploadedSongRowActions: ViewModifier {
     let song: Song
     let edit: (Song) -> Void

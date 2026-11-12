@@ -54,17 +54,11 @@ struct UploadedSongsView: View {
                         .id(song.id)
                         .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
                         .accessibilityHint("Starts playback.")
-                        .modifier(UploadedSongRowActions(
-                            song: song,
-                            edit: { song in
-                                AppHaptic.selection.play()
-                                editingSong = song
-                            },
-                            delete: { song in
-                                AppHaptic.selection.play()
-                                deletingSong = song
-                            }
-                        ))
+                        .modifier(UploadedSongRowActions(song: song, edit: beginEditing, delete: beginDeleting))
+                        .environment(
+                            \.uploadedSongMenuActions,
+                            UploadedSongMenuActions(edit: beginEditing, delete: beginDeleting)
+                        )
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                         .listRowBackground(Color.clear)
                     }
@@ -129,6 +123,16 @@ struct UploadedSongsView: View {
             ArtworkPrefetcher.shared.cancel(reason: "uploaded visible songs")
         }
         .accessibilityIdentifier("Library.UploadedSongs")
+    }
+
+    private func beginEditing(_ song: Song) {
+        AppHaptic.selection.play()
+        editingSong = song
+    }
+
+    private func beginDeleting(_ song: Song) {
+        AppHaptic.selection.play()
+        deletingSong = song
     }
 
     private func play(_ song: Song, context: [Song]) {

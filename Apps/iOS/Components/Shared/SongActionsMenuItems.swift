@@ -7,6 +7,8 @@ struct SongActionsMenuItems: View {
     // Non-nil only inside an editable playlist the user owns; see
     // PlaylistSongRemoval.swift.
     @Environment(\.playlistSongRemoval) private var playlistRemoval
+    // Non-nil only on the Uploaded screen; see UploadedSongMenuActions.swift.
+    @Environment(\.uploadedSongMenuActions) private var uploadActions
 
     init(song: Song, onAddToPlaylist: @escaping () -> Void) {
         self.song = song
@@ -104,6 +106,26 @@ struct SongActionsMenuItems: View {
             Divider()
             ShareLink(item: pageURL, subject: Text(song.title), preview: SharePreview(song.title)) {
                 Label("Share Song…", systemImage: "square.and.arrow.up")
+            }
+        }
+
+        let uploadItems = UploadedSongMenuActions.items(offeredBy: uploadActions)
+        if !uploadItems.isEmpty { Divider() }
+        ForEach(uploadItems, id: \.self) { item in
+            switch item {
+            case .edit:
+                Button {
+                    uploadActions?.edit(song)
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                }
+            case .delete:
+                // Opens the confirmation; nothing is deleted from here.
+                Button(role: .destructive) {
+                    uploadActions?.delete(song)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
         }
     }
