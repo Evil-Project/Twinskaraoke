@@ -68,8 +68,9 @@ extension UploadedSongsViewModel {
         trimmed(edit) == UploadedSongEdit(title: song.title, artist: artistText(for: song))
     }
 
-    /// Saves a new title and artist, then reloads the list from the server,
-    /// which is the only source of how it stored them.
+    /// Saves a new title and artist, shows them on the row at once, then
+    /// reloads the list from the server, which is the only source of how it
+    /// stored them. A failed reload leaves the updated row.
     func update(_ song: Song, edit: UploadedSongEdit) async -> EditOutcome {
         let edit = Self.trimmed(edit)
         guard !edit.title.isEmpty else { return .emptyTitle }
@@ -79,8 +80,30 @@ extension UploadedSongsViewModel {
         } catch {
             return .failed(error as? SongUploadFailure ?? .unknown)
         }
+        if let index = songs.firstIndex(where: { $0.id == song.id }) {
+            songs[index] = Self.applying(edit, to: songs[index])
+            rebuildDisplayedSongs()
+        }
         await refresh()
         return .saved
+    }
+
+    /// `song` with the title and artist of a saved `edit`. The server keeps
+    /// the artist as one string, which `artistText(for:)` reads back.
+    nonisolated static func applying(_ edit: UploadedSongEdit, to song: Song) -> Song {
+        Song(
+            id: song.id,
+            title: edit.title,
+            duration: song.duration,
+            absolutePath: song.absolutePath,
+            cloudflareID: song.cloudflareID,
+            coverArt: song.coverArt,
+            originalArtists: edit.artist.isEmpty ? [] : [edit.artist],
+            coverArtists: song.coverArtists,
+            userUploaded: song.userUploaded,
+            oss: song.oss,
+            order: song.order
+        )
     }
 
     /// Removes the row at once and deletes the song on the server; on
@@ -100,6 +123,9 @@ extension UploadedSongsViewModel {
             }
             return error as? SongUploadFailure ?? .unknown
         }
+        // Every load from here on leaves it out, including one that started
+        // before the delete and finishes after it.
+        deletedSongIDs.insert(song.id)
         // A reload while the request ran may have put the row back.
         if songs.contains(where: { $0.id == song.id }) {
             songs.removeAll { $0.id == song.id }

@@ -13,7 +13,7 @@ nonisolated struct PendingUpload: Codable, Sendable, Equatable, Identifiable {
     var startedAt: Date
     /// The user's upload ids before this one started, or `nil` when they
     /// couldn't be loaded. The server's answer carries no id, so a new id in
-    /// the list afterwards is this upload.
+    /// the list afterwards, with this upload's title, is this upload.
     var knownSongIDs: Set<String>?
     /// The account that started the upload, or `nil` when it couldn't be
     /// told. A relaunch keeps the upload tied to it.

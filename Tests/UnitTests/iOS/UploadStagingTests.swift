@@ -115,7 +115,7 @@ struct UploadStagingTests {
     }
 
     @Test("The sweep removes only old files no pending upload needs")
-    func sweepRemovesOnlyStaleUnreferencedFiles() throws {
+    func sweepRemovesOnlyStaleUnreferencedFiles() async throws {
         try FileManager.default.createDirectory(at: outbox, withIntermediateDirectories: true)
         let now = Date()
         let old = now.addingTimeInterval(-8 * 24 * 60 * 60)
@@ -133,7 +133,7 @@ struct UploadStagingTests {
         try Data("{}".utf8).write(to: journal)
         try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: journal.path)
 
-        UploadStaging.sweepStale(keeping: [activeID], directory: outbox, now: now)
+        await UploadStaging.sweepStale(keeping: [activeID], directory: outbox, now: now)
 
         #expect(!FileManager.default.fileExists(atPath: stale.path))
         #expect(FileManager.default.fileExists(atPath: active.path))
