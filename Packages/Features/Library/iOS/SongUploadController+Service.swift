@@ -14,7 +14,7 @@ extension SongUploadController {
         var stage: @MainActor (_ source: URL, _ metadata: SongUploadMetadata) async throws -> StagedUpload
         var discard: @MainActor (_ staged: StagedUpload) -> Void
         /// The size of a picked file, or `nil` when it can't be read.
-        var fileSize: @MainActor (_ source: URL) -> Int64?
+        var fileSize: @MainActor (_ source: URL) async -> Int64?
         var invalidateUploads: @MainActor () async -> Void
         /// Removes old staged bodies that none of `keeping` names, off the
         /// main actor.
@@ -41,11 +41,7 @@ extension SongUploadController {
                 outbox: .live,
                 stage: { source, metadata in try await UploadStaging.stage(source: source, metadata: metadata) },
                 discard: { staged in UploadStaging.discard(staged) },
-                fileSize: { source in
-                    let scoped = source.startAccessingSecurityScopedResource()
-                    defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-                    return (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
-                },
+                fileSize: { source in await UploadStaging.fileSize(of: source) },
                 invalidateUploads: { await KaraokeAPIClient.invalidateUploadedSongs() },
                 sweepStaged: { keeping in await UploadStaging.sweepStale(keeping: keeping) },
                 currentAccount: { VideoResumeStore.accountIdentity(for: AuthManager.persistedDescriptor()) }
@@ -98,6 +94,17 @@ extension SongUploadController {
                 currentAccount: { "ui-test" }
             )
         }
+    }
+}
+
+nonisolated extension UploadStaging {
+    /// The size of a picked file, or `nil` when it can't be read. Read off
+    /// the main actor, under the file's security scope.
+    @concurrent
+    static func fileSize(of file: URL) async -> Int64? {
+        let scoped = file.startAccessingSecurityScopedResource()
+        defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+        return (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
     }
 }
 

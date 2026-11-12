@@ -186,7 +186,7 @@ final class SongUploadController {
         guard records[id]?.staged == nil else { return await send(id) }
         setPhase(id, .checkingQuota)
         // Limits that can't be loaded don't block: the server decides.
-        if let size = service.fileSize(source),
+        if let size = await service.fileSize(source),
            let limits = try? await service.limits(),
            let blocked = limits.blocking(fileSize: size)
         {
