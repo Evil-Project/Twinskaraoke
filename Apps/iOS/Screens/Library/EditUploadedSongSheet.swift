@@ -73,10 +73,12 @@ struct EditUploadedSongSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
+                    // A save on its way can't be left unseen: it may still fail.
                     Button("Cancel") {
                         AppHaptic.dismiss.play()
                         dismiss()
                     }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving {
