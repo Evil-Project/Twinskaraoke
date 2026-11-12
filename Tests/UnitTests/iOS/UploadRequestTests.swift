@@ -454,4 +454,50 @@ struct UploadRequestTests {
         #expect(limits.blocking(fileSize: 600) == nil)
         #expect(limits.blocking(fileSize: 0) == nil)
     }
+
+    @Test("Limits decode when the server leaves fields out")
+    func limitsDecodeSparseResponse() throws {
+        let empty = try JSONDecoder().decode(UploadLimits.self, from: Data("{}".utf8))
+        #expect(empty.maxSongs == 0)
+        #expect(empty.usedStorageBytes == 0)
+        #expect(empty.songPerPlaylistLimit == 0)
+
+        let partial = try JSONDecoder().decode(
+            UploadLimits.self,
+            from: Data(#"{"maxSongs": 50, "currentSongCount": 3, "playlistLimit": 10}"#.utf8)
+        )
+        #expect(partial.maxSongs == 50)
+        #expect(partial.currentSongCount == 3)
+        #expect(partial.playlistLimit == 10)
+        #expect(partial.maxStorageBytes == 0)
+    }
+
+    @Test("A limit the server didn't report never blocks an upload")
+    func absentLimitDoesNotBlock() throws {
+        let decoder = JSONDecoder()
+        let nothing = try decoder.decode(UploadLimits.self, from: Data("{}".utf8))
+        #expect(nothing.blocking(fileSize: 5_000_000) == nil)
+
+        // The song count is full, but storage is unknown: only the song quota blocks.
+        let songsFull = try decoder.decode(
+            UploadLimits.self,
+            from: Data(#"{"maxSongs": 10, "currentSongCount": 10}"#.utf8)
+        )
+        #expect(songsFull.blocking(fileSize: 5_000_000) == .quotaSongs(max: 10))
+
+        // Storage is full, but the song limit is missing: only storage blocks.
+        let storageFull = try decoder.decode(
+            UploadLimits.self,
+            from: Data(#"{"currentSongCount": 10, "maxStorageBytes": 100, "usedStorageBytes": 100}"#.utf8)
+        )
+        #expect(storageFull.blocking(fileSize: 1) == .quotaStorage(remaining: 0, needed: 1))
+        #expect(storageFull.blocking(fileSize: 0) == nil)
+
+        // Usage without a limit is unknown too.
+        let usageOnly = try decoder.decode(
+            UploadLimits.self,
+            from: Data(#"{"currentSongCount": 99, "usedStorageBytes": 999999}"#.utf8)
+        )
+        #expect(usageOnly.blocking(fileSize: 5_000_000) == nil)
+    }
 }
