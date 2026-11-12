@@ -18,6 +18,7 @@ struct SongUploadControllerTests {
             var cancelled: [Int] = []
             var acknowledged: [Int] = []
             var active: Set<Int> = []
+            var backgroundEventsHandled = 0
         }
 
         let state = Mutex(State())
@@ -50,7 +51,7 @@ struct SongUploadControllerTests {
                 activeTaskIDs: { [self] in state.withLock { $0.active } },
                 events: { [stream] in stream },
                 acknowledge: { [self] taskID in state.withLock { $0.acknowledged.append(taskID) } },
-                handleBackgroundEvents: {}
+                handleBackgroundEvents: { [self] in state.withLock { $0.backgroundEventsHandled += 1 } }
             )
         }
     }
@@ -81,6 +82,11 @@ struct SongUploadControllerTests {
         /// Awaited by a link import before it answers, to hold one.
         var importHold: (() async -> Void)?
         var account: String? = "account-a"
+        var notificationsEnabled = true
+        var appIsActive = true
+        var notifications: [UploadNotifier.Content] = []
+        /// Awaited by the notifier before it posts, to hold a delivery.
+        var deliveryHold: (() async -> Void)?
         /// Awaited by `invalidateUploads`, to hold a success in progress.
         var invalidationHold: (() async -> Void)?
 
@@ -146,7 +152,15 @@ struct SongUploadControllerTests {
                     await invalidationHold?()
                 },
                 sweepStaged: { _ in },
-                currentAccount: { [self] in account }
+                currentAccount: { [self] in account },
+                notifier: UploadNotifier(
+                    isEnabled: { [self] in notificationsEnabled },
+                    isAppActive: { [self] in appIsActive },
+                    deliver: { [self] content in
+                        await deliveryHold?()
+                        notifications.append(content)
+                    }
+                )
             )
         }
 

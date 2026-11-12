@@ -73,6 +73,9 @@ final class SongUploadController {
     @ObservationIgnored private var unclaimedEvents: [Int: [UploadTransport.Event]] = [:]
     @ObservationIgnored private var cancelledTaskIDs: Set<Int> = []
     @ObservationIgnored private var sessionObserver: NSObjectProtocol?
+    /// Uploads whose ending was notified, and notifications being posted.
+    @ObservationIgnored var notifiedUploads: Set<UUID> = []
+    @ObservationIgnored var notificationTasks: [UUID: Task<Void, Never>] = [:]
 
     /// `vanishedGrace` is how long a restored upload whose task is gone may
     /// wait for the session's event before the server is asked instead.
@@ -335,6 +338,7 @@ final class SongUploadController {
         }
         records[id]?.settling = false
         records[id]?.ended = false
+        notifiedUploads.remove(id)
         uploads[index].phase = .waiting
         startNext()
     }
@@ -371,6 +375,7 @@ final class SongUploadController {
         startEventLoop()
         await resume()
         await service.transport.handleBackgroundEvents()
+        await finishNotifications()
     }
 
     private func restore() async {
@@ -514,6 +519,7 @@ final class SongUploadController {
     func noteCompletion(_ completion: Completion) {
         if completion.succeeded { completedUploads += 1 }
         latestCompletion = completion
+        notifyIfInBackground(completion)
     }
 
     /// Called when an upload has ended either way.
