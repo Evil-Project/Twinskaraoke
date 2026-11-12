@@ -85,12 +85,30 @@ struct UploadSongFormModelTests {
             tags: { _ in .init() }
         ))
         let slow = Task { await form.pick(first) }
-        while !reading.started { await Task.yield() }
+        guard await waitUntil({ reading.started }) else {
+            slow.cancel()
+            gate.continuation.finish()
+            return
+        }
         await form.pick(file)
         gate.continuation.yield()
         await slow.value
         #expect(form.file?.url == file)
         #expect(form.title == "My Song")
+    }
+
+    /// Waits for `condition`, a bounded time; records a failure and
+    /// returns `false` when it never holds.
+    private func waitUntil(
+        _ condition: @MainActor () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async -> Bool {
+        for _ in 0..<2000 where !condition() {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        let met = condition()
+        #expect(met, "timed out", sourceLocation: sourceLocation)
+        return met
     }
 
     @MainActor
@@ -212,8 +230,8 @@ struct UploadSongFormModelTests {
     @Test func serverMessageIsShownWhenThereIsOne() {
         let problem = UploadServerProblem(message: "Unsupported platform.", fieldErrors: [:])
         #expect(SongUploadFailure.server(status: 400, problem: problem).userMessage == "Unsupported platform.")
+        // Without a general message, the field's own says what to fix.
         let blank = UploadServerProblem(message: nil, fieldErrors: ["Title": ["Required."]])
-        #expect(SongUploadFailure.server(status: 400, problem: blank).userMessage
-            == SongUploadFailure.server(status: 400, problem: nil).userMessage)
+        #expect(SongUploadFailure.server(status: 400, problem: blank).userMessage == "Required.")
     }
 }

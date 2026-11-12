@@ -152,12 +152,49 @@ struct SongUploadAccountTests {
         #expect(harness.transport.started.count == 1)
     }
 
-    @Test("An account that can't be told doesn't block the upload")
-    func unknownAccountDoesNotBlock() async {
+    @Test("An upload whose account can't be read fails at once, and a retry records the account")
+    func unknownAccountFailsAtOnceAndRetryRecordsIt() async throws {
         harness.account = nil
         let controller = harness.controller()
-        let (id, _) = await startedUpload(controller)
-        #expect(phase(controller, id) == .uploading(0))
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        // Refused synchronously: nothing was queued that could send later.
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(controller.records[try #require(id)]?.account == nil)
+
+        // Still unreadable: the retry is refused the same way.
+        controller.retry(try #require(id))
+        #expect(phase(controller, id) == .failed(.interrupted))
+
+        harness.account = "account-a"
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 1 && controller.records[id ?? UUID()]?.taskID != nil }
+        #expect(controller.records[try #require(id)]?.account == "account-a")
+        #expect(harness.outbox.entries().first?.account == "account-a")
+        #expect(harness.limitsCalls == 1)
+        #expect(harness.stageCalls == 1)
+    }
+
+    @Test("A link whose account can't be read fails at once")
+    func unknownAccountFailsLinkAtOnce() async {
+        harness.account = nil
+        let controller = harness.controller()
+        let link = controller.importLink("https://youtu.be/a")
+        #expect(phase(controller, link) == .failed(.interrupted))
+        #expect(!controller.uploads.contains { $0.isActive })
+        #expect(harness.importCalls == 0)
+        #expect(harness.songListCalls == 0)
+    }
+
+    @Test("A restored upload saved without an account is still sent on retry")
+    func restoredUploadWithoutAccountStaysTolerant() async throws {
+        harness.outbox.save(pending(taskID: 9, account: nil))
+        harness.account = nil
+        let controller = harness.controller()
+        await controller.resume()
+        await waitUntil { controller.uploads.first?.phase.isFinished == true }
+        #expect(controller.uploads.first?.phase == .failed(.interrupted))
+        controller.retry(try #require(controller.uploads.first).id)
+        await waitUntil { harness.transport.started.count == 1 }
     }
 
     @Test("An upload isn't sent while the signed-in account can't be read, and can be retried")
@@ -196,9 +233,10 @@ struct SongUploadAccountTests {
 
         harness.account = "account-b"
         NotificationCenter.default.post(name: WatchSessionLink.sessionChanged, object: nil)
-        await waitUntil { controller.uploads.count == 1 }
+        await waitUntil { controller.uploads.isEmpty }
 
-        #expect(controller.uploads.map(\.id) == [try #require(running)])
+        // The running one finishes unseen; only its record is left until then.
+        #expect(controller.records[try #require(running)]?.endsUnseen == true)
         #expect(controller.records[try #require(failed)] == nil)
         #expect(controller.records[try #require(waiting)] == nil)
         // The failed upload's staged body is gone with it.
@@ -206,21 +244,102 @@ struct SongUploadAccountTests {
         #expect(controller.latestCompletion == nil)
     }
 
-    @Test("A transfer already sent by the previous account leaves the list when it ends")
-    func runningTransferOfPreviousAccountLeavesWhenItEnds() async throws {
+    @Test("A transfer already sent by the previous account leaves the list at once and finishes unseen")
+    func runningTransferOfPreviousAccountFinishesUnseen() async throws {
         let controller = harness.controller()
-        let (id, taskID) = await startedUpload(controller)
+        let (_, taskID) = await startedUpload(controller)
         harness.account = "account-b"
         controller.accountMayHaveChanged()
-        // Sent with the previous account's token; it keeps going.
-        #expect(phase(controller, id) == .uploading(0))
+        // Sent with the previous account's token; it keeps going, out of sight.
+        #expect(controller.uploads.isEmpty)
         #expect(harness.transport.state.withLock { $0.cancelled }.isEmpty)
 
+        harness.transport.send(.progress(taskID: taskID, fraction: 1))
         harness.transport.send(.finished(taskID: taskID, status: 200, body: Data(), contentType: nil, retryAfter: nil))
-        await waitUntil { controller.uploads.isEmpty }
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [taskID] }
+        #expect(controller.uploads.isEmpty)
+        #expect(controller.latestCompletion == nil)
+        #expect(controller.completedUploads == 0)
+        #expect(harness.invalidations == 0)
+        #expect(harness.outbox.entries().isEmpty)
+        #expect(harness.discarded == harness.staged.map(\.id))
+        #expect(controller.records.isEmpty)
+    }
+
+    @Test("A link import running for the previous account leaves the list and its result is dropped")
+    func runningLinkImportOfPreviousAccountIsDropped() async {
+        var release: CheckedContinuation<Void, Never>?
+        harness.importHold = { await withCheckedContinuation { release = $0 } }
+        harness.importResult = { SongLinkImportResult(success: true, songID: "s", title: "Linked") }
+        let controller = harness.controller()
+        _ = controller.importLink("https://youtu.be/a")
+        await waitUntil { release != nil }
+
+        harness.account = "account-b"
+        controller.accountMayHaveChanged()
+        #expect(controller.uploads.isEmpty)
+        release?.resume()
+        await waitUntil { controller.records.isEmpty }
+        #expect(controller.uploads.isEmpty)
+        #expect(controller.latestCompletion == nil)
+        #expect(controller.completedUploads == 0)
+    }
+
+    @Test("A restored upload hidden by an account change before it settles ends unseen")
+    func restoredUploadHiddenBeforeSettlingEndsUnseen() async {
+        let entry = pending(taskID: 9, account: "account-a")
+        harness.outbox.save(entry)
+        let controller = harness.controller(vanishedGrace: .milliseconds(200))
+        await controller.resume()
+        #expect(controller.uploads.count == 1)
+
+        harness.account = "account-b"
+        controller.accountMayHaveChanged()
+        #expect(controller.uploads.isEmpty)
+        await waitUntil { controller.records.isEmpty }
+        // Never matched against the new account's list.
+        #expect(harness.songListCalls == 0)
         #expect(controller.latestCompletion == nil)
         #expect(harness.outbox.entries().isEmpty)
+        #expect(harness.discarded == [entry.id])
+    }
+
+    @Test("An ambiguous ending after the account changed isn't matched against the new account's list")
+    func ambiguousEndingAfterAccountChangeIsNotReconciled() async {
+        let controller = harness.controller()
+        let (_, taskID) = await startedUpload(controller)
+        // Signed in as someone else without the session notice reaching us;
+        // their library happens to have a song of the same title.
+        harness.account = "account-b"
+        harness.songs["theirs"] = "Song"
+        let calls = harness.songListCalls
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { controller.records.isEmpty }
+        #expect(controller.uploads.isEmpty)
+        #expect(harness.songListCalls == calls)
+        #expect(controller.completedUploads == 0)
+        #expect(controller.latestCompletion == nil)
         await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [taskID] }
+    }
+
+    @Test("An ambiguous ending while the account can't be read fails retryably, and the retry checks first")
+    func ambiguousEndingWithUnreadableAccountFailsInterrupted() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.account = nil
+        let calls = harness.songListCalls
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(harness.songListCalls == calls)
+
+        // The first body may have landed: the retry looks before it sends.
+        harness.account = "account-a"
+        harness.songs["new"] = "Song"
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(harness.transport.started.count == 1)
     }
 
     @Test("The same account signing in again keeps its uploads")
