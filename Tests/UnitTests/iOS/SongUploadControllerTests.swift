@@ -71,6 +71,11 @@ struct SongUploadControllerTests {
         var importResult: () throws -> SongLinkImportResult? = { nil }
         var importCalls = 0
         var account: String? = "account-a"
+        var notificationsEnabled = true
+        var appIsActive = true
+        var notifications: [UploadNotifier.Content] = []
+        /// How long posting a notification takes.
+        var notificationDelay: Duration = .zero
         /// Awaited by `invalidateUploads`, to hold a success in progress.
         var invalidationHold: (() async -> Void)?
 
@@ -129,7 +134,15 @@ struct SongUploadControllerTests {
                     await invalidationHold?()
                 },
                 sweepStaged: { _ in },
-                currentAccount: { [self] in account }
+                currentAccount: { [self] in account },
+                notifier: UploadNotifier(
+                    isEnabled: { [self] in notificationsEnabled },
+                    isAppActive: { [self] in appIsActive },
+                    deliver: { [self] content in
+                        try? await Task.sleep(for: notificationDelay)
+                        notifications.append(content)
+                    }
+                )
             )
         }
 

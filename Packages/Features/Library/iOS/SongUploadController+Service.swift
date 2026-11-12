@@ -22,6 +22,8 @@ extension SongUploadController {
         /// Keychain can't tell. Read from storage, as the video resume store
         /// does; nothing here changes the session.
         var currentAccount: @MainActor () -> String?
+        /// Posts the notification for an upload that ends in the background.
+        var notifier: UploadNotifier
 
         static var live: Service {
             Service(
@@ -42,7 +44,8 @@ extension SongUploadController {
                 },
                 invalidateUploads: { await KaraokeAPIClient.invalidateUploadedSongs() },
                 sweepStaged: { keeping in UploadStaging.sweepStale(keeping: keeping) },
-                currentAccount: { VideoResumeStore.accountIdentity(for: AuthManager.persistedDescriptor()) }
+                currentAccount: { VideoResumeStore.accountIdentity(for: AuthManager.persistedDescriptor()) },
+                notifier: .live
             )
         }
 
@@ -93,7 +96,8 @@ extension SongUploadController {
                 fileSize: { _ in 1000 },
                 invalidateUploads: {},
                 sweepStaged: { _ in },
-                currentAccount: { "ui-test" }
+                currentAccount: { "ui-test" },
+                notifier: .disabled
             )
         }
     }
