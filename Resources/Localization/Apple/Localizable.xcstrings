@@ -54733,6 +54733,52 @@
         }
       }
     },
+    "This is already uploading. Its progress shows under Uploaded." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das wird bereits hochgeladen. Den Fortschritt siehst du unter „Hochgeladen“."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tätä lähetetään jo. Edistyminen näkyy kohdassa Lähetetyt."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est déjà en cours d’import. Suivez sa progression dans Importés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これはすでにアップロード中です。進行状況は「アップロード済み」で確認できます。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Це вже вивантажується. Перебіг видно в розділі «Вивантажені»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此内容已在上传中。可在“已上传”中查看进度。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此內容已在上傳中。可在「已上傳」中查看進度。"
+          }
+        }
+      }
+    },
     "This links to a Discord message. Copy the link of the attachment itself instead." : {
       "localizations" : {
         "de" : {

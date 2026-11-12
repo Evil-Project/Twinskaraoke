@@ -64,11 +64,20 @@ final class UploadSongFormModel {
         }
     }
 
-    var mode: Mode = .file
+    var mode: Mode = .file {
+        didSet { isAlreadyUploading = false }
+    }
+
     private(set) var file: PickedFile?
     var title = ""
     var artist = ""
-    var linkText = ""
+    var linkText = "" {
+        didSet { isAlreadyUploading = false }
+    }
+
+    /// The file or link last submitted is already on its way, so the
+    /// controller ignored it; the sheet says so and stays open.
+    private(set) var isAlreadyUploading = false
     private(set) var limits: UploadLimits?
     private(set) var limitsUnavailable = false
     /// What the server said about a failed attempt, for messages under the
@@ -101,6 +110,7 @@ final class UploadSongFormModel {
     func pick(_ url: URL) async {
         file = PickedFile(url: url, name: url.lastPathComponent, size: service.fileSize(url))
         serverProblem = nil
+        isAlreadyUploading = false
         fill(title: SongUploadMetadata.defaultTitle(forFilename: url.lastPathComponent) ?? "", artist: "")
         let tags = await service.tags(url)
         guard file?.url == url else { return }
@@ -152,6 +162,19 @@ final class UploadSongFormModel {
             guard let link = SongLinkImport.supportedLink(linkText) else { return nil }
             return .link(link.absoluteString)
         }
+    }
+
+    /// Hands the song to `controller`. Returns `false` when the same file or
+    /// link is already on its way, which the controller ignores; the form
+    /// then says so.
+    func submit(to controller: SongUploadController) -> Bool {
+        guard let submission else { return false }
+        let started = switch submission {
+        case let .file(url, metadata): controller.uploadFile(at: url, metadata: metadata) != nil
+        case let .link(link): controller.importLink(link) != nil
+        }
+        isAlreadyUploading = !started
+        return started
     }
 
     /// Keeps the field messages of a server answer for display.

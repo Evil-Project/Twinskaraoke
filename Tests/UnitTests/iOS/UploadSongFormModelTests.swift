@@ -43,6 +43,31 @@ struct UploadSongFormModelTests {
         #expect(form.submission == .file(file, SongUploadMetadata(title: "My Song", artist: "", playlistID: nil)))
     }
 
+    @Test("Submitting a file or link that is already uploading keeps the form open and says so")
+    func submittingDuplicateIsRefused() async {
+        let harness = SongUploadControllerTests.Harness()
+        let controller = harness.controller()
+        let form = model()
+        await form.loadLimits()
+        await form.pick(file)
+        #expect(form.submit(to: controller))
+        #expect(!form.isAlreadyUploading)
+        #expect(!form.submit(to: controller))
+        #expect(form.isAlreadyUploading)
+        #expect(controller.uploads.count == 1)
+
+        // A new choice clears the message.
+        form.mode = .link
+        #expect(!form.isAlreadyUploading)
+        form.linkText = "https://youtu.be/abc"
+        #expect(form.submit(to: controller))
+        #expect(!form.submit(to: controller))
+        #expect(form.isAlreadyUploading)
+        form.linkText = "https://youtu.be/other"
+        #expect(!form.isAlreadyUploading)
+        #expect(controller.uploads.count == 2)
+    }
+
     @Test func submitDisabledWithUnsupportedLink() async {
         let form = model()
         await form.loadLimits()
