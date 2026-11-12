@@ -33,11 +33,17 @@ extension SongUploadController {
         }
     }
 
+    /// Errors that mean the request never reached the server, as
+    /// `KaraokeAPIClient` classifies them for the other upload writes.
+    static let offlineCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff,
+        .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+    ]
+
     /// The transfer ended without an answer.
     func settleTransportFailure(_ id: UUID, _ failure: UploadTransport.Failure) async {
         switch failure {
-        case .urlError(.notConnectedToInternet), .urlError(.dataNotAllowed), .urlError(.internationalRoamingOff),
-             .urlError(.cannotFindHost), .urlError(.dnsLookupFailed):
+        case let .urlError(code) where Self.offlineCodes.contains(code):
             DebugLogger.log("Upload failed offline", category: .network)
             fail(id, .offline)
         case .urlError(.timedOut):

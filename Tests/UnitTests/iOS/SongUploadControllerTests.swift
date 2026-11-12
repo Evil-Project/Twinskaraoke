@@ -376,6 +376,15 @@ struct SongUploadControllerTests {
         #expect(controller.completedUploads == 0)
     }
 
+    @Test("A host that refuses the connection counts as offline")
+    func cannotConnectToHostIsOffline() async {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.transport.send(.failed(taskID: taskID, .urlError(.cannotConnectToHost)))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.offline))
+    }
+
     @Test("A 429 carries the server's Retry-After")
     func rateLimitCarriesRetryAfter() async {
         let controller = harness.controller()
