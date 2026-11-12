@@ -2,24 +2,34 @@ import Foundation
 
 /// How an upload ends: the server's answer, a transport failure, or neither.
 extension SongUploadController {
+    /// The server's answer to a transfer, as the transport reports it.
+    struct ServerAnswer {
+        let status: Int
+        let body: Data
+        let contentType: String?
+        let retryAfter: TimeInterval?
+    }
+
     /// The server answered the upload. Success has an empty body and no id.
-    func settleAnswer(_ id: UUID, status: Int, body: Data, contentType: String?, retryAfter: TimeInterval?) async {
+    func settleAnswer(_ id: UUID, settlement: Int, _ answer: ServerAnswer) async {
+        let (status, body, contentType, retryAfter) = (answer.status, answer.body, answer.contentType, answer.retryAfter)
         DebugLogger.log("Upload answered: HTTP \(status), \(body.count) bytes", category: .network)
         switch status {
         case 200..<300:
-            await succeed(id, title: title(of: id))
+            await succeed(id, title: title(of: id), settlement: settlement)
         case 401:
             setPhase(id, .finishing)
             let resolved = await unauthorizedFailure(UploadServerProblem.parse(data: body, contentType: contentType))
-            fail(id, resolved)
+            fail(id, resolved, settlement: settlement)
         case 429:
-            fail(id, .rateLimited(retryAfter: retryAfter))
+            fail(id, .rateLimited(retryAfter: retryAfter), settlement: settlement)
         case 500...:
             // A gateway can time out after the server stored the song.
             let problem = UploadServerProblem.parse(data: body, contentType: contentType)
-            await settleAmbiguous(id, failure: .server(status: status, problem: problem))
+            await settleAmbiguous(id, failure: .server(status: status, problem: problem), settlement: settlement)
         default:
-            fail(id, .server(status: status, problem: UploadServerProblem.parse(data: body, contentType: contentType)))
+            let problem = UploadServerProblem.parse(data: body, contentType: contentType)
+            fail(id, .server(status: status, problem: problem), settlement: settlement)
         }
     }
 
@@ -41,20 +51,20 @@ extension SongUploadController {
     ]
 
     /// The transfer ended without an answer.
-    func settleTransportFailure(_ id: UUID, _ failure: UploadTransport.Failure) async {
+    func settleTransportFailure(_ id: UUID, _ failure: UploadTransport.Failure, settlement: Int) async {
         switch failure {
         case let .urlError(code) where Self.offlineCodes.contains(code):
             DebugLogger.log("Upload failed offline", category: .network)
-            fail(id, .offline)
+            fail(id, .offline, settlement: settlement)
         case .urlError(.timedOut):
             DebugLogger.log("Upload timed out", category: .network)
-            await settleAmbiguous(id, failure: .timedOut)
+            await settleAmbiguous(id, failure: .timedOut, settlement: settlement)
         case let .urlError(code):
             DebugLogger.log("Upload lost: URLError \(code.rawValue)", category: .network)
-            await settleAmbiguous(id, failure: .interrupted)
+            await settleAmbiguous(id, failure: .interrupted, settlement: settlement)
         case .cancelled:
             // Not the user: they remove the upload before cancelling it.
-            await settleAmbiguous(id, failure: .interrupted)
+            await settleAmbiguous(id, failure: .interrupted, settlement: settlement)
         }
     }
 
@@ -98,16 +108,64 @@ extension SongUploadController {
     /// The body may or may not have arrived. The server's answer carries no
     /// id, so a song in the user's uploads that wasn't there before, and that
     /// `isThisUpload` matches, means it did; otherwise the user can try again.
-    func settleAmbiguous(_ id: UUID, failure: SongUploadFailure) async {
+    func settleAmbiguous(_ id: UUID, failure: SongUploadFailure, settlement: Int) async {
+        guard ownsSettlement(id, settlement) else { return }
         setPhase(id, .finishing)
-        guard mayReconcile(id) else { return }
-        if let known = records[id]?.knownSongIDs,
-           let current = try? await service.uploadedSongTitles(),
-           isThisUpload(id, added: current.filter { !known.contains($0.key) }.map(\.value))
-        {
-            return await succeed(id, title: title(of: id))
+        if await reconcileFindsNothing(id, failure: failure, settlement: settlement) {
+            fail(id, failure, settlement: settlement)
         }
-        fail(id, failure)
+    }
+
+    /// A retry of an upload whose ending the list couldn't settle: the list
+    /// is asked again before anything is sent, since the first body may have
+    /// landed. Returns whether it may be sent again. Nothing of this is
+    /// persisted: a failed upload leaves the outbox, and its staged body is
+    /// swept at the next launch, so it can't be retried after a relaunch.
+    func confirmNotLanded(_ id: UUID) async -> Bool {
+        guard let failure = records[id]?.unconfirmed else { return true }
+        let settlement = beginSettlement(id)
+        setPhase(id, .finishing)
+        guard await reconcileFindsNothing(id, failure: failure, settlement: settlement) else { return false }
+        records[id]?.unconfirmed = nil
+        records[id]?.settling = false
+        return true
+    }
+
+    /// Matches `id` against the uploads list. Returns `true` when the list
+    /// loaded without it; otherwise `id` has ended: it succeeded, or failed
+    /// with `failure` and stays unconfirmed when the list couldn't load, or
+    /// it wasn't this account's to match.
+    private func reconcileFindsNothing(_ id: UUID, failure: SongUploadFailure, settlement: Int) async -> Bool {
+        guard mayReconcile(id, settlement: settlement) else { return false }
+        guard let known = records[id]?.knownSongIDs else { return true }
+        let current: [String: String]
+        do {
+            current = try await service.uploadedSongTitles()
+        } catch {
+            guard ownsSettlement(id, settlement) else { return false }
+            DebugLogger.log("Upload not settled: the uploads list failed to load", category: .network)
+            records[id]?.unconfirmed = failure
+            fail(id, failure, settlement: settlement)
+            return false
+        }
+        guard ownsSettlement(id, settlement) else { return false }
+        guard isThisUpload(id, added: current.filter { !known.contains($0.key) }.map(\.value)) else { return true }
+        await succeed(id, title: title(of: id), settlement: settlement)
+        return false
+    }
+
+    /// Claims the settlement of `id`. A later claim, such as the server's
+    /// answer arriving while a vanished upload is being matched, takes over:
+    /// the earlier one's ending is ignored.
+    func beginSettlement(_ id: UUID) -> Int {
+        records[id]?.settlement += 1
+        records[id]?.settling = true
+        return records[id]?.settlement ?? 0
+    }
+
+    func ownsSettlement(_ id: UUID, _ settlement: Int?) -> Bool {
+        guard let record = records[id] else { return false }
+        return settlement.map { $0 == record.settlement } ?? true
     }
 
     /// Whether `added`, the titles of songs new since `id` started, holds it.
@@ -137,9 +195,12 @@ extension SongUploadController {
         }
     }
 
-    func succeed(_ id: UUID, title: String) async {
-        guard let record = records[id] else { return }
+    /// Ends `id` as added, once per run; `settlement`, when given, must
+    /// still be the current one.
+    func succeed(_ id: UUID, title: String, settlement: Int? = nil) async {
+        guard let record = records[id], !record.ended, ownsSettlement(id, settlement) else { return }
         guard !record.endsUnseen else { return endUnseen(id) }
+        records[id]?.ended = true
         clearTransfer(id, discardingStage: true)
         await service.invalidateUploads()
         guard let record = records[id] else { return }
@@ -150,10 +211,12 @@ extension SongUploadController {
         finishRun(id)
     }
 
-    /// Keeps the staged body, so a retry can send it again.
-    func fail(_ id: UUID, _ failure: SongUploadFailure) {
-        guard let record = records[id] else { return }
+    /// Keeps the staged body, so a retry can send it again. Once per run,
+    /// as `succeed`.
+    func fail(_ id: UUID, _ failure: SongUploadFailure, settlement: Int? = nil) {
+        guard let record = records[id], !record.ended, ownsSettlement(id, settlement) else { return }
         guard !record.endsUnseen else { return endUnseen(id) }
+        records[id]?.ended = true
         clearTransfer(id, discardingStage: false)
         setPhase(id, .failed(failure))
         noteCompletion(Completion(itemID: id, title: title(of: id), succeeded: false))

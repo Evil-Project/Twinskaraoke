@@ -322,6 +322,26 @@ struct SongUploadAccountTests {
         await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [taskID] }
     }
 
+    @Test("An ambiguous ending while the account can't be read fails retryably, and the retry checks first")
+    func ambiguousEndingWithUnreadableAccountFailsInterrupted() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.account = nil
+        let calls = harness.songListCalls
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(harness.songListCalls == calls)
+
+        // The first body may have landed: the retry looks before it sends.
+        harness.account = "account-a"
+        harness.songs["new"] = "Song"
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(harness.transport.started.count == 1)
+    }
+
     @Test("The same account signing in again keeps its uploads")
     func sameAccountKeepsItsUploads() async {
         let controller = harness.controller()

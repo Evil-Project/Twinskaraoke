@@ -43,6 +43,13 @@ final class SongUploadController {
         var knownSongIDs: Set<String>?
         /// A finished or failed event is being handled.
         var settling = false
+        /// Bumped by each settlement; only the latest may end the upload.
+        var settlement = 0
+        /// This run has ended; its completion was published.
+        var ended = false
+        /// Ended without the list saying whether the body arrived: the
+        /// failure shown, until a retry asks the list again.
+        var unconfirmed: SongUploadFailure?
         /// The account that started the upload. It is never sent, imported
         /// or retried for another one. `nil` only for an upload restored from
         /// an earlier build's outbox, or one refused because it couldn't be
@@ -163,7 +170,7 @@ final class SongUploadController {
     }
 
     private func run(_ id: UUID) async {
-        guard !refuseForAnotherAccount(id) else { return }
+        guard !refuseForAnotherAccount(id), await confirmNotLanded(id), isCurrent(id) else { return }
         switch records[id]?.source {
         case let .file(source, metadata):
             await runFile(id, source: source, metadata: metadata)
@@ -269,7 +276,9 @@ final class SongUploadController {
                     let resolved = await unauthorizedFailure(problem)
                     return fail(id, resolved)
                 }
-                if Self.mayHaveLanded(failure) { return await settleAmbiguous(id, failure: failure) }
+                if Self.mayHaveLanded(failure) {
+                    return await settleAmbiguous(id, failure: failure, settlement: beginSettlement(id))
+                }
                 return fail(id, failure)
             }
             // Cancelled without the user asking: the app was suspended or
@@ -277,7 +286,7 @@ final class SongUploadController {
             // import landed anyway.
             let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
             guard cancelled else { return fail(id, .unknown) }
-            await settleAmbiguous(id, failure: .interrupted)
+            await settleAmbiguous(id, failure: .interrupted, settlement: beginSettlement(id))
         }
     }
 
@@ -325,6 +334,7 @@ final class SongUploadController {
             return
         }
         records[id]?.settling = false
+        records[id]?.ended = false
         uploads[index].phase = .waiting
         startNext()
     }
@@ -410,8 +420,7 @@ final class SongUploadController {
         try? await Task.sleep(for: vanishedGrace)
         // One an account change hid is still settled, to end it unseen.
         guard let record = records[id], !record.settling, item(id)?.isActive == true || record.endsUnseen else { return }
-        records[id]?.settling = true
-        await settleAmbiguous(id, failure: .interrupted)
+        await settleAmbiguous(id, failure: .interrupted, settlement: beginSettlement(id))
     }
 
     // MARK: - Events
@@ -451,18 +460,20 @@ final class SongUploadController {
             guard item(id)?.isActive == true, records[id]?.settling == false else { return }
             setPhase(id, fraction >= 1 ? .finishing : .uploading(fraction))
         case let .finished(_, status, body, contentType, retryAfter):
-            records[id]?.settling = true
-            // From here the server has answered: cancel must not remove it.
+            // The server's answer settles it, over any reconciliation
+            // running. From here cancel must not remove it.
+            let settlement = beginSettlement(id)
             if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
-                await self?.settleAnswer(id, status: status, body: body, contentType: contentType, retryAfter: retryAfter)
+                let answer = ServerAnswer(status: status, body: body, contentType: contentType, retryAfter: retryAfter)
+                await self?.settleAnswer(id, settlement: settlement, answer)
                 self?.service.transport.acknowledge(taskID)
             }
         case let .failed(_, failure):
-            records[id]?.settling = true
+            let settlement = beginSettlement(id)
             if item(id)?.isActive == true { setPhase(id, .finishing) }
             Task { [weak self] in
-                await self?.settleTransportFailure(id, failure)
+                await self?.settleTransportFailure(id, failure, settlement: settlement)
                 self?.service.transport.acknowledge(taskID)
             }
         }

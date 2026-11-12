@@ -118,8 +118,9 @@ extension SongUploadController {
     /// Before `id` is matched against the uploads list, which is the
     /// signed-in account's: an upload of another account ends unseen, and
     /// one whose account is known fails as interrupted while the current one
-    /// can't be read. Returns whether it may be matched.
-    func mayReconcile(_ id: UUID) -> Bool {
+    /// can't be read, unconfirmed, so a retry looks before it sends. Returns
+    /// whether it may be matched.
+    func mayReconcile(_ id: UUID, settlement: Int) -> Bool {
         guard let record = records[id] else { return false }
         guard !record.endsUnseen else {
             endUnseen(id)
@@ -129,7 +130,8 @@ extension SongUploadController {
         guard let owner = record.account else { return true }
         guard let current = service.currentAccount() else {
             DebugLogger.log("Upload not settled: the signed-in account can't be read", category: .network)
-            fail(id, .interrupted)
+            records[id]?.unconfirmed = .interrupted
+            fail(id, .interrupted, settlement: settlement)
             return false
         }
         guard owner == current else {
