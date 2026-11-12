@@ -40,6 +40,7 @@ struct EditUploadedSongSheet: View {
             Form {
                 Section {
                     TextField("Title", text: $title)
+                        .disabled(isSaving)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.next)
                         .accessibilityIdentifier("EditUpload.Title")
@@ -55,6 +56,7 @@ struct EditUploadedSongSheet: View {
 
                 Section {
                     TextField("Artist", text: $artist)
+                        .disabled(isSaving)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)
                         .onSubmit { if canSave { submit() } }
@@ -108,6 +110,9 @@ struct EditUploadedSongSheet: View {
 
     private func submit() {
         guard canSave else { return }
+        // The fields lock while saving; the edit is read now, not when the
+        // task first runs.
+        let edit = edit
         // One haptic per save, for its result.
         isSaving = true
         failure = nil
