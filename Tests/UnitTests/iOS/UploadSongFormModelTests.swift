@@ -212,8 +212,8 @@ struct UploadSongFormModelTests {
     @Test func serverMessageIsShownWhenThereIsOne() {
         let problem = UploadServerProblem(message: "Unsupported platform.", fieldErrors: [:])
         #expect(SongUploadFailure.server(status: 400, problem: problem).userMessage == "Unsupported platform.")
+        // Without a general message, the field's own says what to fix.
         let blank = UploadServerProblem(message: nil, fieldErrors: ["Title": ["Required."]])
-        #expect(SongUploadFailure.server(status: 400, problem: blank).userMessage
-            == SongUploadFailure.server(status: 400, problem: nil).userMessage)
+        #expect(SongUploadFailure.server(status: 400, problem: blank).userMessage == "Required.")
     }
 }
