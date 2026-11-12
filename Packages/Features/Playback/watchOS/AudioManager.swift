@@ -99,7 +99,9 @@ class AudioManager {
     /// listener has already left behind can't adopt itself when it finishes
     /// coming up on its own queue.
     private var radioStreamToken: UUID?
-    @ObservationIgnored private let audioSession = WatchAudioSessionCoordinator()
+    @ObservationIgnored private let audioSession: WatchAudioSessionCoordinator
+    @ObservationIgnored private let canPlayLocally: @MainActor () -> Bool
+    @ObservationIgnored private let startPlayer: @MainActor (AVPlayer) -> Void
     private nonisolated static let audioCacheDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
             .appendingPathComponent("AudioCache")
@@ -112,7 +114,14 @@ class AudioManager {
     /// files are evicted even when the count limit has not been reached.
     private nonisolated static let maxCacheBytes = 128 * 1024 * 1024
     private static let volumeDefaultsKey = "nk.watchVolume"
-    init() {
+    init(
+        audioSession: WatchAudioSessionCoordinator = WatchAudioSessionCoordinator(),
+        canPlayLocally: @escaping @MainActor () -> Bool = { WatchAuthManager.shared.canPlayLocally },
+        startPlayer: @escaping @MainActor (AVPlayer) -> Void = { $0.play() }
+    ) {
+        self.audioSession = audioSession
+        self.canPlayLocally = canPlayLocally
+        self.startPlayer = startPlayer
         setupRemoteCommands()
         setupInterruptionHandler()
     }
@@ -172,12 +181,10 @@ class AudioManager {
             playbackError = String(localized: "Changing audio output. Try again in a moment.")
             return true
         }
+        if canPlayLocally() { return false }
         guard WatchAuthManager.shared.output == .phone else {
-            if !WatchAuthManager.shared.canPlayLocally {
-                playbackError = "Reconnect to iPhone to finish changing output, then select Apple Watch again."
-                return true
-            }
-            return false
+            playbackError = "Reconnect to iPhone to finish changing output, then select Apple Watch again."
+            return true
         }
         let command = CompanionPlayback.Command(
             sessionID: WatchAuthManager.shared.currentPlaybackSessionID,
@@ -197,7 +204,7 @@ class AudioManager {
         companionProgressTimer = nil
         isPlaying = false
         isLoading = false
-        audioSession.invalidate()
+        audioSession.relinquish()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
@@ -265,7 +272,7 @@ class AudioManager {
         // A companion snapshot only updates presentation. It must never open a
         // player on the watch while the phone owns audio.
         if player != nil || radioStreamToken != nil { cleanupPlayer() }
-        audioSession.invalidate()
+        audioSession.relinquish()
         metadataToken = nil
         playbackRequested = false
         // Position snapshots arrive frequently. Replacing the whole queue and
@@ -459,22 +466,17 @@ class AudioManager {
     private func activatePlaybackSession(for player: AVPlayer, whenReady: Bool = false) {
         audioSession.request { [weak self, weak player] result in
             guard let self, let player, self.player === player,
-                  self.playbackRequested, WatchAuthManager.shared.canPlayLocally else { return }
+                  self.playbackRequested, self.canPlayLocally() else { return }
             switch result {
             case .success:
                 if whenReady, player.currentItem?.status != .readyToPlay { return }
-                Self.startPlayer(player)
+                self.startPlayer(player)
                 self.refreshPlaybackState()
                 self.updateNowPlayingInfo()
             case .failure:
                 self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
             }
         }
-    }
-
-    /// Keep transport ordered with pause and cleanup on the main actor.
-    private static func startPlayer(_ player: AVPlayer) {
-        player.play()
     }
 
     /// Build the radio item and player off the main actor so the buffering
@@ -491,7 +493,7 @@ class AudioManager {
             player.automaticallyWaitsToMinimizeStalling = true
             player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
             await MainActor.run { [weak self] in
-                guard let self, self.radioStreamToken == token, WatchAuthManager.shared.canPlayLocally else { return }
+                guard let self, self.radioStreamToken == token, self.canPlayLocally() else { return }
                 self.adoptRadioPlayer(player, item: playerItem)
                 if self.playbackRequested { self.activatePlaybackSession(for: player) }
             }
@@ -509,7 +511,7 @@ class AudioManager {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
                     if playbackRequested, audioSession.isActive {
-                        Self.startPlayer(player)
+                        self.startPlayer(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -639,7 +641,7 @@ class AudioManager {
                     // The session may still be coming up on its own queue; it
                     // starts playback itself when it lands.
                     if playbackRequested, audioSession.isActive {
-                        Self.startPlayer(player)
+                        self.startPlayer(player)
                     }
                     refreshPlaybackState()
                     updateNowPlayingInfo()
@@ -731,7 +733,7 @@ class AudioManager {
 
     @discardableResult
     private func resumePlayback() -> Bool {
-        guard WatchAuthManager.shared.canPlayLocally else { return false }
+        guard canPlayLocally() else { return false }
         guard let player else {
             if isLoading {
                 playbackRequested = true
@@ -1246,7 +1248,7 @@ class AudioManager {
     /// user asks. Retire the player and keep the position, so the next Play
     /// rebuilds through `resumePlayback`: the station again, or the song from
     /// `transferredPosition`.
-    private func handleMediaServicesReset() {
+    func handleMediaServicesReset() {
         audioSession.invalidate()
         shouldResumeAfterInterruption = false
         if player == nil {
@@ -1319,7 +1321,7 @@ class AudioManager {
         }
     }
 
-    private func audioSessionInterruptionBegan() {
+    func audioSessionInterruptionBegan() {
         // The system takes the session away with the interruption, so the
         // next resume has to bring it back up rather than assume it is there.
         audioSession.invalidate()
