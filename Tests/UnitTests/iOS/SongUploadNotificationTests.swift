@@ -65,7 +65,8 @@ struct SongUploadNotificationTests {
         let (id, taskID) = await startedUpload(controller)
         finish(taskID)
         await waitUntil { isFinished(controller, id) }
-        try? await Task.sleep(for: .milliseconds(20))
+        // Any notification would be posting by now; wait for those to end.
+        await controller.finishNotifications()
         #expect(harness.notifications.isEmpty)
     }
 
@@ -77,7 +78,8 @@ struct SongUploadNotificationTests {
         let (id, taskID) = await startedUpload(controller)
         finish(taskID)
         await waitUntil { isFinished(controller, id) }
-        try? await Task.sleep(for: .milliseconds(20))
+        // Any notification would be posting by now; wait for those to end.
+        await controller.finishNotifications()
         #expect(harness.notifications.isEmpty)
     }
 
@@ -108,7 +110,7 @@ struct SongUploadNotificationTests {
         let (_, otherTask) = await startedUpload(controller, file: URL(fileURLWithPath: "/picked/Other.m4a"))
         finish(otherTask, status: 400)
         await waitUntil { harness.notifications.count == 2 }
-        try? await Task.sleep(for: .milliseconds(30))
+        await controller.finishNotifications()
         #expect(harness.notifications.count == 2)
         #expect(Set(harness.notifications.map(\.identifier)).count == 2)
     }
