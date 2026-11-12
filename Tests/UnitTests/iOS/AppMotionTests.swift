@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Twinskaraoke
 
@@ -53,5 +54,12 @@ struct AppMotionTests {
         #expect(!reduces(.fair))
         #expect(reduces(.serious))
         #expect(reduces(.critical))
+    }
+
+    @Test("The cross-fade token is a short ease, not one of the springs")
+    func crossFadeIsAnEaseNotASpring() {
+        #expect(AppMotion.crossFade == .easeInOut(duration: 0.25))
+        #expect(AppMotion.crossFade != AppMotion.standard)
+        #expect(AppMotion.crossFade != AppMotion.quick)
     }
 }
