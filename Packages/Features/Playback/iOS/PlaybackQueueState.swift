@@ -95,6 +95,7 @@ nonisolated struct PlaybackQueueState: Equatable, Sendable, Codable {
     mutating func clear() {
         entries = []
         originalEntries = []
+        isShuffled = false
         currentEntryID = nil
         repeatsCollection = nil
     }

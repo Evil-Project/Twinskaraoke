@@ -2329,13 +2329,11 @@ final class AudioPlayerManager {
     /// shuffled one. The songs skipped over stay behind the new current song,
     /// where Previous reaches them.
     func skipToQueuedSong(_ song: Song) { // play(song:), keeping the queue's playlist for play counts
-        queueState.selectSingleSong()
         play(song: song, resetTransitionVolume: true, queueEntryID: queueState.entry(for: song)?.id)
     }
 
     func skipToQueuedEntry(_ entry: PlaybackQueueState.Entry) {
         guard queueState.containsEntry(entry.id) else { return }
-        queueState.selectSingleSong()
         play(song: entry.song, resetTransitionVolume: true, queueEntryID: entry.id)
     }
 

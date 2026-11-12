@@ -321,6 +321,19 @@ struct PlaybackQueueStateTests {
         #expect(state.upNext(after: songs[2]).first?.id == incoming.id)
     }
 
+    @Test func clearingQueueResetsShuffle() {
+        let songs = fixtures(3)
+        var state = PlaybackQueueState()
+        state.beginInOrder(context: songs)
+        state.toggleShuffle(current: songs[0])
+        #expect(state.isShuffled)
+
+        state.clear()
+        #expect(!state.isShuffled)
+        state.replaceContext(songs, current: songs[2])
+        #expect(state.items == songs)
+    }
+
     private func fixtures(_ count: Int) -> [Song] {
         (0..<count).map { index in
             Song(

@@ -254,6 +254,31 @@ struct SystemIntentPlaybackTests {
         #expect(player.queue == queue)
     }
 
+    @Test(arguments: [true, false])
+    func selectingUpNextPreservesRepeatAll(selectByEntry: Bool) throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        let songs = try (0..<3).map { try cachedSong(index: $0) }
+        defer {
+            player.pauseIfPlaying()
+            player.repeatMode = .off
+            player.aiEnabled = previousAI
+            for song in songs { AudioCacheStore.removeSongCache(for: song.id) }
+        }
+        player.aiEnabled = false
+        player.repeatMode = .all
+        player.playInOrder(song: songs[0], context: songs)
+        let selected = try #require(player.upNextEntries.last)
+        if selectByEntry {
+            player.skipToQueuedEntry(selected)
+        } else {
+            player.skipToQueuedSong(selected.song)
+        }
+        #expect(player.currentSong?.id == songs[2].id)
+        player.playNextOrRandom()
+        #expect(player.currentSong?.id == songs[0].id)
+    }
+
     @Test(
         "Removing an audible crossfade target keeps the remaining queue",
         .enabled(if: audioOutputAvailable, "Needs an audio output device.")
