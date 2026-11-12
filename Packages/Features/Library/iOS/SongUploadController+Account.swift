@@ -32,6 +32,40 @@ extension SongUploadController {
         return true
     }
 
+    /// After a relaunch, an upload another account started is never listed:
+    /// one still running finishes unseen, any other is dropped with its
+    /// staged body. An account that can't be told on either side sets
+    /// nothing aside. Returns whether `entry` was set aside.
+    func setAsideForAnotherAccount(_ entry: PendingUpload, current: String?, running: Bool) -> Bool {
+        guard let started = entry.account, let current, started != current else { return false }
+        if running {
+            records[entry.id] = Record(
+                source: nil,
+                key: "staged:\(entry.id)",
+                staged: entry.staged(),
+                taskID: entry.taskID,
+                knownSongIDs: entry.knownSongIDs,
+                account: started,
+                endsUnseen: true
+            )
+        } else {
+            service.discard(entry.staged())
+            service.outbox.remove(id: entry.id)
+        }
+        DebugLogger.log("Upload of another account set aside after relaunch", category: .network)
+        return true
+    }
+
+    /// The transfer of an upload set aside for another account ended: no
+    /// banner, notification or retry, just its body and outbox entry gone.
+    func endUnseen(_ id: UUID, taskID: Int) {
+        if let staged = records.removeValue(forKey: id)?.staged {
+            service.discard(staged)
+            service.outbox.remove(id: staged.id)
+        }
+        service.transport.acknowledge(taskID)
+    }
+
     /// After a sign-in, sign-out or account switch, the previous account's
     /// waiting and ended uploads leave the list with their staged bodies. One
     /// already running finishes under the token it was sent with (or is

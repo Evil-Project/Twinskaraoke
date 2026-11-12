@@ -49,6 +49,9 @@ final class SongUploadController {
         /// Started by an account that has since signed out: the upload is
         /// dropped from the list when it ends.
         var leavesListWhenEnded = false
+        /// Restored for an account other than the current one: never listed,
+        /// and it ends without a message.
+        var endsUnseen = false
     }
 
     @ObservationIgnored let service: Service
@@ -370,7 +373,13 @@ final class SongUploadController {
         startEventLoop()
         let active = await service.transport.activeTaskIDs()
         var vanished: [UUID] = []
+        let current = service.currentAccount()
         for entry in entries where records[entry.id] == nil {
+            let running = entry.taskID.map(active.contains) ?? false
+            if setAsideForAnotherAccount(entry, current: current, running: running) {
+                if running, let taskID = entry.taskID { replayUnclaimedEvents(for: taskID) }
+                continue
+            }
             records[entry.id] = Record(
                 source: nil,
                 key: "staged:\(entry.id)",
@@ -379,7 +388,6 @@ final class SongUploadController {
                 knownSongIDs: entry.knownSongIDs,
                 account: entry.account
             )
-            let running = entry.taskID.map(active.contains) ?? false
             uploads.append(Item(id: entry.id, title: entry.title, kind: .file, phase: running ? .uploading(0) : .finishing))
             if let taskID = entry.taskID { replayUnclaimedEvents(for: taskID) }
             if !running { vanished.append(entry.id) }
@@ -428,6 +436,10 @@ final class SongUploadController {
             }
             unclaimedEvents[taskID, default: []].append(event)
             return
+        }
+        if records[id]?.endsUnseen == true {
+            if case .progress = event { return }
+            return endUnseen(id, taskID: taskID)
         }
         switch event {
         case let .progress(_, fraction):

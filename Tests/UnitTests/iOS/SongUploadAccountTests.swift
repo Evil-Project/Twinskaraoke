@@ -41,6 +41,78 @@ struct SongUploadAccountTests {
         return (id, controller.records[id ?? UUID()]?.taskID ?? -1)
     }
 
+    private func pending(taskID: Int, account: String?) -> PendingUpload {
+        let id = UUID()
+        let staged = StagedUpload(
+            id: id,
+            fileURL: URL(fileURLWithPath: "/staged/\(id.uuidString).upload"),
+            bodyBytes: 1200,
+            sourceBytes: 1000,
+            filename: "Song.mp3",
+            contentType: "audio/mpeg",
+            boundary: "B"
+        )
+        return PendingUpload(
+            staged: staged, taskID: taskID, title: "Away", startedAt: Date(), knownSongIDs: ["old"], account: account
+        )
+    }
+
+    // MARK: - Relaunch
+
+    @Test("After a relaunch, another account's ended upload is dropped with its body")
+    func restoreDropsAnotherAccountsEndedUpload() async {
+        let entry = pending(taskID: 9, account: "account-a")
+        harness.outbox.save(entry)
+        harness.account = "account-b"
+        let controller = harness.controller()
+        await controller.resume()
+        #expect(controller.uploads.isEmpty)
+        #expect(controller.records.isEmpty)
+        #expect(harness.outbox.entries().isEmpty)
+        #expect(harness.discarded == [entry.id])
+    }
+
+    @Test("After a relaunch, another account's running transfer finishes unseen")
+    func restoreFinishesAnotherAccountsTransferUnseen() async {
+        let entry = pending(taskID: 7, account: "account-a")
+        harness.outbox.save(entry)
+        harness.transport.state.withLock { $0.active = [7] }
+        harness.account = "account-b"
+        let controller = harness.controller()
+        await controller.resume()
+        #expect(controller.uploads.isEmpty)
+        #expect(harness.discarded.isEmpty)
+
+        harness.transport.send(.progress(taskID: 7, fraction: 1))
+        harness.transport.send(.finished(taskID: 7, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [7] }
+        #expect(controller.uploads.isEmpty)
+        #expect(controller.latestCompletion == nil)
+        #expect(controller.completedUploads == 0)
+        #expect(harness.invalidations == 0)
+        #expect(harness.outbox.entries().isEmpty)
+        #expect(harness.discarded == [entry.id])
+        #expect(controller.records.isEmpty)
+    }
+
+    @Test("After a relaunch, an upload still shows when either account can't be told")
+    func restoreKeepsUploadWhenAccountUnknown() async {
+        harness.outbox.save(pending(taskID: 7, account: "account-a"))
+        harness.outbox.save(pending(taskID: 8, account: nil))
+        harness.transport.state.withLock { $0.active = [7, 8] }
+        harness.account = nil
+        let first = harness.controller()
+        await first.resume()
+        #expect(first.uploads.count == 2)
+
+        harness.account = "account-b"
+        let second = harness.controller()
+        await second.resume()
+        #expect(second.uploads.map(\.title) == ["Away"])
+    }
+
+    // MARK: - Sending
+
     @Test("A queued upload isn't sent after the account changed")
     func queuedUploadIsNotSentAfterAccountChange() async {
         let controller = harness.controller()
