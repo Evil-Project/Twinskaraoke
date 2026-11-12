@@ -78,6 +78,7 @@ struct SongUploadAccountTests {
         harness.outbox.save(entry)
         harness.transport.state.withLock { $0.active = [7] }
         harness.account = "account-b"
+        harness.appIsActive = false
         let controller = harness.controller()
         await controller.resume()
         #expect(controller.uploads.isEmpty)
@@ -93,6 +94,8 @@ struct SongUploadAccountTests {
         #expect(harness.outbox.entries().isEmpty)
         #expect(harness.discarded == [entry.id])
         #expect(controller.records.isEmpty)
+        await controller.finishNotifications()
+        #expect(harness.notifications.isEmpty)
     }
 
     @Test("After a relaunch, an upload still shows when either account can't be told")
