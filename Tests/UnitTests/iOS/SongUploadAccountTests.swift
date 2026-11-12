@@ -74,8 +74,8 @@ struct SongUploadAccountTests {
         harness.transport.send(.finished(taskID: taskID, status: 500, body: Data(), contentType: nil, retryAfter: nil))
         await waitUntil { isFinished(controller, id) }
         harness.account = "account-b"
+        // The refusal is synchronous: nothing is queued, so nothing can start.
         controller.retry(try #require(id))
-        try? await Task.sleep(for: .milliseconds(20))
         #expect(phase(controller, id) == .failed(.signedOut))
         #expect(harness.transport.started.count == 1)
     }
