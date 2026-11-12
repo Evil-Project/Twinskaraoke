@@ -242,7 +242,7 @@ nonisolated extension KaraokeAPIClient {
     /// sent (offline, signed out) or the server refused it with a 4xx.
     private static func mayHaveChangedServer(_ failure: SongUploadFailure?) -> Bool {
         switch failure {
-        case .signedOut, .offline, .rateLimited, .quotaSongs, .quotaStorage, .fileUnreadable:
+        case .signedOut, .offline, .rateLimited, .quotaSongs, .quotaStorage, .fileUnreadable, .unsupportedLink:
             false
         case let .server(status, _):
             !(400..<500).contains(status)

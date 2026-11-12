@@ -1,0 +1,315 @@
+import Foundation
+import Synchronization
+import Testing
+@testable import Twinskaraoke
+
+/// Outcomes that don't say whether the song arrived, and the moments an
+/// upload can no longer be cancelled.
+@MainActor
+@Suite("Song upload settling")
+struct SongUploadSettlingTests {
+    typealias Harness = SongUploadControllerTests.Harness
+
+    private let harness = Harness()
+    private let song = URL(fileURLWithPath: "/picked/Song.mp3")
+    private let metadata = SongUploadMetadata(title: "", artist: "Neuro", playlistID: nil)
+
+    private func waitUntil(
+        _ condition: @MainActor () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        for _ in 0..<2000 where !condition() {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(condition(), "timed out", sourceLocation: sourceLocation)
+    }
+
+    private func phase(_ controller: SongUploadController, _ id: UUID?) -> SongUploadItem.Phase? {
+        controller.uploads.first { $0.id == id }?.phase
+    }
+
+    private func isFinished(_ controller: SongUploadController, _ id: UUID?) -> Bool {
+        phase(controller, id)?.isFinished == true
+    }
+
+    /// Starts `file` and waits until the transport has its task.
+    private func startedUpload(_ controller: SongUploadController, file: URL? = nil) async -> (UUID?, Int) {
+        let before = harness.transport.started.count
+        let id = controller.uploadFile(at: file ?? song, metadata: metadata)
+        await waitUntil { harness.transport.started.count > before && controller.records[id ?? UUID()]?.taskID != nil }
+        return (id, controller.records[id ?? UUID()]?.taskID ?? -1)
+    }
+
+    private func failedWithServerError(_ phase: SongUploadItem.Phase?, status: Int) -> Bool {
+        if case let .failed(.server(actual, _)) = phase { actual == status } else { false }
+    }
+
+    // MARK: - Server errors
+
+    @Test("A 5xx counts as success when the server has a new song")
+    func serverErrorWithNewSongCountsAsSuccess() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.songs["new"] = "Song"
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(harness.discarded == [try #require(harness.staged.first).id])
+        #expect(controller.completedUploads == 1)
+    }
+
+    @Test("A new song with another title, such as one added from another device, isn't this upload")
+    func newSongWithAnotherTitleIsNotThisUpload() async {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.songs["other"] = "From Another Device"
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        #expect(controller.completedUploads == 0)
+    }
+
+    @Test("The title is compared as it was sent, without surrounding spaces")
+    func newSongMatchesTrimmedTitle() async {
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: SongUploadMetadata(title: "  My Song ", artist: "", playlistID: nil))
+        await waitUntil { harness.transport.started.count == 1 && controller.records[id ?? UUID()]?.taskID != nil }
+        let taskID = controller.records[id ?? UUID()]?.taskID ?? -1
+        harness.songs["other"] = "Another"
+        harness.songs["new"] = "My Song"
+        harness.transport.send(.failed(taskID: taskID, .urlError(.timedOut)))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "  My Song "))
+    }
+
+    @Test("A 5xx without a new song fails and keeps the body for a retry")
+    func serverErrorWithoutNewSongFails() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.transport.send(.finished(taskID: taskID, status: 500, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 500))
+        #expect(harness.discarded.isEmpty)
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 2 }
+    }
+
+    @Test("A 4xx fails without asking the server's list")
+    func clientErrorFailsAtOnce() async {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        harness.songs["new"] = "Song"
+        harness.transport.send(.finished(taskID: taskID, status: 400, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 400))
+    }
+
+    // MARK: - One settlement at a time
+
+    @Test("A real answer that arrives during a vanished upload's reconciliation wins, once")
+    func lateAnswerWinsOverVanishedReconciliation() async throws {
+        let id = UUID()
+        let staged = StagedUpload(
+            id: id,
+            fileURL: URL(fileURLWithPath: "/staged/\(id.uuidString).upload"),
+            bodyBytes: 1200,
+            sourceBytes: 1000,
+            filename: "Song.mp3",
+            contentType: "audio/mpeg",
+            boundary: "B"
+        )
+        harness.outbox.save(PendingUpload(
+            staged: staged, taskID: 9, title: "Away", startedAt: Date(), knownSongIDs: ["old"], account: "account-a"
+        ))
+        var release: CheckedContinuation<Void, Never>?
+        harness.songListHold = { await withCheckedContinuation { release = $0 } }
+        let controller = harness.controller()
+        await controller.resume()
+        // The task is gone, so the list is asked; hold it there.
+        await waitUntil { release != nil }
+
+        harness.transport.send(.finished(taskID: 9, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { controller.uploads.first?.phase.isFinished == true }
+        #expect(controller.uploads.first?.phase == .succeeded(title: "Away"))
+
+        // The list, without the song, comes back late: it changes nothing.
+        harness.songListHold = nil
+        release?.resume()
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [9] }
+        // The list's caller runs on to its end without suspending again.
+        await waitUntil { harness.songListAnswers == 1 }
+        #expect(controller.uploads.first?.phase == .succeeded(title: "Away"))
+        #expect(controller.completedUploads == 1)
+        #expect(controller.latestCompletion?.succeeded == true)
+        #expect(harness.invalidations == 1)
+    }
+
+    // MARK: - Unconfirmed endings
+
+    /// An upload whose 503 couldn't be checked against the list.
+    private func unconfirmedUpload(_ controller: SongUploadController) async -> UUID? {
+        let (id, taskID) = await startedUpload(controller)
+        harness.songListError = URLError(.notConnectedToInternet)
+        harness.transport.send(.finished(taskID: taskID, status: 503, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        return id
+    }
+
+    @Test("When the list can't tell, a retry finds the song and sends nothing")
+    func unconfirmedRetryFindsSongWithoutResending() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        harness.songListError = nil
+        harness.songs["new"] = "Song"
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(harness.transport.started.count == 1)
+        #expect(controller.completedUploads == 1)
+    }
+
+    @Test("When the list can't tell, a retry that finds nothing sends once")
+    func unconfirmedRetryWithoutSongSendsOnce() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 2 && controller.records[id ?? UUID()]?.taskID != nil }
+        #expect(phase(controller, id) == .uploading(0))
+        #expect(harness.stageCalls == 1)
+    }
+
+    @Test("While the list keeps failing, a retry sends nothing")
+    func unconfirmedRetryWhileListFailsSendsNothing() async throws {
+        let controller = harness.controller()
+        let id = await unconfirmedUpload(controller)
+        let calls = harness.songListCalls
+        controller.retry(try #require(id))
+        await waitUntil { isFinished(controller, id) }
+        #expect(failedWithServerError(phase(controller, id), status: 503))
+        #expect(harness.songListCalls == calls + 1)
+        #expect(harness.transport.started.count == 1)
+
+        // Still unconfirmed: the next retry asks again.
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 2 }
+        #expect(harness.songListCalls == calls + 2)
+    }
+
+    // MARK: - Baseline
+
+    @Test("Without the list of uploads from before, no file is sent and no link imported")
+    func missingBaselineFailsBeforeSending() async throws {
+        harness.songListError = URLError(.notConnectedToInternet)
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.offline))
+        #expect(harness.stageCalls == 0)
+        #expect(harness.transport.started.isEmpty)
+
+        harness.songListError = KaraokeAPIClient.APIError.decodeFailed
+        let link = controller.importLink("https://youtu.be/a")
+        await waitUntil { isFinished(controller, link) }
+        #expect(phase(controller, link) == .failed(.interrupted))
+        #expect(harness.importCalls == 0)
+
+        harness.songListError = nil
+        controller.retry(try #require(id))
+        await waitUntil { harness.transport.started.count == 1 }
+    }
+
+    @Test("Limits that can't be loaded still don't block once the list loads")
+    func limitsFailureStillDoesNotBlock() async {
+        harness.limits = { throw URLError(.notConnectedToInternet) }
+        let controller = harness.controller()
+        let id = controller.uploadFile(at: song, metadata: metadata)
+        await waitUntil { harness.transport.started.count == 1 }
+        #expect(phase(controller, id) == .uploading(0))
+    }
+
+    // MARK: - Cancel
+
+    @Test("Cancel is ignored once the server's answer arrived")
+    func cancelIsIgnoredOnceTheAnswerArrived() async throws {
+        let controller = harness.controller()
+        let (id, taskID) = await startedUpload(controller)
+        var release: CheckedContinuation<Void, Never>?
+        harness.invalidationHold = { await withCheckedContinuation { release = $0 } }
+        harness.transport.send(.finished(taskID: taskID, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        await waitUntil { release != nil }
+
+        controller.cancel(try #require(id))
+        #expect(phase(controller, id) == .finishing)
+        release?.resume()
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "Song"))
+        #expect(controller.completedUploads == 1)
+        #expect(harness.transport.state.withLock { $0.cancelled }.isEmpty)
+    }
+
+    // MARK: - Background wake
+
+    @Test("A background wake with an empty outbox acknowledges orphan events")
+    func backgroundWakeWithEmptyOutboxAcknowledgesOrphanEvents() async {
+        harness.transport.send(.finished(taskID: 9, status: 200, body: Data(), contentType: nil, retryAfter: nil))
+        let controller = harness.controller()
+        await controller.handleBackgroundEvents()
+        await waitUntil { harness.transport.state.withLock { $0.acknowledged } == [9] }
+        #expect(controller.uploads.isEmpty)
+    }
+
+    // MARK: - Link imports
+
+    @Test("An interrupted link import that landed counts as success")
+    func interruptedLinkImportThatLandedSucceeds() async {
+        harness.importResult = { [harness] in
+            harness.songs["new"] = "Linked Song"
+            throw URLError(.cancelled)
+        }
+        let controller = harness.controller()
+        let id = controller.importLink("https://youtu.be/a")
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .succeeded(title: "https://youtu.be/a"))
+        #expect(controller.completedUploads == 1)
+    }
+
+    @Test("An interrupted link import without a new song fails retryably")
+    func interruptedLinkImportWithoutNewSongFails() async {
+        harness.importResult = { throw URLError(.cancelled) }
+        let controller = harness.controller()
+        let id = controller.importLink("https://youtu.be/a")
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.interrupted))
+        #expect(controller.completedUploads == 0)
+    }
+
+    @Test("A timed-out or 5xx link import that landed counts as success")
+    func timedOutLinkImportThatLandedSucceeds() async {
+        for failure in [SongUploadFailure.timedOut, .server(status: 504, problem: nil)] {
+            harness.songs = ["old": "Old Song"]
+            harness.importResult = { [harness] in
+                harness.songs["new"] = "Linked Song"
+                throw failure
+            }
+            let controller = harness.controller()
+            let id = controller.importLink("https://youtu.be/a")
+            await waitUntil { isFinished(controller, id) }
+            #expect(phase(controller, id) == .succeeded(title: "https://youtu.be/a"), "\(failure)")
+        }
+    }
+
+    @Test("A link import the server refused fails without asking the list")
+    func refusedLinkImportFails() async {
+        harness.importResult = { [harness] in
+            harness.songs["new"] = "Linked Song"
+            throw SongUploadFailure.server(status: 400, problem: nil)
+        }
+        let controller = harness.controller()
+        let id = controller.importLink("https://youtu.be/a")
+        await waitUntil { isFinished(controller, id) }
+        #expect(phase(controller, id) == .failed(.server(status: 400, problem: nil)))
+    }
+}
