@@ -85,6 +85,41 @@ a copy of its specs and a Markdown reference generated from them.
   (including the China mirrors) are in
   `Packages/Core/Configuration/Apple/StorageHost.swift`.
 
+## SwiftUI skill (mandatory)
+
+The `swiftui-pro` skill is in `.agents/skills/swiftui-pro/` (pinned in
+`skills-lock.json`; `.claude/skills/swiftui-pro` links to it). Use it for
+every task that writes, changes or reviews SwiftUI code: views, view
+modifiers, navigation, toolbars, sheets, animations and the `@Observable`
+state those views read.
+
+- Load it before you write the plan. Claude Code: invoke the `swiftui-pro`
+  skill. Tools without skill support: read
+  `.agents/skills/swiftui-pro/SKILL.md`, then the files in `references/` it
+  names for the area you work on. Don't apply its rules from memory.
+- Writing code: every line you add or change follows the skill's rules.
+- Before `Scripts/verify.sh`: run the skill's review process over your diff
+  and fix what it finds in the lines you touched.
+- Findings in code you didn't change are not part of the task. List them in
+  your reply or the PR; don't fix them (one PR = one concern).
+- The skill assumes a new iOS 27 app built with Xcode 27. This project
+  doesn't: read the deployment target and the Xcode version CI builds with
+  before you use anything the skill ties to a version (`@ContentBuilder`,
+  `alert(_:item:)`, `ForEach` in `toolbar()`, the iOS 27 and 27.1 APIs).
+  Never raise a deployment target to satisfy the skill. Newer APIs go behind
+  `#available` with the current behavior as the fallback.
+- Its examples are for iOS. `Apple/` code also builds for watchOS, tvOS and
+  macOS, so check that an API exists on each of them.
+- When the skill and this file (or a nearer `AGENTS.md`) disagree, this file
+  wins: design system tokens, localization, large-file limits, formatting,
+  dependencies and the approval rule for navigation all stay as written here.
+- Never edit the files in `.agents/skills/`. They are a third-party copy;
+  update them from their source (named in `skills-lock.json`) in a separate
+  PR.
+- In the PR, write under "AI assistance" that `swiftui-pro` was applied, and
+  list the skill rules you chose not to follow, each with its reason. A PR
+  without SwiftUI changes says so instead.
+
 ## Code rules
 
 - Observable state: `@MainActor @Observable final class` (not
