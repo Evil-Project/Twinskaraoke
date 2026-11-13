@@ -158,6 +158,12 @@ struct PlayerView: View {
             .sheet(isPresented: $showSongOptions) {
                 NavigationStack {
                     List {
+                        if auth.isPlayingDownloadsIndependently {
+                            Button("Return to iPhone Playback", systemImage: "iphone") {
+                                showSongOptions = false
+                                auth.endIndependentDownloads()
+                            }
+                        }
                         if !audioManager.isRadioMode {
                             WatchDownloadMenu(song: song)
                             if auth.linkState == .signedIn {
@@ -471,9 +477,9 @@ struct PlayerView: View {
     }
 
     private var systemVolumeControl: some View {
-        WatchSystemVolumeControl(owner: WatchAuthManager.shared.output,
+        WatchSystemVolumeControl(owner: auth.crownVolumeOwner,
                                  isFocused: page == .nowPlaying && !showOutputOptions && !showSongOptions)
-            .id(WatchAuthManager.shared.output)
+            .id(auth.crownVolumeOwner)
             .frame(width: 40, height: 40)
             .scaleEffect(0.65)
             .accessibilityLabel("Volume")

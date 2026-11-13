@@ -131,14 +131,17 @@ class AudioManager {
         WatchAuthManager.shared.localPlaybackDidChange()
     }
 
+    private var independentDownloads: Bool { WatchAuthManager.shared.isPlayingDownloadsIndependently }
+    private var canOutputAudio: Bool { independentDownloads || canPlayLocally() }
+
     func setSleepTimer(minutes: Int? = nil, endOfSong: Bool = false) {
-        if WatchAuthManager.shared.output == .phone {
+        if !independentDownloads, WatchAuthManager.shared.output == .phone {
             _ = WatchAuthManager.shared.sendPlaybackCommand(CompanionPlayback.Command(
                 sessionID: WatchAuthManager.shared.currentPlaybackSessionID,
                 action: .sleepTimer, sleepMinutes: minutes, sleepAtEndOfSong: endOfSong))
             return
         }
-        guard WatchAuthManager.shared.canPlayLocally else { return }
+        guard canOutputAudio else { return }
         sleepTimer.cancel()
         if endOfSong { sleepTimer.startEndOfSong() }
         else if let minutes { sleepTimer.start(minutes: minutes) }
@@ -177,6 +180,7 @@ class AudioManager {
         artworkURL: URL? = nil,
         shuffleEnabled: Bool? = nil
     ) -> Bool {
+        if independentDownloads { return false }
         if WatchAuthManager.shared.changingOutput {
             playbackError = String(localized: "Changing audio output. Try again in a moment.")
             return true
@@ -209,7 +213,9 @@ class AudioManager {
     }
 
     func clearAccountPlayback() {
+        WatchAuthManager.shared.resetIndependentDownloads()
         stopForOutputTransfer()
+        playbackError = nil
         currentSong = nil
         queue = []
         currentIndex = 0
@@ -342,9 +348,14 @@ class AudioManager {
     }
 
     func play(song: Song, context: [Song] = [], shuffled: Bool? = nil) {
+        if independentDownloads, WatchDownloads.shared.localURL(for: song.id) == nil {
+            playbackError = String(localized: "Choose a saved download or return to iPhone playback.")
+            return
+        }
         if let shuffled { isShuffleOn = shuffled }
         transferredPosition = nil
         var playbackQueue = context.isEmpty ? [song] : context
+        if independentDownloads { playbackQueue = playbackQueue.filter { WatchDownloads.shared.localURL(for: $0.id) != nil } }
         if let index = playbackQueue.firstIndex(of: song) {
             currentIndex = index
         } else {
@@ -372,6 +383,10 @@ class AudioManager {
     func playSong(at index: Int, context: [Song]) {
         transferredPosition = nil
         guard context.indices.contains(index) else { return }
+        if independentDownloads {
+            play(song: context[index], context: context)
+            return
+        }
         queue = context
         currentIndex = index
         currentSong = context[index]
@@ -405,6 +420,10 @@ class AudioManager {
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
         playbackError = nil
+        if independentDownloads {
+            playbackError = String(localized: "Choose a saved download or return to iPhone playback.")
+            return
+        }
         if sendToPhone(.radio, song: song, streamURL: streamURL, artworkURL: artworkURL) {
             if playbackError == nil {
                 currentSong = song
@@ -466,7 +485,7 @@ class AudioManager {
     private func activatePlaybackSession(for player: AVPlayer, whenReady: Bool = false) {
         audioSession.request { [weak self, weak player] result in
             guard let self, let player, self.player === player,
-                  self.playbackRequested, self.canPlayLocally() else { return }
+                  self.playbackRequested, self.canOutputAudio else { return }
             switch result {
             case .success:
                 if whenReady, player.currentItem?.status != .readyToPlay { return }
@@ -529,7 +548,7 @@ class AudioManager {
     }
 
     private func prepareAndPlay() {
-        guard WatchAuthManager.shared.canPlayLocally else { return }
+        guard canOutputAudio else { return }
         companionProgressTimer?.invalidate()
         companionProgressTimer = nil
         // Any ordinary song leaves the station behind; this is the single
@@ -553,7 +572,12 @@ class AudioManager {
         // Every play path funnels through here, so recents are recorded once
         // rather than at each of the four call sites that set `currentSong`.
         RecentlyPlayedStore.shared.record(song)
-        let localURL = WatchDownloads.shared.localURL(for: song.id) ?? localCacheURL(for: song.id)
+        let download = WatchDownloads.shared.localURL(for: song.id)
+        if independentDownloads, download == nil {
+            failPlayback(String(localized: "Choose a saved download or return to iPhone playback."))
+            return
+        }
+        let localURL = download ?? localCacheURL(for: song.id)
         if FileManager.default.fileExists(atPath: localURL.path) {
             isLoading = true
             validateCacheAndPlay(song: song, cacheURL: localURL)
@@ -592,7 +616,7 @@ class AudioManager {
     // background URLSession download service, rather than a foreground task
     // that can stall or be suspended before an entire song is downloaded.
     private func setupPlayer(with localURL: URL) {
-        guard WatchAuthManager.shared.canPlayLocally else { return }
+        guard canOutputAudio, !independentDownloads || localURL.isFileURL else { return }
         guard playbackRequested else {
             // Paused, by an interruption say, while this song's cache was
             // validating or its metadata loading. That work has now ended, so
@@ -733,7 +757,7 @@ class AudioManager {
 
     @discardableResult
     private func resumePlayback() -> Bool {
-        guard canPlayLocally() else { return false }
+        guard canOutputAudio else { return false }
         guard let player else {
             if isLoading {
                 playbackRequested = true
@@ -1009,7 +1033,7 @@ class AudioManager {
     }
 
     func clearAllDownloadedAudio(downloads: WatchDownloads = .shared, cacheDirectory: URL? = nil) {
-        if WatchAuthManager.shared.output == .watch {
+        if canOutputAudio {
             _ = pausePlayback()
             cleanupPlayer()
             isLoading = false
@@ -1079,8 +1103,10 @@ class AudioManager {
 
     private func validateCacheAndPlay(song: Song, cacheURL: URL) {
         let songID = song.id
+        let independentSession = WatchAuthManager.shared.independentDownloadsSession
         validateCachedFile(at: cacheURL, expectedDuration: song.duration) { [weak self] valid in
             guard let self,
+                  independentSession == WatchAuthManager.shared.independentDownloadsSession,
                   currentSong?.id == songID,
                   playbackRequested || isLoading
             else { return }
@@ -1092,7 +1118,7 @@ class AudioManager {
                 setupPlayer(with: cacheURL)
                 return
             }
-            if cacheURL == WatchDownloads.shared.localURL(for: songID) {
+            if independentDownloads || cacheURL == WatchDownloads.shared.localURL(for: songID) {
                 WatchDownloads.shared.invalidate(songID)
                 failPlayback("The download is damaged. Connect to the internet and choose Retry Download.")
                 return
@@ -1109,7 +1135,7 @@ class AudioManager {
 
     @discardableResult
     private func recoverFromBrokenCache(playbackURL: URL) -> Bool {
-        guard playbackURL.path.hasPrefix(AudioManager.audioCacheDir.path),
+        guard !independentDownloads, playbackURL.path.hasPrefix(AudioManager.audioCacheDir.path),
               let song = currentSong,
               !recoveringFromBrokenCache.contains(song.id),
               let remoteURL = song.audioURL
@@ -1357,7 +1383,7 @@ class AudioManager {
 
     private func updateNowPlayingInfo() {
         WatchAuthManager.shared.localPlaybackDidChange()
-        guard WatchAuthManager.shared.canPlayLocally else {
+        guard canOutputAudio else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
         }

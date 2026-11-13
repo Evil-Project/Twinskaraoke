@@ -10161,6 +10161,12 @@
     "Choose a playlist in the Control Center control settings." : {
 
     },
+    "Choose a saved download or return to iPhone playback." : {
+
+    },
+    "Choose Apple Watch as the playback device to play these downloads." : {
+
+    },
     "Choose a song from Home, Songs, or Search." : {
       "localizations" : {
         "de" : {
@@ -35519,6 +35525,9 @@
         }
       }
     },
+    "Play on This Watch" : {
+
+    },
     "Play playlist" : {
       "localizations" : {
         "de" : {
@@ -43500,6 +43509,9 @@
           }
         }
       }
+    },
+    "Return to iPhone Playback" : {
+
     },
     "Retry" : {
       "localizations" : {
@@ -55567,6 +55579,9 @@
           }
         }
       }
+    },
+    "This plays the saved song without changing playback on your iPhone." : {
+
     },
     "This song has no playable audio." : {
       "localizations" : {

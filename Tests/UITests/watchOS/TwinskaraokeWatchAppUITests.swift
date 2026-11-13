@@ -262,6 +262,23 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         saveScreenshot(app, name: "Watch Offline Download Playback")
     }
 
+    func testWatchDownloadsCanPlayWithoutTakingOverPhone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1", "-UITestDownloadedAudio", "-UITestPhoneOwnsPlayback"]
+        app.launch()
+        defer { app.terminate() }
+        scrollToVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+        openVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+        XCTAssertTrue(app.buttons["Wake Me Up Before You Go-Go"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Wake Me Up Before You Go-Go"].firstMatch.tap()
+        app.buttons["Play on This Watch"].tap()
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 15),
+                      "Persisted watch downloads must play without a phone or remote audio URL.")
+        app.buttons["Next Track"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
+        saveScreenshot(app, name: "Watch Independent Download Playback")
+    }
+
     func testWatchAccountClearsPersistentDownloads() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestDownloadedAudio"]
