@@ -60,6 +60,11 @@ Markdown reference, which is what AI agents read. After the API changes, run
 - Shared Claude Code commands live in `.claude/commands/`. Using another tool?
   The files are plain Markdown — tell your agent "follow
   `.claude/commands/plan-issue.md` for issue #42".
+- `.claude/settings.json` holds the shared Claude Code hooks: a guard that
+  blocks commits on `main` and edits to generated or third-party files, and
+  asks before edits to the Xcode project, CI or `AGENTS.md`. `.mcp.json`
+  offers the Sosumi MCP server for Apple's documentation. Personal settings
+  go in `.claude/settings.local.json` (gitignored).
 - You own every line you submit, generated or not. Read the whole diff before
   you ask for review.
 
