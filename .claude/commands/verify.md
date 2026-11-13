@@ -3,9 +3,10 @@ description: Run Scripts/verify.sh and fix what fails
 argument-hint: "[--quick | --lint]"
 ---
 
-If your diff has SwiftUI code and you haven't run the `swiftui-pro` skill's
-review process over it yet, do that first and fix what it finds in the lines
-you touched ("SwiftUI skill" in `AGENTS.md`).
+If your diff has SwiftUI code, the `swiftui-pro` skill's review process must
+have covered the diff as it is now, including SwiftUI lines you changed
+after an earlier review. If it hasn't, run it first and fix what it finds in
+the lines you touched ("SwiftUI skill" in `AGENTS.md`).
 
 Then run `Scripts/verify.sh $ARGUMENTS` from the repository root.
 

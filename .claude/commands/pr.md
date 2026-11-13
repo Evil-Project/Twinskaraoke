@@ -12,13 +12,13 @@ Prepare and open a pull request for the current branch.
 2. Check the size: `git diff --stat origin/main...HEAD`. If over ~400 changed
    lines or mixing concerns (refactor + feature, formatting + logic), stop and
    propose a split instead.
-3. Make sure `Scripts/verify.sh` passed in this session; if not, run it.
-4. Read the whole diff once more and fix leftovers: debug code, `print`,
+3. Read the whole diff once more and fix leftovers: debug code, `print`,
    commented-out code, unlocalized strings, TODOs without an issue. If the
    diff has SwiftUI code, run the `swiftui-pro` skill's review process over
    it: fix what it finds in lines you touched, and note findings in code you
-   didn't change for the PR description instead of fixing them. If that
-   changes code, run `Scripts/verify.sh` again.
+   didn't change for the PR description instead of fixing them.
+4. Make sure `Scripts/verify.sh` passed in this session after your last
+   change, step 3 included; if not, run it.
 5. Build the description from the team template, following "Pull requests"
    in `AGENTS.md`: create a body file with
    `mktemp "${TMPDIR:-/tmp}/pr-body.XXXXXX"`, copy
