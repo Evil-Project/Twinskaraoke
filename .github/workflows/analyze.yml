@@ -16,6 +16,7 @@ jobs:
   analyze:
     name: Analyze ${{ matrix.scheme }}
     runs-on: xcode-27  # GitHub's Xcode 27 image (macOS 27)
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
