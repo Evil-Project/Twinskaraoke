@@ -46,9 +46,12 @@ error() {
   fi
 }
 
-is_frozen() {
+# True when $1 is a frozen file's current path, which the frozen check below
+# already judged. The ${array[@]+...} form survives an empty array under
+# set -u in macOS's bash 3.2.
+is_frozen_now() {
   local candidate
-  for candidate in "${frozen[@]}"; do
+  for candidate in ${frozen_now[@]+"${frozen_now[@]}"}; do
     [[ "$candidate" == "$1" ]] && return 0
   done
   return 1
@@ -63,6 +66,7 @@ line_count() {
 
 grown=0
 frozen_grown=0
+frozen_now=()
 
 # New, untracked files first: they don't need a base to compare with. Each
 # git command's output is captured first, so a failure is reported as a
@@ -93,6 +97,32 @@ if [[ -z "$base" ]] || ! merge_base="$(git merge-base HEAD "$base" 2>/dev/null)"
   exit 0
 fi
 
+# Frozen files: compare each one's length at the merge base with the file it
+# is now, following a rename, so moving a frozen file doesn't lift the rule.
+# Git only pairs a rename once the new path is tracked or staged.
+if ! renames="$(git diff --name-status -M --diff-filter=R "$merge_base" -- "${paths[@]}")"; then
+  echo "File growth: comparing with $base failed, skipped."
+  exit 0
+fi
+for path in "${frozen[@]}"; do
+  # Not in the base: nothing to compare with.
+  git cat-file -e "$merge_base:$path" 2>/dev/null || continue
+  base_lines="$(git show "$merge_base:$path" | wc -l | tr -d '[:space:]')"
+  current="$path"
+  moved=""
+  if [[ ! -f "$path" ]]; then
+    current="$(awk -F'\t' -v old="$path" '$2 == old { print $3; exit }' <<< "$renames")"
+    # Deleted, or split up beyond what Git recognizes as a rename.
+    [[ -n "$current" ]] || continue
+    moved=" (renamed from $path)"
+  fi
+  frozen_now+=("$current")
+  lines="$(line_count "$current")" || continue
+  ((lines > base_lines)) || continue
+  error "$current" "$current$moved grew by $((lines - base_lines)) lines to $lines. AGENTS.md says this file must not grow: move the new code into its own type and file."
+  frozen_grown=$((frozen_grown + 1))
+done
+
 if ! numstat="$(git diff --numstat --no-renames "$merge_base" -- "${paths[@]}")"; then
   echo "File growth: comparing with $base failed, skipped."
   exit 0
@@ -101,12 +131,8 @@ while IFS=$'\t' read -r added deleted path; do
   # Binary files show "-" instead of line counts.
   [[ -n "$path" && "$added" != "-" ]] || continue
   ((added > deleted)) || continue
+  is_frozen_now "$path" && continue
   lines="$(line_count "$path")" || continue
-  if is_frozen "$path"; then
-    error "$path" "$path grew by $((added - deleted)) lines to $lines. AGENTS.md says this file must not grow: move the new code into its own type and file."
-    frozen_grown=$((frozen_grown + 1))
-    continue
-  fi
   ((lines > limit)) || continue
   warn "$path" "$path grew by $((added - deleted)) lines to $lines (over $limit). Move new code into its own type and file; see \"Large files\" in AGENTS.md."
   grown=$((grown + 1))
