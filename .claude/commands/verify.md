@@ -3,7 +3,11 @@ description: Run Scripts/verify.sh and fix what fails
 argument-hint: "[--quick | --lint]"
 ---
 
-Run `Scripts/verify.sh $ARGUMENTS` from the repository root.
+If your diff has SwiftUI code and you haven't run the `swiftui-pro` skill's
+review process over it yet, do that first and fix what it finds in the lines
+you touched ("SwiftUI skill" in `AGENTS.md`).
+
+Then run `Scripts/verify.sh $ARGUMENTS` from the repository root.
 
 - If formatting fails, format only the Swift files your branch changed and
   rerun:
