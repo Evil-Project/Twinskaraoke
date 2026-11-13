@@ -181,7 +181,9 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         dismissPlaybackError(in: app)
         let output = app.buttons["WatchPlayer.options"].firstMatch
         XCTAssertTrue(output.waitForExistence(timeout: 8))
-        output.tap()
+        XCTAssertGreaterThanOrEqual(output.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(output.frame.height, 44)
+        output.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.65)).tap()
         XCTAssertTrue(app.staticTexts["Options"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["Sleep Timer"].exists)
         XCTAssertTrue(app.buttons["Download to Watch"].exists, "Songs without inline audio metadata must allow a resolving download.")

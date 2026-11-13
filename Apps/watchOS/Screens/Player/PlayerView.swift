@@ -14,6 +14,7 @@ private struct WatchPlayerLayoutMetrics {
     /// clock above, the paging dots below.
     static let topBarAllowance: CGFloat = 44
     static let pageIndicatorAllowance: CGFloat = 14
+    static let optionsTargetSize: CGFloat = 44
 
     private var compactWidth: Bool {
         containerSize.width < 180
@@ -34,7 +35,7 @@ private struct WatchPlayerLayoutMetrics {
         let used = titleBlockHeight
             + statusRowHeight
             + primaryControlDiameter
-            + (showsSecondaryRow ? secondaryControlSize : 0)
+            + (showsSecondaryRow ? Self.optionsTargetSize : 0)
             + contentSpacing * rowsBelowArtwork
         let leftover = containerSize.height - used
         let ceiling = min(containerSize.width * (compactWidth ? 0.60 : 0.65), compactHeight ? 92 : 110)
@@ -438,7 +439,9 @@ struct PlayerView: View {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
-                                .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
+                                .frame(width: WatchPlayerLayoutMetrics.optionsTargetSize,
+                                       height: WatchPlayerLayoutMetrics.optionsTargetSize)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Options")
