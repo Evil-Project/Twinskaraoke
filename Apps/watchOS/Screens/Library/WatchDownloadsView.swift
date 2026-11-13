@@ -46,6 +46,7 @@ struct WatchDownloadsView: View {
     private let bridge = WatchAuthManager.shared
     @Environment(AudioManager.self) private var audio
     @State private var showPlayer = false
+    @State private var pendingOfflineSong: Song?
 
     var body: some View {
         List {
@@ -61,12 +62,13 @@ struct WatchDownloadsView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         if entry.status == .ready {
                             Button {
-                                guard bridge.output == .watch else {
-                                    audio.playbackError = "Choose Apple Watch as the playback device to play these downloads."
-                                    return
+                                if bridge.output == .watch || bridge.isPlayingDownloadsIndependently {
+                                    playDownload(entry.song)
+                                } else if bridge.canStartIndependentDownloads {
+                                    pendingOfflineSong = entry.song
+                                } else {
+                                    audio.playbackError = String(localized: "Choose Apple Watch as the playback device to play these downloads.")
                                 }
-                                audio.play(song: entry.song, context: downloads.songs)
-                                showPlayer = true
                             } label: {
                                 WatchSongRow(song: entry.song, isCurrent: audio.currentSong?.id == entry.id,
                                              isPlaying: audio.isPlaying, trailingSystemImage: "checkmark.circle.fill")
@@ -96,7 +98,26 @@ struct WatchDownloadsView: View {
                 }
             }
         }
+        .confirmationDialog("Play on This Watch", isPresented: Binding(
+            get: { pendingOfflineSong != nil },
+            set: { if !$0 { pendingOfflineSong = nil } }
+        ), titleVisibility: .visible, presenting: pendingOfflineSong) { song in
+            Button("Play on This Watch") {
+                guard bridge.beginIndependentDownloads() else {
+                    audio.playbackError = String(localized: "Choose Apple Watch as the playback device to play these downloads.")
+                    return
+                }
+                playDownload(song)
+            }
+        } message: { _ in
+            Text("This plays the saved song without changing playback on your iPhone.")
+        }
         .navigationTitle("Downloads")
         .navigationDestination(isPresented: $showPlayer) { PlayerView().environment(audio) }
+    }
+
+    private func playDownload(_ song: Song) {
+        audio.play(song: song, context: downloads.songs)
+        showPlayer = true
     }
 }

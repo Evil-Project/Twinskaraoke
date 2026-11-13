@@ -9,7 +9,8 @@ enum WatchPlaybackUITestFixture {
         guard AppRuntime.isUITestMode else { return }
         let downloaded = ProcessInfo.processInfo.arguments.contains("-UITestDownloadedAudio")
         let standalone = downloaded || ProcessInfo.processInfo.arguments.contains("-UITestLocalAudio")
-        let lease = CompanionPlayback.Lease(owner: standalone ? .watch : .phone)
+        let phoneOwnsPlayback = ProcessInfo.processInfo.arguments.contains("-UITestPhoneOwnsPlayback")
+        let lease = CompanionPlayback.Lease(owner: standalone && !phoneOwnsPlayback ? .watch : .phone)
         CompanionPlayback.saveLease(lease)
         UserDefaults.standard.removeObject(forKey: "nk.watch.relinquishedLease")
         UserDefaults.standard.removeObject(forKey: "nk.watch.localPlayback")
