@@ -225,12 +225,16 @@ final class WatchAuthManager: NSObject {
     }
 
     func selectOutput(_ owner: CompanionPlayback.Owner) {
-        if isPlayingDownloadsIndependently { endIndependentDownloads() }
-        guard owner != output, !changingOutput else { return }
+        guard !changingOutput else { return }
+        if owner == output {
+            endIndependentDownloads()
+            return
+        }
         guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             AudioManager.shared.playbackError = String(localized: "Connect your iPhone to change output. Choose Apple Watch before leaving your phone; downloaded songs then play offline.")
             return
         }
+        endIndependentDownloads()
         if output == .watch {
             // Persist the stop before requesting a phone grant. If its reply
             // is lost, relaunching must not resume the relinquished lease.

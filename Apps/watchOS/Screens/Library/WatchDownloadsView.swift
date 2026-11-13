@@ -94,7 +94,7 @@ struct WatchDownloadsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("\(ByteCountFormatter.string(fromByteCount: downloads.sizeBytes, countStyle: .file)) of 512 MB")
-                    Text("Choose Apple Watch while your iPhone is connected. This playback device stays selected when you leave your phone. Press Play to connect AirPods or other Bluetooth headphones.")
+                    Text("You can select Apple Watch while your iPhone is connected, or open a saved song to play it here when your iPhone is out of reach.")
                 }
             }
         }
