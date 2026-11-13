@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Warns when a Swift file over 600 lines gets longer, or a new one over 600
-# lines is added ("Large files" in AGENTS.md). Advisory only: always exits 0.
+# lines is added ("Large files" in AGENTS.md). That part is advisory. It
+# fails (exit 1) only when one of the files AGENTS.md says must not grow, the
+# `frozen` list below, got longer.
 #
 #   Scripts/check-file-growth.sh [base]
 #
@@ -17,6 +19,14 @@ cd "$(dirname "$0")/.."
 
 limit=600
 paths=('Apps/*.swift' 'Packages/*.swift' 'Extensions/*.swift' 'Tests/*.swift')
+# The files "Large files" in AGENTS.md names. Keep the two lists the same.
+frozen=(
+  Packages/Features/Playback/iOS/AudioPlayerManager.swift
+  Packages/Core/Storage/iOS/DownloadManager.swift
+  Apps/iOS/Screens/Player/FullScreenPlayerView.swift
+  Apps/iOS/Screens/Search/SearchView.swift
+  Apps/iOS/Navigation/ContentView.swift
+)
 
 warn() {
   local path="$1" message="$2"
@@ -27,6 +37,23 @@ warn() {
   fi
 }
 
+error() {
+  local path="$1" message="$2"
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "::error file=$path,title=Frozen file grew::$message"
+  else
+    echo "✗ $message"
+  fi
+}
+
+is_frozen() {
+  local candidate
+  for candidate in "${frozen[@]}"; do
+    [[ "$candidate" == "$1" ]] && return 0
+  done
+  return 1
+}
+
 # Prints the line count; fails if the file is gone, for example deleted
 # while the check runs, so the caller skips it.
 line_count() {
@@ -35,6 +62,7 @@ line_count() {
 }
 
 grown=0
+frozen_grown=0
 
 # New, untracked files first: they don't need a base to compare with. Each
 # git command's output is captured first, so a failure is reported as a
@@ -74,11 +102,19 @@ while IFS=$'\t' read -r added deleted path; do
   [[ -n "$path" && "$added" != "-" ]] || continue
   ((added > deleted)) || continue
   lines="$(line_count "$path")" || continue
+  if is_frozen "$path"; then
+    error "$path" "$path grew by $((added - deleted)) lines to $lines. AGENTS.md says this file must not grow: move the new code into its own type and file."
+    frozen_grown=$((frozen_grown + 1))
+    continue
+  fi
   ((lines > limit)) || continue
   warn "$path" "$path grew by $((added - deleted)) lines to $lines (over $limit). Move new code into its own type and file; see \"Large files\" in AGENTS.md."
   grown=$((grown + 1))
 done <<< "$numstat"
 
+if ((frozen_grown > 0)); then
+  exit 1
+fi
 if ((grown == 0)); then
   echo "File growth: no Swift file over $limit lines got longer."
 fi

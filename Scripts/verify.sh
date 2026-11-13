@@ -72,9 +72,14 @@ else
 fi
 
 # --- Large files ------------------------------------------------------------
-# Advisory: warns when a Swift file over 600 lines grows, never fails.
+# Warns when a Swift file over 600 lines grows. Fails only when one of the
+# files AGENTS.md says must not grow got longer.
 step "Large files"
-Scripts/check-file-growth.sh || echo "Large file check could not run."
+if Scripts/check-file-growth.sh; then
+  pass "Large files"
+else
+  fail "Large files — a file AGENTS.md says must not grow got longer"
+fi
 
 if [[ "$mode" == "lint" ]]; then
   :

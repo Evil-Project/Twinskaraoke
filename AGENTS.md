@@ -134,12 +134,13 @@ state those views read.
   also de, fi, fr, ja, uk, zh-Hans, zh-Hant). Never build user-facing text by
   concatenation.
 - Logging: `DebugLogger.log(...)` with the right category; no `print`.
-- Large files: don't grow `AudioPlayerManager.swift`, `DownloadManager.swift`,
-  `FullScreenPlayerView.swift`, `SearchView.swift` or `ContentView.swift`.
-  Extract a new type into its own file instead. Files over ~600 lines are
-  split when a PR touches them substantially (in a separate refactor PR).
-  `Scripts/check-file-growth.sh` (run by `verify.sh` and CI) warns when a
-  Swift file over 600 lines gets longer.
+- Large files: don't grow `AudioPlayerManager.swift`, `DownloadManager.swift`
+  or the iOS app's `FullScreenPlayerView.swift`, `SearchView.swift` and
+  `ContentView.swift`. Extract a new type into its own file instead. Files
+  over ~600 lines are split when a PR touches them substantially (in a
+  separate refactor PR). `Scripts/check-file-growth.sh` (run by `verify.sh`
+  and CI) fails when one of those five files gets longer, and warns when any
+  other Swift file over 600 lines does.
 - No new third-party dependencies without asking. Current ones:
   SDWebImageSwiftUI, swift-spleeter, pillarbox-apple.
 - Formatting is owned by SwiftFormat (`.swiftformat`) and linting by
