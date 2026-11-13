@@ -253,5 +253,7 @@ In Claude Code, `.claude/hooks/guard.py` (set up in `.claude/settings.json`)
 enforces part of this: it blocks commits on `main` and edits to
 `.agents/skills/`, the generated `docs/api/` Markdown and
 `.swiftlint-baseline.json`, and asks before a push to `main` or an edit to
-`project.pbxproj`, a CI workflow, `CODEOWNERS` or an `AGENTS.md`. The rules
-apply in every tool, with or without the hook.
+`project.pbxproj`, a CI workflow, `CODEOWNERS` or an `AGENTS.md`. It also
+asks when a shell command visibly writes one of those files (a redirect,
+`sed -i`, `cp`, `rm`, …), but it can't see a write made inside a script. The
+rules apply in every tool, with or without the hook.

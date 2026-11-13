@@ -6,10 +6,14 @@ prints a permission decision, or nothing when the call is fine:
 
   deny  edits to files that are generated or third-party
   ask   edits to files that need approval first
+  ask   shell commands that write either kind of file
   deny  `git commit` on main
   ask   `git push` to main
 
-Other tools (Codex, Cursor, ...) don't run this; they follow AGENTS.md.
+The shell checks read the command text. They catch the usual forms (a
+redirect, tee, sed -i, cp, mv, rm, ...), not every way a command can write a
+file: a script that opens the path itself gets through. Other tools (Codex,
+Cursor, ...) don't run this at all; they follow AGENTS.md.
 A guard that fails must never block work, so every error exits 0.
 """
 import json
@@ -35,6 +39,9 @@ ASK_EDIT = [
     (r"(^|/)AGENTS\.md$", "AGENTS.md: rule changes need approval and their own PR."),
 ]
 GIT = re.compile(r"(?:^|[;&|(]|\s)git((?:\s+-[cC]\s+\S+|\s+--[\w-]+(?:=\S+)?)*)\s+(commit|push)\b([^;&|]*)")
+REDIRECT = re.compile(r"(?<![0-9&])>{1,2}\s*((?:\"[^\"]*\"|'[^']*'|[^\s;&|<>()])+)")
+# Commands whose arguments are files they change. cp only changes its last one.
+WRITERS = {"tee", "rm", "mv", "cp", "touch", "truncate", "install", "ln"}
 CD = re.compile(r"(?:^|[;&|(]\s*)cd\s+((?:\"[^\"]*\"|'[^']*'|\S)+)")
 
 
@@ -73,15 +80,41 @@ def check_edit(tool_input):
             decide("ask", reason)
 
 
+def written_paths(command):
+    """Paths the command text shows it writing; see the module docstring."""
+    paths = [words(target)[0] for target in REDIRECT.findall(command) if words(target)]
+    for simple in re.split(r"[;&|\n]+", command):
+        tokens = words(simple)
+        while tokens and re.match(r"^\w+=", tokens[0]):  # VAR=value prefixes
+            tokens.pop(0)
+        if not tokens:
+            continue
+        name, args = os.path.basename(tokens[0]), tokens[1:]
+        files = [a for a in args if not a.startswith("-")]
+        in_place = any(re.match(r"^-[a-zA-Z]*i", a) or a.startswith("--in-place") for a in args)
+        if name in WRITERS:
+            paths += files[-1:] if name == "cp" else files
+        elif name in ("sed", "perl") and in_place:
+            paths += files
+        elif name == "swiftlint" and "--write-baseline" in args:
+            paths.append(".swiftlint-baseline.json")
+    return paths
+
+
 def check_bash(tool_input, cwd):
     command = tool_input.get("command") or ""
+    for path in written_paths(command):
+        path = path.replace(os.sep, "/")
+        for pattern, reason in DENY_EDIT + ASK_EDIT:
+            if re.search(pattern, path):
+                decide("ask", "This command looks like it writes " + path + ". " + reason)
     for match in GIT.finditer(command):
         options, verb, rest = match.group(1), match.group(2), match.group(3)
-        # Where the command runs: `git -C <dir>`, else the last `cd` before it.
+        # Where the command runs: every `cd` before it in turn, then `git -C`.
         directory = cwd
-        cds = CD.findall(command[:match.start()])
-        if cds:
-            directory = os.path.join(cwd, os.path.expanduser(words(cds[-1])[0]))
+        for target in CD.findall(command[:match.start()]):
+            if words(target):
+                directory = os.path.join(directory, os.path.expanduser(words(target)[0]))
         opts = words(options)
         for index, opt in enumerate(opts[:-1]):
             if opt == "-C":
@@ -91,11 +124,14 @@ def check_bash(tool_input, cwd):
             decide("deny", "AGENTS.md: never commit to main. Create a branch first: "
                    "feat/<slug>, fix/<slug>, refactor/<slug> or chore/<slug>.")
         if verb == "push":
-            args = [w for w in words(rest) if not w.startswith("-")]
+            rest_words = words(rest)
+            args = [w for w in rest_words if not w.startswith("-")]
             refspecs = args[1:]  # args[0] is the remote
             to_main = any(r == "main" or r.endswith(":main") or r.endswith(":refs/heads/main")
                           for r in refspecs)
-            if to_main or (not refspecs and current == "main"):
+            # These push every branch, main included, whatever is checked out.
+            every_branch = any(w in ("--all", "--mirror", "--branches") for w in rest_words)
+            if to_main or every_branch or (not refspecs and current == "main"):
                 decide("ask", "AGENTS.md: never push to main. Every push to main publishes the "
                        "public nightly IPA. Allow this only to sync a fork's main.")
 
