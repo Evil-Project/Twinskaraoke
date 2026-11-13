@@ -460,7 +460,7 @@ struct PlayerView: View {
             .padding(.horizontal, 2)
         }
         .overlay(alignment: WatchCrownVolumeIndicator.alignment) {
-            if auth.output == .watch, page == .nowPlaying, !showOutputOptions, !showSongOptions {
+            if auth.crownVolumeOwner == .watch, page == .nowPlaying, !showOutputOptions, !showSongOptions {
                 WatchCrownVolumeIndicator()
             }
         }
