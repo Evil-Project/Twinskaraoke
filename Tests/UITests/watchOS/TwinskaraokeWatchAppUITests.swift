@@ -277,6 +277,11 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         app.buttons["Next Track"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
         saveScreenshot(app, name: "Watch Independent Download Playback")
+        app.buttons["WatchPlayer.options"].tap()
+        let returnToPhone = app.buttons["Return to iPhone Playback"]
+        XCTAssertTrue(returnToPhone.waitForExistence(timeout: 5))
+        returnToPhone.tap()
+        XCTAssertFalse(app.buttons["Pause"].exists, "Returning to iPhone must stop independent Watch playback.")
     }
 
     func testWatchAccountClearsPersistentDownloads() throws {
