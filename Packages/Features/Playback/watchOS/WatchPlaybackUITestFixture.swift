@@ -14,6 +14,15 @@ enum WatchPlaybackUITestFixture {
         CompanionPlayback.saveLease(lease)
         UserDefaults.standard.removeObject(forKey: "nk.watch.relinquishedLease")
         UserDefaults.standard.removeObject(forKey: "nk.watch.localPlayback")
+        if !downloaded {
+            // UI tests reuse the app container. Remove the saved fixtures before
+            // testing a song that should still offer Download to Watch.
+            try? FileManager.default.removeItem(at: WatchDownloads.directory.appendingPathComponent("manifest.json"))
+            for id in ["watch-ui-song-1", "watch-ui-song-2", "watch-ui-song-3"] {
+                let file = WatchDownloads.directory.appendingPathComponent(SongStorageKey.component(for: id) + ".wav")
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
         guard standalone else { return }
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AudioCache")
