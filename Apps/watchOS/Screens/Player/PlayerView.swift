@@ -450,7 +450,12 @@ struct PlayerView: View {
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             .padding(.horizontal, 2)
         }
-        // Preserve Crown routing without another visible playback control.
+        .overlay(alignment: WatchCrownVolumeIndicator.alignment) {
+            if auth.output == .watch, page == .nowPlaying, !showOutputOptions, !showSongOptions {
+                WatchCrownVolumeIndicator()
+            }
+        }
+        // Keep the system control in charge of Crown input.
         .background {
             systemVolumeControl
                 .opacity(0.001)
