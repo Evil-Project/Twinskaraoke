@@ -120,6 +120,19 @@ state those views read.
   list the skill rules you chose not to follow, each with its reason. A PR
   without SwiftUI changes says so instead.
 
+## Apple documentation
+
+Check an Apple API before you use it: that it exists on every platform the
+code builds for, its minimum OS version, and whether it is deprecated. Don't
+answer that from memory.
+
+- `.mcp.json` configures the Sosumi MCP server, which returns Apple's
+  developer documentation, Human Interface Guidelines and WWDC transcripts
+  as Markdown. Claude Code asks once whether to enable it. Without MCP, read
+  https://developer.apple.com/documentation.
+- The documentation describes the newest SDK. Compare what it says with this
+  project's deployment targets.
+
 ## Code rules
 
 - Observable state: `@MainActor @Observable final class` (not
@@ -235,3 +248,10 @@ The author is responsible for every line, including generated ones.
 - Commit secrets, tokens, signing settings, team IDs or bundle ID changes.
 - Change CI workflows, `CODEOWNERS` or this file as a side effect of another
   task.
+
+In Claude Code, `.claude/hooks/guard.py` (set up in `.claude/settings.json`)
+enforces part of this: it blocks commits on `main` and edits to
+`.agents/skills/`, the generated `docs/api/` Markdown and
+`.swiftlint-baseline.json`, and asks before a push to `main` or an edit to
+`project.pbxproj`, a CI workflow, `CODEOWNERS` or an `AGENTS.md`. The rules
+apply in every tool, with or without the hook.
