@@ -28,19 +28,6 @@ enum AirPlaySongComparison {
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
         return player
     }
-    static func start(_ player: AVQueuePlayer, at position: TimeInterval) {
-        let time = CMTime(seconds: position.isFinite ? max(0, position) : 0, preferredTimescale: 600)
-        if time > .zero { player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) }
-        player.play()
-    }
-
-    static func resume(_ player: AVQueuePlayer) {
-        if let duration = player.currentItem?.duration.seconds, duration.isFinite,
-           player.currentTime().seconds >= duration {
-            player.seek(to: .zero)
-        }
-        player.play()
-    }
 }
 
 @MainActor

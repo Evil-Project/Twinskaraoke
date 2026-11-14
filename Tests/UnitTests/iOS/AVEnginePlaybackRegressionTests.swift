@@ -27,6 +27,43 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.airPlay], url: remote, processingActive: false))
     }
 
+    @Test("AirPlay transition overlaps the tracks and maps the incoming lyric clock")
+    func airPlayTransitionTimeline() throws {
+        let timing = try #require(AirPlayTransitionTiming(outgoing: 60, incoming: 40, fade: 8))
+        #expect(timing.overlapStart == 52)
+        #expect(timing.promotionTime == 60)
+        #expect(timing.incomingTime(at: 60) == 8)
+        #expect(timing.incomingTime(at: 65) == 13)
+        #expect(AirPlayTransitionTiming(outgoing: 60, incoming: 3, fade: 8) == nil)
+    }
+
+    @Test("The AirPlay player item carries two overlapping audio tracks and a mix")
+    func airPlayCompositionCarriesBothTracks() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000, tone: 440)
+        defer { try? FileManager.default.removeItem(at: outgoing) }
+        let incoming = try makeSilentWaveFile(duration: 5, sampleRate: 48_000, tone: 660)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        let result = try await AirPlayTransition.prepare(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
+        let prepared = try #require(result)
+        let tracks = try await prepared.item.asset.loadTracks(withMediaType: .audio)
+        let duration = try await prepared.item.asset.load(.duration)
+        #expect(tracks.count == 2)
+        #expect(duration.seconds == 9)
+        #expect(prepared.item.audioMix?.inputParameters.count == 2)
+        #expect(prepared.timing.incomingTime(at: prepared.timing.promotionTime) == 2)
+    }
+
+    @Test("AirPlay accepts only the latest seek or handoff completion")
+    func airPlayRejectsObsoleteOperations() {
+        let session = AirPlaySongOperations()
+        let oldSeek = session.begin()
+        let latestSeek = session.begin()
+        #expect(!session.isCurrent(oldSeek))
+        #expect(session.isCurrent(latestSeek))
+        session.invalidate()
+        #expect(!session.isCurrent(latestSeek))
+    }
+
     @Test("Stopping a scheduled player does not report natural playback end")
     func teardownCompletionIsSuppressed() throws {
         let sourceURL = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
