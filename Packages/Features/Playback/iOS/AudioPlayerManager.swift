@@ -1107,30 +1107,6 @@ final class AudioPlayerManager {
         return "remote/\(host)/\(fileName)"
     }
 
-    private func streamItemDiagnostics() -> String {
-        guard let player = streamPlayer, let item = player.currentItem else { return "stream=none" }
-        let duration = item.duration.seconds
-        let durationText = duration.isFinite ? String(format: "%.2f", duration) : "unknown"
-        let loadedRanges = item.loadedTimeRanges
-            .map(\.timeRangeValue)
-            .map { range -> String in
-                let start = range.start.seconds
-                let end = CMTimeAdd(range.start, range.duration).seconds
-                guard start.isFinite, end.isFinite else { return "unknown" }
-                return String(format: "%.2f-%.2f", start, end)
-            }
-            .joined(separator: ",")
-        let status = switch item.status {
-        case .unknown: "unknown"
-        case .readyToPlay: "ready"
-        case .failed: "failed"
-        @unknown default: "unknown-default"
-        }
-        let itemError = item.error?.localizedDescription ?? "none"
-        let playerError = player.error?.localizedDescription ?? "none"
-        return "streamDuration=\(durationText), loaded=[\(loadedRanges)], itemStatus=\(status), itemError=\(itemError), playerError=\(playerError)"
-    }
-
     private func handlePrematurePlaybackEndIfNeeded(source: String) -> Bool {
         guard let song = currentSong, !isRadioMode else { return false }
         let expectedDuration = TimeInterval(song.duration)
@@ -1141,7 +1117,7 @@ final class AudioPlayerManager {
         guard elapsed < minimumExpectedElapsed else { return false }
 
         DebugLogger.log(
-            "Ignoring premature playback end from \(source) for \(song.id): elapsed=\(elapsed), expected=\(expectedDuration), source=\(playbackSourceDescription(currentPlaybackURL)), \(streamItemDiagnostics())",
+            "Ignoring premature playback end from \(source) for \(song.id): elapsed=\(elapsed), expected=\(expectedDuration), source=\(playbackSourceDescription(currentPlaybackURL)), \(ManagedAVPlayerObservation.diagnostics(for: streamPlayer))",
             category: .playback
         )
         suppressPlaybackEndedCallbacks(for: 2.0)
@@ -1263,7 +1239,7 @@ final class AudioPlayerManager {
             guard let self else { return }
             guard let stems = await cachedStems(for: song, sourceURL: sourceURL) else { return }
             guard separationGeneration == gen,
-                  currentSong?.id == song.id, !isRadioMode
+                  currentSong?.id == song.id, !isRadioMode, !(streamPlayer is AVQueuePlayer)
             else { return }
 
             preparedStemSongID = song.id
@@ -1484,7 +1460,7 @@ final class AudioPlayerManager {
                     }
                     self.updateNowPlayingElapsed(t)
 
-                    self.pollTransition(at: t, duration: dur)
+                    if !(player is AVQueuePlayer) { self.pollTransition(at: t, duration: dur) }
                     return
                 }
                 if !self.avEngine.isEngineRunning {
@@ -1757,6 +1733,12 @@ final class AudioPlayerManager {
         aiStemSwitchInFlightSongID = nil
         loadFailure = nil
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
+        if AirPlaySongComparison.isEnabled, AirPlaySongComparison.shouldUsePlayer(
+            outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
+        ) {
+            startAirPlaySong(url, position: startAt)
+            return
+        }
         avEngine.play(url: url, startAt: max(0, startAt)) { [weak self] in
             #if canImport(UIKit)
                 self?.endTrackTransitionBackgroundTask()
@@ -1774,6 +1756,33 @@ final class AudioPlayerManager {
             triggerBackgroundAnalysis(for: song)
             prepareBackgroundStemPlaybackIfPossible(for: song)
         }
+    }
+
+    private func startAirPlaySong(_ url: URL, position: TimeInterval) {
+        cancelPendingTransitionWork()
+        loadedEngine?.stop()
+        let player = AirPlaySongComparison.makePlayer(url: url)
+        guard let item = player.currentItem else { return }
+        streamPlayer = player
+        DebugLogger.log("AirPlay comparison selected AVQueuePlayer at \(position)s", category: .playback)
+        streamPlaybackRequested = true
+        setPreferredStreamResumeTime(position, for: currentSong?.id)
+        setPlaybackState(playing: false, buffering: true, reloadArtwork: true, reason: "airPlaySong")
+        observeManagedPlayer(player, item: item, kind: .stream)
+        streamEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+        ) { [weak self, weak player] _ in
+            Task { @MainActor in
+                guard let self, let player, self.streamPlayer === player, self.streamPlaybackRequested else { return }
+                if self.sleepTimer.consumeEndOfSong() {
+                    self.pauseCurrentPlayback(source: "airPlaySong.endOfSong")
+                } else {
+                    self.streamPlaybackRequested = false
+                    self.playNextOrRandom()
+                }
+            }
+        }
+        AirPlaySongComparison.start(player, at: position)
     }
 
     private func warmPlayerArtwork(for song: Song) {
@@ -2050,7 +2059,8 @@ final class AudioPlayerManager {
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             streamPlaybackRequested = true
             setPlaybackState(playing: false, buffering: true, reason: "resume.stream.buffering.\(source)")
-            player.playImmediately(atRate: 1.0)
+            if let queuePlayer = player as? AVQueuePlayer { AirPlaySongComparison.resume(queuePlayer) }
+            else { player.playImmediately(atRate: 1.0) }
             refreshManagedPlayerState(player, kind: .stream)
             return true
         }
@@ -2380,43 +2390,10 @@ final class AudioPlayerManager {
             refreshManagedPlayerState(player, kind: kind)
         }
 
+        let observations = ManagedAVPlayerObservation.observe(player: player, item: item, onStatus: statusHandler, onState: stateHandler)
         switch kind {
-        case .radio:
-            radioPlayerCancellables.removeAll()
-            item.publisher(for: \.status, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink(receiveValue: statusHandler)
-                .store(in: &radioPlayerCancellables)
-            item.publisher(for: \.isPlaybackBufferEmpty, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-            item.publisher(for: \.isPlaybackLikelyToKeepUp, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-        case .stream:
-            streamPlayerCancellables.removeAll()
-            item.publisher(for: \.status, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink(receiveValue: statusHandler)
-                .store(in: &streamPlayerCancellables)
-            item.publisher(for: \.isPlaybackBufferEmpty, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
-            item.publisher(for: \.isPlaybackLikelyToKeepUp, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
-            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
+        case .radio: radioPlayerCancellables = observations
+        case .stream: streamPlayerCancellables = observations
         }
     }
 
@@ -2972,7 +2949,7 @@ final class AudioPlayerManager {
     }
 
     private func applyMLSeparationIfNeeded() {
-        guard phoneAudioAllowed else { return }
+        guard phoneAudioAllowed, !(streamPlayer is AVQueuePlayer) else { return }
         instrumentalTask?.cancel()
         instrumentalTask = nil
         preparedStemTask?.cancel()
@@ -3295,6 +3272,25 @@ final class AudioPlayerManager {
     private func handleRouteChange(_ note: Notification) {
         guard phoneAudioAllowed else { return }
         updateRouteIcon()
+        if AirPlaySongComparison.isEnabled, !isRadioMode, !isRemotePlaybackCaching,
+           let url = currentPlaybackURL, url.isFileURL
+        {
+            let useQueuePlayer = AirPlaySongComparison.shouldUsePlayer(
+                outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
+            )
+            let usingQueuePlayer = streamPlayer is AVQueuePlayer
+            if useQueuePlayer != usingQueuePlayer, isPlaybackRequested {
+                let position = usingQueuePlayer ? activePlaybackTime() : lastKnownPlaybackTime
+                startPlayingFile(url, startAt: position, resetSeparation: false)
+                return
+            }
+            if usingQueuePlayer, !useQueuePlayer {
+                lastKnownPlaybackTime = activePlaybackTime()
+                stopStreamPlayer()
+                clearPreferredStreamResumeTime()
+                return
+            }
+        }
         guard let info = note.userInfo,
               let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
