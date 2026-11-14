@@ -54,6 +54,10 @@ final class WatchAuthManager: NSObject {
     private var relinquishedLease = CompanionPlayback.decode(CompanionPlayback.Lease.self,
                                                              from: UserDefaults.standard.data(forKey: "nk.watch.relinquishedLease"))
     var canPlayLocally: Bool { lease?.allowsAudio(on: .watch, relinquished: relinquishedLease) == true && !changingOutput }
+    private(set) var independentDownloadsSession: UUID?
+    var isPlayingDownloadsIndependently: Bool { independentDownloadsSession != nil }
+    var canStartIndependentDownloads: Bool { output == .phone && !changingOutput && !WCSession.default.isReachable }
+    var crownVolumeOwner: CompanionPlayback.Owner { isPlayingDownloadsIndependently ? .watch : output }
     private var localPublishTask: Task<Void, Never>?
     private var lastPositionPublish = Date.distantPast
     private var commandGate = CompanionPlayback.CommandGate()
@@ -201,8 +205,31 @@ final class WatchAuthManager: NSObject {
         )
     }
 
+    func beginIndependentDownloads() -> Bool {
+        if isPlayingDownloadsIndependently { return true }
+        guard canStartIndependentDownloads else { return false }
+        playbackSequence &+= 1
+        independentDownloadsSession = UUID()
+        AudioManager.shared.stopForOutputTransfer()
+        return true
+    }
+
+    func endIndependentDownloads() {
+        guard isPlayingDownloadsIndependently else { return }
+        AudioManager.shared.clearAccountPlayback()
+        if let playbackSnapshot { AudioManager.shared.applyCompanionSnapshot(playbackSnapshot) }
+    }
+
+    func resetIndependentDownloads() {
+        independentDownloadsSession = nil
+    }
+
     func selectOutput(_ owner: CompanionPlayback.Owner) {
-        guard owner != output, !changingOutput else { return }
+        guard !changingOutput else { return }
+        if owner == output {
+            endIndependentDownloads()
+            return
+        }
         guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
             AudioManager.shared.playbackError = String(localized: "Connect your iPhone to change output. Choose Apple Watch before leaving your phone; downloaded songs then play offline.")
             return
@@ -280,22 +307,19 @@ final class WatchAuthManager: NSObject {
     /// failure: only an acknowledged ownership grant permits watch playback.
     @discardableResult
     func sendPlaybackCommand(_ command: CompanionPlayback.Command) -> Bool {
+        let changesOutput = command.action == .transferToWatch || command.action == .transferToPhone
+        guard !changingOutput || changesOutput else { return true }
         guard WCSession.isSupported() else {
-            AudioManager.shared.playbackError = String(localized: "Connect an iPhone to play music.")
-            changingOutput = false
+            finishPlaybackCommand(changesOutput: changesOutput, error: String(localized: "Connect an iPhone to play music."))
             return true
         }
         let session = WCSession.default
         guard session.activationState == .activated else {
-            AudioManager.shared.playbackError = String(localized: "Connecting to iPhone. Try again in a moment.")
-            AudioManager.shared.isLoading = false
-            changingOutput = false
+            finishPlaybackCommand(changesOutput: changesOutput, error: String(localized: "Connecting to iPhone. Try again in a moment."))
             return true
         }
         guard session.isCompanionAppInstalled else {
-            AudioManager.shared.playbackError = String(localized: "Install Twinskaraoke on your paired iPhone to play music.")
-            AudioManager.shared.isLoading = false
-            changingOutput = false
+            finishPlaybackCommand(changesOutput: changesOutput, error: String(localized: "Install Twinskaraoke on your paired iPhone to play music."))
             return true
         }
         var command = command
@@ -306,12 +330,10 @@ final class WatchAuthManager: NSObject {
         command.ownershipEpoch = lease?.epoch
         command.accountGeneration = defaults.integer(forKey: Key.generation)
         command.phoneInstanceID = phoneInstanceID
-        let sentSequence = command.sequence
+        let sentSequence = playbackSequence
         guard session.isReachable,
               let data = CompanionPlayback.encode(command) else {
-            AudioManager.shared.playbackError = String(localized: "iPhone is out of reach. Bring it nearby and try again.")
-            AudioManager.shared.isLoading = false
-            changingOutput = false
+            finishPlaybackCommand(changesOutput: changesOutput, error: String(localized: "iPhone is out of reach. Bring it nearby and try again."))
             return true
         }
         session.sendMessage(
@@ -324,34 +346,37 @@ final class WatchAuthManager: NSObject {
                 )
                 let error = reply[CompanionPlayback.errorKey] as? String
                 Task { @MainActor [weak self] in
-                    self?.changingOutput = false
-                    if let snapshot { self?.applyPlayback(snapshot) }
-                    guard self?.playbackSequence == sentSequence else { return }
-                    if let error {
-                        AudioManager.shared.playbackError = error
-                    } else if snapshot == nil {
-                        if let previous = self?.playbackSnapshot {
-                            AudioManager.shared.applyCompanionSnapshot(previous)
-                        }
-                        AudioManager.shared.playbackError = String(localized: "iPhone couldn't update playback. Try again.")
-                    }
-                    AudioManager.shared.isLoading = false
+                    self?.receivePlaybackReply(sequence: sentSequence, changesOutput: changesOutput, snapshot: snapshot, error: error)
                 }
             },
             errorHandler: { @Sendable [weak self] error in
                 let message = Self.playbackMessageError(error)
                 Task { @MainActor [weak self] in
-                    guard self?.playbackSequence == sentSequence else { return }
-                    self?.changingOutput = false
-                    if let snapshot = self?.playbackSnapshot {
-                        AudioManager.shared.applyCompanionSnapshot(snapshot)
-                    }
-                    AudioManager.shared.playbackError = message
-                    AudioManager.shared.isLoading = false
+                    self?.receivePlaybackReply(sequence: sentSequence, changesOutput: changesOutput, snapshot: nil, error: message)
                 }
             }
         )
         return true
+    }
+
+    private func receivePlaybackReply(
+        sequence: Int, changesOutput: Bool, snapshot: CompanionPlayback.Snapshot?, error: String?
+    ) {
+        guard playbackSequence == sequence else { return }
+        if changesOutput { changingOutput = false }
+        if let snapshot {
+            applyPlayback(snapshot)
+        } else if !isPlayingDownloadsIndependently, let playbackSnapshot {
+            AudioManager.shared.applyCompanionSnapshot(playbackSnapshot)
+        }
+        let message = error ?? (snapshot == nil ? String(localized: "iPhone couldn't update playback. Try again.") : nil)
+        finishPlaybackCommand(changesOutput: false, error: message)
+    }
+
+    private func finishPlaybackCommand(changesOutput: Bool, error: String?) {
+        if changesOutput { changingOutput = false }
+        if let error { AudioManager.shared.playbackError = error }
+        if !isPlayingDownloadsIndependently { AudioManager.shared.isLoading = false }
     }
 
     private func applyPlayback(_ snapshot: CompanionPlayback.Snapshot) {
@@ -368,6 +393,10 @@ final class WatchAuthManager: NSObject {
         lease = nextLease
         CompanionPlayback.saveLease(nextLease)
         playbackSnapshot = snapshot
+        if isPlayingDownloadsIndependently {
+            guard snapshot.owner == .watch else { return }
+            AudioManager.shared.clearAccountPlayback()
+        }
         AudioManager.shared.applyCompanionSnapshot(snapshot)
         if snapshot.owner == .watch { publishLocalPlayback() }
     }
@@ -499,6 +528,8 @@ final class WatchAuthManager: NSObject {
     // MARK: - Token pull
 
     private func invalidatePlaybackPresentation() {
+        playbackSequence &+= 1
+        changingOutput = false
         localPublishTask?.cancel()
         localPublishTask = nil
         playbackSnapshot = nil

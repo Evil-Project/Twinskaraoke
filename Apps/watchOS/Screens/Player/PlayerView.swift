@@ -14,6 +14,7 @@ private struct WatchPlayerLayoutMetrics {
     /// clock above, the paging dots below.
     static let topBarAllowance: CGFloat = 44
     static let pageIndicatorAllowance: CGFloat = 14
+    static let optionsTargetSize: CGFloat = 44
 
     private var compactWidth: Bool {
         containerSize.width < 180
@@ -34,7 +35,7 @@ private struct WatchPlayerLayoutMetrics {
         let used = titleBlockHeight
             + statusRowHeight
             + primaryControlDiameter
-            + (showsSecondaryRow ? secondaryControlSize : 0)
+            + (showsSecondaryRow ? Self.optionsTargetSize : 0)
             + contentSpacing * rowsBelowArtwork
         let leftover = containerSize.height - used
         let ceiling = min(containerSize.width * (compactWidth ? 0.60 : 0.65), compactHeight ? 92 : 110)
@@ -157,6 +158,12 @@ struct PlayerView: View {
             .sheet(isPresented: $showSongOptions) {
                 NavigationStack {
                     List {
+                        if auth.isPlayingDownloadsIndependently {
+                            Button("Return to iPhone Playback", systemImage: "iphone") {
+                                showSongOptions = false
+                                auth.endIndependentDownloads()
+                            }
+                        }
                         if !audioManager.isRadioMode {
                             WatchDownloadMenu(song: song)
                             if auth.linkState == .signedIn {
@@ -438,7 +445,9 @@ struct PlayerView: View {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
-                                .frame(width: metrics.secondaryControlSize, height: metrics.secondaryControlSize)
+                                .frame(width: WatchPlayerLayoutMetrics.optionsTargetSize,
+                                       height: WatchPlayerLayoutMetrics.optionsTargetSize)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.watchPressable)
                         .accessibilityLabel("Options")
@@ -450,7 +459,12 @@ struct PlayerView: View {
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             .padding(.horizontal, 2)
         }
-        // Preserve Crown routing without another visible playback control.
+        .overlay(alignment: WatchCrownVolumeIndicator.alignment) {
+            if auth.crownVolumeOwner == .watch, page == .nowPlaying, !showOutputOptions, !showSongOptions {
+                WatchCrownVolumeIndicator()
+            }
+        }
+        // Keep the system control in charge of Crown input.
         .background {
             systemVolumeControl
                 .opacity(0.001)
@@ -463,9 +477,9 @@ struct PlayerView: View {
     }
 
     private var systemVolumeControl: some View {
-        WatchSystemVolumeControl(owner: WatchAuthManager.shared.output,
+        WatchSystemVolumeControl(owner: auth.crownVolumeOwner,
                                  isFocused: page == .nowPlaying && !showOutputOptions && !showSongOptions)
-            .id(WatchAuthManager.shared.output)
+            .id(auth.crownVolumeOwner)
             .frame(width: 40, height: 40)
             .scaleEffect(0.65)
             .accessibilityLabel("Volume")
