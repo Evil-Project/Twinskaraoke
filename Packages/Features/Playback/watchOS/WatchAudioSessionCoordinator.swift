@@ -6,14 +6,14 @@ final class WatchAudioSessionCoordinator {
     typealias Completion = @MainActor (Result<Void, Error>) -> Void
     typealias Activation = @MainActor (@escaping Completion) -> Void
 
-    typealias Deactivation = @MainActor (@escaping @MainActor () -> Void) -> Void
+    typealias Deactivation = @MainActor (@escaping @MainActor (Bool) -> Void) -> Void
 
     private let activate: Activation
     private let deactivate: Deactivation
     private var generation: UInt64 = 0
     private var activationInFlight = false
     private var deactivationInFlight = false
-    private var releaseOnActivation = false
+    private var releaseUnconfirmed = false
     private var pendingPlayback: Completion?
     private(set) var isActive = false
 
@@ -47,15 +47,16 @@ final class WatchAudioSessionCoordinator {
     func relinquish() {
         let wasActive = isActive
         invalidate()
-        if activationInFlight { releaseOnActivation = true }
-        if wasActive { releaseSession() }
+        if !activationInFlight, wasActive || releaseUnconfirmed { releaseSession() }
     }
 
     private func releaseSession() {
+        guard !deactivationInFlight else { return }
         deactivationInFlight = true
-        deactivate { [weak self] in
+        deactivate { [weak self] released in
             guard let self else { return }
             self.deactivationInFlight = false
+            self.releaseUnconfirmed = !released
             self.activateIfNeeded()
         }
     }
@@ -67,11 +68,9 @@ final class WatchAudioSessionCoordinator {
         activate { [weak self] result in
             guard let self else { return }
             self.activationInFlight = false
-            let shouldRelease = self.releaseOnActivation
-            self.releaseOnActivation = false
             guard self.generation == generation else {
                 // Complete any required release before another request can activate.
-                if shouldRelease, case .success = result { self.releaseSession() }
+                if case .success = result { self.releaseSession() }
                 else { self.activateIfNeeded() }
                 return
             }
@@ -79,6 +78,7 @@ final class WatchAudioSessionCoordinator {
             self.pendingPlayback = nil
             switch result {
             case .success:
+                self.releaseUnconfirmed = false
                 self.isActive = true
             case let .failure(error):
                 DebugLogger.log("Watch audio session activation failed: \(error)", category: .playback)
@@ -94,15 +94,27 @@ final class WatchAudioSessionCoordinator {
         }
     }
 
-    private static func deactivateSession(_ completion: @escaping @MainActor () -> Void) {
+    private static func deactivateSession(_ completion: @escaping @MainActor (Bool) -> Void) {
         Task.detached(priority: .userInitiated) {
+            let released = Self.releaseAudioSession()
+            await completion(released)
+        }
+    }
+
+    private nonisolated static func releaseAudioSession() -> Bool {
+        // AVAudioSession documents that isBusy still leaves the session inactive.
+        for attempt in 0..<2 {
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                return true
             } catch {
-                DebugLogger.log("Watch audio session deactivation failed: \(error)", category: .playback)
+                let status = error as NSError
+                if status.domain == NSOSStatusErrorDomain,
+                   status.code == AVAudioSession.ErrorCode.isBusy.rawValue { return true }
+                DebugLogger.log("Watch audio session deactivation attempt \(attempt + 1) failed: \(error)", category: .playback)
             }
-            await completion()
         }
+        return false
     }
 
     private nonisolated static func bringUpSession() async -> Result<Void, Error> {

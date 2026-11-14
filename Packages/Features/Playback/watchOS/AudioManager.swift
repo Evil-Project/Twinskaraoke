@@ -187,7 +187,7 @@ class AudioManager {
         }
         if canPlayLocally() { return false }
         guard WatchAuthManager.shared.output == .phone else {
-            playbackError = "Reconnect to iPhone to finish changing output, then select Apple Watch again."
+            playbackError = String(localized: "Reconnect to iPhone to finish changing output, then select Apple Watch again.")
             return true
         }
         let command = CompanionPlayback.Command(
@@ -322,12 +322,12 @@ class AudioManager {
         }
     }
 
-    private func failPlayback(_ message: String) {
+    private func failPlayback(_ message: String, preserveRadio: Bool = false) {
         cleanupPlayer()
         playbackRequested = false
         isPlaying = false
         isLoading = false
-        if isRadioMode { isRadioMode = false }
+        if isRadioMode, !preserveRadio { isRadioMode = false }
         playbackError = message
         updateNowPlayingInfo()
     }
@@ -383,19 +383,34 @@ class AudioManager {
     func playSong(at index: Int, context: [Song]) {
         transferredPosition = nil
         guard context.indices.contains(index) else { return }
+        let song = context[index]
         if independentDownloads {
-            play(song: context[index], context: context)
-            return
+            guard let saved = Self.savedQueue(at: index, in: context, isSaved: {
+                WatchDownloads.shared.localURL(for: $0) != nil
+            }) else {
+                playbackError = String(localized: "Choose a saved download or return to iPhone playback.")
+                return
+            }
+            queue = saved.songs
+            currentIndex = saved.index
+            originalQueue = []
+        } else {
+            queue = context
+            currentIndex = index
         }
-        queue = context
-        currentIndex = index
-        currentSong = context[index]
+        currentSong = song
         playbackError = nil
-        if sendToPhone(.play, song: context[index], queue: context) {
+        if sendToPhone(.play, song: song, queue: queue) {
             isLoading = playbackError == nil
             return
         }
         prepareAndPlay()
+    }
+
+    static func savedQueue(at index: Int, in songs: [Song], isSaved: (String) -> Bool) -> (songs: [Song], index: Int)? {
+        let saved = songs.enumerated().filter { isSaved($0.element.id) }
+        guard let savedIndex = saved.firstIndex(where: { $0.offset == index }) else { return nil }
+        return (saved.map(\.element), savedIndex)
     }
 
     /// Plays the up-next row at `offset`. The queue position is picked by
@@ -493,7 +508,7 @@ class AudioManager {
                 self.refreshPlaybackState()
                 self.updateNowPlayingInfo()
             case .failure:
-                self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."))
+                self.failPlayback(String(localized: "Audio is unavailable. Connect an audio output and try again."), preserveRadio: true)
             }
         }
     }

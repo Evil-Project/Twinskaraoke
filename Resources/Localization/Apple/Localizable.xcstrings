@@ -4,8 +4,281 @@
     "" : {
 
     },
-    "You can select Apple Watch while your iPhone is connected, or open a saved song to play it here when your iPhone is out of reach." : {
-
+    "Choose a saved download or return to iPhone playback." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle einen gespeicherten Download oder wechsle zurück zur iPhone-Wiedergabe."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valitse tallennettu lataus tai palaa iPhone-toistoon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un téléchargement enregistré ou revenez à la lecture sur l’iPhone."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存済みのダウンロードを選ぶか、iPhoneでの再生に戻ってください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть збережене завантаження або поверніться до відтворення на iPhone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择已保存的下载内容，或返回 iPhone 播放。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請選擇已儲存的下載項目，或返回 iPhone 播放。"
+          }
+        }
+      }
+    },
+    "Choose Apple Watch as the playback device to play these downloads." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle die Apple Watch als Wiedergabegerät, um diese Downloads abzuspielen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valitse Apple Watch toistolaitteeksi, jotta voit toistaa nämä lataukset."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez l’Apple Watch comme appareil de lecture pour écouter ces téléchargements."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらのダウンロードを再生するには、再生デバイスとしてApple Watchを選んでください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть Apple Watch як пристрій відтворення, щоб прослухати ці завантаження."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择 Apple Watch 作为播放设备，以播放这些下载内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請選擇 Apple Watch 作為播放裝置，以播放這些下載項目。"
+          }
+        }
+      }
+    },
+    "Play on This Watch" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf dieser Watch abspielen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toista tällä kellolla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire sur cette montre"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このWatchで再生"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відтворити на цьому годиннику"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在此手表上播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在這部手錶上播放"
+          }
+        }
+      }
+    },
+    "Reconnect to iPhone to finish changing output, then select Apple Watch again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stelle die Verbindung zum iPhone wieder her, um den Ausgabegerätewechsel abzuschließen, und wähle dann erneut die Apple Watch aus."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viimeistele äänilähdön vaihto yhdistämällä iPhone uudelleen ja valitse sitten Apple Watch uudestaan."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnectez l’iPhone pour terminer le changement de sortie, puis sélectionnez à nouveau l’Apple Watch."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "出力先の変更を完了するにはiPhoneに再接続し、その後Apple Watchを選び直してください。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Підключіться до iPhone знову, щоб завершити зміну пристрою виведення звуку, а потім знову виберіть Apple Watch."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请重新连接 iPhone 以完成输出切换，然后再次选择 Apple Watch。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請重新連接 iPhone 以完成輸出切換，然後再次選擇 Apple Watch。"
+          }
+        }
+      }
+    },
+    "Return to iPhone Playback" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zur iPhone-Wiedergabe"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Palaa iPhone-toistoon"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revenir à la lecture sur l’iPhone"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhoneでの再生に戻る"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повернутися до відтворення на iPhone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回 iPhone 播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回 iPhone 播放"
+          }
+        }
+      }
+    },
+    "This plays the saved song without changing playback on your iPhone." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der gespeicherte Titel wird abgespielt, ohne die Wiedergabe auf deinem iPhone zu ändern."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tämä toistaa tallennetun kappaleen muuttamatta iPhonen toistoa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le morceau enregistré sera lu sans modifier la lecture sur votre iPhone."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhoneでの再生には影響せず、保存済みの曲を再生します。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Збережена пісня відтворюватиметься без змін у відтворенні на iPhone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会播放已保存的歌曲，不会影响 iPhone 上的播放。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這會播放已儲存的歌曲，不會影響 iPhone 上的播放。"
+          }
+        }
+      }
     },
     "—" : {
 
@@ -10162,12 +10435,6 @@
       }
     },
     "Choose a playlist in the Control Center control settings." : {
-
-    },
-    "Choose a saved download or return to iPhone playback." : {
-
-    },
-    "Choose Apple Watch as the playback device to play these downloads." : {
 
     },
     "Choose a song from Home, Songs, or Search." : {
@@ -35528,9 +35795,6 @@
         }
       }
     },
-    "Play on This Watch" : {
-
-    },
     "Play playlist" : {
       "localizations" : {
         "de" : {
@@ -43512,9 +43776,6 @@
           }
         }
       }
-    },
-    "Return to iPhone Playback" : {
-
     },
     "Retry" : {
       "localizations" : {
@@ -55583,9 +55844,6 @@
         }
       }
     },
-    "This plays the saved song without changing playback on your iPhone." : {
-
-    },
     "This song has no playable audio." : {
       "localizations" : {
         "de" : {
@@ -61372,6 +61630,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你可以返回瀏覽器了。"
+          }
+        }
+      }
+    },
+    "You can select Apple Watch while your iPhone is connected, or open a saved song to play it here when your iPhone is out of reach." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solange dein iPhone verbunden ist, kannst du die Apple Watch auswählen. Ist dein iPhone außer Reichweite, öffne einen gespeicherten Titel, um ihn hier abzuspielen."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voit valita Apple Watchin, kun iPhone on yhdistetty. Kun iPhone ei ole tavoitettavissa, avaa tallennettu kappale toistaaksesi sen tässä."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous pouvez sélectionner l’Apple Watch lorsque votre iPhone est connecté. Si votre iPhone est hors de portée, ouvrez un morceau enregistré pour le lire ici."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhoneが接続されている間はApple Watchを選べます。iPhoneが通信範囲外にあるときは、保存済みの曲を開いてこのWatchで再生できます。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ви можете вибрати Apple Watch, поки iPhone підключено. Якщо iPhone поза зоною дії, відкрийте збережену пісню, щоб відтворити її тут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone 已连接时，你可以选择 Apple Watch。iPhone 不在通信范围内时，可以打开已保存的歌曲，在此设备上播放。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone 已連線時，你可以選擇 Apple Watch。iPhone 超出通訊範圍時，可以開啟已儲存的歌曲，在這部裝置上播放。"
           }
         }
       }

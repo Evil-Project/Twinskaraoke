@@ -78,7 +78,7 @@ struct WatchPlaybackRegressionTests {
     @Test("A late activation after relinquishing output is deactivated before a new request")
     func relinquishedActivation() throws {
         let activation = WatchActivationProbe()
-        var deactivation: (@MainActor () -> Void)?
+        var deactivation: (@MainActor (Bool) -> Void)?
         let session = WatchAudioSessionCoordinator(
             activate: { activation.completions.append($0) },
             deactivate: { deactivation = $0 }
@@ -95,7 +95,7 @@ struct WatchPlaybackRegressionTests {
         #expect(!resumed)
 
         let released = try #require(deactivation)
-        released()
+        released(true)
         #expect(activation.completions.count == 2)
         let current = try #require(activation.completions.dropFirst().first)
         current(.success(()))
@@ -107,7 +107,7 @@ struct WatchPlaybackRegressionTests {
     @Test("Relinquishing an already-active session releases it once")
     func relinquishActiveSession() throws {
         let activation = WatchActivationProbe()
-        var deactivations: [@MainActor () -> Void] = []
+        var deactivations: [@MainActor (Bool) -> Void] = []
         let session = WatchAudioSessionCoordinator(
             activate: { activation.completions.append($0) },
             deactivate: { deactivations.append($0) }
@@ -119,6 +119,76 @@ struct WatchPlaybackRegressionTests {
         session.relinquish()
         #expect(!session.isActive)
         #expect(deactivations.count == 1)
+    }
+
+    @MainActor
+    @Test("Filtering out unavailable downloads preserves the second occurrence")
+    func independentQueuePreservesSelectedOccurrence() throws {
+        let a = UITestFixtures.song(id: "a", title: "A", artist: "Artist")
+        let b = UITestFixtures.song(id: "b", title: "B", artist: "Artist")
+        let unavailable = UITestFixtures.song(id: "unavailable", title: "Unavailable", artist: "Artist")
+        let selection = try #require(AudioManager.savedQueue(
+            at: 3, in: [a, unavailable, b, a], isSaved: { $0 != unavailable.id }
+        ))
+        #expect(selection.songs == [a, b, a])
+        #expect(selection.index == selection.songs.count - 1)
+    }
+
+    @MainActor
+    @Test("A later relinquish retries an unconfirmed release without blocking activation")
+    func retriesUnconfirmedRelease() throws {
+        let activation = WatchActivationProbe()
+        var releases: [@MainActor (Bool) -> Void] = []
+        let session = WatchAudioSessionCoordinator(
+            activate: { activation.completions.append($0) },
+            deactivate: { releases.append($0) }
+        )
+        session.request { _ in }
+        let active = try #require(activation.completions.first)
+        active(.success(()))
+        session.relinquish()
+        let attempted = try #require(releases.first)
+        attempted(false)
+        session.relinquish()
+        let retried = try #require(releases.dropFirst().first)
+        session.request { _ in }
+        #expect(activation.completions.count == 1)
+        retried(true)
+        #expect(activation.completions.count == 2)
+    }
+
+    @MainActor
+    @Test("A successful invalidated activation is released even before output is relinquished")
+    func invalidatedActivationReleasesSession() throws {
+        let activation = WatchActivationProbe()
+        var releases = 0
+        let session = WatchAudioSessionCoordinator(
+            activate: { activation.completions.append($0) },
+            deactivate: { finish in releases += 1; finish(true) }
+        )
+        session.request { _ in Issue.record("An invalidated player received an activation result") }
+        session.invalidate()
+        let stale = try #require(activation.completions.first)
+        stale(.success(()))
+        session.relinquish()
+        #expect(releases == 1)
+    }
+
+    @MainActor
+    @Test("Play retries the same radio station after an unpaused activation failure")
+    func managerRetriesRadioAfterActivationFailure() async throws {
+        let fixture = try WatchRadioActivationFixture()
+        defer { fixture.cleanUp() }
+        try await fixture.tuneIn(activationCount: 1)
+        let first = try #require(fixture.activation.completions.first)
+        first(.failure(URLError(.cannotConnectToHost)))
+        #expect(fixture.manager.isRadioMode)
+        #expect(fixture.manager.playbackError != nil)
+        #expect(fixture.manager.togglePlayPause())
+        try await fixture.waitForActivation(count: 2)
+        let second = try #require(fixture.activation.completions.last)
+        second(.success(()))
+        #expect(fixture.starts == 1)
     }
 
     @MainActor
@@ -153,6 +223,7 @@ struct WatchPlaybackRegressionTests {
         let stale = try #require(fixture.activation.completions.first)
         stale(.success(()))
         #expect(fixture.starts == 0)
+        #expect(fixture.deactivations == 1)
         #expect(!fixture.manager.isPlaying)
         #expect(!fixture.manager.isLoading)
 
@@ -307,7 +378,7 @@ private final class WatchActivationProbe {
     var completions: [WatchAudioSessionCoordinator.Completion] = []
 
     func makeSession() -> WatchAudioSessionCoordinator {
-        WatchAudioSessionCoordinator(activate: { self.completions.append($0) })
+        WatchAudioSessionCoordinator(activate: { self.completions.append($0) }, deactivate: { $0(true) })
     }
 }
 
@@ -322,7 +393,7 @@ private final class WatchRadioActivationFixture {
             activate: { [weak self] completion in self?.activation.completions.append(completion) },
             deactivate: { [weak self] completion in
                 self?.deactivations += 1
-                completion()
+                completion(true)
             }
         ),
         canPlayLocally: { true },
