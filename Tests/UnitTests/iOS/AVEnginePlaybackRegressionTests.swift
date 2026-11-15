@@ -92,6 +92,51 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!session.isCurrent(latestSeek))
     }
 
+    @Test("AirPlay departure defers vocal effects until the destination engine is ready")
+    func airPlayDepartureDefersEffectsUntilLocalEngineIsReady() async throws {
+        let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
+        let engine = AVEnginePlayback()
+        defer {
+            engine.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        #expect(!AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: true, loadingLocalEngine: false
+        ))
+        engine.play(url: source, startAt: 4, isAirPlayHandoff: true)
+        #expect(engine.isLoadingAirPlayHandoff)
+        #expect(!AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: false, loadingLocalEngine: engine.isLoadingAirPlayHandoff
+        ))
+        try await waitUntil { engine.hasPlayableMainMedia }
+        #expect(AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: false, loadingLocalEngine: engine.isLoadingAirPlayHandoff
+        ))
+        #expect(engine.currentTime >= 4)
+    }
+
+    @Test("An AirPlay song can play again after reaching the end of the queue")
+    func airPlaySampleSessionRestartsAfterEnding() async throws {
+        let source = try makeSilentWaveFile(duration: 0.4, sampleRate: 48_000)
+        var starts = 0
+        var ends = 0
+        let session = AirPlaySampleSession { event in
+            if case .playing = event { starts += 1 }
+            if case .ended = event { ends += 1 }
+        } onTime: { _, _ in }
+        defer {
+            session.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        session.loadSong(source, at: 0, autoplay: true)
+        try await waitUntil { ends == 1 }
+        session.resume(url: source)
+        #expect(session.position == 0)
+        try await waitUntil { starts == 2 }
+    }
+
     @Test("A superseded AirPlay departure cannot start its destination after the drain")
     func supersededAirPlayDepartureCannotRestart() async {
         let operations = AirPlaySongOperations()

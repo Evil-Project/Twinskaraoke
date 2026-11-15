@@ -312,6 +312,10 @@ final class AirPlaySampleSession {
     private func receive(_ event: AirPlaySampleRenderer.Event, generation: Int) {
         guard operations.isCurrent(generation) else { return }
         if case .playing = event, !wantsPlayback { return }
+        if case .ended = event {
+            wantsPlayback = false
+            position = duration
+        }
         timeout?.cancel()
         awaitingStart = false
         onEvent(event)

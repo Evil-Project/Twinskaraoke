@@ -286,8 +286,10 @@ extension AudioPlayerManager {
                   self.currentPlaybackURL == url else { return }
             self.airPlayHandoffs.invalidate()
             DebugLogger.log("AirPlay handoff \(request): starting destination, airPlay=\(useAirPlay)", category: .playback)
-            self.startPlayingFile(url, startAt: position, resetSeparation: false)
-            if self.anyAIEffectActive { self.applyMLSeparationIfNeeded() }
+            self.startPlayingFile(url, startAt: position, resetSeparation: false) { [weak self] in
+                guard let self, self.anyAIEffectActive else { return }
+                self.applyMLSeparationIfNeeded()
+            }
         }
         if let retiring = airPlayHandoffs.retiringSamples {
             retiring.stop { [weak self] in

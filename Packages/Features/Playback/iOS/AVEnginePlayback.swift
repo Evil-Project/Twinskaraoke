@@ -208,6 +208,8 @@ final class AVEnginePlayback {
 
     private var crossfadeTimer: DispatchSourceTimer?
     private var crossfadeRampGeneration: UInt64 = 0
+    private var singleLoadIsAirPlayHandoff = false
+    var isLoadingAirPlayHandoff: Bool { singleLoadIsAirPlayHandoff && singleLoadTask != nil }
     private var singleLoadPosition: TimeInterval = 0
     private var singleLoadTask: Task<LoadedMediaTransfer<LoadedMedia>, Error>?
     private var stemsLoadTask: Task<LoadedMediaTransfer<LoadedStemTriple>, Error>?
@@ -526,7 +528,7 @@ final class AVEnginePlayback {
         releasePlayerMedia(crossfadePlayer)
     }
 
-    func play(url: URL, startAt: TimeInterval = 0, onReady: (() -> Void)? = nil) {
+    func play(url: URL, startAt: TimeInterval = 0, isAirPlayHandoff: Bool = false, onReady: (() -> Void)? = nil) {
         DebugLogger.log("Play single: \(url.lastPathComponent)", category: .playback)
         _paused = false
         suppressionToken &+= 1
@@ -539,6 +541,7 @@ final class AVEnginePlayback {
         let loadTask = Task.detached(priority: .userInitiated) {
             LoadedMediaTransfer(value: try Self.loadMedia(url: url, intent: .immediatePlayback))
         }
+        singleLoadIsAirPlayHandoff = isAirPlayHandoff
         singleLoadPosition = max(0, startAt)
         singleLoadTask = loadTask
         Task {
