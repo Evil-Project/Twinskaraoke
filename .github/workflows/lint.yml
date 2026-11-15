@@ -81,9 +81,10 @@ jobs:
           if [ "$changed" -gt 400 ]; then
             echo "::warning title=Large PR::$changed changed lines. Consider splitting into focused PRs (see CONTRIBUTING.md), or explain in the description why it can't be split."
           fi
-      - name: Warn when large files grow
+      - name: Check that large files don't grow
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        # Advisory only, like the size check above. Replaces SwiftLint's
-        # file_length and type_body_length; see the script.
+        # Warns when a Swift file over 600 lines grows, and fails when one of
+        # the files AGENTS.md says must not grow got longer. Replaces
+        # SwiftLint's file_length and type_body_length; see the script.
         run: Scripts/check-file-growth.sh "$BASE_SHA"

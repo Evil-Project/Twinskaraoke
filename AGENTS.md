@@ -15,11 +15,17 @@ with approachable concurrency, deployment target iOS 26.5.
 
 1. Work on a branch from current `main`: `feat/<slug>`, `fix/<slug>`,
    `refactor/<slug>`, `chore/<slug>`. Never commit to `main` — every push to
-   `main` publishes the public nightly IPA.
+   `main` publishes the public nightly IPA. Working on several tasks at
+   once: one `git worktree` per task under `.claude/worktrees/<name>`
+   (gitignored), not under `/tmp`. From a `/tmp` path SwiftLint can't match
+   the paths in `.swiftlint-baseline.json` and reports every baselined
+   violation again.
 2. Before editing, read the linked issue and write a plan: the files you will
    touch, the approach, the tests you will add. Stop and ask for approval
    before changing playback, navigation, authentication, the Xcode project or
-   CI.
+   CI. No issue, because the person you work for asked directly? Their
+   request takes its place: put the acceptance criteria you assume into the
+   plan.
 3. One PR = one concern, ideally under ~400 changed lines. Split bigger work
    into stacked PRs (model/service → UI → polish). Never mix a refactor with a
    feature or a fix.
@@ -120,6 +126,19 @@ state those views read.
   list the skill rules you chose not to follow, each with its reason. A PR
   without SwiftUI changes says so instead.
 
+## Apple documentation
+
+Check an Apple API before you use it: that it exists on every platform the
+code builds for, its minimum OS version, and whether it is deprecated. Don't
+answer that from memory.
+
+- `.mcp.json` configures the Sosumi MCP server, which returns Apple's
+  developer documentation, Human Interface Guidelines and WWDC transcripts
+  as Markdown. Claude Code asks once whether to enable it. Without MCP, read
+  https://developer.apple.com/documentation.
+- The documentation describes the newest SDK. Compare what it says with this
+  project's deployment targets.
+
 ## Code rules
 
 - Observable state: `@MainActor @Observable final class` (not
@@ -134,12 +153,13 @@ state those views read.
   also de, fi, fr, ja, uk, zh-Hans, zh-Hant). Never build user-facing text by
   concatenation.
 - Logging: `DebugLogger.log(...)` with the right category; no `print`.
-- Large files: don't grow `AudioPlayerManager.swift`, `DownloadManager.swift`,
-  `FullScreenPlayerView.swift`, `SearchView.swift` or `ContentView.swift`.
-  Extract a new type into its own file instead. Files over ~600 lines are
-  split when a PR touches them substantially (in a separate refactor PR).
-  `Scripts/check-file-growth.sh` (run by `verify.sh` and CI) warns when a
-  Swift file over 600 lines gets longer.
+- Large files: don't grow `AudioPlayerManager.swift`, `DownloadManager.swift`
+  or the iOS app's `FullScreenPlayerView.swift`, `SearchView.swift` and
+  `ContentView.swift`. Extract a new type into its own file instead. Files
+  over ~600 lines are split when a PR touches them substantially (in a
+  separate refactor PR). `Scripts/check-file-growth.sh` (run by `verify.sh`
+  and CI) fails when one of those five files gets longer, and warns when any
+  other Swift file over 600 lines does.
 - No new third-party dependencies without asking. Current ones:
   SDWebImageSwiftUI, swift-spleeter, pillarbox-apple.
 - Formatting is owned by SwiftFormat (`.swiftformat`) and linting by
@@ -174,7 +194,15 @@ git diff --name-only --diff-filter=d origin/main... -- '*.swift' | xargs swiftfo
 swiftlint --fix              # fix autocorrectable lint issues
 ```
 
-CI builds with `-skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO`.
+CI builds with `-skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO`. Its
+tests and analysis run on the newest Xcode 27 (`xcode-27` runners in
+`tests.yml` and `analyze.yml`). The code also has to compile with Xcode 26: wrap a declaration that only exists in
+the iOS 27 SDK in `#if compiler(>=6.4)` as well as `#available`, as
+`AudioSessionController` does. With an Xcode older than CI's,
+`Scripts/verify.sh` doesn't compile those branches; say so under "How it was
+tested". If `xcodebuild` or SwiftLint fails because the Command Line Tools
+are selected, run `sudo xcode-select -s /Applications/Xcode.app` or export
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 Schemes: `Twinskaraoke`, `Twinskaraoke Mac App`, `Twinskaraoke TV App`,
 `TwinskaraokeWatchApp`. Test targets: `TwinskaraokeTests`,
 `TwinskaraokeUITests`, `Twinskaraoke Watch AppTests`,
@@ -235,3 +263,12 @@ The author is responsible for every line, including generated ones.
 - Commit secrets, tokens, signing settings, team IDs or bundle ID changes.
 - Change CI workflows, `CODEOWNERS` or this file as a side effect of another
   task.
+
+In Claude Code, `.claude/hooks/guard.py` (set up in `.claude/settings.json`)
+enforces part of this: it blocks commits on `main` and edits to
+`.agents/skills/`, the generated `docs/api/` Markdown and
+`.swiftlint-baseline.json`, and asks before a push to `main` or an edit to
+`project.pbxproj`, a CI workflow, `CODEOWNERS` or an `AGENTS.md`. It also
+asks when a shell command visibly writes one of those files (a redirect,
+`sed -i`, `cp`, `rm`, …), but it can't see a write made inside a script. The
+rules apply in every tool, with or without the hook.

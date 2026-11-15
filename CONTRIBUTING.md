@@ -57,9 +57,17 @@ Markdown reference, which is what AI agents read. After the API changes, run
 - `AGENTS.md` is the single source of project rules. Claude Code reads it via
   `CLAUDE.md`; Codex and Cursor read it directly. Don't keep private copies.
 - Personal notes go in `CLAUDE.local.md` / `AGENTS.local.md` (gitignored).
+- Agent skills live in `.agents/skills/` (pinned in `skills-lock.json`;
+  `.claude/skills/` links to them). `swiftui-pro` is mandatory for SwiftUI
+  work; see "SwiftUI skill" in `AGENTS.md`.
 - Shared Claude Code commands live in `.claude/commands/`. Using another tool?
   The files are plain Markdown — tell your agent "follow
   `.claude/commands/plan-issue.md` for issue #42".
+- `.claude/settings.json` holds the shared Claude Code hooks: a guard that
+  blocks commits on `main` and edits to generated or third-party files, and
+  asks before edits to the Xcode project, CI or `AGENTS.md`. `.mcp.json`
+  offers the Sosumi MCP server for Apple's documentation. Personal settings
+  go in `.claude/settings.local.json` (gitignored).
 - You own every line you submit, generated or not. Read the whole diff before
   you ask for review.
 

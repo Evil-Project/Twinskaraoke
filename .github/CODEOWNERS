@@ -15,6 +15,11 @@
 /Scripts/                               @Mag1cByt3s
 /AGENTS.md                              @Mag1cByt3s
 /CLAUDE.md                              @Mag1cByt3s
+/Packages/Features/Playback/AGENTS.md   @Mag1cByt3s
 /.claude/                               @Mag1cByt3s
+/.agents/                               @Mag1cByt3s
+/skills-lock.json                       @Mag1cByt3s
+/.mcp.json                              @Mag1cByt3s
+/.coderabbit.yaml                       @Mag1cByt3s
 /.swiftformat                           @Mag1cByt3s
 /.swiftlint.yml                         @Mag1cByt3s
