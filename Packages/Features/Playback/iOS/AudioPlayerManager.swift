@@ -2845,9 +2845,9 @@ final class AudioPlayerManager {
         }
     }
 
-    func applyMLSeparationIfNeeded() {
-        guard phoneAudioAllowed else { return }
-        if usesAirPlaySongPlayer { reconcileAirPlayRoute() }
+    func applyMLSeparationIfNeeded(outputs: [AVAudioSession.Port] = AirPlaySongRouting.outputs) {
+        guard phoneAudioAllowed, !airPlayHandoffs.isPending else { return }
+        reconcileAirPlayRoute(outputs: outputs)
         guard AirPlayPlaybackCoordinator.canApplyEffects(in: self) else { return }
         instrumentalTask?.cancel()
         instrumentalTask = nil

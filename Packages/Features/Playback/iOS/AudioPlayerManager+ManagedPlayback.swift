@@ -159,10 +159,9 @@ extension AudioPlayerManager {
     }
 
     @discardableResult
-    func reconcileAirPlayRoute(resuming: Bool = false) -> Bool {
+    func reconcileAirPlayRoute(resuming: Bool = false, outputs: [AVAudioSession.Port] = AirPlaySongRouting.outputs) -> Bool {
         guard phoneAudioAllowed, !isRadioMode, !isRemotePlaybackCaching,
               let url = currentPlaybackURL, url.isFileURL else { return false }
-        let outputs = AirPlaySongRouting.outputs
         let leavingAirPlay = !outputs.contains(.airPlay)
         let useAirPlay = AirPlaySongRouting.shouldRouteSong(
             outputs: outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
@@ -194,7 +193,8 @@ extension AudioPlayerManager {
             guard let self, self.airPlayHandoffs.isCurrent(request), self.currentSong?.id == songID,
                   self.currentPlaybackURL == url else { return }
             self.airPlayHandoffs.invalidate()
-            self.startPlayingFile(url, startAt: position, resetSeparation: false) { [weak self] in
+            // A seek can update the saved position while the renderer drains.
+            self.startPlayingFile(url, startAt: self.lastKnownPlaybackTime, resetSeparation: false) { [weak self] in
                 guard let self, self.anyAIEffectActive else { return }
                 self.applyMLSeparationIfNeeded()
             }
