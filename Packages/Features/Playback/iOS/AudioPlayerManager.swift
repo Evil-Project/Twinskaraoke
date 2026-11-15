@@ -45,10 +45,6 @@ private enum AudioEffect {
     case karaoke, bassEnhance, vocalEnhance, instrumentalEnhance
 }
 
-private enum ManagedAVPlayerKind {
-    case radio, stream
-}
-
 @MainActor
 @Observable
 final class PlaybackClock {
@@ -70,7 +66,7 @@ final class AudioPlayerManager {
     /// the poll timer, `playbackTime`, `playbackDuration`, the Now Playing
     /// rate — and decoding the lease out of UserDefaults each time cost a
     /// JSON decode per check, dozens of times a second while playing.
-    private var phoneAudioAllowed: Bool { !WatchSessionPublisher.shared.watchOwnsAudio }
+    var phoneAudioAllowed: Bool { !WatchSessionPublisher.shared.watchOwnsAudio }
     var currentSong: Song? { didSet { scheduleSessionSave() } }
     var isPlaying = false { didSet { if oldValue != isPlaying { scheduleSessionSave() } } }
     var isBuffering = false
@@ -121,7 +117,7 @@ final class AudioPlayerManager {
     var radioStreamURL: URL?
     var radioArtworkURL: URL?
     private var isStreamMode: Bool {
-        streamPlayer != nil
+        streamPlayer != nil || airPlaySamples != nil
     }
 
     var aiEnabled: Bool = {
@@ -296,6 +292,7 @@ final class AudioPlayerManager {
         didSet {
             UserDefaults.standard.set(eqEnabled, forKey: "nk.eqEnabled")
             loadedEngine?.setEQEnabled(eqEnabled)
+            reconcileAirPlayRoute()
         }
     }
 
@@ -397,23 +394,25 @@ final class AudioPlayerManager {
     /// time, duration, the AI mode — and the stop/pause calls go through
     /// `loadedEngine`, so drawing the player for a restored song, or stopping
     /// the radio, never builds it.
-    @ObservationIgnored private var loadedEngine: AVEnginePlayback?
+    @ObservationIgnored var loadedEngine: AVEnginePlayback?
     var avEngine: AVEnginePlayback { // Internal so tests can raise its callbacks.
         if let loadedEngine { return loadedEngine }
         let engine = makeEngine()
         loadedEngine = engine
         return engine
     }
-    private let transitionCoordinator = TransitionCoordinator()
+    let transitionCoordinator = TransitionCoordinator()
     @ObservationIgnored let playCountReporter = PlayCountReporter()
-    private var radioPlayer: AVPlayer?
-    private var streamPlayer: AVPlayer?
-    private var streamEndObserver: NSObjectProtocol?
+    var radioPlayer: AVPlayer?
+    var streamPlayer: AVPlayer?
+    @ObservationIgnored var airPlaySamples: AirPlaySampleSession?
+    @ObservationIgnored let airPlayHandoffs = AirPlaySongOperations()
+    var streamEndObserver: NSObjectProtocol?
     private var radioTimeObserver: (player: AVPlayer, token: Any)?
-    private var radioPlayerCancellables = Set<AnyCancellable>()
-    private var streamPlayerCancellables = Set<AnyCancellable>()
-    private var radioPlaybackRequested = false
-    private var streamPlaybackRequested = false
+    var radioPlayerCancellables = Set<AnyCancellable>()
+    var streamPlayerCancellables = Set<AnyCancellable>()
+    var radioPlaybackRequested = false
+    var streamPlaybackRequested = false
     @ObservationIgnored private var remotePlaybackCacheTask: Task<Void, Never>?
     private var remotePlaybackCacheToken: UUID?
     private var autoplayRequestToken: UUID?
@@ -423,7 +422,7 @@ final class AudioPlayerManager {
     // a song replaying with repeat on would otherwise re-issue the search +
     // trending fallback requests every time it starts over.
     private var enrichmentAttemptedSongIDs = Set<String>()
-    private var lastKnownPlaybackTime: TimeInterval = 0
+    var lastKnownPlaybackTime: TimeInterval = 0
     private var pollTimer: Timer?
     // Volume ramps run on a background DispatchSourceTimer (like the engine
     // crossfade ramp) so they don't fire on RunLoop.main during scroll
@@ -447,7 +446,7 @@ final class AudioPlayerManager {
     @ObservationIgnored private var artworkGraceTask: Task<Void, Never>?
     private var playerArtworkWarmupTasks: [String: any SDWebImageOperation] = [:]
     private var warmedPlayerArtworkAt: [String: Date] = [:]
-    private var currentPlaybackURL: URL?
+    var currentPlaybackURL: URL?
     @ObservationIgnored private var instrumentalTask: Task<Void, Never>?
     @ObservationIgnored private var preparedStemTask: Task<Void, Never>?
     @ObservationIgnored private var backgroundAnalysisRetryTask: Task<Void, Never>?
@@ -468,7 +467,7 @@ final class AudioPlayerManager {
     private var suppressPlaybackEndedUntil: Date = .distantPast
     private var wasPlayingBeforeInterruption = false
     private var handlingAudioSessionInterruption = false
-    @ObservationIgnored private let audioSessionController: any AudioSessionManaging =
+    @ObservationIgnored let audioSessionController: any AudioSessionManaging =
         AudioSessionController()
     @ObservationIgnored private let nowPlayingPublisher: any NowPlayingPublishing =
         SystemNowPlayingPublisher()
@@ -512,13 +511,13 @@ final class AudioPlayerManager {
         return !isKaraokePreparedForCurrentSong
     }
 
-    private var isRemotePlaybackCaching: Bool {
+    var isRemotePlaybackCaching: Bool {
         remotePlaybackCacheTask != nil
     }
 
-    private var isPlaybackRequested: Bool {
+    var isPlaybackRequested: Bool {
         if !phoneAudioAllowed { return watchMirror?.isPlaying ?? false }
-        if audioSessionController.hasPendingPlayback { return true }
+        if audioSessionController.hasPendingPlayback || airPlayHandoffs.isPending { return true }
         if isRadioMode { return radioPlaybackRequested }
         if isRemotePlaybackCaching { return streamPlaybackRequested }
         if isStreamMode { return streamPlaybackRequested }
@@ -540,7 +539,7 @@ final class AudioPlayerManager {
         return preparedStemSongID == songID
     }
 
-    private func setPlaybackState(
+    func setPlaybackState(
         playing: Bool,
         buffering: Bool,
         reloadArtwork: Bool = false,
@@ -788,6 +787,7 @@ final class AudioPlayerManager {
 
     func suspendForWatchTransfer() {
         sleepTimer.cancel()
+        airPlayHandoffs.invalidate()
         audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
         cancelPendingTransitionWork()
@@ -850,7 +850,7 @@ final class AudioPlayerManager {
         queueState.mirror(songs, shuffled: isShuffled)
     }
 
-    private func scheduleSessionSave(periodic: Bool = false) {
+    func scheduleSessionSave(periodic: Bool = false) {
         WatchSessionPublisher.shared.playbackDidChange(periodic: periodic)
         guard usesSessionPersistence, sessionPersistenceReady, !isRadioMode else { return }
         let now = ProcessInfo.processInfo.systemUptime
@@ -991,13 +991,13 @@ final class AudioPlayerManager {
         return ids
     }
 
-    private func setPreferredStreamResumeTime(_ seconds: TimeInterval, for songID: String?) {
+    func setPreferredStreamResumeTime(_ seconds: TimeInterval, for songID: String?) {
         guard let songID, seconds.isFinite else { return }
         preferredStreamResumeSongID = songID
         preferredStreamResumeTime = max(0, seconds)
     }
 
-    private func clearPreferredStreamResumeTime() {
+    func clearPreferredStreamResumeTime() {
         preferredStreamResumeSongID = nil
         preferredStreamResumeTime = nil
     }
@@ -1019,10 +1019,11 @@ final class AudioPlayerManager {
         }
     }
 
-    private func activePlaybackTime(for song: Song? = nil) -> TimeInterval {
-        if !isPlaying, !isBuffering, lastKnownPlaybackTime.isFinite, lastKnownPlaybackTime >= 0 {
+    func activePlaybackTime(for song: Song? = nil) -> TimeInterval {
+        if (airPlayHandoffs.isPending || (!isPlaying && !isBuffering)), lastKnownPlaybackTime.isFinite, lastKnownPlaybackTime >= 0 {
             return lastKnownPlaybackTime
         }
+        if let airPlaySamples { return airPlaySamples.position }
         if isStreamMode {
             let fallbackDuration = Double(song?.duration ?? currentSong?.duration ?? 0)
             if let preferredResume = preferredStreamResumeTime(for: song) {
@@ -1066,6 +1067,7 @@ final class AudioPlayerManager {
     var playbackDuration: TimeInterval {
         if let transferredPlayback { return transferredPlayback.duration }
         if !phoneAudioAllowed, let watchMirror { return watchMirror.duration }
+        if let airPlaySamples, airPlaySamples.duration > 0 { return airPlaySamples.duration }
         if isStreamMode {
             let streamDuration = streamPlayer?.currentItem?.duration.seconds ?? .nan
             if streamDuration.isFinite, streamDuration > 0 {
@@ -1107,31 +1109,7 @@ final class AudioPlayerManager {
         return "remote/\(host)/\(fileName)"
     }
 
-    private func streamItemDiagnostics() -> String {
-        guard let player = streamPlayer, let item = player.currentItem else { return "stream=none" }
-        let duration = item.duration.seconds
-        let durationText = duration.isFinite ? String(format: "%.2f", duration) : "unknown"
-        let loadedRanges = item.loadedTimeRanges
-            .map(\.timeRangeValue)
-            .map { range -> String in
-                let start = range.start.seconds
-                let end = CMTimeAdd(range.start, range.duration).seconds
-                guard start.isFinite, end.isFinite else { return "unknown" }
-                return String(format: "%.2f-%.2f", start, end)
-            }
-            .joined(separator: ",")
-        let status = switch item.status {
-        case .unknown: "unknown"
-        case .readyToPlay: "ready"
-        case .failed: "failed"
-        @unknown default: "unknown-default"
-        }
-        let itemError = item.error?.localizedDescription ?? "none"
-        let playerError = player.error?.localizedDescription ?? "none"
-        return "streamDuration=\(durationText), loaded=[\(loadedRanges)], itemStatus=\(status), itemError=\(itemError), playerError=\(playerError)"
-    }
-
-    private func handlePrematurePlaybackEndIfNeeded(source: String) -> Bool {
+    func handlePrematurePlaybackEndIfNeeded(source: String) -> Bool {
         guard let song = currentSong, !isRadioMode else { return false }
         let expectedDuration = TimeInterval(song.duration)
         guard expectedDuration.isFinite, expectedDuration > 15 else { return false }
@@ -1141,7 +1119,7 @@ final class AudioPlayerManager {
         guard elapsed < minimumExpectedElapsed else { return false }
 
         DebugLogger.log(
-            "Ignoring premature playback end from \(source) for \(song.id): elapsed=\(elapsed), expected=\(expectedDuration), source=\(playbackSourceDescription(currentPlaybackURL)), \(streamItemDiagnostics())",
+            "Ignoring premature playback end from \(source) for \(song.id): elapsed=\(elapsed), expected=\(expectedDuration), source=\(playbackSourceDescription(currentPlaybackURL)), \(ManagedAVPlayerObservation.diagnostics(for: streamPlayer))",
             category: .playback
         )
         suppressPlaybackEndedCallbacks(for: 2.0)
@@ -1267,7 +1245,7 @@ final class AudioPlayerManager {
             else { return }
 
             preparedStemSongID = song.id
-            guard anyAIEffectActive else { return }
+            guard anyAIEffectActive, airPlaySamples == nil else { return }
             switchActivePlaybackToStems(
                 for: song, stems: stems, sourceURL: sourceURL,
                 onReady: { [weak self] in self?.applyAIMixVolumes() }
@@ -1288,11 +1266,11 @@ final class AudioPlayerManager {
         }
     }
 
-    private func switchActivePlaybackToStems(
+    func switchActivePlaybackToStems(
         for song: Song, stems: CachedStems, sourceURL: URL,
         onReady: (() -> Void)? = nil
     ) {
-        guard phoneAudioAllowed else { return }
+        guard phoneAudioAllowed, AirPlayPlaybackCoordinator.canApplyEffects(in: self) else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
             self?.switchActivePlaybackToStems(for: song, stems: stems, sourceURL: sourceURL, onReady: onReady)
         }, replacingPending: false) else { return }
@@ -1316,7 +1294,7 @@ final class AudioPlayerManager {
                 endTrackTransitionBackgroundTask()
             #endif
         }
-        if isStreamMode {
+        if isStreamMode || loadedEngine?.currentURL != sourceURL {
             stopStreamPlayer()
             avEngine.playStems(
                 originalURL: sourceURL,
@@ -1350,7 +1328,8 @@ final class AudioPlayerManager {
         }
     }
 
-    private func cancelPendingTransitionWork(resetVolume: Bool = true) {
+    func cancelPendingTransitionWork(resetVolume: Bool = true) {
+        AirPlayPlaybackCoordinator.cancelTransition(in: self)
         transition.reset()
         cancelQuickCutTimer(resetVolume: resetVolume)
         loadedEngine?.cancelCrossfade()
@@ -1367,6 +1346,7 @@ final class AudioPlayerManager {
     }
 
     private func schedulePreparedTransition(_ plan: TransitionCoordinator.TransitionPlan) {
+        if AirPlayPlaybackCoordinator.prepareTransition(plan, in: self) { return }
         let remaining = playbackDuration - activePlaybackTime(for: currentSong)
         let lead = anyAIEffectActive ? 0 : AVEnginePlayback.crossfadeSchedulingLead
         transition.scheduleDeadline(after: remaining - plan.fadeDuration - lead) { [weak self] in
@@ -1456,27 +1436,34 @@ final class AudioPlayerManager {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 guard self.phoneAudioAllowed, !self.isRadioMode else { return }
-                guard !self.isEditingProgress else { return }
+                guard !self.isEditingProgress, !self.airPlayHandoffs.isPending else { return }
                 guard self.currentSong != nil else { return }
                 if self.suppressTransitionAfterSeek {
                     self.suppressTransitionAfterSeek = false
                     return
                 }
                 guard self.isPlaying else {
+                    if self.usesAirPlaySongPlayer, self.streamPlaybackRequested { return }
                     if case .idle = self.transitionCoordinator.state {} else {
                         self.transitionCoordinator.reset()
                     }
                     return
                 }
+                if AirPlayPlaybackCoordinator.pollSamples(in: self) { return }
                 if self.isStreamMode {
                     guard let player = self.streamPlayer,
                           let item = player.currentItem,
                           item.status == .readyToPlay else { return }
                     let t = player.currentTime().seconds
+                    guard t.isFinite else { return }
                     self.lastKnownPlaybackTime = t
                     self.reconcilePreferredStreamResumeTime(observedTime: t, for: self.currentSong)
                     let itemDuration = item.duration.seconds
-                    let dur = (itemDuration.isFinite && itemDuration > 0) ? itemDuration : self.playbackDuration
+                    let dur = if !itemDuration.isFinite || itemDuration <= 0 {
+                        self.playbackDuration
+                    } else {
+                        itemDuration
+                    }
                     guard dur.isFinite, dur > 0 else { return }
                     let newProgress = min(1.0, max(0.0, t / dur))
                     if abs(newProgress - self.progress) > 0.0005 {
@@ -1514,14 +1501,17 @@ final class AudioPlayerManager {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    private var crossfadeTarget: PlaybackQueueState.Entry? {
+    var crossfadeTarget: PlaybackQueueState.Entry? {
         PlaybackTransition.target(in: queueState, after: currentSong, repeatMode: repeatMode,
                                   endsWithCurrentSong: sleepTimer.endsWithCurrentSong, aiEffectActive: anyAIEffectActive)
     }
 
-    private var hasStartedHandoff: Bool { loadedEngine?.hasAudibleCrossfade == true || quickCutTimer != nil }
+    private var hasStartedHandoff: Bool {
+        if airPlaySamples != nil { return transitionCoordinator.state.isCrossfading }
+        return loadedEngine?.hasAudibleCrossfade == true || quickCutTimer != nil
+    }
 
-    private func pollTransition(at time: TimeInterval, duration: TimeInterval) {
+    func pollTransition(at time: TimeInterval, duration: TimeInterval) {
         transitionCoordinator.poll(
             currentTime: time, totalDuration: duration, currentSong: currentSong, target: crossfadeTarget,
             autoMixEnabled: autoMixEnabled, crossfadeEnabled: crossfadeEnabled, crossfadeSeconds: crossfadeSeconds,
@@ -1730,14 +1720,15 @@ final class AudioPlayerManager {
         cancelPendingTransitionWork()
     }
 
-    private func startPlayingFile(
+    func startPlayingFile(
         _ url: URL,
         startAt: TimeInterval = 0,
-        resetSeparation: Bool = true
+        resetSeparation: Bool = true,
+        onLocalReady: (() -> Void)? = nil
     ) {
         guard phoneAudioAllowed else { return }
         guard audioSessionController.performWhenReady({ [weak self] in
-            self?.startPlayingFile(url, startAt: startAt, resetSeparation: resetSeparation)
+            self?.startPlayingFile(url, startAt: startAt, resetSeparation: resetSeparation, onLocalReady: onLocalReady)
         }, replacingPending: false) else { return }
 
         suppressPlaybackEndedCallbacks()
@@ -1757,18 +1748,25 @@ final class AudioPlayerManager {
         aiStemSwitchInFlightSongID = nil
         loadFailure = nil
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
-        avEngine.play(url: url, startAt: max(0, startAt)) { [weak self] in
-            #if canImport(UIKit)
-                self?.endTrackTransitionBackgroundTask()
-            #endif
+        if AirPlaySongRouting.shouldRouteSong(
+            outputs: AirPlaySongRouting.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
+        ) {
+            startAirPlaySamples(url, position: startAt)
+        } else {
+            avEngine.play(url: url, startAt: max(0, startAt), isAirPlayHandoff: onLocalReady != nil) { [weak self] in
+                #if canImport(UIKit)
+                    self?.endTrackTransitionBackgroundTask()
+                #endif
+                onLocalReady?()
+            }
+            setPlaybackState(
+                playing: true,
+                buffering: false,
+                reloadArtwork: true,
+                reason: "startPlayingFile"
+            )
+            DebugLogger.log("Playing file: \(url.lastPathComponent)", category: .playback)
         }
-        setPlaybackState(
-            playing: true,
-            buffering: false,
-            reloadArtwork: true,
-            reason: "startPlayingFile"
-        )
-        DebugLogger.log("Playing file: \(url.lastPathComponent)", category: .playback)
         CacheManager.shared.recordAccess(for: url)
         if let song = currentSong, aiEnabled, aiAutoAnalyze, !anyAIEffectActive {
             triggerBackgroundAnalysis(for: song)
@@ -1859,8 +1857,10 @@ final class AudioPlayerManager {
 
     /// Returns true when a pause request matched an active or resumable playback path.
     @discardableResult
-    private func pauseCurrentPlayback(source: String = #function) -> Bool {
+    func pauseCurrentPlayback(source: String = #function) -> Bool {
         if WatchSessionPublisher.shared.routeToWatch(.pause) { return true }
+        let pendingAirPlayHandoff = airPlayHandoffs.isPending
+        airPlayHandoffs.invalidate()
         audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
         if !handlingAudioSessionInterruption {
@@ -1912,6 +1912,7 @@ final class AudioPlayerManager {
             )
             return wasActive
         }
+        if AirPlayPlaybackCoordinator.pauseSamples(in: self) { return true }
         if isStreamMode {
             let wasActive = streamPlaybackRequested || isPlaying || isBuffering
             guard let player = streamPlayer else {
@@ -1933,10 +1934,10 @@ final class AudioPlayerManager {
                 )
                 return true
             }
-            cancelPendingTransitionWork()
-            streamPlaybackRequested = false
             lastKnownPlaybackTime = activePlaybackTime()
+            streamPlaybackRequested = false
             player.pause()
+            cancelPendingTransitionWork()
             setPlaybackState(playing: false, buffering: false, reason: "pause.stream.\(source)")
             return true
         }
@@ -1951,7 +1952,7 @@ final class AudioPlayerManager {
             return true
         }
         cancelPendingTransitionWork()
-        lastKnownPlaybackTime = activePlaybackTime()
+        if !pendingAirPlayHandoff { lastKnownPlaybackTime = activePlaybackTime() }
         loadedEngine?.pause()
         aiStemSwitchInFlightSongID = nil
         setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")
@@ -2032,6 +2033,8 @@ final class AudioPlayerManager {
             )
             return true
         }
+        if reconcileAirPlayRoute(resuming: true) { return true }
+        if AirPlayPlaybackCoordinator.resumeSamples(in: self) { return true }
         if isStreamMode {
             guard let player = streamPlayer else {
                 streamPlaybackRequested = false
@@ -2108,7 +2111,7 @@ final class AudioPlayerManager {
         return true
     }
 
-    private func reportLoadFailure(_ failure: PlaybackLoadFailure) {
+    func reportLoadFailure(_ failure: PlaybackLoadFailure) {
         loadFailure = failure
         WatchSessionPublisher.shared.playbackDidChange()
         // The message appears under the song, which a VoiceOver user is
@@ -2156,6 +2159,7 @@ final class AudioPlayerManager {
         suppressTransitionAfterSeek = true
         suppressPlaybackEndedCallbacks()
         progress = fraction
+        if AirPlayPlaybackCoordinator.seekSamples(to: fraction, in: self) { return }
         if isStreamMode {
             guard let player = streamPlayer else { return }
             cancelPendingTransitionWork()
@@ -2364,139 +2368,6 @@ final class AudioPlayerManager {
             cancelPendingTransitionWork()
         }
         WatchSessionPublisher.shared.routeToWatch(.replaceQueue, queue: queue)
-    }
-
-    private func observeManagedPlayer(
-        _ player: AVPlayer,
-        item: AVPlayerItem,
-        kind: ManagedAVPlayerKind
-    ) {
-        let statusHandler: (AVPlayerItem.Status) -> Void = { [weak self, weak player, weak item] status in
-            guard let self, let player, let item else { return }
-            handleManagedItemStatus(status, player: player, item: item, kind: kind)
-        }
-        let stateHandler: () -> Void = { [weak self, weak player] in
-            guard let self, let player else { return }
-            refreshManagedPlayerState(player, kind: kind)
-        }
-
-        switch kind {
-        case .radio:
-            radioPlayerCancellables.removeAll()
-            item.publisher(for: \.status, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink(receiveValue: statusHandler)
-                .store(in: &radioPlayerCancellables)
-            item.publisher(for: \.isPlaybackBufferEmpty, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-            item.publisher(for: \.isPlaybackLikelyToKeepUp, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &radioPlayerCancellables)
-        case .stream:
-            streamPlayerCancellables.removeAll()
-            item.publisher(for: \.status, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink(receiveValue: statusHandler)
-                .store(in: &streamPlayerCancellables)
-            item.publisher(for: \.isPlaybackBufferEmpty, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
-            item.publisher(for: \.isPlaybackLikelyToKeepUp, options: [.new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
-            player.publisher(for: \.timeControlStatus, options: [.initial, .new])
-                .receive(on: DispatchQueue.main)
-                .sink { _ in stateHandler() }
-                .store(in: &streamPlayerCancellables)
-        }
-    }
-
-    private func handleManagedItemStatus(
-        _ status: AVPlayerItem.Status,
-        player: AVPlayer,
-        item: AVPlayerItem,
-        kind: ManagedAVPlayerKind
-    ) {
-        guard isCurrentManagedPlayer(player, kind: kind) else { return }
-        switch status {
-        case .readyToPlay:
-            refreshManagedPlayerState(player, kind: kind)
-        case .failed:
-            handleManagedPlayerFailure(player: player, item: item, kind: kind)
-        case .unknown:
-            refreshManagedPlayerState(player, kind: kind)
-        @unknown default:
-            refreshManagedPlayerState(player, kind: kind)
-        }
-    }
-
-    private func refreshManagedPlayerState(_ player: AVPlayer, kind: ManagedAVPlayerKind) {
-        guard isCurrentManagedPlayer(player, kind: kind) else { return }
-        guard let item = player.currentItem else {
-            setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).noItem")
-            return
-        }
-        if item.status == .failed {
-            handleManagedPlayerFailure(player: player, item: item, kind: kind)
-            return
-        }
-        let playbackRequested = playbackRequested(for: kind)
-        guard playbackRequested else {
-            setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).notRequested")
-            return
-        }
-        if player.timeControlStatus == .playing {
-            setPlaybackState(playing: true, buffering: false, reason: "managed.\(kind).playing")
-        } else {
-            setPlaybackState(playing: false, buffering: true, reason: "managed.\(kind).buffering")
-        }
-    }
-
-    private func handleManagedPlayerFailure(
-        player: AVPlayer,
-        item: AVPlayerItem,
-        kind: ManagedAVPlayerKind
-    ) {
-        guard isCurrentManagedPlayer(player, kind: kind) else { return }
-        let message = item.error?.localizedDescription
-            ?? player.error?.localizedDescription
-            ?? "unknown error"
-        switch kind {
-        case .radio:
-            DebugLogger.log("Radio AVPlayer failed: \(message)", category: .playback)
-            radioPlaybackRequested = false
-        case .stream:
-            DebugLogger.log("Stream AVPlayer failed: \(message)", category: .playback)
-            streamPlaybackRequested = false
-        }
-        setPlaybackState(playing: false, buffering: false, reason: "managed.\(kind).failure")
-    }
-
-    private func isCurrentManagedPlayer(_ player: AVPlayer, kind: ManagedAVPlayerKind) -> Bool {
-        switch kind {
-        case .radio:
-            radioPlayer === player
-        case .stream:
-            streamPlayer === player
-        }
-    }
-
-    private func playbackRequested(for kind: ManagedAVPlayerKind) -> Bool {
-        switch kind {
-        case .radio:
-            radioPlaybackRequested
-        case .stream:
-            streamPlaybackRequested
-        }
     }
 
     func playRadio(streamURL: URL, song: Song, artworkURL: URL?) {
@@ -2807,7 +2678,10 @@ final class AudioPlayerManager {
         }
     }
 
-    private func stopStreamPlayer() {
+    func stopStreamPlayer() {
+        airPlayHandoffs.invalidate()
+        airPlaySamples?.stop()
+        airPlaySamples = nil
         remotePlaybackCacheTask?.cancel()
         remotePlaybackCacheTask = nil
         remotePlaybackCacheToken = nil
@@ -2971,8 +2845,10 @@ final class AudioPlayerManager {
         }
     }
 
-    private func applyMLSeparationIfNeeded() {
-        guard phoneAudioAllowed else { return }
+    func applyMLSeparationIfNeeded(outputs: [AVAudioSession.Port] = AirPlaySongRouting.outputs) {
+        guard phoneAudioAllowed, !airPlayHandoffs.isPending else { return }
+        reconcileAirPlayRoute(outputs: outputs)
+        guard AirPlayPlaybackCoordinator.canApplyEffects(in: self) else { return }
         instrumentalTask?.cancel()
         instrumentalTask = nil
         preparedStemTask?.cancel()
@@ -3295,6 +3171,7 @@ final class AudioPlayerManager {
     private func handleRouteChange(_ note: Notification) {
         guard phoneAudioAllowed else { return }
         updateRouteIcon()
+        if reconcileAirPlayRoute() { return }
         guard let info = note.userInfo,
               let reasonValue = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue)
@@ -3441,7 +3318,7 @@ final class AudioPlayerManager {
         )
     }
 
-    private func updateNowPlayingInfo(reloadArtwork: Bool) {
+    func updateNowPlayingInfo(reloadArtwork: Bool) {
         guard let song = currentSong else {
             nowPlayingPublisher.info = nil
             lastNowPlayingElapsedSecond = nil
@@ -3495,7 +3372,7 @@ final class AudioPlayerManager {
         return lastNowPlayingPlaybackRate != nowPlayingPlaybackRate
     }
 
-    private func updateNowPlayingElapsed(_ elapsed: Double) {
+    func updateNowPlayingElapsed(_ elapsed: Double) {
         guard isPlaying else {
             updateNowPlayingInfo(reloadArtwork: false)
             return
@@ -3873,6 +3750,10 @@ final class AudioPlayerManager {
 
     private func handleTransitionBegin(plan: TransitionCoordinator.TransitionPlan) {
         guard phoneAudioAllowed else { return }
+        if usesAirPlaySongPlayer {
+            transition.activePlan = plan
+            return
+        }
         #if canImport(UIKit)
             beginTrackTransitionBackgroundTask()
         #endif
@@ -3969,10 +3850,14 @@ final class AudioPlayerManager {
             recoverFailedCrossfade(didSwapDecks: true)
             return
         }
+        finishTrackTransition(plan, preservingAirPlayPlayer: false)
+    }
+
+    func finishTrackTransition(_ plan: TransitionCoordinator.TransitionPlan, preservingAirPlayPlayer: Bool) {
         transition.reset()
         transitionCoordinator.reset()
         queueState.selectEntry(plan.target.id)
-        stopStreamPlayer()
+        if !preservingAirPlayPlayer { stopStreamPlayer() }
         clearPreferredStreamResumeTime()
         let song = plan.nextSong
         currentPlaybackURL = plan.nextFileURL
@@ -3988,6 +3873,10 @@ final class AudioPlayerManager {
             scheduleIdleCacheCompression(excluding: excludeIDs)
             currentSong = song
         }
+        if preservingAirPlayPlayer, let time = airPlaySamples?.position {
+            lastKnownPlaybackTime = time
+            progress = playbackDuration > 0 ? min(1, time / playbackDuration) : 0
+        }
         upcomingSong = nil
         checkEasterEgg(for: song)
         autoDownloadCurrentSongIfEnabled()
@@ -3995,10 +3884,6 @@ final class AudioPlayerManager {
             playing: true,
             buffering: false,
             reason: "transitionCoordinatorDidFinish"
-        )
-        DebugLogger.log(
-            "Transition complete next=\(song.id), audioURL=\(avEngine.currentURL?.lastPathComponent ?? "nil"), time=\(avEngine.currentTime), duration=\(avEngine.duration), playing=\(avEngine.isPlaying)",
-            category: .playback
         )
         updateNowPlayingInfo(reloadArtwork: true)
         let protectedIDs = activeSongIDs()

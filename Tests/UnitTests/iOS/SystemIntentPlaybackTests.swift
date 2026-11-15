@@ -475,6 +475,101 @@ struct SystemIntentPlaybackTests {
         #expect(await reports.total == 1)
     }
 
+    @Test func airPlayEffectRemovalRechecksRouteWithoutStartingPausedPlayback() async throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        let previousEQ = player.eqEnabled
+        let song = try cachedSong(index: 0, seconds: 15)
+        let url = AudioCacheStore.mainAudioURL(for: song.id, sourceURL: try #require(URL(string: "https://example.invalid/silence.wav")))
+        defer {
+            player.stopStreamPlayer()
+            player.loadedEngine?.stop()
+            player.currentSong = nil
+            player.currentPlaybackURL = nil
+            player.aiEnabled = previousAI
+            player.eqEnabled = previousEQ
+            AudioCacheStore.removeSongCache(for: song.id)
+        }
+        player.aiEnabled = false
+        player.eqEnabled = false
+        player.stopStreamPlayer()
+        player.setPlaybackState(playing: false, buffering: false, reason: "test")
+        player.currentSong = song
+        player.currentPlaybackURL = url
+        player.avEngine.play(url: url, startAt: 2)
+        try await waitForPlayback { player.loadedEngine?.hasPlayableMainMedia == true }
+        player.loadedEngine?.pause()
+
+        player.applyMLSeparationIfNeeded(outputs: [.airPlay])
+
+        #expect(player.loadedEngine?.currentURL == nil)
+        #expect(!player.isPlaying)
+        #expect(!player.streamPlaybackRequested)
+    }
+
+    @Test func seekDuringAirPlayDepartureIsUsedWhenSpeakerStarts() async throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        let song = try cachedSong(index: 0, seconds: 15)
+        let url = AudioCacheStore.mainAudioURL(for: song.id, sourceURL: try #require(URL(string: "https://example.invalid/silence.wav")))
+        defer {
+            player.pauseIfPlaying()
+            player.stopStreamPlayer()
+            player.loadedEngine?.stop()
+            player.currentSong = nil
+            player.currentPlaybackURL = nil
+            player.aiEnabled = previousAI
+            AudioCacheStore.removeSongCache(for: song.id)
+        }
+        player.aiEnabled = false
+        player.stopStreamPlayer()
+        player.currentSong = song
+        player.currentPlaybackURL = url
+        player.startAirPlaySamples(url, position: 1)
+        try #require(player.reconcileAirPlayRoute(outputs: [.builtInSpeaker]))
+        try #require(player.airPlayHandoffs.isPending)
+
+        player.seek(to: 0.5)
+        #expect(player.playbackTime == 7.5)
+        try await waitForPlayback { player.loadedEngine?.hasPlayableMainMedia == true }
+        #expect(player.playbackTime >= 7.5)
+    }
+
+    @Test func pausedAirPlayStemsLoadOriginalAudioAndResumeAtSavedPosition() async throws {
+        let player = AudioPlayerManager.shared
+        let previousAI = player.aiEnabled
+        let song = try cachedSong(index: 0, seconds: 15)
+        let url = AudioCacheStore.mainAudioURL(for: song.id, sourceURL: try #require(URL(string: "https://example.invalid/silence.wav")))
+        defer {
+            player.pauseIfPlaying()
+            player.stopStreamPlayer()
+            player.loadedEngine?.stop()
+            player.currentSong = nil
+            player.currentPlaybackURL = nil
+            player.aiEnabled = previousAI
+            AudioCacheStore.removeSongCache(for: song.id)
+        }
+        player.aiEnabled = false
+        player.stopStreamPlayer()
+        player.currentSong = song
+        player.currentPlaybackURL = url
+        player.startAirPlaySamples(url, position: 5)
+        try #require(player.pauseCurrentPlayback())
+        try #require(player.reconcileAirPlayRoute(outputs: [.builtInSpeaker]))
+        try #require(!player.isPlaybackRequested)
+
+        let stems = CachedStems(vocals: url, instruments: url, startOffset: 0)
+        player.switchActivePlaybackToStems(for: song, stems: stems, sourceURL: url)
+        try await waitForPlayback { player.loadedEngine?.mode == .aiStems }
+
+        #expect(player.loadedEngine?.currentURL == url)
+        #expect(player.loadedEngine?.isPlaying == false)
+        #expect(abs((player.loadedEngine?.currentTime ?? 0) - 5) < 0.1)
+        try #require(player.togglePlayPause())
+        try await waitForPlayback { player.loadedEngine?.hasPlayableMainMedia == true }
+        #expect(player.playbackTime >= 5)
+    }
+
     private func cachedSong(index: Int, seconds: Int = 60) throws -> Song {
         let id = "system-intent-test-\(UUID().uuidString)-\(index)"
         _ = AudioCacheStore.ensureSongDirectory(for: id)

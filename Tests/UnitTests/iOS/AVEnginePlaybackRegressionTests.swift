@@ -7,6 +7,168 @@ import Testing
 @Suite("AVEngine playback regressions", .serialized)
 @MainActor
 struct AVEnginePlaybackRegressionTests {
+    @Test("AirPlay automatically routes only ordinary file-backed songs")
+    func airPlayAutomaticRouteSelection() {
+        let local = URL(fileURLWithPath: "/tmp/song.wav")
+        let remote = URL(string: "https://example.com/song.wav")
+        #expect(AirPlaySongRouting.shouldRouteSong(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.builtInSpeaker], url: local, processingActive: false))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.airPlay], url: local, processingActive: true))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.airPlay], url: remote, processingActive: false))
+    }
+
+    @Test("AirPlay transition overlaps the tracks and maps the incoming lyric clock")
+    func airPlayTransitionTimeline() throws {
+        let timing = try #require(AirPlayTransitionTiming(outgoing: 60, incoming: 40, fade: 8))
+        #expect(timing.overlapStart == 52)
+        #expect(timing.promotionTime == 60)
+        #expect(timing.incomingTime(at: 60) == 8)
+        #expect(timing.incomingTime(at: 65) == 13)
+        #expect(AirPlayTransitionTiming(outgoing: 60, incoming: 3, fade: 8) == nil)
+    }
+
+    @Test("The AirPlay composition carries two overlapping audio tracks and a mix")
+    func airPlayCompositionCarriesBothTracks() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000, tone: 440)
+        defer { try? FileManager.default.removeItem(at: outgoing) }
+        let incoming = try makeSilentWaveFile(duration: 5, sampleRate: 48_000, tone: 660)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        let result = try await AirPlayTransition.prepare(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
+        let prepared = try #require(result)
+        #expect(prepared.tracks.count == 2)
+        #expect(prepared.duration == 9)
+        #expect(prepared.mix.inputParameters.count == 2)
+        #expect(prepared.timing.incomingTime(at: prepared.timing.promotionTime) == 2)
+    }
+
+    @Test("AirPlay sends the renderer PCM containing both songs during the fade")
+    func airPlayMixedSamplesContainBothSongs() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000, tone: 440)
+        defer { try? FileManager.default.removeItem(at: outgoing) }
+        let incoming = try makeSilentWaveFile(duration: 5, sampleRate: 48_000, tone: 660)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        let prepared = try await AirPlaySampleSource.transition(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
+        let source = try #require(prepared)
+        let cursor = try source.makeCursor(at: CMTime(seconds: 5, preferredTimescale: 48_000))
+        let buffer = try #require(try cursor.nextBuffer())
+        let block = try #require(CMSampleBufferGetDataBuffer(buffer))
+        let length = CMBlockBufferGetDataLength(block)
+        var pcm = [Float](repeating: 0, count: length / MemoryLayout<Float>.size)
+        let status = pcm.withUnsafeMutableBytes { bytes in
+            CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: length, destination: bytes.baseAddress!)
+        }
+        #expect(status == kCMBlockBufferNoErr)
+        let frames = stride(from: 0, to: pcm.count, by: 2).map { pcm[$0] }
+        for frequency in [440.0, 660.0] {
+            let energy = frames.enumerated().reduce(into: (real: 0.0, imaginary: 0.0)) { sum, frame in
+                let phase = 2 * Double.pi * frequency * Double(frame.offset) / 48_000
+                sum.real += Double(frame.element) * cos(phase)
+                sum.imaginary += Double(frame.element) * sin(phase)
+            }
+            #expect(2 * hypot(energy.real, energy.imaginary) / Double(frames.count) > 0.04)
+        }
+    }
+
+    @Test("AirPlay accepts only the latest seek or handoff completion")
+    func airPlayRejectsObsoleteOperations() {
+        let session = AirPlaySongOperations()
+        let oldSeek = session.begin()
+        let latestSeek = session.begin()
+        #expect(!session.isCurrent(oldSeek))
+        #expect(session.isCurrent(latestSeek))
+        session.invalidate()
+        #expect(!session.isCurrent(latestSeek))
+    }
+
+    @Test("AirPlay departure defers vocal effects until the destination engine is ready")
+    func airPlayDepartureDefersEffectsUntilLocalEngineIsReady() async throws {
+        let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
+        let engine = AVEnginePlayback()
+        defer {
+            engine.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        #expect(!AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: true, loadingLocalEngine: false
+        ))
+        engine.play(url: source, startAt: 4, isAirPlayHandoff: true)
+        #expect(engine.isLoadingAirPlayHandoff)
+        #expect(!AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: false, loadingLocalEngine: engine.isLoadingAirPlayHandoff
+        ))
+        try await waitUntil { engine.hasPlayableMainMedia }
+        #expect(AirPlayPlaybackCoordinator.canApplyEffects(
+            usesAirPlayPlayer: false, handoffPending: false, loadingLocalEngine: engine.isLoadingAirPlayHandoff
+        ))
+        #expect(engine.currentTime >= 4)
+    }
+
+    @Test("An AirPlay song can play again after reaching the end of the queue")
+    func airPlaySampleSessionRestartsAfterEnding() async throws {
+        let source = try makeSilentWaveFile(duration: 0.4, sampleRate: 48_000)
+        var starts = 0
+        var ends = 0
+        let session = AirPlaySampleSession { event in
+            if case .playing = event { starts += 1 }
+            if case .ended = event { ends += 1 }
+        } onTime: { _, _ in }
+        defer {
+            session.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        session.loadSong(source, at: 0, autoplay: true)
+        try await waitUntil { ends == 1 }
+        session.resume(url: source)
+        #expect(session.position == 0)
+        try await waitUntil { starts == 2 }
+    }
+
+    @Test("A superseded AirPlay departure cannot start its destination after the drain")
+    func supersededAirPlayDepartureCannotRestart() async {
+        let operations = AirPlaySongOperations()
+        let first = operations.begin()
+        let drain = Task { await operations.waitForOutputDrain(first) }
+        await Task.yield()
+
+        let second = operations.begin()
+        #expect(await !drain.value)
+        operations.invalidate()
+        #expect(await !operations.waitForOutputDrain(second))
+    }
+
+    @Test("Repeated AirPlay retirement completes every handoff waiter")
+    func repeatedAirPlayRetirementCompletesWaiters() async throws {
+        let renderer = AirPlaySampleRenderer(event: { _, _ in }, time: { _, _ in })
+        let completed = Mutex(0)
+        #expect(await !renderer.isMutedForTesting())
+        renderer.retire(completion: nil)
+        renderer.retire { completed.withLock { $0 += 1 } }
+        renderer.retire { completed.withLock { $0 += 1 } }
+
+        try await waitUntil { completed.withLock { $0 == 2 } }
+        #expect(await renderer.isMutedForTesting())
+    }
+
+    @Test("The local clock holds its resume position while a song loads")
+    func localClockHoldsResumePositionDuringLoad() async throws {
+        let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
+        let engine = AVEnginePlayback()
+        defer {
+            engine.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        engine.play(url: source, startAt: 4)
+        #expect(engine.currentTime == 4)
+        try await waitUntil { engine.hasPlayableMainMedia }
+        #expect(engine.currentTime >= 4)
+
+        engine.stop()
+        #expect(engine.currentTime == 0)
+    }
+
     @Test("Stopping a scheduled player does not report natural playback end")
     func teardownCompletionIsSuppressed() throws {
         let sourceURL = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
