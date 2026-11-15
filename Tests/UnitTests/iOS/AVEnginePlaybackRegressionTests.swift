@@ -7,24 +7,14 @@ import Testing
 @Suite("AVEngine playback regressions", .serialized)
 @MainActor
 struct AVEnginePlaybackRegressionTests {
-    @Test("AirPlay comparison uses one file item and leaves queue advancement to the app")
-    func airPlayComparisonPlayer() throws {
-        let source = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
-        defer { try? FileManager.default.removeItem(at: source) }
-        let player = AirPlaySongComparison.makePlayer(url: source)
-        #expect(player.items().count == 1)
-        #expect(player.actionAtItemEnd == .pause)
-        #expect(player.allowsExternalPlayback)
-    }
-
     @Test("AirPlay automatically routes only ordinary file-backed songs")
-    func airPlayComparisonRouteSelection() {
+    func airPlayAutomaticRouteSelection() {
         let local = URL(fileURLWithPath: "/tmp/song.wav")
         let remote = URL(string: "https://example.com/song.wav")
-        #expect(AirPlaySongComparison.shouldRouteSong(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
-        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.builtInSpeaker], url: local, processingActive: false))
-        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.airPlay], url: local, processingActive: true))
-        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.airPlay], url: remote, processingActive: false))
+        #expect(AirPlaySongRouting.shouldRouteSong(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.builtInSpeaker], url: local, processingActive: false))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.airPlay], url: local, processingActive: true))
+        #expect(!AirPlaySongRouting.shouldRouteSong(outputs: [.airPlay], url: remote, processingActive: false))
     }
 
     @Test("AirPlay transition overlaps the tracks and maps the incoming lyric clock")
@@ -37,7 +27,7 @@ struct AVEnginePlaybackRegressionTests {
         #expect(AirPlayTransitionTiming(outgoing: 60, incoming: 3, fade: 8) == nil)
     }
 
-    @Test("The AirPlay player item carries two overlapping audio tracks and a mix")
+    @Test("The AirPlay composition carries two overlapping audio tracks and a mix")
     func airPlayCompositionCarriesBothTracks() async throws {
         let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000, tone: 440)
         defer { try? FileManager.default.removeItem(at: outgoing) }
@@ -45,11 +35,9 @@ struct AVEnginePlaybackRegressionTests {
         defer { try? FileManager.default.removeItem(at: incoming) }
         let result = try await AirPlayTransition.prepare(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
         let prepared = try #require(result)
-        let tracks = try await prepared.item.asset.loadTracks(withMediaType: .audio)
-        let duration = try await prepared.item.asset.load(.duration)
-        #expect(tracks.count == 2)
-        #expect(duration.seconds == 9)
-        #expect(prepared.item.audioMix?.inputParameters.count == 2)
+        #expect(prepared.tracks.count == 2)
+        #expect(prepared.duration == 9)
+        #expect(prepared.mix.inputParameters.count == 2)
         #expect(prepared.timing.incomingTime(at: prepared.timing.promotionTime) == 2)
     }
 

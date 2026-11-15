@@ -6,7 +6,7 @@ enum ManagedAVPlayerKind {
 }
 
 extension AudioPlayerManager {
-    var usesAirPlaySongPlayer: Bool { airPlaySamples != nil || streamPlayer is AVQueuePlayer }
+    var usesAirPlaySongPlayer: Bool { airPlaySamples != nil }
 
     func startAirPlaySamples(_ url: URL, position: TimeInterval) {
         cancelPendingTransitionWork()
@@ -56,89 +56,6 @@ extension AudioPlayerManager {
                 playNextOrRandom()
             }
         }
-    }
-
-    func startAirPlaySong(_ url: URL, position: TimeInterval) {
-        cancelPendingTransitionWork()
-        loadedEngine?.stop()
-        let player = AirPlaySongComparison.makePlayer(url: url)
-        guard let item = player.currentItem else { return }
-        streamPlayer = player
-        streamPlaybackRequested = true
-        setPreferredStreamResumeTime(position, for: currentSong?.id)
-        setPlaybackState(playing: false, buffering: true, reloadArtwork: true, reason: "airPlaySong")
-        observeAirPlayItem(item, on: player)
-        seekAirPlayPlayer(player, to: position, autoplay: true)
-    }
-
-    private func observeAirPlayItem(_ item: AVPlayerItem, on player: AVQueuePlayer) {
-        observeManagedPlayer(player, item: item, kind: .stream)
-        streamEndObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
-        ) { [weak self, weak player, weak item] _ in
-            Task { @MainActor in
-                guard let self, let player, let item, self.streamPlayer === player, player.currentItem === item,
-                      self.streamPlaybackRequested, self.airPlayTimeline.pendingPosition == nil else { return }
-                self.promoteAirPlayTransition(at: player.currentTime().seconds)
-                if self.handlePrematurePlaybackEndIfNeeded(source: "AirPlay") { return }
-                if self.sleepTimer.consumeEndOfSong() { self.pauseCurrentPlayback(source: "airPlaySong.endOfSong") }
-                else {
-                    self.streamPlaybackRequested = false
-                    self.playNextOrRandom()
-                }
-            }
-        }
-    }
-
-    func replaceAirPlayItem(_ item: AVPlayerItem, on player: AVQueuePlayer, position: TimeInterval, autoplay: Bool) {
-        player.pause()
-        streamPlayerCancellables.removeAll()
-        if let observer = streamEndObserver { NotificationCenter.default.removeObserver(observer) }
-        player.removeAllItems()
-        player.insert(item, after: nil)
-        observeAirPlayItem(item, on: player)
-        seekAirPlayPlayer(player, to: position, autoplay: autoplay)
-    }
-
-    func seekAirPlayPlayer(_ player: AVQueuePlayer, to position: TimeInterval, autoplay: Bool) {
-        if autoplay { armAirPlayStartupTimeout(for: player) }
-        airPlayTimeline.seek(player, to: position) { [weak self, weak player] finished in
-            guard let self, let player, self.streamPlayer === player else { return }
-            if autoplay, self.streamPlaybackRequested {
-                if finished { player.play() }
-                else if let item = player.currentItem { self.handleManagedPlayerFailure(player: player, item: item, kind: .stream) }
-            }
-            guard self.streamPlayer === player else { return }
-            let time = self.airPlayTimeline.songTime(player.currentTime().seconds)
-            if time.isFinite {
-                self.lastKnownPlaybackTime = time
-                self.progress = self.playbackDuration > 0 ? min(1, time / self.playbackDuration) : 0
-            }
-            self.clearPreferredStreamResumeTime()
-            self.updateNowPlayingInfo(reloadArtwork: false)
-            self.scheduleSessionSave()
-        }
-    }
-
-    func armAirPlayStartupTimeout(for player: AVQueuePlayer) {
-        airPlayTimeline.armStartupTimeout { [weak self, weak player] in
-            guard let self, let player, self.streamPlayer === player, self.streamPlaybackRequested,
-                  player.timeControlStatus != .playing, let item = player.currentItem else { return }
-            self.handleManagedPlayerFailure(player: player, item: item, kind: .stream)
-        }
-    }
-
-    func discardAirPlayTransition() {
-        guard let player = streamPlayer as? AVQueuePlayer, let url = currentPlaybackURL else { return }
-        let position = activePlaybackTime()
-        airPlayTimeline.reset()
-        replaceAirPlayItem(AVPlayerItem(url: url), on: player, position: position, autoplay: streamPlaybackRequested)
-    }
-
-    func promoteAirPlayTransition(at time: TimeInterval) {
-        guard let prepared = airPlayTimeline.transition, time >= prepared.timing.promotionTime,
-              let plan = airPlayTimeline.promote() else { return }
-        finishTrackTransition(plan, preservingAirPlayPlayer: true)
     }
 
     func observeManagedPlayer(
@@ -197,7 +114,6 @@ extension AudioPlayerManager {
             return
         }
         if player.timeControlStatus == .playing {
-            if player is AVQueuePlayer, airPlayTimeline.pendingPosition == nil { airPlayTimeline.cancelStartupTimeout() }
             setPlaybackState(playing: true, buffering: false, reason: "managed.\(kind).playing")
         } else {
             setPlaybackState(playing: false, buffering: true, reason: "managed.\(kind).buffering")
@@ -210,13 +126,6 @@ extension AudioPlayerManager {
         kind: ManagedAVPlayerKind
     ) {
         guard isCurrentManagedPlayer(player, kind: kind), player.currentItem === item else { return }
-        if player is AVQueuePlayer {
-            lastKnownPlaybackTime = activePlaybackTime()
-            stopStreamPlayer()
-            clearPreferredStreamResumeTime()
-            cancelPendingTransitionWork()
-            reportLoadFailure(.unavailable)
-        }
         let message = item.error?.localizedDescription
             ?? player.error?.localizedDescription
             ?? "unknown error"
@@ -253,9 +162,9 @@ extension AudioPlayerManager {
     func reconcileAirPlayRoute(resuming: Bool = false) -> Bool {
         guard phoneAudioAllowed, !isRadioMode, !isRemotePlaybackCaching,
               let url = currentPlaybackURL, url.isFileURL else { return false }
-        let outputs = AirPlaySongComparison.outputs
+        let outputs = AirPlaySongRouting.outputs
         let leavingAirPlay = !outputs.contains(.airPlay)
-        let useAirPlay = AirPlaySongComparison.shouldRouteSong(
+        let useAirPlay = AirPlaySongRouting.shouldRouteSong(
             outputs: outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         )
         guard useAirPlay != usesAirPlaySongPlayer || airPlayHandoffs.isPending else { return false }
@@ -285,7 +194,6 @@ extension AudioPlayerManager {
             guard let self, self.airPlayHandoffs.isCurrent(request), self.currentSong?.id == songID,
                   self.currentPlaybackURL == url else { return }
             self.airPlayHandoffs.invalidate()
-            DebugLogger.log("AirPlay handoff \(request): starting destination, airPlay=\(useAirPlay)", category: .playback)
             self.startPlayingFile(url, startAt: position, resetSeparation: false) { [weak self] in
                 guard let self, self.anyAIEffectActive else { return }
                 self.applyMLSeparationIfNeeded()

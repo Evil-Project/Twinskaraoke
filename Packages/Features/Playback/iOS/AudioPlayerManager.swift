@@ -406,7 +406,6 @@ final class AudioPlayerManager {
     var radioPlayer: AVPlayer?
     var streamPlayer: AVPlayer?
     @ObservationIgnored var airPlaySamples: AirPlaySampleSession?
-    @ObservationIgnored let airPlayTimeline = AirPlaySongTimeline()
     @ObservationIgnored let airPlayHandoffs = AirPlaySongOperations()
     var streamEndObserver: NSObjectProtocol?
     private var radioTimeObserver: (player: AVPlayer, token: Any)?
@@ -1036,8 +1035,7 @@ final class AudioPlayerManager {
             if suppressTransitionAfterSeek, fallbackDuration > 0 {
                 return min(max(0, progress * fallbackDuration), fallbackDuration)
             }
-            let raw = streamPlayer?.currentTime().seconds ?? .nan
-            let streamTime = streamPlayer is AVQueuePlayer ? airPlayTimeline.songTime(raw) : raw
+            let streamTime = streamPlayer?.currentTime().seconds ?? .nan
             if streamTime.isFinite, streamTime >= 0 {
                 return streamTime
             }
@@ -1071,9 +1069,6 @@ final class AudioPlayerManager {
         if !phoneAudioAllowed, let watchMirror { return watchMirror.duration }
         if let airPlaySamples, airPlaySamples.duration > 0 { return airPlaySamples.duration }
         if isStreamMode {
-            if let timing = airPlayTimeline.transition?.timing {
-                return airPlayTimeline.plan == nil ? timing.incomingDuration : timing.promotionTime
-            }
             let streamDuration = streamPlayer?.currentItem?.duration.seconds ?? .nan
             if streamDuration.isFinite, streamDuration > 0 {
                 return streamDuration
@@ -1250,7 +1245,7 @@ final class AudioPlayerManager {
             else { return }
 
             preparedStemSongID = song.id
-            guard anyAIEffectActive, airPlaySamples == nil, !(streamPlayer is AVQueuePlayer) else { return }
+            guard anyAIEffectActive, airPlaySamples == nil else { return }
             switchActivePlaybackToStems(
                 for: song, stems: stems, sourceURL: sourceURL,
                 onReady: { [weak self] in self?.applyAIMixVolumes() }
@@ -1459,13 +1454,12 @@ final class AudioPlayerManager {
                     guard let player = self.streamPlayer,
                           let item = player.currentItem,
                           item.status == .readyToPlay else { return }
-                    let rawTime = player.currentTime().seconds
-                    guard rawTime.isFinite else { return }
-                    guard let t = AirPlayPlaybackCoordinator.pollTime(rawTime, on: player, in: self) else { return }
+                    let t = player.currentTime().seconds
+                    guard t.isFinite else { return }
                     self.lastKnownPlaybackTime = t
                     self.reconcilePreferredStreamResumeTime(observedTime: t, for: self.currentSong)
                     let itemDuration = item.duration.seconds
-                    let dur = if player is AVQueuePlayer || !itemDuration.isFinite || itemDuration <= 0 {
+                    let dur = if !itemDuration.isFinite || itemDuration <= 0 {
                         self.playbackDuration
                     } else {
                         itemDuration
@@ -1514,7 +1508,6 @@ final class AudioPlayerManager {
 
     private var hasStartedHandoff: Bool {
         if airPlaySamples != nil { return transitionCoordinator.state.isCrossfading }
-        if streamPlayer is AVQueuePlayer { return airPlayTimeline.plan != nil && transitionCoordinator.state.isCrossfading }
         return loadedEngine?.hasAudibleCrossfade == true || quickCutTimer != nil
     }
 
@@ -1755,8 +1748,8 @@ final class AudioPlayerManager {
         aiStemSwitchInFlightSongID = nil
         loadFailure = nil
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
-        if AirPlaySongComparison.shouldRouteSong(
-            outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
+        if AirPlaySongRouting.shouldRouteSong(
+            outputs: AirPlaySongRouting.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         ) {
             startAirPlaySamples(url, position: startAt)
         } else {
@@ -1943,7 +1936,6 @@ final class AudioPlayerManager {
             }
             lastKnownPlaybackTime = activePlaybackTime()
             streamPlaybackRequested = false
-            airPlayTimeline.cancelStartupTimeout()
             player.pause()
             cancelPendingTransitionWork()
             setPlaybackState(playing: false, buffering: false, reason: "pause.stream.\(source)")
@@ -2061,16 +2053,7 @@ final class AudioPlayerManager {
             NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
             streamPlaybackRequested = true
             setPlaybackState(playing: false, buffering: true, reason: "resume.stream.buffering.\(source)")
-            if let queuePlayer = player as? AVQueuePlayer {
-                armAirPlayStartupTimeout(for: queuePlayer)
-                if let position = airPlayTimeline.pendingPosition {
-                    seekAirPlayPlayer(queuePlayer, to: position, autoplay: true)
-                } else if activePlaybackTime() >= playbackDuration, let url = currentPlaybackURL {
-                    startPlayingFile(url)
-                } else {
-                    queuePlayer.play()
-                }
-            } else { player.playImmediately(atRate: 1.0) }
+            player.playImmediately(atRate: 1.0)
             refreshManagedPlayerState(player, kind: .stream)
             return true
         }
@@ -2186,7 +2169,6 @@ final class AudioPlayerManager {
             guard targetSeconds >= 0 else { return }
             setPreferredStreamResumeTime(targetSeconds, for: currentSong?.id)
             let target = CMTime(seconds: targetSeconds, preferredTimescale: 600)
-            if AirPlayPlaybackCoordinator.seekQueuePlayer(player, to: targetSeconds, in: self) { return }
             player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
             if anyAIEffectActive {
                 applyMLSeparationIfNeeded()
@@ -2700,7 +2682,6 @@ final class AudioPlayerManager {
         airPlayHandoffs.invalidate()
         airPlaySamples?.stop()
         airPlaySamples = nil
-        airPlayTimeline.reset()
         remotePlaybackCacheTask?.cancel()
         remotePlaybackCacheTask = nil
         remotePlaybackCacheToken = nil
@@ -2714,10 +2695,7 @@ final class AudioPlayerManager {
         streamFadeTimer?.cancel()
         streamFadeTimer = nil
         streamPlayer?.pause()
-        if let player = streamPlayer as? AVQueuePlayer {
-            player.currentItem?.cancelPendingSeeks()
-            player.removeAllItems()
-        } else { streamPlayer?.replaceCurrentItem(with: nil) }
+        streamPlayer?.replaceCurrentItem(with: nil)
         streamPlayer = nil
         streamStartedAt = nil
     }
@@ -3895,7 +3873,7 @@ final class AudioPlayerManager {
             scheduleIdleCacheCompression(excluding: excludeIDs)
             currentSong = song
         }
-        if preservingAirPlayPlayer, let time = airPlaySamples?.position ?? streamPlayer.map({ airPlayTimeline.songTime($0.currentTime().seconds) }) {
+        if preservingAirPlayPlayer, let time = airPlaySamples?.position {
             lastKnownPlaybackTime = time
             progress = playbackDuration > 0 ? min(1, time / playbackDuration) : 0
         }

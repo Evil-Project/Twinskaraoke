@@ -3,21 +3,13 @@ import Combine
 import Foundation
 
 @MainActor
-enum AirPlaySongComparison {
+enum AirPlaySongRouting {
     static var outputs: [AVAudioSession.Port] {
         AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType)
     }
 
     static func shouldRouteSong(outputs: [AVAudioSession.Port], url: URL?, processingActive: Bool) -> Bool {
         outputs.contains(.airPlay) && url?.isFileURL == true && !processingActive
-    }
-
-    static func makePlayer(url: URL) -> AVQueuePlayer {
-        let player = AVQueuePlayer(items: [AVPlayerItem(url: url)])
-        player.actionAtItemEnd = .pause
-        player.allowsExternalPlayback = true
-        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
-        return player
     }
 }
 

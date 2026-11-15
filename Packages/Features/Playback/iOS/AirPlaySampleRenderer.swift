@@ -85,13 +85,11 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
             self.retirementCallbacks = completion.map { [$0] } ?? []
             self.renderer.isMuted = true
             self.stopReading()
-            DebugLogger.log("AirPlay renderer muted and flushed", category: .playback)
             self.source = nil
             // Flush drops queued samples locally. Wait for the synchronizer to
             // detach the renderer before handing playback to the local engine.
-            self.clock.removeRenderer(self.renderer, at: .invalid) { removed in
+            self.clock.removeRenderer(self.renderer, at: .invalid) { _ in
                 self.queue.async {
-                    DebugLogger.log("AirPlay renderer removal completed: removed=\(removed)", category: .playback)
                     self.didRetire = true
                     let callbacks = self.retirementCallbacks
                     self.retirementCallbacks = nil

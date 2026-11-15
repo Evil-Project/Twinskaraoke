@@ -50,7 +50,10 @@ final class AirPlaySongOperations {
 
 @MainActor
 struct AirPlayTransition {
-    let item: AVPlayerItem
+    let asset: AVComposition
+    let tracks: [AVAssetTrack]
+    let duration: TimeInterval
+    let mix: AVAudioMix
     let timing: AirPlayTransitionTiming
 
     static func prepare(outgoing: URL, incoming: URL, fade: TimeInterval, equalPower: Bool) async throws -> Self? {
@@ -77,9 +80,10 @@ struct AirPlayTransition {
             ramp(for: left, timing: timing, incoming: false, equalPower: equalPower),
             ramp(for: right, timing: timing, incoming: true, equalPower: equalPower),
         ]
-        let item = AVPlayerItem(asset: composition)
-        item.audioMix = mix
-        return Self(item: item, timing: timing)
+        return Self(
+            asset: composition, tracks: [left, right],
+            duration: CMTimeAdd(start, secondRange.duration).seconds, mix: mix, timing: timing
+        )
     }
 
     private static func ramp(
@@ -101,94 +105,5 @@ struct AirPlayTransition {
             input.setVolumeRamp(fromStartVolume: gain(from), toEndVolume: gain(to), timeRange: CMTimeRange(start: start, end: end))
         }
         return input
-    }
-}
-
-@MainActor
-final class AirPlaySongTimeline {
-    let operations = AirPlaySongOperations()
-    private var preparation: Task<Void, Never>?
-    private var deadline: Task<Void, Never>?
-    private(set) var transition: AirPlayTransition?
-    private(set) var plan: TransitionCoordinator.TransitionPlan?
-    private(set) var offset: TimeInterval = 0
-    private(set) var pendingPosition: TimeInterval?
-
-    func prepare(
-        from url: URL, plan: TransitionCoordinator.TransitionPlan, ready: @escaping @MainActor (AirPlayTransition) -> Void
-    ) {
-        preparation?.cancel()
-        preparation = Task {
-            do {
-                guard let result = try await AirPlayTransition.prepare(
-                    outgoing: url, incoming: plan.nextFileURL, fade: plan.fadeDuration,
-                    equalPower: plan.rampStyle == .equalPower
-                ), !Task.isCancelled else { return }
-                ready(result)
-            } catch {
-                DebugLogger.log("AirPlay transition preparation failed: \(error)", category: .playback)
-            }
-        }
-    }
-
-    func install(_ transition: AirPlayTransition, plan: TransitionCoordinator.TransitionPlan) {
-        self.transition = transition
-        self.plan = plan
-        offset = 0
-    }
-
-    func promote() -> TransitionCoordinator.TransitionPlan? {
-        guard let transition, let plan else { return nil }
-        offset = transition.timing.overlapStart
-        self.plan = nil
-        return plan
-    }
-
-    func seek(_ player: AVQueuePlayer, to position: TimeInterval, completion: @escaping @MainActor (Bool) -> Void) {
-        let generation = operations.begin()
-        pendingPosition = position
-        player.currentItem?.cancelPendingSeeks()
-        let time = CMTime(seconds: max(0, position) + offset, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
-            Task { @MainActor in
-                guard let self, self.operations.isCurrent(generation) else { return }
-                self.operations.invalidate()
-                self.pendingPosition = nil
-                completion(finished)
-            }
-        }
-    }
-
-    func armStartupTimeout(_ expired: @escaping @MainActor () -> Void) {
-        cancelStartupTimeout()
-        deadline = Task {
-            do { try await Task.sleep(for: .seconds(30)) } catch { return }
-            expired()
-        }
-    }
-
-    func cancelStartupTimeout() {
-        deadline?.cancel()
-        deadline = nil
-    }
-
-    func cancelPreparation() {
-        preparation?.cancel()
-        preparation = nil
-    }
-
-    func reset() {
-        cancelPreparation()
-        cancelStartupTimeout()
-        operations.invalidate()
-        pendingPosition = nil
-        transition = nil
-        plan = nil
-        offset = 0
-    }
-
-    func songTime(_ raw: TimeInterval) -> TimeInterval {
-        if let pendingPosition { return pendingPosition }
-        return raw.isFinite ? max(0, raw - offset) : .nan
     }
 }

@@ -24,11 +24,10 @@ nonisolated struct AirPlaySampleSource: @unchecked Sendable {
         guard let prepared = try await AirPlayTransition.prepare(
             outgoing: outgoing, incoming: incoming, fade: fade, equalPower: equalPower
         ) else { return nil }
-        let asset = prepared.item.asset
-        let mix = prepared.item.audioMix
-        let tracks = try await asset.loadTracks(withMediaType: .audio)
-        let duration = try await asset.load(.duration).seconds
-        return Self(asset: asset, tracks: tracks, mix: mix, duration: duration, timing: prepared.timing)
+        return Self(
+            asset: prepared.asset, tracks: prepared.tracks, mix: prepared.mix,
+            duration: prepared.duration, timing: prepared.timing
+        )
     }
 
     func makeCursor(at position: CMTime) throws -> Cursor {
