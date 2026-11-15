@@ -26,7 +26,10 @@ Closes #
 
 ## AI assistance
 
-<!-- Which tool(s) wrote code here (Claude Code, Codex, Cursor, none)? -->
+<!-- Which tool(s) wrote code here (Claude Code, Codex, Cursor, none)?
+     SwiftUI changes: say that the swiftui-pro skill was applied and list the
+     skill rules you didn't follow, each with its reason. Otherwise write
+     "No SwiftUI changes." -->
 
 ## Checklist
 
