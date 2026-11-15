@@ -24,6 +24,8 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
     private var requested = false
     private var reachedEnd = false
     private var generation = 0
+    private var retirementCallbacks: [@Sendable () -> Void]?
+    private var didRetire = false
 
     init(event: @escaping @Sendable (Int, Event) -> Void, time: @escaping @Sendable (Int, Double) -> Void) {
         self.event = event
@@ -63,11 +65,36 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
         }
     }
 
-    func stop(completion: (@Sendable () -> Void)? = nil) {
+    func stop() {
         queue.async {
             self.stopReading()
             self.source = nil
-            completion?()
+        }
+    }
+
+    func retire(completion: (@Sendable () -> Void)?) {
+        queue.async {
+            if self.didRetire {
+                completion?()
+                return
+            }
+            if self.retirementCallbacks != nil {
+                if let completion { self.retirementCallbacks?.append(completion) }
+                return
+            }
+            self.retirementCallbacks = completion.map { [$0] } ?? []
+            self.stopReading()
+            self.source = nil
+            // Flush drops queued samples locally. Wait for the synchronizer to
+            // detach the renderer before handing playback to the local engine.
+            self.clock.removeRenderer(self.renderer, at: .invalid) { _ in
+                self.queue.async {
+                    self.didRetire = true
+                    let callbacks = self.retirementCallbacks
+                    self.retirementCallbacks = nil
+                    callbacks?.forEach { $0() }
+                }
+            }
         }
     }
 
@@ -258,7 +285,7 @@ final class AirPlaySampleSession {
         preparation?.cancel()
         loading?.cancel()
         timeout?.cancel()
-        renderer?.stop(completion: completion)
+        renderer?.retire(completion: completion)
     }
 
     private func armTimeout(generation: Int? = nil) {

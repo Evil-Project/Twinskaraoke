@@ -92,6 +92,35 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!session.isCurrent(latestSeek))
     }
 
+    @Test("Repeated AirPlay retirement completes every handoff waiter")
+    func repeatedAirPlayRetirementCompletesWaiters() async throws {
+        let renderer = AirPlaySampleRenderer(event: { _, _ in }, time: { _, _ in })
+        let completed = Mutex(0)
+        renderer.retire(completion: nil)
+        renderer.retire { completed.withLock { $0 += 1 } }
+        renderer.retire { completed.withLock { $0 += 1 } }
+
+        try await waitUntil { completed.withLock { $0 == 2 } }
+    }
+
+    @Test("The local clock holds its resume position while a song loads")
+    func localClockHoldsResumePositionDuringLoad() async throws {
+        let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
+        let engine = AVEnginePlayback()
+        defer {
+            engine.stop()
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        engine.play(url: source, startAt: 4)
+        #expect(engine.currentTime == 4)
+        try await waitUntil { engine.hasPlayableMainMedia }
+        #expect(engine.currentTime >= 4)
+
+        engine.stop()
+        #expect(engine.currentTime == 0)
+    }
+
     @Test("Stopping a scheduled player does not report natural playback end")
     func teardownCompletionIsSuppressed() throws {
         let sourceURL = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)

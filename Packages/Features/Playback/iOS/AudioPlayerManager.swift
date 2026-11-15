@@ -1021,7 +1021,7 @@ final class AudioPlayerManager {
     }
 
     func activePlaybackTime(for song: Song? = nil) -> TimeInterval {
-        if !isPlaying, !isBuffering, lastKnownPlaybackTime.isFinite, lastKnownPlaybackTime >= 0 {
+        if (airPlayHandoffs.isPending || (!isPlaying && !isBuffering)), lastKnownPlaybackTime.isFinite, lastKnownPlaybackTime >= 0 {
             return lastKnownPlaybackTime
         }
         if let airPlaySamples { return airPlaySamples.position }
@@ -1460,7 +1460,7 @@ final class AudioPlayerManager {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 guard self.phoneAudioAllowed, !self.isRadioMode else { return }
-                guard !self.isEditingProgress else { return }
+                guard !self.isEditingProgress, !self.airPlayHandoffs.isPending else { return }
                 guard self.currentSong != nil else { return }
                 if self.suppressTransitionAfterSeek {
                     self.suppressTransitionAfterSeek = false
