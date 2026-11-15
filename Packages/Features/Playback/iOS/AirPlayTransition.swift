@@ -38,6 +38,14 @@ final class AirPlaySongOperations {
         isPending = false
     }
     func isCurrent(_ request: Int) -> Bool { request == generation }
+
+    func waitForOutputDrain(_ request: Int) async -> Bool {
+        guard isCurrent(request) else { return false }
+        // Build 39 consistently measured about 500 ms of far-end audio after
+        // detachment. Leave a small margin in the signed comparison build.
+        do { try await Task.sleep(for: .milliseconds(750)) } catch { return false }
+        return isCurrent(request)
+    }
 }
 
 @MainActor

@@ -253,8 +253,10 @@ extension AudioPlayerManager {
     func reconcileAirPlayRoute(resuming: Bool = false) -> Bool {
         guard AirPlaySongComparison.isEnabled, phoneAudioAllowed, !isRadioMode, !isRemotePlaybackCaching,
               let url = currentPlaybackURL, url.isFileURL else { return false }
+        let outputs = AirPlaySongComparison.outputs
+        let leavingAirPlay = !outputs.contains(.airPlay)
         let useAirPlay = AirPlaySongComparison.shouldUsePlayer(
-            outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
+            outputs: outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         )
         guard useAirPlay != usesAirPlaySongPlayer || airPlayHandoffs.isPending else { return false }
         let position = activePlaybackTime()
@@ -291,6 +293,9 @@ extension AudioPlayerManager {
             retiring.stop { [weak self] in
                 Task { @MainActor in
                     guard let self, self.airPlayHandoffs.isCurrent(request) else { return }
+                    if leavingAirPlay {
+                        guard await self.airPlayHandoffs.waitForOutputDrain(request) else { return }
+                    }
                     self.airPlayHandoffs.retiringSamples = nil
                     if self.audioSessionController.performWhenReady(restart, replacingPending: true) { restart() }
                 }

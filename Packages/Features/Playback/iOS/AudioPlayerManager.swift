@@ -1894,6 +1894,7 @@ final class AudioPlayerManager {
     @discardableResult
     func pauseCurrentPlayback(source: String = #function) -> Bool {
         if WatchSessionPublisher.shared.routeToWatch(.pause) { return true }
+        let pendingAirPlayHandoff = airPlayHandoffs.isPending
         airPlayHandoffs.invalidate()
         audioSessionController.cancelPendingPlayback()
         cancelAutoplayRequest()
@@ -1994,7 +1995,7 @@ final class AudioPlayerManager {
             return true
         }
         cancelPendingTransitionWork()
-        lastKnownPlaybackTime = activePlaybackTime()
+        if !pendingAirPlayHandoff { lastKnownPlaybackTime = activePlaybackTime() }
         loadedEngine?.pause()
         aiStemSwitchInFlightSongID = nil
         setPlaybackState(playing: false, buffering: false, reason: "pause.file.\(source)")

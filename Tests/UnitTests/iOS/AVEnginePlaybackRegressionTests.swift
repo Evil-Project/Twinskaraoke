@@ -92,6 +92,19 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!session.isCurrent(latestSeek))
     }
 
+    @Test("A superseded AirPlay departure cannot start its destination after the drain")
+    func supersededAirPlayDepartureCannotRestart() async {
+        let operations = AirPlaySongOperations()
+        let first = operations.begin()
+        let drain = Task { await operations.waitForOutputDrain(first) }
+        await Task.yield()
+
+        let second = operations.begin()
+        #expect(await !drain.value)
+        operations.invalidate()
+        #expect(await !operations.waitForOutputDrain(second))
+    }
+
     @Test("Repeated AirPlay retirement completes every handoff waiter")
     func repeatedAirPlayRetirementCompletesWaiters() async throws {
         let renderer = AirPlaySampleRenderer(event: { _, _ in }, time: { _, _ in })
