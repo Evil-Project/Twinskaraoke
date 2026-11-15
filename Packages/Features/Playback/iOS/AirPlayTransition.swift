@@ -23,6 +23,7 @@ nonisolated struct AirPlayTransitionTiming {
 
 @MainActor
 final class AirPlaySongOperations {
+    var retiringSamples: AirPlaySampleSession?
     private var generation = 0
     private(set) var isPending = false
 

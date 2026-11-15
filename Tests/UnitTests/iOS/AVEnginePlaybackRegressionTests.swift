@@ -53,6 +53,34 @@ struct AVEnginePlaybackRegressionTests {
         #expect(prepared.timing.incomingTime(at: prepared.timing.promotionTime) == 2)
     }
 
+    @Test("AirPlay sends the renderer PCM containing both songs during the fade")
+    func airPlayMixedSamplesContainBothSongs() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000, tone: 440)
+        defer { try? FileManager.default.removeItem(at: outgoing) }
+        let incoming = try makeSilentWaveFile(duration: 5, sampleRate: 48_000, tone: 660)
+        defer { try? FileManager.default.removeItem(at: incoming) }
+        let prepared = try await AirPlaySampleSource.transition(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
+        let source = try #require(prepared)
+        let cursor = try source.makeCursor(at: CMTime(seconds: 5, preferredTimescale: 48_000))
+        let buffer = try #require(try cursor.nextBuffer())
+        let block = try #require(CMSampleBufferGetDataBuffer(buffer))
+        let length = CMBlockBufferGetDataLength(block)
+        var pcm = [Float](repeating: 0, count: length / MemoryLayout<Float>.size)
+        let status = pcm.withUnsafeMutableBytes { bytes in
+            CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: length, destination: bytes.baseAddress!)
+        }
+        #expect(status == kCMBlockBufferNoErr)
+        let frames = stride(from: 0, to: pcm.count, by: 2).map { pcm[$0] }
+        for frequency in [440.0, 660.0] {
+            let energy = frames.enumerated().reduce(into: (real: 0.0, imaginary: 0.0)) { sum, frame in
+                let phase = 2 * Double.pi * frequency * Double(frame.offset) / 48_000
+                sum.real += Double(frame.element) * cos(phase)
+                sum.imaginary += Double(frame.element) * sin(phase)
+            }
+            #expect(2 * hypot(energy.real, energy.imaginary) / Double(frames.count) > 0.04)
+        }
+    }
+
     @Test("AirPlay accepts only the latest seek or handoff completion")
     func airPlayRejectsObsoleteOperations() {
         let session = AirPlaySongOperations()

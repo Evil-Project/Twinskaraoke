@@ -6,6 +6,58 @@ enum ManagedAVPlayerKind {
 }
 
 extension AudioPlayerManager {
+    var usesAirPlaySongPlayer: Bool { airPlaySamples != nil || streamPlayer is AVQueuePlayer }
+
+    func startAirPlaySamples(_ url: URL, position: TimeInterval) {
+        cancelPendingTransitionWork()
+        loadedEngine?.stop()
+        let samples = AirPlaySampleSession { [weak self] event in
+            self?.handleAirPlaySampleEvent(event)
+        } onTime: { [weak self] time, plan in
+            self?.updateAirPlaySampleTime(time, promoting: plan)
+        }
+        airPlaySamples = samples
+        streamPlaybackRequested = true
+        lastKnownPlaybackTime = position
+        setPlaybackState(playing: false, buffering: true, reloadArtwork: true, reason: "airPlaySamples.start")
+        samples.loadSong(url, at: position, autoplay: true)
+    }
+
+    private func updateAirPlaySampleTime(_ time: Double, promoting plan: TransitionCoordinator.TransitionPlan?) {
+        guard let samples = airPlaySamples else { return }
+        if let pending = samples.pendingPlan, samples.isOverlapping {
+            transitionCoordinator.beginPreparedTransition(pending)
+        }
+        if let plan { finishTrackTransition(plan, preservingAirPlayPlayer: true) }
+        lastKnownPlaybackTime = time
+        if playbackDuration > 0 { progress = min(1, time / playbackDuration) }
+        updateNowPlayingElapsed(time)
+    }
+
+    private func handleAirPlaySampleEvent(_ event: AirPlaySampleRenderer.Event) {
+        guard let samples = airPlaySamples else { return }
+        switch event {
+        case .playing:
+            guard streamPlaybackRequested else { return }
+            setPlaybackState(playing: true, buffering: false, reason: "airPlaySamples.playing")
+        case .failed:
+            lastKnownPlaybackTime = samples.position
+            stopStreamPlayer()
+            cancelPendingTransitionWork()
+            reportLoadFailure(.unavailable)
+            setPlaybackState(playing: false, buffering: false, reason: "airPlaySamples.failed")
+        case .ended:
+            guard streamPlaybackRequested else { return }
+            if handlePrematurePlaybackEndIfNeeded(source: "AirPlay samples") { return }
+            if sleepTimer.consumeEndOfSong() {
+                pauseCurrentPlayback(source: "airPlaySamples.endOfSong")
+            } else {
+                streamPlaybackRequested = false
+                playNextOrRandom()
+            }
+        }
+    }
+
     func startAirPlaySong(_ url: URL, position: TimeInterval) {
         cancelPendingTransitionWork()
         loadedEngine?.stop()
@@ -204,16 +256,28 @@ extension AudioPlayerManager {
         let useAirPlay = AirPlaySongComparison.shouldUsePlayer(
             outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         )
-        guard useAirPlay != (streamPlayer is AVQueuePlayer) || airPlayHandoffs.isPending else { return false }
+        guard useAirPlay != usesAirPlaySongPlayer || airPlayHandoffs.isPending else { return false }
         let position = activePlaybackTime()
         let autoplay = resuming || isPlaybackRequested
         let songID = currentSong?.id
+        if let samples = airPlaySamples { airPlayHandoffs.retiringSamples = samples }
         stopStreamPlayer()
         cancelPendingTransitionWork()
         loadedEngine?.stop()
         lastKnownPlaybackTime = position
         clearPreferredStreamResumeTime()
-        guard autoplay else { return true }
+        guard autoplay else {
+            if let retiring = airPlayHandoffs.retiringSamples {
+                retiring.stop { [weak self, weak retiring] in
+                    Task { @MainActor in
+                        guard let self, let retiring, self.airPlayHandoffs.retiringSamples === retiring,
+                              !self.airPlayHandoffs.isPending else { return }
+                        self.airPlayHandoffs.retiringSamples = nil
+                    }
+                }
+            }
+            return true
+        }
         let request = airPlayHandoffs.begin()
         let restart: @MainActor () -> Void = { [weak self] in
             guard let self, self.airPlayHandoffs.isCurrent(request), self.currentSong?.id == songID,
@@ -222,7 +286,15 @@ extension AudioPlayerManager {
             self.startPlayingFile(url, startAt: position, resetSeparation: false)
             if self.anyAIEffectActive { self.applyMLSeparationIfNeeded() }
         }
-        if audioSessionController.performWhenReady(restart, replacingPending: true) { restart() }
+        if let retiring = airPlayHandoffs.retiringSamples {
+            retiring.stop { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.airPlayHandoffs.isCurrent(request) else { return }
+                    self.airPlayHandoffs.retiringSamples = nil
+                    if self.audioSessionController.performWhenReady(restart, replacingPending: true) { restart() }
+                }
+            }
+        } else if audioSessionController.performWhenReady(restart, replacingPending: true) { restart() }
         return true
     }
 }
