@@ -283,6 +283,7 @@ extension AudioPlayerManager {
             guard let self, self.airPlayHandoffs.isCurrent(request), self.currentSong?.id == songID,
                   self.currentPlaybackURL == url else { return }
             self.airPlayHandoffs.invalidate()
+            DebugLogger.log("AirPlay handoff \(request): starting destination, airPlay=\(useAirPlay)", category: .playback)
             self.startPlayingFile(url, startAt: position, resetSeparation: false)
             if self.anyAIEffectActive { self.applyMLSeparationIfNeeded() }
         }

@@ -96,11 +96,13 @@ struct AVEnginePlaybackRegressionTests {
     func repeatedAirPlayRetirementCompletesWaiters() async throws {
         let renderer = AirPlaySampleRenderer(event: { _, _ in }, time: { _, _ in })
         let completed = Mutex(0)
+        #expect(await !renderer.isMutedForTesting())
         renderer.retire(completion: nil)
         renderer.retire { completed.withLock { $0 += 1 } }
         renderer.retire { completed.withLock { $0 += 1 } }
 
         try await waitUntil { completed.withLock { $0 == 2 } }
+        #expect(await renderer.isMutedForTesting())
     }
 
     @Test("The local clock holds its resume position while a song loads")
