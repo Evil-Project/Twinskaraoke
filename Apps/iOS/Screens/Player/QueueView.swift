@@ -257,34 +257,7 @@ struct QueueView: View {
             AppHaptic.selection.play()
             dismiss()
         } label: {
-            HStack(spacing: 12) {
-                RemoteArtworkImage(
-                    url: audioManager.displayImageURL(for: current, variant: .row),
-                    cornerRadius: AM.Radius.thumb,
-                    lowResURL: current.thumbnailURL
-                )
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Now Playing")
-                        .font(AM.Font.badge)
-                        .foregroundStyle(Color.appAccent)
-                        .textCase(.uppercase)
-                    Text(current.title)
-                        .font(AM.Font.groupHeader)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(current.displayArtist)
-                        .font(AM.Font.rowSubtitle)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-
-                EqualizerBars(isAnimating: audioManager.isPlaying, pausesWhileScrolling: false)
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(Color.appAccent)
-            }
+            currentSongRowLabel(current)
         }
         .buttonStyle(.plain)
         .padding(.vertical, 2)
@@ -309,6 +282,41 @@ struct QueueView: View {
         .accessibilityAction(named: "Add to Playlist") {
             AppHaptic.selection.play()
             showCurrentAddToPlaylist = true
+        }
+    }
+
+    private func currentSongRowLabel(_ current: Song) -> some View {
+        HStack(spacing: 12) {
+            RemoteArtworkImage(
+                url: audioManager.displayImageURL(for: current, variant: .row),
+                cornerRadius: AM.Radius.thumb,
+                lowResURL: current.thumbnailURL
+            )
+            .frame(width: 48, height: 48)
+            .clipShape(RoundedRectangle(cornerRadius: AM.Radius.thumb, style: .continuous))
+            currentSongRowMetadata(current)
+            Spacer()
+
+            EqualizerBars(isAnimating: audioManager.isPlaying, pausesWhileScrolling: false)
+                .frame(width: 16, height: 16)
+                .foregroundStyle(Color.appAccent)
+        }
+    }
+
+    private func currentSongRowMetadata(_ current: Song) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Now Playing")
+                .font(AM.Font.badge)
+                .foregroundStyle(Color.appAccent)
+                .textCase(.uppercase)
+            Text(current.title)
+                .font(AM.Font.groupHeader)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Text(current.displayArtist)
+                .font(AM.Font.rowSubtitle)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 
