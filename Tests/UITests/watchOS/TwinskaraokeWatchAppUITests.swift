@@ -181,7 +181,9 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         dismissPlaybackError(in: app)
         let output = app.buttons["WatchPlayer.options"].firstMatch
         XCTAssertTrue(output.waitForExistence(timeout: 8))
-        output.tap()
+        XCTAssertGreaterThanOrEqual(output.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(output.frame.height, 44)
+        output.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.65)).tap()
         XCTAssertTrue(app.staticTexts["Options"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["Sleep Timer"].exists)
         XCTAssertTrue(app.buttons["Download to Watch"].exists, "Songs without inline audio metadata must allow a resolving download.")
@@ -258,6 +260,28 @@ final class TwinskaraokeWatchAppUITests: XCTestCase {
         app.buttons["Next Track"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
         saveScreenshot(app, name: "Watch Offline Download Playback")
+    }
+
+    func testWatchDownloadsCanPlayWithoutTakingOverPhone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1", "-UITestDownloadedAudio", "-UITestPhoneOwnsPlayback"]
+        app.launch()
+        defer { app.terminate() }
+        scrollToVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+        openVisibleItem("Downloads", identifier: "WatchHome.downloads", in: app)
+        XCTAssertTrue(app.buttons["Wake Me Up Before You Go-Go"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Wake Me Up Before You Go-Go"].firstMatch.tap()
+        app.buttons["Play on This Watch"].tap()
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 15),
+                      "Persisted watch downloads must play without a phone or remote audio URL.")
+        app.buttons["Next Track"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Hero"].waitForExistence(timeout: 8))
+        saveScreenshot(app, name: "Watch Independent Download Playback")
+        app.buttons["WatchPlayer.options"].tap()
+        let returnToPhone = app.buttons["Return to iPhone Playback"]
+        XCTAssertTrue(returnToPhone.waitForExistence(timeout: 5))
+        returnToPhone.tap()
+        XCTAssertFalse(app.buttons["Pause"].exists, "Returning to iPhone must stop independent Watch playback.")
     }
 
     func testWatchAccountClearsPersistentDownloads() throws {
