@@ -23,6 +23,22 @@ case "${1:-}" in
   *) echo "Unknown option: $1 (use --quick, --lint or --help)" >&2; exit 2 ;;
 esac
 
+# xcodebuild and SwiftLint (which loads SourceKit) need a full Xcode. When only
+# the Command Line Tools are selected and DEVELOPER_DIR isn't set, use the
+# installed Xcode for this run instead of failing every step.
+if [[ "$(uname -s)" == Darwin && -z "${DEVELOPER_DIR:-}" ]]; then
+  selected="$(xcode-select -p 2>/dev/null || true)"
+  if [[ "${selected%/}" != *.app/Contents/Developer ]]; then
+    for candidate in /Applications/Xcode.app /Applications/Xcode*.app; do
+      if [[ -d "$candidate/Contents/Developer" ]]; then
+        export DEVELOPER_DIR="$candidate/Contents/Developer"
+        echo "xcode-select points at ${selected:-nothing}; using $DEVELOPER_DIR for this run."
+        break
+      fi
+    done
+  fi
+fi
+
 project="Twinskaraoke.xcodeproj"
 common_flags=(-project "$project" -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO)
 failures=()
