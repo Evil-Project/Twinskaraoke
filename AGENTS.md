@@ -15,11 +15,17 @@ with approachable concurrency, deployment target iOS 26.5.
 
 1. Work on a branch from current `main`: `feat/<slug>`, `fix/<slug>`,
    `refactor/<slug>`, `chore/<slug>`. Never commit to `main` — every push to
-   `main` publishes the public nightly IPA.
+   `main` publishes the public nightly IPA. Working on several tasks at
+   once: one `git worktree` per task under `.claude/worktrees/<name>`
+   (gitignored), not under `/tmp`. From a `/tmp` path SwiftLint can't match
+   the paths in `.swiftlint-baseline.json` and reports every baselined
+   violation again.
 2. Before editing, read the linked issue and write a plan: the files you will
    touch, the approach, the tests you will add. Stop and ask for approval
    before changing playback, navigation, authentication, the Xcode project or
-   CI.
+   CI. No issue, because the person you work for asked directly? Their
+   request takes its place: put the acceptance criteria you assume into the
+   plan.
 3. One PR = one concern, ideally under ~400 changed lines. Split bigger work
    into stacked PRs (model/service → UI → polish). Never mix a refactor with a
    feature or a fix.
@@ -174,7 +180,15 @@ git diff --name-only --diff-filter=d origin/main... -- '*.swift' | xargs swiftfo
 swiftlint --fix              # fix autocorrectable lint issues
 ```
 
-CI builds with `-skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO`.
+CI builds with `-skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO`. Its
+tests and analysis run on the newest Xcode 27 (`xcode-27` runners in
+`tests.yml` and `analyze.yml`). The code also has to compile with Xcode 26: wrap a declaration that only exists in
+the iOS 27 SDK in `#if compiler(>=6.4)` as well as `#available`, as
+`AudioSessionController` does. With an Xcode older than CI's,
+`Scripts/verify.sh` doesn't compile those branches; say so under "How it was
+tested". If `xcodebuild` or SwiftLint fails because the Command Line Tools
+are selected, run `sudo xcode-select -s /Applications/Xcode.app` or export
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 Schemes: `Twinskaraoke`, `Twinskaraoke Mac App`, `Twinskaraoke TV App`,
 `TwinskaraokeWatchApp`. Test targets: `TwinskaraokeTests`,
 `TwinskaraokeUITests`, `Twinskaraoke Watch AppTests`,
