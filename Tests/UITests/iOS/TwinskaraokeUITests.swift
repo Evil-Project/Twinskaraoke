@@ -1072,6 +1072,24 @@ final class TwinskaraokeUITests: XCTestCase {
         )
     }
 
+    func testNowPlayingQueueRowReturnsToPlayer() {
+        let app = launchApp(initialSection: "home")
+        let title = "Wake Me Up Before You Go-Go"
+        openVisibleItem(title, identifier: "HomeSongSection.Made for You.ui-home-song-1", in: app)
+        openMiniPlayer(in: app)
+
+        let queueButton = app.buttons["PlayerToolbar.PlayingNext"].firstMatch
+        XCTAssertTrue(waitUntil(timeout: 8) { queueButton.isHittable })
+        queueButton.tap()
+
+        let currentRow = app.buttons["Now Playing"].firstMatch
+        XCTAssertTrue(waitUntil(timeout: 8) { currentRow.isHittable })
+        XCTAssertTrue((currentRow.value as? String)?.contains(title) == true)
+        currentRow.tap()
+
+        XCTAssertTrue(waitUntil(timeout: 8) { !app.buttons["Queue.Reorder"].exists && queueButton.isHittable })
+    }
+
     func testQueueBrowsingAndReordering() throws {
         try verifyQueueEditing()
     }
