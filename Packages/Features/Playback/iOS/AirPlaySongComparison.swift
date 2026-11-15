@@ -2,22 +2,13 @@ import AVFoundation
 import Combine
 import Foundation
 
-/// The signed comparison build opts in at compile time so it can launch from the Home Screen.
 @MainActor
 enum AirPlaySongComparison {
-    static var isEnabled: Bool {
-        #if DEBUG && AIRPLAY_SONG_COMPARISON
-            true
-        #else
-            false
-        #endif
-    }
-
     static var outputs: [AVAudioSession.Port] {
         AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType)
     }
 
-    static func shouldUsePlayer(outputs: [AVAudioSession.Port], url: URL?, processingActive: Bool) -> Bool {
+    static func shouldRouteSong(outputs: [AVAudioSession.Port], url: URL?, processingActive: Bool) -> Bool {
         outputs.contains(.airPlay) && url?.isFileURL == true && !processingActive
     }
 

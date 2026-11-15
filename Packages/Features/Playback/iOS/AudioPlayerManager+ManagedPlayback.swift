@@ -251,11 +251,11 @@ extension AudioPlayerManager {
 
     @discardableResult
     func reconcileAirPlayRoute(resuming: Bool = false) -> Bool {
-        guard AirPlaySongComparison.isEnabled, phoneAudioAllowed, !isRadioMode, !isRemotePlaybackCaching,
+        guard phoneAudioAllowed, !isRadioMode, !isRemotePlaybackCaching,
               let url = currentPlaybackURL, url.isFileURL else { return false }
         let outputs = AirPlaySongComparison.outputs
         let leavingAirPlay = !outputs.contains(.airPlay)
-        let useAirPlay = AirPlaySongComparison.shouldUsePlayer(
+        let useAirPlay = AirPlaySongComparison.shouldRouteSong(
             outputs: outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         )
         guard useAirPlay != usesAirPlaySongPlayer || airPlayHandoffs.isPending else { return false }

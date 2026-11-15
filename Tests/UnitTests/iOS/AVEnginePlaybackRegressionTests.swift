@@ -17,14 +17,14 @@ struct AVEnginePlaybackRegressionTests {
         #expect(player.allowsExternalPlayback)
     }
 
-    @Test("AirPlay comparison only switches an ordinary file-backed song")
+    @Test("AirPlay automatically routes only ordinary file-backed songs")
     func airPlayComparisonRouteSelection() {
         let local = URL(fileURLWithPath: "/tmp/song.wav")
         let remote = URL(string: "https://example.com/song.wav")
-        #expect(AirPlaySongComparison.shouldUsePlayer(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
-        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.builtInSpeaker], url: local, processingActive: false))
-        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.airPlay], url: local, processingActive: true))
-        #expect(!AirPlaySongComparison.shouldUsePlayer(outputs: [.airPlay], url: remote, processingActive: false))
+        #expect(AirPlaySongComparison.shouldRouteSong(outputs: [.builtInSpeaker, .airPlay], url: local, processingActive: false))
+        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.builtInSpeaker], url: local, processingActive: false))
+        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.airPlay], url: local, processingActive: true))
+        #expect(!AirPlaySongComparison.shouldRouteSong(outputs: [.airPlay], url: remote, processingActive: false))
     }
 
     @Test("AirPlay transition overlaps the tracks and maps the incoming lyric clock")

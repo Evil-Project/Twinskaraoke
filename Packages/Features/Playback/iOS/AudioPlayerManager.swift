@@ -1755,7 +1755,7 @@ final class AudioPlayerManager {
         aiStemSwitchInFlightSongID = nil
         loadFailure = nil
         NotificationCenter.default.post(name: MediaPlaybackCoordinator.audioWillPlay, object: nil)
-        if AirPlaySongComparison.isEnabled, AirPlaySongComparison.shouldUsePlayer(
+        if AirPlaySongComparison.shouldRouteSong(
             outputs: AirPlaySongComparison.outputs, url: url, processingActive: anyAIEffectActive || eqEnabled
         ) {
             startAirPlaySamples(url, position: startAt)

@@ -41,8 +41,8 @@ final class AirPlaySongOperations {
 
     func waitForOutputDrain(_ request: Int) async -> Bool {
         guard isCurrent(request) else { return false }
-        // Build 39 consistently measured about 500 ms of far-end audio after
-        // detachment. Leave a small margin in the signed comparison build.
+        // HomePod played about 500 ms of buffered audio after detachment in
+        // hardware testing. The extra margin prevented audible overlap.
         do { try await Task.sleep(for: .milliseconds(750)) } catch { return false }
         return isCurrent(request)
     }
