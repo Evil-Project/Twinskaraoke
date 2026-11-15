@@ -23,6 +23,9 @@ jobs:
   ios-tests:
     name: iOS Tests
     runs-on: xcode-27
+    # About 25 minutes when healthy. Without a limit a hung simulator holds
+    # the runner for GitHub's default of six hours.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -73,6 +76,7 @@ jobs:
   watch-tests:
     name: watchOS Tests
     runs-on: xcode-27
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -88,7 +92,10 @@ jobs:
       - name: Run watchOS Tests
         run: |
           udid=$(Scripts/ci-simulator.sh watchOS "$WATCHOS_MAJOR" "Apple Watch")
+          test -n "$udid"
           echo "Using simulator UDID: $udid"
+          # Same as the iOS jobs: wait for a usable simulator first.
+          xcrun simctl bootstatus "$udid" -b
           xcodebuild test \
             -project Twinskaraoke.xcodeproj \
             -skipPackagePluginValidation \

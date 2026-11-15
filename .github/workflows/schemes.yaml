@@ -3,14 +3,20 @@ name: List Schemes and Targets
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   list-info:
     name: Run xcodebuild -list
     runs-on: macos-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: List Xcode Project Information
         run: |
