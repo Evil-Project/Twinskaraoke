@@ -1266,7 +1266,7 @@ final class AudioPlayerManager {
         }
     }
 
-    private func switchActivePlaybackToStems(
+    func switchActivePlaybackToStems(
         for song: Song, stems: CachedStems, sourceURL: URL,
         onReady: (() -> Void)? = nil
     ) {
@@ -1294,7 +1294,7 @@ final class AudioPlayerManager {
                 endTrackTransitionBackgroundTask()
             #endif
         }
-        if isStreamMode {
+        if isStreamMode || loadedEngine?.currentURL != sourceURL {
             stopStreamPlayer()
             avEngine.playStems(
                 originalURL: sourceURL,
