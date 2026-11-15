@@ -196,12 +196,13 @@ swiftlint --fix              # fix autocorrectable lint issues
 
 CI builds with `-skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO`. Its
 tests and analysis run on the newest Xcode 27 (`xcode-27` runners in
-`tests.yml` and `analyze.yml`). The code also has to compile with Xcode 26: wrap a declaration that only exists in
-the iOS 27 SDK in `#if compiler(>=6.4)` as well as `#available`, as
-`AudioSessionController` does. With an Xcode older than CI's,
-`Scripts/verify.sh` doesn't compile those branches; say so under "How it was
-tested". If `xcodebuild` or SwiftLint fails because the Command Line Tools
-are selected, run `sudo xcode-select -s /Applications/Xcode.app` or export
+`tests.yml` and `analyze.yml`). The code also has to compile with Xcode 26:
+wrap a declaration that only exists in the iOS 27 SDK in
+`#if compiler(>=6.4)` as well as `#available`, as `AudioSessionController`
+does. With an Xcode older than CI's, `Scripts/verify.sh` doesn't compile
+those branches; say so under "How it was tested". If `xcodebuild` or
+SwiftLint fails because the Command Line Tools are selected, run
+`sudo xcode-select -s /Applications/Xcode.app` or export
 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 Schemes: `Twinskaraoke`, `Twinskaraoke Mac App`, `Twinskaraoke TV App`,
 `TwinskaraokeWatchApp`. Test targets: `TwinskaraokeTests`,
