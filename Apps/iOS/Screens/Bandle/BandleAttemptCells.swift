@@ -15,6 +15,7 @@ struct BandleAttemptCells: View {
                 // keep their colours, the ones never needed are greyed out.
                 let isUnneeded = isCompleted && attempt == nil
                 let isUnlocked = !isCompleted && number <= currentAttempt
+                let isPlayedSummary = isCompleted && attempt != nil
                 Button {
                     onSelect(number)
                 } label: {
@@ -44,7 +45,11 @@ struct BandleAttemptCells: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(!isUnlocked)
+                // Played attempts in the summary keep full colour, so they
+                // aren't disabled (which dims them), only not tappable.
+                .disabled(!isUnlocked && !isPlayedSummary)
+                .allowsHitTesting(isUnlocked)
+                .accessibilityRemoveTraits(isPlayedSummary ? .isButton : [])
                 .accessibilityLabel(String(localized: "Attempt \(number)"))
                 .accessibilityValue(
                     attempt?.status?.title
