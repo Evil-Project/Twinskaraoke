@@ -77,7 +77,34 @@ struct BandleLeaderboardViewModelTests {
             .init(period: .global, mode: .normal),
             .init(period: .global, mode: .extreme),
         ])
+    }
+
+    @Test("Extreme takes the player's rank from its own board, not the mode-less rank lookup")
+    func extremeRankComesFromBoard() async {
+        let fake = FakeBandleLeaderboardService()
+        let model = BandleLeaderboardViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.selectPeriod(.global)
         #expect(model.currentUserRank == 13)
+
+        await model.selectMode(.extreme)
+
+        #expect(model.ranks?.globalRank == 13)
+        #expect(model.currentUserRank == 3)
+    }
+
+    @Test("Extreme shows no rank when the player isn't on its board")
+    func extremeRankHiddenOffBoard() async {
+        let fake = FakeBandleLeaderboardService()
+        fake.userId = "player-off-board"
+        let model = BandleLeaderboardViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.selectPeriod(.global)
+        #expect(model.currentUserRank == 13)
+
+        await model.selectMode(.extreme)
+
+        #expect(model.currentUserRank == nil)
     }
 
     @Test("Guests load public leaderboards without a rank request")

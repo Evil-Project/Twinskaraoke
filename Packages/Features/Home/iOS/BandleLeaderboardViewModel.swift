@@ -16,13 +16,22 @@ final class BandleLeaderboardViewModel {
 
     @ObservationIgnored private let service: Service
     @ObservationIgnored private var hasLoaded = false
+    /// The signed-in player's id; guests have none.
+    private var rankedUserId: String?
 
     init(service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live) {
         self.service = service
     }
 
     var currentUserRank: Int? {
-        ranks?[keyPath: period.rankKeyPath]
+        // The ranks endpoint takes no mode, so like the leaderboards'
+        // default it describes Normal. Other modes use the player's entry on
+        // the loaded board, if they're on it.
+        if mode == .normal, let rank = ranks?[keyPath: period.rankKeyPath] {
+            return rank
+        }
+        guard let rankedUserId else { return nil }
+        return leaderboard?.entries?.first { $0.userId == rankedUserId }?.rank
     }
 
     func loadIfNeeded() async {
@@ -47,7 +56,8 @@ final class BandleLeaderboardViewModel {
             history = try await historyRequest
             globalStats = try await globalRequest
             let status = try await statusRequest
-            ranks = await loadRanks(userId: status.userId)
+            rankedUserId = service.isSignedIn() ? status.userId : nil
+            ranks = await loadRanks(userId: rankedUserId)
         } catch {
             guard !Task.isCancelled else { return }
             errorMessage = String(localized: "Couldn't load Bandle statistics. Check your connection and try again.")
@@ -85,7 +95,7 @@ final class BandleLeaderboardViewModel {
 
     /// A rank is extra; failing to load it doesn't hide the leaderboard.
     private func loadRanks(userId: String?) async -> BandleUserRanks? {
-        guard service.isSignedIn(), let userId, !userId.isEmpty else { return nil }
+        guard let userId, !userId.isEmpty else { return nil }
         do {
             return try await service.ranks(userId)
         } catch {

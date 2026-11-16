@@ -81,7 +81,7 @@ nonisolated extension UITestFixtures {
 
     private static func bandleLeaderboardEntry(rank: Int, period: BandleLeaderboardPeriod) -> BandleLeaderboardEntry {
         var entry = BandleLeaderboardEntry(
-            userId: "leaderboard-user-\(rank)",
+            userId: rank == 3 ? bandleUserRanks.userId : "leaderboard-user-\(rank)",
             username: rank == 3 ? "BandleTester" : "Player \(rank)",
             rank: rank,
             score: 12500 - rank * 125,
