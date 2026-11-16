@@ -58,7 +58,15 @@ struct BandleGameView: View {
                         isCompleted: true,
                         onSelect: selectClip
                     )
-                    BandleClipControls(clip: model.currentClip, isLoading: model.isLoadingClip, player: clipPlayer)
+                    BandleRevealedSongCard(
+                        song: model.revealedSong,
+                        fallbackTitle: model.result?.songTitle,
+                        fallbackArtist: model.result?.artist,
+                        fallbackArtwork: model.result?.mediaListDTO,
+                        isPractice: model.isPractice,
+                        player: clipPlayer,
+                        onOpenInPlayer: openInPlayer
+                    )
                 }
             }
             .controlSize(.large)
@@ -80,8 +88,10 @@ struct BandleGameView: View {
         }
         .task { await model.loadIfNeeded() }
         .refreshable { await model.reload() }
-        .onChange(of: model.currentClip) { _, clip in
-            synchronizeClip(clip)
+        // One player serves both: the clip while playing, the revealed song
+        // once the game is over.
+        .onChange(of: model.playbackURL) { _, url in
+            synchronizePlayer(url)
         }
         .onChange(of: clipPlayer.didFail) { _, didFail in
             if didFail { model.clipPlaybackFailed() }
@@ -128,8 +138,14 @@ struct BandleGameView: View {
         Task { await model.retry() }
     }
 
-    private func synchronizeClip(_ clip: BandleAudioClip?) {
-        guard let url = clip?.playableURL else {
+    private func openInPlayer(_ song: Song) {
+        clipPlayer.stop()
+        AudioPlayerManager.shared.play(song: song)
+        NowPlayingPresentation.shared.expand()
+    }
+
+    private func synchronizePlayer(_ url: URL?) {
+        guard let url else {
             clipPlayer.unload()
             return
         }

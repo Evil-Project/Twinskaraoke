@@ -27,6 +27,14 @@ final class BandleGameUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Well done!"].waitForExistence(timeout: 10))
         XCTAssertTrue(element("Bandle.ShareResult", in: app).exists)
         XCTAssertTrue(app.staticTexts["Hero"].exists)
+
+        // The full song replaces the clip controls, and the attempts that
+        // were never needed are greyed out.
+        let revealed = element("Bandle.RevealedSong", in: app)
+        XCTAssertTrue(revealed.waitForExistence(timeout: 5))
+        XCTAssertTrue(element("Bandle.RevealedSong.OpenInPlayer", in: app).exists)
+        XCTAssertFalse(element("Bandle.TogglePlayback", in: app).exists)
+        XCTAssertFalse(element("Bandle.Attempt.2", in: app).isEnabled)
     }
 
     func testPracticeReplayStaysAvailableAndCompletesLocally() throws {

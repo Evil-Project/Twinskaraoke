@@ -10,6 +10,8 @@ extension BandleGameViewModel {
         var complete: @MainActor (BandleCompletionInput) async throws -> BandleResult
         var playStatus: @MainActor (BandleMode) async throws -> BandlePlayStatus
         var userData: @MainActor (BandleMode) async throws -> BandleUserData
+        /// The full song, revealed once the game is over.
+        var song: @MainActor (String) async throws -> Song
 
         static var live: Service {
             Service(
@@ -22,7 +24,8 @@ extension BandleGameViewModel {
                 attempt: KaraokeAPIClient.bandleSubmitAttempt,
                 complete: KaraokeAPIClient.bandleComplete,
                 playStatus: KaraokeAPIClient.bandlePlayStatus,
-                userData: KaraokeAPIClient.bandleUserData
+                userData: KaraokeAPIClient.bandleUserData,
+                song: { id in try await KaraokeAPIClient.fetchSong(id: id) }
             )
         }
 
@@ -56,7 +59,13 @@ extension BandleGameViewModel {
                     )
                 },
                 playStatus: { _ in BandlePlayStatus(hasPlayed: false, inProgress: false) },
-                userData: { _ in UITestFixtures.bandleUserData }
+                userData: { _ in UITestFixtures.bandleUserData },
+                song: { id in
+                    guard let song = UITestFixtures.coreSongs.first(where: { $0.id == id }) else {
+                        throw URLError(.fileDoesNotExist)
+                    }
+                    return song
+                }
             )
         }
     }
