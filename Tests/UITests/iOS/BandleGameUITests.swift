@@ -46,6 +46,26 @@ final class BandleGameUITests: XCTestCase {
         XCTAssertTrue(element("Bandle.ShareResult", in: app).exists)
     }
 
+    func testStatisticsSwitchPeriodsAndShowHistory() throws {
+        let app = launchBandle()
+        let statistics = element("Bandle.StatisticsButton", in: app)
+        XCTAssertTrue(statistics.waitForExistence(timeout: 10))
+        statistics.tap()
+
+        XCTAssertTrue(element("Bandle.GlobalStats", in: app).waitForExistence(timeout: 10))
+        let monthly = app.buttons["Monthly"]
+        XCTAssertTrue(monthly.waitForExistence(timeout: 5))
+        monthly.tap()
+        XCTAssertTrue(element("Bandle.Leaderboard.Entry.leaderboard-user-1", in: app).waitForExistence(timeout: 5))
+
+        app.buttons["All Time"].tap()
+        XCTAssertTrue(app.staticTexts["Your All Time rank: 13"].waitForExistence(timeout: 5))
+
+        app.buttons["History"].tap()
+        XCTAssertTrue(element("Bandle.History.Entry.bandle-game-2", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Cure For Me"].exists)
+    }
+
     private func launchBandle() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "new"]

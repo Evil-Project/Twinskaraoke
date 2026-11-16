@@ -61,6 +61,16 @@ struct BandleGameView: View {
         }
         .musicScreenBackground()
         .navigationTitle(String(localized: "Daily Bandle"))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    DeferredView { BandleStatsView() }
+                } label: {
+                    Label(String(localized: "Bandle Statistics"), systemImage: "chart.bar")
+                }
+                .accessibilityIdentifier("Bandle.StatisticsButton")
+            }
+        }
         .task { await model.loadIfNeeded() }
         .refreshable { await model.reload() }
         .onChange(of: model.currentClip) { _, clip in

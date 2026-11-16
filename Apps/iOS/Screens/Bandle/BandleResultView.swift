@@ -61,7 +61,16 @@ struct BandleResultView: View {
                 )
             }
 
-            practiceButton
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AM.Spacing.m) {
+                    practiceButton
+                    leaderboardLink
+                }
+                VStack(spacing: AM.Spacing.m) {
+                    practiceButton
+                    leaderboardLink
+                }
+            }
         }
         .padding(AM.Spacing.xl)
         .background(Color.appSecondaryBackground, in: .rect(cornerRadius: AM.Radius.hero))
@@ -72,6 +81,17 @@ struct BandleResultView: View {
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("Bandle.PlayAgain")
+    }
+
+    private var leaderboardLink: some View {
+        NavigationLink {
+            DeferredView { BandleStatsView() }
+        } label: {
+            Label(String(localized: "Leaderboard"), systemImage: "list.number")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("Bandle.ViewLeaderboard")
     }
 
     private func shareText(for result: BandleResult) -> String {
