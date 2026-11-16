@@ -234,7 +234,7 @@ final class BandleGameViewModel {
 
     func loadClip(number: Int) async {
         let highestUnlocked = phase == .completed ? 6 : currentAttemptNumber
-        guard (1 ... highestUnlocked).contains(number), !isLoadingClip else { return }
+        guard number >= 1, number <= highestUnlocked, !isLoadingClip else { return }
         isLoadingClip = true
         visibleAttemptNumber = number
         currentClip = nil
@@ -358,9 +358,24 @@ final class BandleGameViewModel {
         pendingRetry = nil
     }
 
+    /// The saved attempts decide where the game continues. The server's
+    /// `currentAttemptNumber` is undocumented and was 0 for a session with no
+    /// attempts, so it is used only when no attempts come back.
     private func resume(_ progress: BandleProgress) {
         attempts = progress.attempts ?? []
-        currentAttemptNumber = progress.currentAttemptNumber ?? attempts.count + 1
+        let attempt: Int
+        if let last = attempts.last {
+            let lastNumber = last.attemptNumber ?? attempts.count
+            let isFinished = last.status == .correct || attempts.count >= 6
+            attempt = isFinished ? lastNumber : lastNumber + 1
+        } else {
+            attempt = progress.currentAttemptNumber ?? 1
+        }
+        DebugLogger.log(
+            "Bandle resume: server attempt \(progress.currentAttemptNumber.map(String.init) ?? "nil"), \(attempts.count) saved, continuing at \(attempt)",
+            category: .network
+        )
+        currentAttemptNumber = min(max(attempt, 1), 6)
         visibleAttemptNumber = currentAttemptNumber
     }
 }
