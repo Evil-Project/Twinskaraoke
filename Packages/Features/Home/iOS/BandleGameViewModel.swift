@@ -19,6 +19,8 @@ final class BandleGameViewModel {
     private(set) var isPractice = false
     private(set) var excludeFromLeaderboard = false
     private(set) var isLoadingClip = false
+    /// The answer as a full song, fetched once the game is over.
+    private(set) var revealedSong: Song?
     private(set) var errorMessage: String?
     private(set) var isSignedIn = false
     var searchText = ""
@@ -38,6 +40,7 @@ final class BandleGameViewModel {
     @ObservationIgnored private var pendingRetry: BandleGameRetry?
     /// Identifies the latest clip request; an older response is dropped.
     @ObservationIgnored private var clipRequest = 0
+    @ObservationIgnored private var revealRequest = 0
 
     init(
         service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
@@ -70,6 +73,12 @@ final class BandleGameViewModel {
         challenge?.isInvalid == true
     }
 
+    /// What the screen's player should hold: the revealed song once the
+    /// game is over, otherwise the current clip.
+    var playbackURL: URL? {
+        phase == .completed ? revealedSong?.audioURL : currentClip?.playableURL
+    }
+
     var canSubmitGuess: Bool {
         phase == .playing && selectedGuess?.songId != nil && !isLoadingClip
     }
@@ -93,6 +102,7 @@ final class BandleGameViewModel {
         isSignedIn = readSignedIn()
         result = nil
         attempts = []
+        hideRevealedSong()
         dropClipRequest()
         selectedGuess = nil
         searchText = ""
@@ -117,6 +127,7 @@ final class BandleGameViewModel {
                 currentAttemptNumber = result?.attemptNumber ?? max(attempts.count, 1)
                 visibleAttemptNumber = currentAttemptNumber
                 phase = .completed
+                await revealSong()
             } else if playStatus?.inProgress == true, let progress = playStatus?.progress {
                 resume(progress)
                 let lastAttempt = attempts.last
@@ -179,6 +190,7 @@ final class BandleGameViewModel {
             currentAttemptNumber = 1
             visibleAttemptNumber = 1
             isPractice = false
+            hideRevealedSong()
             self.excludeFromLeaderboard = excludeFromLeaderboard
             defaults.set(excludeFromLeaderboard, forKey: exclusionKey)
             phase = .playing
@@ -212,6 +224,7 @@ final class BandleGameViewModel {
             currentAttemptNumber = 1
             visibleAttemptNumber = 1
             isPractice = true
+            hideRevealedSong()
             excludeFromLeaderboard = true
             phase = .playing
             await loadClip(number: 1)
@@ -245,8 +258,8 @@ final class BandleGameViewModel {
     }
 
     func loadClip(number: Int) async {
-        let highestUnlocked = phase == .completed ? 6 : currentAttemptNumber
-        guard number >= 1, number <= highestUnlocked else { return }
+        // Once the game is over the full song replaces the clips.
+        guard phase != .completed, number >= 1, number <= currentAttemptNumber else { return }
         clipRequest += 1
         let request = clipRequest
         isLoadingClip = true
@@ -277,12 +290,33 @@ final class BandleGameViewModel {
     }
 
     /// The clip player couldn't play the loaded clip, for example because its
-    /// download failed. Retry loads the clip again.
+    /// download failed. Retry loads the clip again. For the revealed song
+    /// there is no clip to reload; its Play button starts over instead.
     func clipPlaybackFailed() {
+        guard phase != .completed else { return }
         fail(
             String(localized: "Couldn't load this Bandle clip. Tap it to try again."),
             retry: .clip(visibleAttemptNumber)
         )
+    }
+
+    private func revealSong() async {
+        guard let songId = isPractice ? challenge?.replaySongId : result?.songId else { return }
+        revealRequest += 1
+        let request = revealRequest
+        do {
+            let song = try await service.song(songId)
+            guard request == revealRequest, phase == .completed else { return }
+            revealedSong = song
+        } catch {
+            // The result already names the song; the card shows that instead.
+            DebugLogger.log("Bandle song reveal failed: \(error)", category: .network)
+        }
+    }
+
+    private func hideRevealedSong() {
+        revealRequest += 1
+        revealedSong = nil
     }
 
     private func dropClipRequest() {
@@ -352,6 +386,7 @@ final class BandleGameViewModel {
                 challengeDate: challenge?.date
             )
             phase = .completed
+            await revealSong()
             return
         }
         do {
@@ -369,6 +404,7 @@ final class BandleGameViewModel {
             )
             defaults.removeObject(forKey: exclusionKey)
             phase = .completed
+            await revealSong()
         } catch {
             // Cancelled before the result was confirmed: the next load
             // resumes the finished attempts and completes again.

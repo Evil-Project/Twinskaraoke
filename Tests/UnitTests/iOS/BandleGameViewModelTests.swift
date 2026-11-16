@@ -30,6 +30,8 @@ private final class FakeBandleGameService {
     private(set) var heldAudio: CheckedContinuation<Void, Never>?
     /// Cancels the task loading the next clip, as leaving the screen does.
     var cancelNextAudio = false
+    private(set) var songCalls: [String] = []
+    var shouldFailSong = false
     private var acceptedAttempts: Set<Int> = []
     /// Thrown by `/start`; a 409 also marks today's game as played, as the server does.
     var startError: (any Error)?
@@ -118,7 +120,12 @@ private final class FakeBandleGameService {
                 )
             },
             playStatus: { _ in self.status },
-            userData: { _ in UITestFixtures.bandleUserData }
+            userData: { _ in UITestFixtures.bandleUserData },
+            song: { id in
+                self.songCalls.append(id)
+                if self.shouldFailSong { throw URLError(.notConnectedToInternet) }
+                return try #require(UITestFixtures.coreSongs.first { $0.id == id })
+            }
         )
     }
 }
@@ -570,5 +577,79 @@ struct BandleGameViewModelTests {
         #expect(fake.audioCalls == [1, 1])
         #expect(model.errorMessage == nil)
         #expect(model.currentClip != nil)
+    }
+
+    @Test("A won game reveals the full song and locks the clips")
+    func winRevealsSong() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+
+        #expect(model.revealedSong?.id == UITestFixtures.bandleAnswer.songId)
+        #expect(model.playbackURL == model.revealedSong?.audioURL)
+
+        await model.loadClip(number: 3)
+        #expect(fake.audioCalls == [1])
+    }
+
+    @Test("A lost game reveals the song too")
+    func lossRevealsSong() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        for _ in 1 ... 6 {
+            await model.skip()
+        }
+
+        #expect(model.result?.won == false)
+        #expect(model.revealedSong?.id == UITestFixtures.bandleAnswer.songId)
+    }
+
+    @Test("Reopening a finished game reveals its song")
+    func reopenRevealsSong() async {
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(hasPlayed: true, inProgress: false)
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+
+        #expect(fake.songCalls == [UITestFixtures.bandleAnswer.songId])
+        #expect(model.revealedSong != nil)
+    }
+
+    @Test("Practice reveals its replayed song, and a new round hides it again")
+    func practiceRevealsSong() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.startPractice()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+        #expect(model.revealedSong?.id == UITestFixtures.bandlePracticeChallenge.replaySongId)
+
+        await model.startPractice()
+
+        #expect(model.revealedSong == nil)
+        #expect(model.playbackURL == model.currentClip?.playableURL)
+    }
+
+    @Test("A song that can't be fetched keeps the result without an error")
+    func failedRevealKeepsResult() async {
+        let fake = FakeBandleGameService()
+        fake.shouldFailSong = true
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+
+        #expect(model.phase == .completed)
+        #expect(model.result?.won == true)
+        #expect(model.revealedSong == nil)
+        #expect(model.errorMessage == nil)
     }
 }
