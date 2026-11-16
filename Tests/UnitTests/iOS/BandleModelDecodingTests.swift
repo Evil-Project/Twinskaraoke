@@ -97,7 +97,23 @@ struct BandleModelDecodingTests {
         #expect(BandleTimeSpan.duration(from: text) == expected)
     }
 
-    @Test("Malformed time spans are ignored", arguments: ["", "abc", "12", "00:61:00", "-00:00:05"])
+    @Test("Sub-millisecond fractions don't round up into the next second")
+    func keepsTimeSpanFraction() throws {
+        let duration = try #require(BandleTimeSpan.duration(from: "00:00:59.9999000"))
+
+        #expect(duration < .seconds(60))
+        #expect(duration > .milliseconds(59999))
+    }
+
+    @Test(
+        "Malformed time spans are ignored",
+        arguments: [
+            "", "abc", "12", "00:61:00", "-00:00:05",
+            // Past .NET's TimeSpan.MaxValue (10675199 days); the second would
+            // overflow Int while converting.
+            "10675200.00:00:00", "9223372036854775807.00:00:00",
+        ]
+    )
     func rejectsMalformedTimeSpan(text: String) {
         #expect(BandleTimeSpan.duration(from: text) == nil)
     }
