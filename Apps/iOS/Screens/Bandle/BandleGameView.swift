@@ -33,7 +33,7 @@ struct BandleGameView: View {
                         .frame(maxWidth: .infinity, minHeight: 180)
                         .accessibilityIdentifier("Bandle.Loading")
                 case .ready:
-                    if !model.isChallengeInvalid {
+                    if model.canStart {
                         BandleStartCard(isSignedIn: model.isSignedIn, onStart: start, onPractice: startPractice)
                     }
                 case .starting, .playing, .submitting:
