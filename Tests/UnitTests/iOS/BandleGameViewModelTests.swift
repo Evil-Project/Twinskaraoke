@@ -17,7 +17,10 @@ private final class FakeBandleGameService {
     var attemptCalls: [AttemptCall] = []
     var completeCalls = 0
     var completionAttempts = 0
-    var completedExclusion = false
+    var completedExclusion: Bool?
+    var shouldFailSongs = false
+    /// The next clip comes back without an audio URL.
+    var nextClipWithoutURL = false
     var shouldFailAttempt = false
     var shouldFailComplete = false
     var shouldFailAudio = false
@@ -65,6 +68,10 @@ private final class FakeBandleGameService {
                     withUnsafeCurrentTask { $0?.cancel() }
                     throw CancellationError()
                 }
+                if self.nextClipWithoutURL {
+                    self.nextClipWithoutURL = false
+                    return BandleAudioClip(attemptNumber: number, clipLength: number * 3, mode: mode)
+                }
                 if self.holdNextAudio {
                     self.holdNextAudio = false
                     await withCheckedContinuation { self.heldAudio = $0 }
@@ -73,7 +80,10 @@ private final class FakeBandleGameService {
                 }
                 return UITestFixtures.bandleClip(attempt: number, mode: mode)
             },
-            songs: { _, _ in UITestFixtures.bandleGuessSongs },
+            songs: { _, _ in
+                if self.shouldFailSongs { throw URLError(.timedOut) }
+                return UITestFixtures.bandleGuessSongs
+            },
             attempt: { input in
                 if self.shouldFailAttempt { throw URLError(.networkConnectionLost) }
                 if self.acceptedAttempts.contains(input.attemptNumber) {
@@ -146,7 +156,7 @@ struct BandleGameViewModelTests {
         #expect(model.result?.won == true)
         #expect(fake.startCalls == 1)
         #expect(fake.completeCalls == 1)
-        #expect(fake.completedExclusion)
+        #expect(fake.completedExclusion == true)
         #expect(fake.attemptCalls == [
             .init(number: 1, songId: "ui-song-cure-for-me", isSkip: false),
             .init(number: 2, songId: "ui-song-hero", isSkip: false),
@@ -337,7 +347,7 @@ struct BandleGameViewModelTests {
         await restored.loadIfNeeded()
 
         #expect(restored.phase == .completed)
-        #expect(fake.completedExclusion)
+        #expect(fake.completedExclusion == true)
         #expect(fake.attemptCalls.isEmpty)
     }
 
@@ -570,5 +580,61 @@ struct BandleGameViewModelTests {
         #expect(fake.audioCalls == [1, 1])
         #expect(model.errorMessage == nil)
         #expect(model.currentClip != nil)
+    }
+
+    @Test("A resumed game whose leaderboard choice isn't known here leaves it to the server")
+    func resumedGameOmitsUnknownExclusion() async {
+        let suiteName = "BandleGameViewModelTests.unknownExclusion.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(
+            hasPlayed: false,
+            inProgress: true,
+            progress: BandleProgress(attempts: [BandleAttempt(
+                clipLength: 3,
+                attemptNumber: 1,
+                status: .correct,
+                guessedSongId: UITestFixtures.bandleAnswer.songId
+            )])
+        )
+        let model = BandleGameViewModel(service: fake.service, defaults: defaults)
+
+        await model.loadIfNeeded()
+
+        #expect(fake.completeCalls == 1)
+        #expect(fake.completedExclusion == nil)
+    }
+
+    @Test("A load that fails part-way offers Retry, not a game to start")
+    func failedLoadHidesStart() async {
+        let fake = FakeBandleGameService()
+        fake.shouldFailSongs = true
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+        #expect(!model.canStart)
+        await model.start()
+        #expect(fake.startCalls == 0)
+
+        fake.shouldFailSongs = false
+        await model.retry()
+        #expect(model.canStart)
+    }
+
+    @Test("A clip without an audio URL is reported with a retry")
+    func clipWithoutURLFails() async {
+        let fake = FakeBandleGameService()
+        fake.nextClipWithoutURL = true
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        #expect(model.errorMessage != nil)
+
+        await model.retry()
+
+        #expect(fake.audioCalls == [1, 1])
+        #expect(model.currentClip?.playableURL != nil)
+        #expect(model.errorMessage == nil)
     }
 }
