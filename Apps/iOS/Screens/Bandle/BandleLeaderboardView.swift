@@ -45,7 +45,9 @@ struct BandleLeaderboardView: View {
                         ForEach(entries) { entry in
                             VStack(spacing: 0) {
                                 BandleLeaderboardRow(entry: entry, period: model.period)
-                                Divider()
+                                if entry.id != entries.last?.id {
+                                    Divider()
+                                }
                             }
                         }
                     }

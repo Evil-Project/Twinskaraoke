@@ -16,7 +16,9 @@ struct BandleHistoryView: View {
                 ForEach(entries) { entry in
                     VStack(spacing: 0) {
                         BandleHistoryRow(entry: entry)
-                        Divider()
+                        if entry.id != entries.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }

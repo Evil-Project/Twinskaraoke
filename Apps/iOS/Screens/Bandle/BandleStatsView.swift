@@ -52,7 +52,7 @@ struct BandleStatsView: View {
             }
             .controlSize(.large)
             .padding(AM.Spacing.screenMargin)
-            .frame(maxWidth: AM.Layout.wideContentMaxWidth)
+            .frame(maxWidth: AM.Layout.wideRailMaxWidth)
             .frame(maxWidth: .infinity)
         }
         .musicScreenBackground()

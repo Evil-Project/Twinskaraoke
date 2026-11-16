@@ -88,9 +88,9 @@ struct BandleResultView: View {
             DeferredView { BandleStatsView() }
         } label: {
             Label(String(localized: "Leaderboard"), systemImage: "list.number")
-                .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
+        .buttonSizing(.flexible)
         .accessibilityIdentifier("Bandle.ViewLeaderboard")
     }
 
