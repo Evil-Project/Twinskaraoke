@@ -36,6 +36,8 @@ final class BandleGameViewModel {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let readSignedIn: @MainActor () -> Bool
     @ObservationIgnored private var pendingRetry: BandleGameRetry?
+    /// Identifies the latest clip request; an older response is dropped.
+    @ObservationIgnored private var clipRequest = 0
 
     init(
         service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
@@ -47,8 +49,11 @@ final class BandleGameViewModel {
         readSignedIn = isSignedIn
     }
 
+    /// Per account, so one player's play-privately choice never applies to
+    /// another account on the same device.
     private var exclusionKey: String {
-        "nk.bandle.excludeFromLeaderboard.\(mode.rawValue).\(challenge?.date ?? "unknown")"
+        let account = playStatus?.userId ?? "guest"
+        return "nk.bandle.excludeFromLeaderboard.\(account).\(mode.rawValue).\(challenge?.date ?? "unknown")"
     }
 
     var filteredSongs: [BandleGuessSong] {
@@ -70,8 +75,15 @@ final class BandleGameViewModel {
     }
 
     func loadIfNeeded() async {
-        guard phase == .idle else { return }
-        await reload()
+        switch phase {
+        case .idle:
+            await reload()
+        case .playing where currentClip == nil && !isLoadingClip:
+            // The clip load was cancelled when the screen went away.
+            await loadClip(number: visibleAttemptNumber)
+        default:
+            return
+        }
     }
 
     func reload() async {
@@ -81,7 +93,7 @@ final class BandleGameViewModel {
         isSignedIn = readSignedIn()
         result = nil
         attempts = []
-        currentClip = nil
+        dropClipRequest()
         selectedGuess = nil
         searchText = ""
         isPractice = false
@@ -92,8 +104,8 @@ final class BandleGameViewModel {
             async let dataRequest = service.userData(mode)
             async let songsRequest = service.songs(nil, mode)
             challenge = try await todayRequest
-            excludeFromLeaderboard = defaults.bool(forKey: exclusionKey)
             playStatus = try await statusRequest
+            excludeFromLeaderboard = defaults.bool(forKey: exclusionKey)
             userData = try await dataRequest
             guessSongs = try await songsRequest
             if challenge?.isInvalid == true {
@@ -234,25 +246,49 @@ final class BandleGameViewModel {
 
     func loadClip(number: Int) async {
         let highestUnlocked = phase == .completed ? 6 : currentAttemptNumber
-        guard number >= 1, number <= highestUnlocked, !isLoadingClip else { return }
+        guard number >= 1, number <= highestUnlocked else { return }
+        clipRequest += 1
+        let request = clipRequest
         isLoadingClip = true
         visibleAttemptNumber = number
         currentClip = nil
         clearError()
-        defer { isLoadingClip = false }
         do {
+            let clip: BandleAudioClip?
             if isPractice {
-                currentClip = challenge?.audioClips?.first { $0.attemptNumber == number }
-                if currentClip == nil {
-                    fail(String(localized: "This Bandle clip isn't available."), retry: .practice)
-                }
+                clip = challenge?.audioClips?.first { $0.attemptNumber == number }
             } else {
-                currentClip = try await service.audio(number, mode)
+                clip = try await service.audio(number, mode)
+            }
+            // A newer request (another clip, a skip, a new round) replaced
+            // this one while it loaded.
+            guard request == clipRequest else { return }
+            isLoadingClip = false
+            currentClip = clip
+            if clip == nil {
+                fail(String(localized: "This Bandle clip isn't available."), retry: .practice)
             }
         } catch {
+            guard request == clipRequest else { return }
+            isLoadingClip = false
             guard !Task.isCancelled else { return }
             fail(String(localized: "Couldn't load this Bandle clip. Tap it to try again."), retry: .clip(number))
         }
+    }
+
+    /// The clip player couldn't play the loaded clip, for example because its
+    /// download failed. Retry loads the clip again.
+    func clipPlaybackFailed() {
+        fail(
+            String(localized: "Couldn't load this Bandle clip. Tap it to try again."),
+            retry: .clip(visibleAttemptNumber)
+        )
+    }
+
+    private func dropClipRequest() {
+        clipRequest += 1
+        isLoadingClip = false
+        currentClip = nil
     }
 
     private func performAttempt(guess: BandleGuessSong?, isSkip: Bool) async {

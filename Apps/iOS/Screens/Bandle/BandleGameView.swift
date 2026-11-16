@@ -76,6 +76,9 @@ struct BandleGameView: View {
         .onChange(of: model.currentClip) { _, clip in
             synchronizeClip(clip)
         }
+        .onChange(of: clipPlayer.didFail) { _, didFail in
+            if didFail { model.clipPlaybackFailed() }
+        }
         .onDisappear(perform: clipPlayer.stop)
     }
 

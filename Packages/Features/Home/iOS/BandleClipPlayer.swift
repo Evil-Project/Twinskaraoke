@@ -13,10 +13,14 @@ final class BandleClipPlayer {
     private(set) var isPlaying = false
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
+    private(set) var didFail = false
 
     @ObservationIgnored private let player: AVPlayer
     @ObservationIgnored private var progressObserver: Any?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var failureObserver: NSObjectProtocol?
+    @ObservationIgnored private var statusObservation: NSKeyValueObservation?
+    @ObservationIgnored private var loadedURL: URL?
     @ObservationIgnored private var appAudioObserver: NSObjectProtocol?
     @ObservationIgnored private let notificationCenter: NotificationCenter
     @ObservationIgnored private let pauseAppPlayback: @MainActor () -> Void
@@ -55,6 +59,10 @@ final class BandleClipPlayer {
         if let endObserver {
             notificationCenter.removeObserver(endObserver)
         }
+        if let failureObserver {
+            notificationCenter.removeObserver(failureObserver)
+        }
+        statusObservation?.invalidate()
         if let appAudioObserver {
             notificationCenter.removeObserver(appAudioObserver)
         }
@@ -72,6 +80,7 @@ final class BandleClipPlayer {
 
     func load(url: URL) {
         clearCurrentItem()
+        loadedURL = url
         let item = AVPlayerItem(url: url)
         endObserver = notificationCenter.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
@@ -82,10 +91,31 @@ final class BandleClipPlayer {
                 self?.finishPlayback(of: item)
             }
         }
+        failureObserver = notificationCenter.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.failPlayback(of: item)
+            }
+        }
+        // A clip that can't be loaded (bad download, missing file) only
+        // reports it through the item's status.
+        statusObservation = item.observe(\.status) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in
+                self?.failPlayback(of: item)
+            }
+        }
         player.replaceCurrentItem(with: item)
     }
 
     func play() {
+        // A failed item can't play again; start over with a fresh one.
+        if didFail || player.currentItem?.status == .failed, let loadedURL {
+            load(url: loadedURL)
+        }
         guard player.currentItem != nil else { return }
         if duration > 0, currentTime >= duration {
             player.seek(to: .zero)
@@ -142,13 +172,29 @@ final class BandleClipPlayer {
         }
     }
 
+    private func failPlayback(of item: AVPlayerItem) {
+        guard player.currentItem === item, !didFail else { return }
+        DebugLogger.log("Bandle clip failed: \(item.error.map(String.init(describing:)) ?? "unknown")", category: .playback)
+        player.pause()
+        isPlaying = false
+        didFail = true
+    }
+
     private func clearCurrentItem() {
         player.pause()
         player.replaceCurrentItem(with: nil)
         if let endObserver {
             notificationCenter.removeObserver(endObserver)
         }
+        if let failureObserver {
+            notificationCenter.removeObserver(failureObserver)
+        }
         endObserver = nil
+        failureObserver = nil
+        statusObservation?.invalidate()
+        statusObservation = nil
+        loadedURL = nil
+        didFail = false
         isPlaying = false
         currentTime = 0
         duration = 0
