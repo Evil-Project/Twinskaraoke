@@ -57,9 +57,10 @@ final class BandleGameViewModel {
     }
 
     /// Per account, so one player's play-privately choice never applies to
-    /// another account on the same device.
-    private var exclusionKey: String {
-        let account = playStatus?.userId ?? "guest"
+    /// another account on the same device. Without an id from the server
+    /// (guests get a guest id) the choice isn't stored at all.
+    private var exclusionKey: String? {
+        guard let account = playStatus?.userId, !account.isEmpty else { return nil }
         return "nk.bandle.excludeFromLeaderboard.\(account).\(mode.rawValue).\(challenge?.date ?? "unknown")"
     }
 
@@ -125,8 +126,12 @@ final class BandleGameViewModel {
             async let songsRequest = service.songs(nil, mode)
             challenge = try await todayRequest
             playStatus = try await statusRequest
-            excludeFromLeaderboard = defaults.bool(forKey: exclusionKey)
-            isExclusionKnown = defaults.object(forKey: exclusionKey) != nil
+            if let exclusionKey, defaults.object(forKey: exclusionKey) != nil {
+                excludeFromLeaderboard = defaults.bool(forKey: exclusionKey)
+                isExclusionKnown = true
+            } else {
+                isExclusionKnown = false
+            }
             userData = try await dataRequest
             guessSongs = try await songsRequest
             hasLoadedGame = true
@@ -197,7 +202,14 @@ final class BandleGameViewModel {
         phase = .starting
         clearError()
         do {
-            _ = try await service.start(excludeFromLeaderboard, mode)
+            let session = try await service.start(excludeFromLeaderboard, mode)
+            if let sessionDay = session.date?.prefix(10), let loadedDay = challenge?.date?.prefix(10), sessionDay != loadedDay {
+                // The day turned over while this screen was open: /start began
+                // the new day's game, so load its challenge and resume it.
+                phase = .ready
+                await reload()
+                return
+            }
             attempts = []
             currentAttemptNumber = 1
             visibleAttemptNumber = 1
@@ -205,7 +217,9 @@ final class BandleGameViewModel {
             hideRevealedSong()
             self.excludeFromLeaderboard = excludeFromLeaderboard
             isExclusionKnown = true
-            defaults.set(excludeFromLeaderboard, forKey: exclusionKey)
+            if let exclusionKey {
+                defaults.set(excludeFromLeaderboard, forKey: exclusionKey)
+            }
             phase = .playing
             await loadClip(number: 1)
         } catch KaraokeAPIClient.APIError.httpStatus(409) {
@@ -278,7 +292,10 @@ final class BandleGameViewModel {
         isLoadingClip = true
         visibleAttemptNumber = number
         currentClip = nil
-        clearError()
+        // An unconfirmed result keeps its Reload recovery until it succeeds.
+        if !(phase == .completed && result == nil) {
+            clearError()
+        }
         do {
             let clip: BandleAudioClip?
             if isPractice {
@@ -448,7 +465,9 @@ final class BandleGameViewModel {
                     mode: mode
                 )
             )
-            defaults.removeObject(forKey: exclusionKey)
+            if let exclusionKey {
+                defaults.removeObject(forKey: exclusionKey)
+            }
             phase = .completed
             await revealSong()
         } catch {

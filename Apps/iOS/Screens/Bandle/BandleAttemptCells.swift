@@ -55,6 +55,8 @@ struct BandleAttemptCells: View {
                     attempt?.status?.title
                         ?? (isUnlocked || isUnneeded ? String(localized: "Unplayed") : String(localized: "Locked"))
                 )
+                // The ring marks the clip on screen; VoiceOver hears it as selected.
+                .accessibilityAddTraits(!isCompleted && number == visibleAttempt ? .isSelected : [])
                 .accessibilityIdentifier("Bandle.Attempt.\(number)")
             }
         }

@@ -15,8 +15,9 @@ struct BandleHistoryRow: View {
             VStack(alignment: .leading, spacing: AM.Spacing.xs) {
                 Text(entry.dailySong?.songTitle ?? String(localized: "Daily Challenge"))
                     .font(AM.Font.rowTitle)
-                if let day = entry.challengeDay, let date = calendar.date(from: day) {
-                    Text(date, format: .dateTime.day().month().year().locale(locale))
+                if let date = entry.challengeDayDate {
+                    // Shown in the reader's calendar and language, in UTC like the day itself.
+                    Text(date, format: Date.FormatStyle(locale: locale, calendar: calendar, timeZone: .gmt).day().month().year())
                         .font(AM.Font.rowCompactSubtitle)
                         .foregroundStyle(.secondary)
                 }

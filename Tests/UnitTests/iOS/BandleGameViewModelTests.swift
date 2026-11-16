@@ -19,6 +19,9 @@ private final class FakeBandleGameService {
     var completionAttempts = 0
     var completedExclusion: Bool?
     var shouldFailSongs = false
+    private(set) var todayCalls = 0
+    /// The day /start reports; the fixture challenge is for 2026-11-15.
+    var sessionDate = "2026-11-15T00:00:00Z"
     /// The next clip comes back without an audio URL.
     var nextClipWithoutURL = false
     var shouldFailAttempt = false
@@ -51,6 +54,7 @@ private final class FakeBandleGameService {
         BandleGameViewModel.Service(
             today: { ephemeral, _ in
                 try Task.checkCancellation()
+                self.todayCalls += 1
                 if ephemeral {
                     self.practiceCalls += 1
                     if self.shouldFailPractice { throw URLError(.notConnectedToInternet) }
@@ -63,7 +67,7 @@ private final class FakeBandleGameService {
                     self.status = BandlePlayStatus(hasPlayed: true, inProgress: false)
                     throw error
                 }
-                return BandleSession(startedAt: "2026-11-15T12:00:00Z", mode: mode)
+                return BandleSession(startedAt: "2026-11-15T12:00:00Z", date: self.sessionDate, mode: mode)
             },
             audio: { number, mode in
                 self.audioCalls.append(number)
@@ -336,10 +340,13 @@ struct BandleGameViewModelTests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let fake = FakeBandleGameService()
+        // The server identifies the account (or guest) in the play status.
+        fake.status = BandlePlayStatus(userId: "account-a", hasPlayed: false, inProgress: false)
         let firstModel = BandleGameViewModel(service: fake.service, defaults: defaults)
         await firstModel.loadIfNeeded()
         await firstModel.start(excludeFromLeaderboard: true)
         fake.status = BandlePlayStatus(
+            userId: "account-a",
             hasPlayed: false,
             inProgress: true,
             progress: BandleProgress(
@@ -770,5 +777,55 @@ struct BandleGameViewModelTests {
         #expect(fake.audioCalls == [1, 1])
         #expect(model.currentClip?.playableURL != nil)
         #expect(model.errorMessage == nil)
+    }
+
+    @Test("Accounts without a user id don't share a play-privately choice")
+    func exclusionNotSharedWithoutUserId() async throws {
+        let suiteName = "BandleGameViewModelTests.noUserId.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(userId: nil, hasPlayed: false, inProgress: false)
+        let first = BandleGameViewModel(service: fake.service, defaults: defaults)
+        await first.loadIfNeeded()
+        await first.start(excludeFromLeaderboard: true)
+
+        let second = BandleGameViewModel(service: fake.service, defaults: defaults)
+        await second.loadIfNeeded()
+
+        #expect(!second.excludeFromLeaderboard)
+    }
+
+    @Test("Picking a clip after a failed completion keeps the Reload recovery")
+    func clipAfterFailedCompletionKeepsRecovery() async {
+        let fake = FakeBandleGameService()
+        fake.shouldFailComplete = true
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+        let completionError = model.errorMessage
+        #expect(completionError != nil)
+
+        await model.loadClip(number: 1)
+
+        #expect(model.errorMessage == completionError)
+        let loads = fake.todayCalls
+        await model.retry()
+        #expect(fake.todayCalls == loads + 1)
+    }
+
+    @Test("A start that lands on the next day reloads that day's challenge")
+    func startOnNextDayReloads() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        #expect(fake.todayCalls == 1)
+        fake.sessionDate = "2026-11-16T00:00:00Z"
+
+        await model.start()
+
+        #expect(fake.todayCalls == 2)
     }
 }

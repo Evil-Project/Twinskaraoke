@@ -20,6 +20,7 @@ private final class FakeBandleLeaderboardService {
     var service: BandleLeaderboardViewModel.Service {
         BandleLeaderboardViewModel.Service(
             leaderboard: { period, mode in
+                try Task.checkCancellation()
                 self.calls.append(Call(period: period, mode: mode))
                 if self.shouldFail { throw URLError(.notConnectedToInternet) }
                 return UITestFixtures.bandleLeaderboard(for: period)
@@ -192,5 +193,19 @@ struct BandleLeaderboardViewModelTests {
 
         #expect(model.ranks == nil)
         #expect(fake.rankCalls.isEmpty)
+    }
+
+    @Test("A first load cancelled with the screen loads again when it returns")
+    func cancelledFirstLoadLoadsAgain() async {
+        let fake = FakeBandleLeaderboardService()
+        let model = BandleLeaderboardViewModel(service: fake.service)
+        let load = Task { await model.loadIfNeeded() }
+        load.cancel()
+        await load.value
+        #expect(model.leaderboard == nil)
+
+        await model.loadIfNeeded()
+
+        #expect(model.leaderboard != nil)
     }
 }
