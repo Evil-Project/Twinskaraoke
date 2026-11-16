@@ -3,6 +3,8 @@ import SwiftUI
 struct BandleResultView: View {
     let result: BandleResult?
     let attempts: [BandleAttempt]
+    /// A practice round isn't today's result, so it isn't shared.
+    let isPractice: Bool
     let onPractice: () -> Void
 
     var body: some View {
@@ -47,12 +49,14 @@ struct BandleResultView: View {
                         .accessibilityIdentifier("Bandle.Reimbursement")
                 }
 
-                ShareLink(item: shareText(for: result)) {
-                    Label(String(localized: "Share Result"), systemImage: "square.and.arrow.up")
+                if !isPractice {
+                    ShareLink(item: shareText(for: result)) {
+                        Label(String(localized: "Share Result"), systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonSizing(.flexible)
+                    .accessibilityIdentifier("Bandle.ShareResult")
                 }
-                .buttonStyle(.bordered)
-                .buttonSizing(.flexible)
-                .accessibilityIdentifier("Bandle.ShareResult")
             } else {
                 ContentUnavailableView(
                     String(localized: "Result needs confirming"),
