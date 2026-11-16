@@ -49,9 +49,9 @@ struct BandleResultView: View {
 
                 ShareLink(item: shareText(for: result)) {
                     Label(String(localized: "Share Result"), systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.bordered)
+                .buttonSizing(.flexible)
                 .accessibilityIdentifier("Bandle.ShareResult")
             } else {
                 ContentUnavailableView(
@@ -79,7 +79,7 @@ struct BandleResultView: View {
     private var practiceButton: some View {
         Button(String(localized: "Play Again (Practice)"), systemImage: "arrow.counterclockwise", action: onPractice)
             .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
+            .buttonSizing(.flexible)
             .accessibilityIdentifier("Bandle.PlayAgain")
     }
 

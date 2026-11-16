@@ -28,19 +28,19 @@ struct BandleStartCard: View {
 
             Button(String(localized: "Play Today's Challenge"), systemImage: "play.fill", action: startRanked)
                 .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
+                .buttonSizing(.flexible)
                 .accessibilityIdentifier("Bandle.PlayToday")
 
             if isSignedIn {
                 Button(String(localized: "Play Without Leaderboard"), systemImage: "eye.slash", action: startUnranked)
                     .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
+                    .buttonSizing(.flexible)
                     .accessibilityIdentifier("Bandle.PlayUnranked")
             }
 
             Button(String(localized: "Practice"), systemImage: "arrow.counterclockwise", action: onPractice)
                 .buttonStyle(.bordered)
-                .frame(maxWidth: .infinity)
+                .buttonSizing(.flexible)
                 .accessibilityIdentifier("Bandle.Practice")
         }
         .padding(AM.Spacing.xl)
