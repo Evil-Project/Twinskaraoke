@@ -22,12 +22,17 @@ private final class FakeBandleGameService {
     var shouldFailComplete = false
     var shouldFailAudio = false
     var shouldFailPractice = false
+    /// The server accepts the next attempt but the response is lost; the
+    /// resubmission gets the documented 409.
+    var loseAttemptResponse = false
+    private var acceptedAttempts: Set<Int> = []
     /// Thrown by `/start`; a 409 also marks today's game as played, as the server does.
     var startError: (any Error)?
 
     var service: BandleGameViewModel.Service {
         BandleGameViewModel.Service(
             today: { ephemeral, _ in
+                try Task.checkCancellation()
                 if ephemeral {
                     self.practiceCalls += 1
                     if self.shouldFailPractice { throw URLError(.notConnectedToInternet) }
@@ -50,6 +55,20 @@ private final class FakeBandleGameService {
             songs: { _, _ in UITestFixtures.bandleGuessSongs },
             attempt: { input in
                 if self.shouldFailAttempt { throw URLError(.networkConnectionLost) }
+                if self.acceptedAttempts.contains(input.attemptNumber) {
+                    throw KaraokeAPIClient.APIError.httpStatus(409)
+                }
+                if self.loseAttemptResponse {
+                    self.loseAttemptResponse = false
+                    self.acceptedAttempts.insert(input.attemptNumber)
+                    let accepted = BandleAttempt(clipLength: 3, attemptNumber: input.attemptNumber, status: .skipped)
+                    self.status = BandlePlayStatus(
+                        hasPlayed: false,
+                        inProgress: true,
+                        progress: BandleProgress(currentAttemptNumber: input.attemptNumber + 1, attempts: [accepted])
+                    )
+                    throw URLError(.networkConnectionLost)
+                }
                 self.attemptCalls.append(
                     AttemptCall(number: input.attemptNumber, songId: input.guessedSongId, isSkip: input.isSkip)
                 )
@@ -373,5 +392,50 @@ struct BandleGameViewModelTests {
         await model.loadIfNeeded()
 
         #expect(model.isSignedIn == signedIn)
+    }
+
+    @Test("Reopening a finished game shows its saved attempts")
+    func completedGameRestoresAttempts() async {
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(hasPlayed: true, inProgress: false)
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+
+        #expect(model.phase == .completed)
+        #expect(model.attempts.map(\.status) == [.incorrect, .correct])
+        #expect(model.currentAttemptNumber == 2)
+    }
+
+    @Test("A load cancelled mid-request runs again the next time the screen appears")
+    func cancelledLoadCanLoadAgain() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+
+        let load = Task { await model.loadIfNeeded() }
+        load.cancel()
+        await load.value
+        #expect(model.phase == .idle)
+
+        await model.loadIfNeeded()
+        #expect(model.phase == .ready)
+    }
+
+    @Test("Retrying an attempt the server already accepted resumes its progress")
+    func acceptedAttemptConflictResumes() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        fake.loseAttemptResponse = true
+
+        await model.skip()
+        #expect(model.errorMessage != nil)
+        await model.retry()
+
+        #expect(model.phase == .playing)
+        #expect(model.currentAttemptNumber == 2)
+        #expect(model.attempts.map(\.attemptNumber) == [1])
+        #expect(model.errorMessage == nil)
     }
 }
