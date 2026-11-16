@@ -51,7 +51,11 @@ final class BandleGameUITests: XCTestCase {
 
     private func launchBandle() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-UITestMode", "1", "-UITestInitialSection", "new"]
+        // English, so the text assertions hold on any simulator language.
+        app.launchArguments = [
+            "-UITestMode", "1", "-UITestInitialSection", "new",
+            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+        ]
         app.launch()
         let card = element("New.BandleCard", in: app)
         XCTAssertTrue(card.waitForExistence(timeout: 15))

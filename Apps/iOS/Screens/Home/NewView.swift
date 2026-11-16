@@ -19,10 +19,15 @@ struct NewView: View {
                             NewSkeletonView(availableWidth: proxy.size.width)
                                 .transition(.opacity)
                         } else if viewModel.newIsEmpty {
-                            HomeLoadFailedView(title: String(localized: "Couldn't load New")) {
-                                viewModel.fetchHomeData(force: true)
+                            // Bandle loads on its own, so it stays reachable
+                            // when the New feeds fail.
+                            VStack(spacing: AM.Spacing.xxl) {
+                                BandleEntryCard()
+                                HomeLoadFailedView(title: String(localized: "Couldn't load New")) {
+                                    viewModel.fetchHomeData(force: true)
+                                }
+                                .frame(minHeight: proxy.size.height * 0.6)
                             }
-                            .frame(minHeight: proxy.size.height * 0.6)
                             .transition(.opacity)
                         } else {
                             VStack(alignment: .leading, spacing: AM.Spacing.l) {
