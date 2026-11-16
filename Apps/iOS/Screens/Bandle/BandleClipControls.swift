@@ -29,7 +29,7 @@ struct BandleClipControls: View {
                         HStack {
                             Text(Duration.seconds(player.currentTime).formatted(.time(pattern: .minuteSecond)))
                             Spacer()
-                            Text(Duration.seconds(clip?.clipLength ?? 0).formatted(.time(pattern: .minuteSecond)))
+                            Text(Duration.seconds(clip?.clipLength.map(Double.init) ?? player.duration).formatted(.time(pattern: .minuteSecond)))
                         }
                         .font(AM.Font.timecode)
                         .foregroundStyle(.secondary)
@@ -39,9 +39,16 @@ struct BandleClipControls: View {
             }
 
             if let clip {
-                Text(String(localized: "\(clip.clipLength ?? 0)-second clip · Attempt \(clip.attemptNumber ?? 1) of 6"))
-                    .font(AM.Font.rowCompactSubtitle)
-                    .foregroundStyle(.secondary)
+                // Without a length from the server, say only which attempt it is.
+                Group {
+                    if let length = clip.clipLength {
+                        Text(String(localized: "\(length)-second clip · Attempt \(clip.attemptNumber ?? 1) of 6"))
+                    } else {
+                        Text(String(localized: "Attempt \(clip.attemptNumber ?? 1)"))
+                    }
+                }
+                .font(AM.Font.rowCompactSubtitle)
+                .foregroundStyle(.secondary)
                 if let effect = clip.effect, effect != .none {
                     Label(effect.title, systemImage: "wand.and.stars")
                         .font(AM.Font.rowCompactSubtitle)

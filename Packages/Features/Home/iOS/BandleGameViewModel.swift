@@ -41,6 +41,10 @@ final class BandleGameViewModel {
     /// Identifies the latest clip request; an older response is dropped.
     @ObservationIgnored private var clipRequest = 0
     @ObservationIgnored private var revealRequest = 0
+    /// Whether this device knows the play-privately choice for the current
+    /// game; a game resumed from another device doesn't.
+    @ObservationIgnored private var isExclusionKnown = false
+    private var hasLoadedGame = false
 
     init(
         service: Service = AppRuntime.isUITestMode ? .uiTestFixture : .live,
@@ -79,6 +83,11 @@ final class BandleGameViewModel {
         phase == .completed ? revealedSong?.audioURL : currentClip?.playableURL
     }
 
+    /// Only after a complete load: a partial one leaves Retry instead.
+    var canStart: Bool {
+        phase == .ready && hasLoadedGame && challenge?.isInvalid != true
+    }
+
     var canSubmitGuess: Bool {
         phase == .playing && selectedGuess?.songId != nil && !isLoadingClip
     }
@@ -108,6 +117,7 @@ final class BandleGameViewModel {
         searchText = ""
         isPractice = false
         excludeFromLeaderboard = false
+        hasLoadedGame = false
         do {
             async let todayRequest = service.today(false, mode)
             async let statusRequest = service.playStatus(mode)
@@ -116,8 +126,10 @@ final class BandleGameViewModel {
             challenge = try await todayRequest
             playStatus = try await statusRequest
             excludeFromLeaderboard = defaults.bool(forKey: exclusionKey)
+            isExclusionKnown = defaults.object(forKey: exclusionKey) != nil
             userData = try await dataRequest
             guessSongs = try await songsRequest
+            hasLoadedGame = true
             if challenge?.isInvalid == true {
                 phase = .ready
                 errorMessage = challenge?.invalidationMessage ?? String(localized: "Today's challenge is unavailable.")
@@ -181,7 +193,7 @@ final class BandleGameViewModel {
     }
 
     func start(excludeFromLeaderboard: Bool = false) async {
-        guard phase == .ready, challenge?.isInvalid != true else { return }
+        guard canStart else { return }
         phase = .starting
         clearError()
         do {
@@ -192,6 +204,7 @@ final class BandleGameViewModel {
             isPractice = false
             hideRevealedSong()
             self.excludeFromLeaderboard = excludeFromLeaderboard
+            isExclusionKnown = true
             defaults.set(excludeFromLeaderboard, forKey: exclusionKey)
             phase = .playing
             await loadClip(number: 1)
@@ -278,8 +291,13 @@ final class BandleGameViewModel {
             guard request == clipRequest else { return }
             isLoadingClip = false
             currentClip = clip
-            if clip == nil {
-                fail(String(localized: "This Bandle clip isn't available."), retry: .practice)
+            // A clip without a playable URL can't be played either.
+            if clip?.playableURL == nil {
+                if isPractice {
+                    fail(String(localized: "This Bandle clip isn't available."), retry: .practice)
+                } else {
+                    fail(String(localized: "Couldn't load this Bandle clip. Tap it to try again."), retry: .clip(number))
+                }
             }
         } catch {
             guard request == clipRequest else { return }
@@ -426,7 +444,7 @@ final class BandleGameViewModel {
                     songTitle: won ? guess?.title : nil,
                     artist: won ? (guess?.coverArtists ?? guess?.originalArtists) : nil,
                     attempts: attempts,
-                    excludeFromLeaderboard: excludeFromLeaderboard,
+                    excludeFromLeaderboard: isExclusionKnown ? excludeFromLeaderboard : nil,
                     mode: mode
                 )
             )
