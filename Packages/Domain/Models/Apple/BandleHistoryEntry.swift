@@ -19,6 +19,18 @@ nonisolated struct BandleHistoryEntry: Decodable, Identifiable, Sendable {
     var id: String { gameID ?? challengeDate ?? dailySongId ?? "" }
     var challengeDay: DateComponents? { challengeDate.flatMap(KaraokeSetlist.day) }
 
+    /// The challenge day as midnight UTC on the Gregorian calendar, which is
+    /// how the server counts days. Format it in UTC too so it doesn't shift.
+    var challengeDayDate: Date? {
+        challengeDay.flatMap { Self.gregorianUTC.date(from: $0) }
+    }
+
+    private static let gregorianUTC: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        return calendar
+    }()
+
     init(
         gameID: String? = nil,
         userId: String? = nil,

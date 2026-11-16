@@ -38,6 +38,10 @@ final class BandleLeaderboardViewModel {
         guard !hasLoaded else { return }
         hasLoaded = true
         await reload()
+        // Cancelled with the screen: load again when it next appears.
+        if Task.isCancelled {
+            hasLoaded = false
+        }
     }
 
     func reload() async {

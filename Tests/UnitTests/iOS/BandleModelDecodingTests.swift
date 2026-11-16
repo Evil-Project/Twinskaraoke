@@ -117,4 +117,12 @@ struct BandleModelDecodingTests {
     func rejectsMalformedTimeSpan(text: String) {
         #expect(BandleTimeSpan.duration(from: text) == nil)
     }
+
+    @Test("A history day is the server's Gregorian day, whatever the device calendar")
+    func historyDayIsGregorian() throws {
+        let entry = BandleHistoryEntry(challengeDate: "2026-11-14T00:00:00Z")
+        let date = try #require(entry.challengeDayDate)
+
+        #expect(date == (try Date("2026-11-14T00:00:00Z", strategy: .iso8601)))
+    }
 }
