@@ -154,6 +154,45 @@ struct BandleGameViewModelTests {
         #expect(fake.audioCalls == [2])
     }
 
+    @Test("A game started before any guess resumes at the first attempt")
+    func resumesUnplayedSession() async {
+        // Seen on a device: the server reported attempt 0 for a session
+        // with no attempts yet, which crashed the clip range check.
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(
+            hasPlayed: false,
+            inProgress: true,
+            progress: BandleProgress(currentAttemptNumber: 0, attempts: [])
+        )
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+
+        #expect(model.phase == .playing)
+        #expect(model.currentAttemptNumber == 1)
+        #expect(fake.audioCalls == [1])
+    }
+
+    @Test("Resuming continues after the last saved attempt, however the server counts")
+    func resumesAfterLastAttempt() async {
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(
+            hasPlayed: false,
+            inProgress: true,
+            progress: BandleProgress(
+                currentAttemptNumber: 1,
+                attempts: [BandleAttempt(clipLength: 3, attemptNumber: 1, status: .skipped)]
+            )
+        )
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+
+        #expect(model.phase == .playing)
+        #expect(model.currentAttemptNumber == 2)
+        #expect(fake.audioCalls == [2])
+    }
+
     @Test("A terminal resumed attempt completes without another guess")
     func resumesTerminalAttempt() async {
         let fake = FakeBandleGameService()
