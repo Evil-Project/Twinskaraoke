@@ -101,6 +101,9 @@ final class BandleGameViewModel {
                 errorMessage = challenge?.invalidationMessage ?? String(localized: "Today's challenge is unavailable.")
             } else if playStatus?.hasPlayed == true {
                 result = userData?.lastResult
+                attempts = result?.attempts ?? []
+                currentAttemptNumber = result?.attemptNumber ?? max(attempts.count, 1)
+                visibleAttemptNumber = currentAttemptNumber
                 phase = .completed
             } else if playStatus?.inProgress == true, let progress = playStatus?.progress {
                 resume(progress)
@@ -119,7 +122,12 @@ final class BandleGameViewModel {
                 phase = .ready
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            // The screen went away mid-load; `loadIfNeeded()` starts over
+            // when it appears again.
+            guard !Task.isCancelled else {
+                phase = .idle
+                return
+            }
             phase = .ready
             fail(String(localized: "Couldn't load Bandle. Check your connection and try again."), retry: .reload)
         }
@@ -169,8 +177,8 @@ final class BandleGameViewModel {
             phase = .ready
             await reload()
         } catch {
-            guard !Task.isCancelled else { return }
             phase = .ready
+            guard !Task.isCancelled else { return }
             fail(String(localized: "Couldn't start today's challenge. Please try again."), retry: .reload)
         }
     }
@@ -196,10 +204,10 @@ final class BandleGameViewModel {
             phase = .playing
             await loadClip(number: 1)
         } catch {
-            guard !Task.isCancelled else { return }
             // Nothing was replaced yet, so the screen goes back to what it
             // showed, such as today's result.
             phase = previousPhase
+            guard !Task.isCancelled else { return }
             fail(String(localized: "Couldn't start Bandle practice. Please try again."), retry: .practice)
         }
     }
@@ -279,9 +287,14 @@ final class BandleGameViewModel {
                 phase = .playing
                 await loadClip(number: currentAttemptNumber)
             }
-        } catch {
-            guard !Task.isCancelled else { return }
+        } catch KaraokeAPIClient.APIError.httpStatus(409) {
+            // The server already has this attempt, for example because the
+            // response to an earlier try was lost. Resume from its progress.
             phase = .playing
+            await reload()
+        } catch {
+            phase = .playing
+            guard !Task.isCancelled else { return }
             fail(
                 String(localized: "Couldn't submit that Bandle attempt. Please try again."),
                 retry: .attempt(guess: guess, isSkip: isSkip)
@@ -321,7 +334,12 @@ final class BandleGameViewModel {
             defaults.removeObject(forKey: exclusionKey)
             phase = .completed
         } catch {
-            guard !Task.isCancelled else { return }
+            // Cancelled before the result was confirmed: the next load
+            // resumes the finished attempts and completes again.
+            guard !Task.isCancelled else {
+                phase = .idle
+                return
+            }
             phase = .completed
             fail(
                 String(localized: "Your attempt was saved, but Bandle couldn't confirm the result. Reload to finish."),

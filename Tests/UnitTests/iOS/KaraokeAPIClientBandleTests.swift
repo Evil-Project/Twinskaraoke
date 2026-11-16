@@ -14,7 +14,9 @@ struct KaraokeAPIClientBandleTests {
             URLQueryItem(name: "ephemeral", value: "true"),
             URLQueryItem(name: "mode", value: "1"),
         ])
-        #expect(request.value(forHTTPHeaderField: "x-guest-id")?.isEmpty == false)
+        // The shared builder adds the guest id only when no one is signed in
+        // on the test host.
+        #expect(request.value(forHTTPHeaderField: "x-guest-id") == (GuestIdentity.isAuthenticated ? nil : GuestIdentity.current))
     }
 
     @Test("A start uses one JSON POST with leaderboard exclusion and mode")

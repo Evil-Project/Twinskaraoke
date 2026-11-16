@@ -49,6 +49,22 @@ nonisolated extension UITestFixtures {
         lastResult: BandleResult(
             completedAt: "2026-11-14T12:05:00Z",
             won: true,
+            attempts: [
+                BandleAttempt(
+                    clipLength: 3,
+                    attemptNumber: 1,
+                    status: .incorrect,
+                    guessedSongId: "ui-song-cure-for-me",
+                    guessedSongTitle: "Cure For Me"
+                ),
+                BandleAttempt(
+                    clipLength: 6,
+                    attemptNumber: 2,
+                    status: .correct,
+                    guessedSongId: bandleAnswer.songId,
+                    guessedSongTitle: bandleAnswer.title
+                ),
+            ],
             attemptNumber: 2,
             songId: bandleAnswer.songId,
             songTitle: bandleAnswer.title,
