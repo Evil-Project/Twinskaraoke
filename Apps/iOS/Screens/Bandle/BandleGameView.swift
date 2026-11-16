@@ -45,7 +45,12 @@ struct BandleGameView: View {
                         onSelectClip: selectClip
                     )
                 case .completed:
-                    BandleResultView(result: model.result, attempts: model.attempts, onPractice: startPractice)
+                    BandleResultView(
+                        result: model.result,
+                        attempts: model.attempts,
+                        isPractice: model.isPractice,
+                        onPractice: startPractice
+                    )
                     BandleAttemptGrid(
                         attempts: model.attempts,
                         currentAttempt: model.currentAttemptNumber,

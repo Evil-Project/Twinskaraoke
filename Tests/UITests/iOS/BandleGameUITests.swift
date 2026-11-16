@@ -46,7 +46,8 @@ final class BandleGameUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Well done!"].waitForExistence(timeout: 10))
         XCTAssertTrue(element("Bandle.PlayAgain", in: app).exists)
-        XCTAssertTrue(element("Bandle.ShareResult", in: app).exists)
+        // Practice isn't today's result, so there is nothing to share.
+        XCTAssertFalse(element("Bandle.ShareResult", in: app).exists)
     }
 
     private func launchBandle() -> XCUIApplication {
