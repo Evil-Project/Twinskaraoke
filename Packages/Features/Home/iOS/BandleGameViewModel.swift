@@ -301,7 +301,13 @@ final class BandleGameViewModel {
     }
 
     private func revealSong() async {
-        guard let songId = isPractice ? challenge?.replaySongId : result?.songId else { return }
+        guard let songId = answerSongId else {
+            DebugLogger.log(
+                "Bandle song reveal: no song id (result id \(result?.songId ?? "nil"), title \(result?.songTitle ?? "nil"))",
+                category: .network
+            )
+            return
+        }
         revealRequest += 1
         let request = revealRequest
         do {
@@ -312,6 +318,28 @@ final class BandleGameViewModel {
             // The result already names the song; the card shows that instead.
             DebugLogger.log("Bandle song reveal failed: \(error)", category: .network)
         }
+    }
+
+    /// The answer's song id. A result doesn't always carry it (seen on a
+    /// device for a finished game reopened later), so it falls back to the
+    /// correct guess, then to the official song list matched by title.
+    private var answerSongId: String? {
+        if isPractice, let id = challenge?.replaySongId, !id.isEmpty {
+            return id
+        }
+        if let id = result?.songId, !id.isEmpty {
+            return id
+        }
+        if let id = attempts.first(where: { $0.status == .correct })?.guessedSongId, !id.isEmpty {
+            return id
+        }
+        guard let title = result?.songTitle, !title.isEmpty else { return nil }
+        let sameTitle = guessSongs.filter { $0.title?.caseInsensitiveCompare(title) == .orderedSame }
+        let artist = result?.artist ?? ""
+        let sameArtist = sameTitle.first { song in
+            !artist.isEmpty && [song.coverArtists, song.originalArtists].contains { $0?.localizedStandardContains(artist) == true }
+        }
+        return (sameArtist ?? sameTitle.first)?.songId
     }
 
     private func hideRevealedSong() {

@@ -8,6 +8,8 @@ struct BandleRevealedSongCard: View {
     let song: Song?
     let fallbackTitle: String?
     let fallbackArtist: String?
+    /// The result's cover art, for when the song itself isn't available.
+    let fallbackArtwork: Media?
     let isPractice: Bool
     let player: BandleClipPlayer
     let onOpenInPlayer: (Song) -> Void
@@ -28,7 +30,7 @@ struct BandleRevealedSongCard: View {
 
             HStack(spacing: AM.Spacing.m) {
                 RemoteArtworkImage(
-                    url: song.flatMap { PlaybackRowState.shared.displayImageURL(for: $0, variant: .row) },
+                    url: artworkURL,
                     cornerRadius: AM.Radius.thumb,
                     fixedDisplaySize: CGSize(width: artworkSize, height: artworkSize)
                 )
@@ -89,6 +91,18 @@ struct BandleRevealedSongCard: View {
                 AddToPlaylistSheet(song: song)
             }
         }
+    }
+
+    private var artworkURL: URL? {
+        if let song {
+            return PlaybackRowState.shared.displayImageURL(for: song, variant: .row)
+        }
+        guard let fallbackArtwork else { return nil }
+        return ArtworkURLBuilder.imageURL(
+            cloudflareID: fallbackArtwork.cloudflareId,
+            path: fallbackArtwork.absolutePath,
+            variant: .row
+        )
     }
 
     private func favoriteButton(for song: Song) -> some View {

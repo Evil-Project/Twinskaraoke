@@ -57,6 +57,7 @@ struct BandleGameView: View {
                         song: model.revealedSong,
                         fallbackTitle: model.result?.songTitle,
                         fallbackArtist: model.result?.artist,
+                        fallbackArtwork: model.result?.mediaListDTO,
                         isPractice: model.isPractice,
                         player: clipPlayer,
                         onOpenInPlayer: openInPlayer

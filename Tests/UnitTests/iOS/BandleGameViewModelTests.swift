@@ -31,6 +31,9 @@ private final class FakeBandleGameService {
     /// Cancels the task loading the next clip, as leaving the screen does.
     var cancelNextAudio = false
     private(set) var songCalls: [String] = []
+    /// The completion response leaves out the song id, as it may on a loss.
+    var completeWithoutSongId = false
+    var userData = UITestFixtures.bandleUserData
     var shouldFailSong = false
     private var acceptedAttempts: Set<Int> = []
     /// Thrown by `/start`; a 409 also marks today's game as played, as the server does.
@@ -114,13 +117,13 @@ private final class FakeBandleGameService {
                     won: input.won,
                     attempts: input.attempts,
                     attemptNumber: input.attemptNumber,
-                    songId: input.songId ?? UITestFixtures.bandleAnswer.songId,
+                    songId: self.completeWithoutSongId ? nil : (input.songId ?? UITestFixtures.bandleAnswer.songId),
                     songTitle: input.songTitle ?? UITestFixtures.bandleAnswer.title,
                     artist: input.artist
                 )
             },
             playStatus: { _ in self.status },
-            userData: { _ in UITestFixtures.bandleUserData },
+            userData: { _ in self.userData },
             song: { id in
                 self.songCalls.append(id)
                 if self.shouldFailSong { throw URLError(.notConnectedToInternet) }
@@ -651,5 +654,55 @@ struct BandleGameViewModelTests {
         #expect(model.result?.won == true)
         #expect(model.revealedSong == nil)
         #expect(model.errorMessage == nil)
+    }
+
+    @Test("A lost game whose result has no song id finds the song by its title")
+    func lossWithoutSongIdRevealsByTitle() async {
+        let fake = FakeBandleGameService()
+        fake.completeWithoutSongId = true
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        for _ in 1 ... 6 {
+            await model.skip()
+        }
+
+        #expect(model.result?.songId == nil)
+        #expect(fake.songCalls == [UITestFixtures.bandleAnswer.songId])
+        #expect(model.revealedSong?.id == UITestFixtures.bandleAnswer.songId)
+    }
+
+    @Test("A won game whose result has no song id uses the correct guess")
+    func winWithoutSongIdUsesCorrectGuess() async {
+        let fake = FakeBandleGameService()
+        fake.completeWithoutSongId = true
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+
+        #expect(model.revealedSong?.id == UITestFixtures.bandleAnswer.songId)
+    }
+
+    @Test("Reopening a game whose saved result has an empty song id still reveals the song")
+    func reopenWithEmptySongIdRevealsByTitle() async {
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(hasPlayed: true, inProgress: false)
+        fake.userData = BandleUserData(
+            lastResult: BandleResult(
+                completedAt: "2026-11-15T12:05:00Z",
+                won: false,
+                songId: "",
+                songTitle: UITestFixtures.bandleAnswer.title,
+                artist: UITestFixtures.bandleAnswer.coverArtists
+            )
+        )
+        let model = BandleGameViewModel(service: fake.service)
+
+        await model.loadIfNeeded()
+
+        #expect(fake.songCalls == [UITestFixtures.bandleAnswer.songId])
+        #expect(model.revealedSong?.id == UITestFixtures.bandleAnswer.songId)
     }
 }
