@@ -56,6 +56,7 @@ final class BandleGameUITests: XCTestCase {
         statistics.tap()
 
         XCTAssertTrue(element("Bandle.GlobalStats", in: app).waitForExistence(timeout: 10))
+        XCTAssertFalse(element("Bandle.ModePicker", in: app).exists)
         let monthly = app.buttons["Monthly"]
         XCTAssertTrue(monthly.waitForExistence(timeout: 5))
         monthly.tap()
