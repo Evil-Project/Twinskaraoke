@@ -25,9 +25,19 @@ private final class FakeBandleGameService {
     /// The server accepts the next attempt but the response is lost; the
     /// resubmission gets the documented 409.
     var loseAttemptResponse = false
+    /// Holds the next clip response until `releaseAudio()`.
+    var holdNextAudio = false
+    private(set) var heldAudio: CheckedContinuation<Void, Never>?
+    /// Cancels the task loading the next clip, as leaving the screen does.
+    var cancelNextAudio = false
     private var acceptedAttempts: Set<Int> = []
     /// Thrown by `/start`; a 409 also marks today's game as played, as the server does.
     var startError: (any Error)?
+
+    func releaseAudio() {
+        heldAudio?.resume()
+        heldAudio = nil
+    }
 
     var service: BandleGameViewModel.Service {
         BandleGameViewModel.Service(
@@ -50,6 +60,17 @@ private final class FakeBandleGameService {
             audio: { number, mode in
                 self.audioCalls.append(number)
                 if self.shouldFailAudio { throw URLError(.resourceUnavailable) }
+                if self.cancelNextAudio {
+                    self.cancelNextAudio = false
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    throw CancellationError()
+                }
+                if self.holdNextAudio {
+                    self.holdNextAudio = false
+                    await withCheckedContinuation { self.heldAudio = $0 }
+                    // A marker, so a late response is recognisable.
+                    return BandleAudioClip(attemptNumber: number, clipLength: 999, mode: mode)
+                }
                 return UITestFixtures.bandleClip(attempt: number, mode: mode)
             },
             songs: { _, _ in UITestFixtures.bandleGuessSongs },
@@ -476,5 +497,78 @@ struct BandleGameViewModelTests {
         #expect(model.currentAttemptNumber == 2)
         #expect(model.attempts.map(\.attemptNumber) == [1])
         #expect(model.errorMessage == nil)
+    }
+
+    @Test("A play-privately choice belongs to the account that made it")
+    func exclusionIsPerAccount() async throws {
+        let suiteName = "BandleGameViewModelTests.accounts.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(userId: "account-a", hasPlayed: false, inProgress: false)
+        let first = BandleGameViewModel(service: fake.service, defaults: defaults)
+        await first.loadIfNeeded()
+        await first.start(excludeFromLeaderboard: true)
+
+        fake.status = BandlePlayStatus(userId: "account-b", hasPlayed: false, inProgress: false)
+        let second = BandleGameViewModel(service: fake.service, defaults: defaults)
+        await second.loadIfNeeded()
+
+        #expect(!second.excludeFromLeaderboard)
+    }
+
+    @Test("A clip from the previous round never replaces the new round's clip")
+    func lateClipFromEarlierRoundIsDropped() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        fake.holdNextAudio = true
+        let ranked = Task { await model.start() }
+        while fake.heldAudio == nil {
+            await Task.yield()
+        }
+
+        await model.startPractice()
+        fake.releaseAudio()
+        await ranked.value
+
+        #expect(model.isPractice)
+        #expect(model.currentClip == UITestFixtures.bandlePracticeChallenge.audioClips?.first)
+        #expect(!model.isLoadingClip)
+    }
+
+    @Test("A resumed game whose clip load was cancelled loads it when the screen returns")
+    func cancelledResumedClipReloads() async {
+        let fake = FakeBandleGameService()
+        fake.status = BandlePlayStatus(
+            hasPlayed: false,
+            inProgress: true,
+            progress: BandleProgress(currentAttemptNumber: 2, attempts: [BandleAttempt(clipLength: 3, attemptNumber: 1, status: .skipped)])
+        )
+        fake.cancelNextAudio = true
+        let model = BandleGameViewModel(service: fake.service)
+        await Task { await model.loadIfNeeded() }.value
+        #expect(model.currentClip == nil)
+
+        await model.loadIfNeeded()
+
+        #expect(fake.audioCalls == [2, 2])
+        #expect(model.currentClip?.attemptNumber == 2)
+    }
+
+    @Test("A clip that can't be played shows the clip error with a retry")
+    func clipPlaybackFailureOffersRetry() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+
+        model.clipPlaybackFailed()
+        #expect(model.errorMessage != nil)
+        await model.retry()
+
+        #expect(fake.audioCalls == [1, 1])
+        #expect(model.errorMessage == nil)
+        #expect(model.currentClip != nil)
     }
 }
