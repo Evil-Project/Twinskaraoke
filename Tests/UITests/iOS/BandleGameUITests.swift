@@ -10,6 +10,9 @@ final class BandleGameUITests: XCTestCase {
         let app = launchBandle()
         let play = element("Bandle.PlayToday", in: app)
         XCTAssertTrue(play.waitForExistence(timeout: 10))
+        // Extreme is hidden until the website releases it (see
+        // BandleMode.visibleModes), so there is nothing to pick.
+        XCTAssertFalse(element("Bandle.ModePicker", in: app).exists)
         play.tap()
 
         let field = element("Bandle.GuessField", in: app)

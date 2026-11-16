@@ -7,15 +7,17 @@ struct BandleGameView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: AM.Spacing.l) {
-                BandleSegmentPicker(
-                    title: String(localized: "Challenge mode"),
-                    options: BandleMode.allCases,
-                    selection: model.mode,
-                    isDisabled: model.phase.isBusy || model.phase == .playing,
-                    optionTitle: \.title,
-                    onSelect: selectMode
-                )
-                .accessibilityIdentifier("Bandle.ModePicker")
+                if BandleMode.visibleModes.count > 1 {
+                    BandleSegmentPicker(
+                        title: String(localized: "Challenge mode"),
+                        options: BandleMode.visibleModes,
+                        selection: model.mode,
+                        isDisabled: model.phase.isBusy || model.phase == .playing,
+                        optionTitle: \.title,
+                        onSelect: selectMode
+                    )
+                    .accessibilityIdentifier("Bandle.ModePicker")
+                }
 
                 if model.phase == .ready || (model.phase == .completed && !model.isPractice) {
                     BandlePersonalSummary(userData: model.userData)
