@@ -121,20 +121,21 @@ nonisolated extension KaraokeAPIClient {
         let encodedAttempts = try JSONEncoder().encode(input.attempts)
         let attemptObjects = try JSONSerialization.jsonObject(with: encodedAttempts)
         guard attemptObjects is [[String: Any]] else { throw APIError.invalidBody }
-        return try bandleWriteRequest(
-            path: "\(bandlePath)/complete",
-            body: [
-                "won": input.won,
-                "attemptNumber": input.attemptNumber,
-                "songId": input.songId ?? NSNull(),
-                "songTitle": input.songTitle ?? NSNull(),
-                "artist": input.artist ?? NSNull(),
-                "attempts": attemptObjects,
-                "excludeFromLeaderboard": input.excludeFromLeaderboard,
-                "mode": input.mode.rawValue,
-            ],
-            readToken: readToken
-        )
+        var body: [String: Any] = [
+            "won": input.won,
+            "attemptNumber": input.attemptNumber,
+            "songId": input.songId ?? NSNull(),
+            "songTitle": input.songTitle ?? NSNull(),
+            "artist": input.artist ?? NSNull(),
+            "attempts": attemptObjects,
+            "mode": input.mode.rawValue,
+        ]
+        // Optional in the API; left out when unknown so the server keeps the
+        // choice recorded at /start.
+        if let exclude = input.excludeFromLeaderboard {
+            body["excludeFromLeaderboard"] = exclude
+        }
+        return try bandleWriteRequest(path: "\(bandlePath)/complete", body: body, readToken: readToken)
     }
 
     static func bandleComplete(_ input: BandleCompletionInput) async throws -> BandleResult {

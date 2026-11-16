@@ -76,6 +76,19 @@ struct KaraokeAPIClientBandleTests {
         #expect(sentAttempts?.last?["guessedSongId"] as? String == "song-1")
     }
 
+    @Test("Completion sends the leaderboard choice only when it is known", arguments: [true, false, nil] as [Bool?])
+    func completionLeaderboardChoice(exclude: Bool?) throws {
+        let request = try KaraokeAPIClient.bandleCompleteRequest(
+            BandleCompletionInput(won: false, attemptNumber: 6, attempts: [], excludeFromLeaderboard: exclude),
+            readToken: { nil }
+        )
+        let body = try jsonObject(request.httpBody)
+
+        #expect(body["excludeFromLeaderboard"] as? Bool == exclude)
+        // Unknown: left out, so the server keeps what /start recorded.
+        #expect(body.keys.contains("excludeFromLeaderboard") == (exclude != nil))
+    }
+
     @Test("Replay song and user-rank path values use the documented fields")
     func buildsReplayAndRankRequests() throws {
         let songs = try KaraokeAPIClient.bandleGuessableSongsRequest(

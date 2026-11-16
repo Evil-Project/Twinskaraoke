@@ -7,7 +7,9 @@ nonisolated struct BandleCompletionInput: Sendable {
     let songTitle: String?
     let artist: String?
     let attempts: [BandleAttempt]
-    let excludeFromLeaderboard: Bool
+    /// Nil when the choice made at `/start` isn't known here (a game resumed
+    /// on another device); the field is then left out of the request.
+    let excludeFromLeaderboard: Bool?
     let mode: BandleMode
 
     init(
@@ -17,7 +19,7 @@ nonisolated struct BandleCompletionInput: Sendable {
         songTitle: String? = nil,
         artist: String? = nil,
         attempts: [BandleAttempt],
-        excludeFromLeaderboard: Bool = false,
+        excludeFromLeaderboard: Bool? = false,
         mode: BandleMode = .normal
     ) {
         self.won = won
