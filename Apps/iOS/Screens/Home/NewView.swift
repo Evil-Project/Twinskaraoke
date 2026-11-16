@@ -79,31 +79,34 @@ struct NewView: View {
 
     private var compactNewOverview: some View {
         VStack(alignment: .leading, spacing: AM.Spacing.xxl) {
+            BandleEntryCard()
+                .shelfEntrance(index: 0)
+
             if viewModel.playableLatestSetlist != nil || !viewModel.trending.isEmpty {
                 NewFeaturedRail(latestStream: viewModel.playableLatestSetlist, trending: viewModel.trending)
-                    .shelfEntrance(index: 0)
+                    .shelfEntrance(index: 1)
             }
 
             if !viewModel.newReleases.isEmpty {
                 NewSongRail(title: String(localized: "Up Next"), songs: Array(viewModel.newReleases.prefix(8)))
-                    .shelfEntrance(index: 1)
+                    .shelfEntrance(index: 2)
             }
 
             // The website's "Trending This Week": the 7-day trending list. See
             // All opens all of it, so it isn't repeated as a rail below.
             if !viewModel.trending.isEmpty {
                 NewSongListPreview(title: String(localized: "Trending This Week"), songs: viewModel.trending)
-                    .shelfEntrance(index: 2)
+                    .shelfEntrance(index: 3)
             }
 
             if !viewModel.recentPlaylists.isEmpty {
                 NewPlaylistRail(title: String(localized: "New This Week"), playlists: viewModel.recentPlaylists)
-                    .shelfEntrance(index: 3)
+                    .shelfEntrance(index: 4)
             }
 
             if !viewModel.newReleases.isEmpty {
                 NewSongRail(title: String(localized: "New Releases"), songs: viewModel.newReleases)
-                    .shelfEntrance(index: 4)
+                    .shelfEntrance(index: 5)
             }
         }
     }
@@ -116,6 +119,8 @@ struct NewView: View {
                 context: viewModel.newReleases.isEmpty ? viewModel.trending : viewModel.newReleases,
                 playlist: viewModel.recentPlaylists.first
             )
+
+            BandleEntryCard()
 
             if viewModel.playableLatestSetlist != nil || !viewModel.trending.isEmpty {
                 NewFeaturedRail(latestStream: viewModel.playableLatestSetlist, trending: viewModel.trending)
