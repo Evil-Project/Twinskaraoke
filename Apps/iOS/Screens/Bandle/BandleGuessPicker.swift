@@ -43,7 +43,7 @@ struct BandleGuessPicker: View {
         Button(String(localized: "Submit Guess"), systemImage: "checkmark", action: onSubmit)
             .buttonStyle(.borderedProminent)
             .disabled(!model.canSubmitGuess)
-            .frame(maxWidth: .infinity)
+            .buttonSizing(.flexible)
             .accessibilityIdentifier("Bandle.SubmitGuess")
     }
 
@@ -51,7 +51,7 @@ struct BandleGuessPicker: View {
         Button(String(localized: "Skip"), systemImage: "forward.fill", action: onSkip)
             .buttonStyle(.bordered)
             .disabled(model.phase != .playing)
-            .frame(maxWidth: .infinity)
+            .buttonSizing(.flexible)
             .accessibilityIdentifier("Bandle.Skip")
     }
 }
