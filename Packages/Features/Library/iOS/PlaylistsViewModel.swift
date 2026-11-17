@@ -46,23 +46,40 @@ final class PlaylistsViewModel {
         }
     }
 
+    /// No observation here. `LibraryView` holds the model in `@State`, whose
+    /// initial value is built again on every re-init of the view and thrown
+    /// away; registering from `init` subscribed every one of those copies to
+    /// the shared stores. `startObserving()` runs from the view's appear, so
+    /// only the instance SwiftUI kept registers.
     init(service: Service = .live) {
         self.service = service
-        // Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
-        // and `$favoriteIDs`. `observeContinuously` already hops to the next
-        // main-actor turn before calling back, which is what the old
-        // `.receive(on: DispatchQueue.main)` was there for — observation fires
-        // from willSet, so the recompute must not read pre-write values.
-        sourceObservation = observeContinuously({
-            _ = self.playlists
-            _ = self.favoriteSongs
+        recomputeCombinedPlaylists()
+    }
+
+    /// Keeps `combinedPlaylists` current. Idempotent.
+    ///
+    /// Replaces the Merge5 of `$playlists`, `$favoriteSongs`, the two stores
+    /// and `$favoriteIDs`. `observeContinuously` already hops to the next
+    /// main-actor turn before calling back, which is what the old
+    /// `.receive(on: DispatchQueue.main)` was there for — observation fires
+    /// from willSet, so the recompute must not read pre-write values.
+    ///
+    /// `track` holds `self` weakly: the shared stores' registrars keep it
+    /// until their next change, and a strong capture kept the model, and the
+    /// token re-arming it, alive for good.
+    func startObserving() {
+        guard sourceObservation == nil else { return }
+        recomputeCombinedPlaylists()
+        sourceObservation = observeContinuously({ [weak self] in
+            guard let self else { return }
+            _ = playlists
+            _ = favoriteSongs
             _ = SavedPlaylistsStore.shared.playlists
             _ = UserPlaylistsManager.shared.playlists
             _ = FavoritesManager.shared.favoriteIDs
         }, onChange: { [weak self] in
             self?.recomputeCombinedPlaylists()
         })
-        recomputeCombinedPlaylists()
     }
 
     var favoritesPlaylist: Playlist {

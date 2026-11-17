@@ -121,6 +121,7 @@ struct LibraryView: View {
                 viewModel.fetchFavoriteSongs()
             }
             .onAppear {
+                viewModel.startObserving()
                 favorites.loadIfNeeded()
                 viewModel.fetchPlaylists()
                 viewModel.fetchFavoriteSongs()
