@@ -33,6 +33,7 @@ nonisolated struct SplashSlide: Codable, Equatable, Identifiable {
     var features: [SplashDemoFeature]?
     var demonstration: SplashDemonstration?
     var releaseNotes: SplashReleaseNotes?
+    var website: SplashWebsite?
 
     static func releaseNotesPage() -> Self {
         var slide = Self()
@@ -94,9 +95,14 @@ nonisolated struct SplashContent: Codable, Equatable {
             let prefix = "Slide \(index + 1): "
             try require(Self.validID(slide.id), prefix + "invalid slide ID.")
             if let notes = slide.releaseNotes {
-                try require(kind == .update && index == 0,
+                try require(kind == .update && index == 0 && slide.website == nil,
                             String(localized: "Release notes belong on the first update slide."))
                 try notes.validate()
+            }
+            if let website = slide.website {
+                try require(kind == .update && index > 0, String(localized: "A website slide must follow the release notes."))
+                try require(website.url.isEmpty || website.httpsURL != nil,
+                            String(localized: "Enter an HTTPS website URL without credentials or a fragment."))
             }
             try require((slide.title?.count ?? 0) <= 300 && (slide.body?.count ?? 0) <= 12000, prefix + "text exceeds the limit (title 300, body 12000).")
             try require(Self.validColor(slide.backgroundColor) && Self.validColor(slide.textColor), prefix + "colors must use #RRGGBB.")
@@ -121,11 +127,16 @@ nonisolated struct SplashContent: Codable, Equatable {
     }
 
     /// Drafts can be saved and imported before they have publishable release notes.
-    func validateForPresentation() throws {
+    func validateForPresentation(forRelease: Bool = false) throws {
         try validate()
         guard kind == .update else { return }
         guard slides.first?.releaseNotes?.isReady == true else {
             throw SplashError(message: String(localized: "Add release notes with a headline for each entry and a version for watchOS notes."))
+        }
+        if forRelease, enabled, slides.contains(where: { $0.website != nil }) {
+            guard targetBuild != nil, slides.compactMap(\.website).allSatisfy({ $0.httpsURL != nil }) else {
+                throw SplashError(message: String(localized: "An enabled website slide needs an HTTPS URL and an exact target build."))
+            }
         }
     }
     /// Checks image bytes, dimensions, and the required accessible description.
@@ -204,7 +215,7 @@ enum SplashBundleLoader {
     static func runtimeContent(_ kind: SplashKind) -> SplashContent? {
         do {
             let content = try load(kind)
-            try content.validateForPresentation()
+            try content.validateForPresentation(forRelease: true)
             return content
         } catch {
             NSLog("Splash %@: %@", kind.rawValue, error.localizedDescription)

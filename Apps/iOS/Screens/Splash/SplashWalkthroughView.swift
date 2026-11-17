@@ -16,6 +16,7 @@ struct SplashWalkthroughView: View {
     let index: Int
     var errorMessage: String? = nil
     var busy = false
+    var websiteCompleted = false
     let back: () -> Void
     let next: () -> Void
     let complete: () -> Void
@@ -25,14 +26,21 @@ struct SplashWalkthroughView: View {
     private var slide: SplashSlide { content.slides[index] }
     private var foreground: Color { Color(splashHex: slide.textColor) }
     var body: some View {
-        nativePage
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(foreground)
-            .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
-            .tint(foreground)
-            .interactiveDismissDisabled()
-            .onChange(of: index) { _, _ in titleFocused = true }
-            .onAppear { titleFocused = true }
+        Group {
+            if let website = slide.website, !websiteCompleted, errorMessage == nil {
+                SplashWebsiteView(website: website, advance: advance)
+                    .id(slide.id)
+            } else {
+                nativePage
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(foreground)
+        .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
+        .tint(foreground)
+        .interactiveDismissDisabled()
+        .onChange(of: index) { _, _ in titleFocused = true }
+        .onAppear { titleFocused = true }
     }
 
     private var nativePage: some View {
@@ -47,6 +55,13 @@ struct SplashWalkthroughView: View {
                         if let releaseNotes = slide.releaseNotes {
                             SplashReleaseNotesView(notes: releaseNotes, title: slide.title,
                                                    version: content.targetVersion, build: content.targetBuild)
+                        } else if slide.website != nil {
+                            Group {
+                                if websiteCompleted { Text("Website step complete.") }
+                                else { Text("Saving website progress.") }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(20)
                         } else {
                             SplashSlideRenderer(slide: slide, viewport: geometry.size)
                         }
@@ -154,6 +169,7 @@ struct SplashRootView: View {
                     let renderedIndex = coordinator.index
                     SplashWalkthroughView(content: active, index: renderedIndex,
                                           errorMessage: coordinator.errorMessage, busy: coordinator.isSaving,
+                                          websiteCompleted: coordinator.hasPassedCurrentSlide,
                                           back: { coordinator.back(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },
                                           next: { coordinator.next(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },
                                           complete: { coordinator.complete(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },

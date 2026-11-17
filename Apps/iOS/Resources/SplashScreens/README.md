@@ -26,6 +26,12 @@ Older update drafts retain their existing slides and need release notes before
 preview or export. If a legacy draft already has 30 slides, delete one to make
 room for the changelog.
 
+For an additional update slide, open **Edit Slide**, choose **Website** as
+the slide type, and enter its HTTPS URL. Use **Preview** to test it on the
+current device. A blank URL loads the local test page when previewing or
+testing the disabled bundled walkthrough. A webpage can also be the final slide.
+The [website integration blueprint](../../../../docs/splash-website-integration.md)
+describes the request and completion message.
 Edit Next and final button labels in the main form. Save Local Draft stores an
 installation-local draft independently of runtime completion state. Switching
 modes saves the current valid draft; backgrounding or leaving Studio also saves.
@@ -64,17 +70,22 @@ This Release**, set target marketing version to the release's
 `CFBundleShortVersionString`, and optionally set target
 build to `CFBundleVersion`. Build matching is exact when supplied. Edit and preview
 slides, export `update.json`, replace its canonical source file, then build and ship.
+An enabled announcement with a website requires both a website URL and an
+exact target build.
 Reusing an announcement across builds does not replay it for people who completed
 that ID. Completion IDs survive updates and downgrades. Only the currently bundled,
 enabled, matching announcement is considered; no missed-release backlog is shown.
 For an ordinary update, leave **Show Update Walkthrough for This Release** off,
 export the disabled `update.json`, replace its source file, then rebuild. The
-shipped update example is disabled and contains a single release notes page.
+shipped update example is disabled and includes release notes, a local website
+test page, and a final native page.
 
 Install comes first when both are pending, then Update, before the app opens.
-Next and Back navigate between pages. Done completes the final page.
-Progress and completion are persisted atomically before advancing or unlocking.
-If content changes while unfinished, its fingerprint no longer matches and progress restarts
+Native pages use Next, Back, and the final Done action. Website completion uses
+the same Next or Done action. A failed or closed website offers Continue to
+update. Progress is noninteractive and every slide is visited in sequence.
+Progress and completion are persisted atomically before advancing/unlocking. If content
+changes while unfinished, its fingerprint no longer matches and progress restarts
 at slide one. Completed install onboarding is independent of content/ID/version
 and stays completed when install content changes. Malformed install content uses
 three built-in placeholder slides; malformed update content is logged and skipped

@@ -11,7 +11,7 @@ struct SplashJSONDocument: FileDocument {
     init(data: Data) { self.data = data }
     /// Validates and encodes a self-contained walkthrough for export.
     init(content: SplashContent) throws {
-        try content.validateForPresentation()
+        try content.validateForPresentation(forRelease: true)
         data = try content.encoded()
     }
     /// Reads and validates imported JSON before creating the document.
@@ -152,10 +152,14 @@ struct SplashStudioView: View {
                                 .deleteDisabled(true)
                             } else {
                                 NavigationLink {
-                                    SplashSlideEditor(slide: model.binding(for: slide))
+                                    SplashSlideEditor(slide: model.binding(for: slide), allowsWebsite: model.draft.kind == .update)
                                 } label: {
                                     VStack(alignment: .leading) {
-                                        Text("\(index + 1). \(slide.title ?? "Untitled slide")")
+                                        if slide.website != nil {
+                                            Text("Website")
+                                        } else {
+                                            Text("\(index + 1). \(slide.title ?? "Untitled slide")")
+                                        }
                                         Text(slide.id).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
@@ -252,11 +256,15 @@ struct SplashStudioView: View {
 struct SplashPreviewView: View {
     let content: SplashContent
     @State private var index = 0
+    @State private var highestVisited = 0
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        SplashWalkthroughView(content: content, index: index,
+        SplashWalkthroughView(content: content, index: index, websiteCompleted: highestVisited > index,
                               back: { index = max(0, index - 1) },
-                              next: { index = min(content.slides.count - 1, index + 1) },
+                              next: {
+                                  index = min(content.slides.count - 1, index + 1)
+                                  highestVisited = max(index, highestVisited)
+                              },
                               complete: { dismiss() }, retry: {})
             .safeAreaInset(edge: .top) {
                 HStack { Text("Preview"); Spacer(); Button("Exit Preview") { dismiss() } }
@@ -267,11 +275,27 @@ struct SplashPreviewView: View {
 
 struct SplashSlideEditor: View {
     @Binding var slide: SplashSlide
+    var allowsWebsite = false
     @State private var message: String?
     @State private var singlePreview = false
     @State private var arranging = false
     var body: some View {
         Form {
+            if allowsWebsite {
+                SplashWebsiteEditor(website: $slide.website)
+            }
+            if slide.website == nil { standardFields }
+        }
+        .accessibilityIdentifier("SplashStudio.SlideForm")
+        .navigationTitle("Edit Slide")
+        .splashNotice($message)
+        .fullScreenCover(isPresented: $singlePreview) {
+            SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
+        }
+        .fullScreenCover(isPresented: $arranging) { SplashCanvasEditor(slide: $slide) }
+    }
+    private var standardFields: some View {
+        Group {
             Section("Live design") {
                 Button("Preview This Slide") {
                     do {
@@ -362,14 +386,8 @@ struct SplashSlideEditor: View {
                 }
             }
         }
-        .accessibilityIdentifier("SplashStudio.SlideForm")
-        .navigationTitle("Edit Slide")
-        .splashNotice($message)
-        .fullScreenCover(isPresented: $singlePreview) {
-            SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
-        }
-        .fullScreenCover(isPresented: $arranging) { SplashCanvasEditor(slide: $slide) }
     }
+
     /// Binds an optional slide design field through its resolved default design.
     private func design<T>(_ key: WritableKeyPath<SplashSlideDesign, T>) -> Binding<T> {
         Binding(get: { slide.resolvedDesign[keyPath: key] }, set: { value in
