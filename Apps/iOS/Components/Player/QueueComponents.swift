@@ -129,7 +129,7 @@ struct QueueModeButton: View {
         .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.75, haptic: .selection))
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Double tap to toggle.")
+        .accessibilityHint("Changes this playback setting.")
     }
 }
 
