@@ -373,7 +373,7 @@ struct FullScreenPlayerView: View {
     @State private var showKaraokeControls = false
     @State private var showTranslatedLyrics = false
     @State private var showCoverArt = false
-    @State private var showAddToPlaylist = false
+    @State private var addToPlaylist = AddToPlaylistPresenter()
     @State private var coverArtSaveStatus: ArtworkSaveStatus = .idle
     @State private var coverArtSaveGeneration = 0
     @State private var easterEggImageURL: URL?
@@ -479,15 +479,10 @@ struct FullScreenPlayerView: View {
             .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showAddToPlaylist) {
-            if let song {
-                AddToPlaylistSheet(song: song)
-            }
-        }
+        .addToPlaylistSheet($addToPlaylist)
         .onChange(of: audioManager.currentSong?.id) { _, newId in
             showTranslatedLyrics = false
             showKaraokeControls = false
-            showAddToPlaylist = false
             coverArtArtistName = nil
             coverArtArtistLink = nil
             if let id = newId {
@@ -845,7 +840,7 @@ struct FullScreenPlayerView: View {
 
     private func padMoreMenu(song: Song) -> some View {
         PlayerMoreMenu(song: song, font: .title3, showsChrome: false) {
-            showAddToPlaylist = true
+            addToPlaylist.present(song)
         }
     }
 
@@ -966,7 +961,7 @@ struct FullScreenPlayerView: View {
             PlayerFavoriteButton(song: song)
 
             PlayerMoreMenu(song: song) {
-                showAddToPlaylist = true
+                addToPlaylist.present(song)
             }
         }
         .padding(.horizontal, metrics.horizontalPadding)
@@ -1040,7 +1035,7 @@ struct FullScreenPlayerView: View {
             )
 
             PlayerMoreMenu(song: song, size: max(metrics.titleButtonSize, 44)) {
-                showAddToPlaylist = true
+                addToPlaylist.present(song)
             }
         }
         .contextMenu {
@@ -1254,7 +1249,7 @@ struct FullScreenPlayerView: View {
 
     private func songActions(song: Song) -> some View {
         SongActionsMenuItems(song: song) {
-            showAddToPlaylist = true
+            addToPlaylist.present(song)
         }
     }
 

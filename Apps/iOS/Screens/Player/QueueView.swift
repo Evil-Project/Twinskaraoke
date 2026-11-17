@@ -4,7 +4,7 @@ struct QueueView: View {
     @Environment(AudioPlayerManager.self) var audioManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var showCurrentAddToPlaylist = false
+    @State private var addToPlaylist = AddToPlaylistPresenter()
     @State private var upNextEntries: [UpNextEntry] = []
     @State private var isReordering = false
 
@@ -151,11 +151,7 @@ struct QueueView: View {
                 }
             }
         }
-        .sheet(isPresented: $showCurrentAddToPlaylist) {
-            if let current = audioManager.currentSong {
-                AddToPlaylistSheet(song: current)
-            }
-        }
+        .addToPlaylistSheet($addToPlaylist)
         // Snapshot up-next only when the queue or current song changes, so
         // unrelated AudioPlayerManager publishes don't redo the O(n) slice.
         .onAppear { refreshUpNextSongs() }
@@ -270,7 +266,7 @@ struct QueueView: View {
         .contentShape(Rectangle())
         .contextMenu {
             SongActionsMenuItems(song: current) {
-                showCurrentAddToPlaylist = true
+                addToPlaylist.present(current)
             }
         } preview: {
             SongContextPreview(song: current)
@@ -287,7 +283,7 @@ struct QueueView: View {
         }
         .accessibilityAction(named: "Add to Playlist") {
             AppHaptic.selection.play()
-            showCurrentAddToPlaylist = true
+            addToPlaylist.present(current)
         }
     }
 
