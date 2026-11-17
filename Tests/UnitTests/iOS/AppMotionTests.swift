@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 import Testing
@@ -61,5 +62,27 @@ struct AppMotionTests {
         #expect(AppMotion.crossFade == .easeInOut(duration: 0.25))
         #expect(AppMotion.crossFade != AppMotion.standard)
         #expect(AppMotion.crossFade != AppMotion.quick)
+    }
+
+    @Test(
+        "Power and thermal changes posted off the main thread are delivered on it",
+        arguments: [Notification.Name.NSProcessInfoPowerStateDidChange, ProcessInfo.thermalStateDidChangeNotification]
+    )
+    func systemStateNotificationsHopToMain(name: Notification.Name) async {
+        let center = NotificationCenter()
+        var subscription: AnyCancellable?
+        await confirmation("the notification is delivered once", expectedCount: 1) { delivered in
+            let deliveredOnMain = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                subscription = AppMotion.mainThreadPublisher(for: name, center: center)
+                    .first()
+                    .sink { @Sendable _ in
+                        delivered()
+                        continuation.resume(returning: Thread.isMainThread)
+                    }
+                DispatchQueue.global().async { center.post(name: name, object: nil) }
+            }
+            #expect(deliveredOnMain)
+        }
+        subscription?.cancel()
     }
 }
