@@ -7,5 +7,6 @@ struct GallerySectionHeader: View {
         Text(title)
             .scaledSystemFont(size: 22, weight: .bold)
             .padding(.horizontal, 16)
+            .accessibilityAddTraits(.isHeader)
     }
 }
