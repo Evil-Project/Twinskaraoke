@@ -44,6 +44,7 @@ struct PlaylistDetailView: View {
     @State private var warmedSongIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
+    @State private var pendingRemoval = PendingPlaylistSongRemoval()
     @State private var isEditing = false
     /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
     /// touches until the push has settled. The zoom transition does not gate
@@ -419,6 +420,7 @@ struct PlaylistDetailView: View {
         } message: { song in
             Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
+        .playlistSongRemovalConfirmation($pendingRemoval, playlistName: playlist.name, onConfirm: remove)
         .onAppear {
             // Per-appear, deliberately outside the one-shot guard below.
             // onDisappear disarms the rows, so gating this on `hasStartedVisit`
@@ -848,7 +850,7 @@ struct PlaylistDetailView: View {
         return PlaylistSongRemovalContext(
             playlistID: playlist.id,
             playlistName: playlist.name,
-            remove: { song in remove(song) }
+            requestRemoval: { song in pendingRemoval.request(song) }
         )
     }
 
