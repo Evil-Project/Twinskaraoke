@@ -50,32 +50,37 @@ struct DownloadedSongsView: View {
                         actionButtons
                             .padding(.horizontal)
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(localSongs.enumerated()), id: \.element.id) { idx, song in
-                                // A button with the press style, like every
-                                // other song list. The row's own context menu
-                                // already offers Remove Download; a second one
-                                // here only answered a press on the padding.
-                                Button {
-                                    play(song)
-                                } label: {
-                                    SongRow(song: song, size: .regular)
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 8)
-                                        .contentShape(Rectangle())
-                                        .songRowAccessibility(song: song) {
-                                            play(song)
-                                        }
-                                }
-                                .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
-                                .accessibilityHint("Starts playback.")
-                                .id(
-                                    DownloadedSongRowIdentity(
-                                        songID: song.id,
-                                        duration: song.duration
+                            // One view per element (row and separator in a
+                            // VStack), so SwiftUI can take the row identities
+                            // from the ids instead of running every row's body.
+                            ForEach(localSongs.enumerated(), id: \.element.id) { idx, song in
+                                VStack(spacing: 0) {
+                                    // A button with the press style, like every
+                                    // other song list. The row's own context menu
+                                    // already offers Remove Download; a second one
+                                    // here only answered a press on the padding.
+                                    Button {
+                                        play(song)
+                                    } label: {
+                                        SongRow(song: song, size: .regular)
+                                            .padding(.horizontal)
+                                            .padding(.vertical, 8)
+                                            .contentShape(Rectangle())
+                                            .songRowAccessibility(song: song) {
+                                                play(song)
+                                            }
+                                    }
+                                    .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
+                                    .accessibilityHint("Starts playback.")
+                                    .id(
+                                        DownloadedSongRowIdentity(
+                                            songID: song.id,
+                                            duration: song.duration
+                                        )
                                     )
-                                )
-                                if idx < localSongs.count - 1 {
-                                    Divider().padding(.leading, 76)
+                                    if idx < localSongs.count - 1 {
+                                        Divider().padding(.leading, 76)
+                                    }
                                 }
                             }
                         }

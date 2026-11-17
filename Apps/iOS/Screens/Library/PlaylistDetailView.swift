@@ -751,25 +751,12 @@ struct PlaylistDetailView: View {
                 if showsActionButtons, !isWideOverview {
                     actionButtons(songs: displayedSongs)
                 }
-                LazyVStack(spacing: 0) {
-                    ForEach(displayedSongs.enumerated().map { PositionedPlaylistSong(offset: $0.offset, song: $0.element) }) { item in
-                        Button {
-                            play(item.song, context: displayedSongs)
-                        } label: {
-                            PlaylistRow(song: item.song, showsArtwork: true, horizontalPadding: rowHorizontalPadding)
-                                .contentShape(Rectangle())
-                                .songRowAccessibility(song: item.song) {
-                                    play(item.song, context: displayedSongs)
-                                }
-                        }
-                        .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
-                        .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("PlaylistDetail.song.\(item.offset).\(item.song.id)")
-                        if item.offset < displayedSongs.count - 1 {
-                            Divider().padding(.leading, rowHorizontalPadding + 60)
-                        }
-                    }
-                }
+                PlaylistSongList(
+                    playlist: playlist,
+                    songs: displayedSongs,
+                    rowHorizontalPadding: rowHorizontalPadding
+                )
+                .equatable()
                 .allowsHitTesting(playbackTapsArmed)
             }
             .environment(\.playlistSongRemoval, songRemovalContext)
@@ -827,11 +814,6 @@ struct PlaylistDetailView: View {
         .allowsHitTesting(playbackTapsArmed)
     }
 
-    private func play(_ song: Song, context: [Song]) {
-        AppHaptic.selection.play()
-        PlaylistPlayback.play(song, from: playlist, context: context)
-    }
-
     /// Non-nil only for a playlist the signed-in user owns. Favorites is
     /// excluded: its membership is owned by the star action, which the same
     /// menu already offers.
@@ -860,32 +842,6 @@ struct PlaylistDetailView: View {
             restore()
             removalErrorSong = song
         }
-    }
-}
-
-/// Row identity for the playlist song list. The offset keeps IDs unique when
-/// a playlist contains the same song twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The content fields make the ID change when metadata
-/// (artist, duration) arrives after a row was first composed: with purely
-/// positional identity, an already-composed row keeps showing the stale
-/// "Unknown Artist" from the artist-less list DTOs even after the detail
-/// fetch lands, until the whole list is torn down and rebuilt.
-private struct PositionedPlaylistSong: Identifiable {
-    struct ID: Hashable {
-        let offset: Int
-        let songID: String
-        let metadata: Song.RowMetadata
-    }
-
-    let offset: Int
-    let song: Song
-
-    var id: ID {
-        ID(
-            offset: offset,
-            songID: song.id,
-            metadata: song.rowMetadata
-        )
     }
 }
 

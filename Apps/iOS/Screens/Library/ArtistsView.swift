@@ -192,13 +192,17 @@ struct ArtistDetailView: View {
                         actionButtons
                         LazyVStack(spacing: 0) {
                             ForEach(songs) { song in
-                                ArtistSongRow(song: song, showsArtwork: true) {
-                                    play(song)
-                                }
-                                // The last row has nothing to separate it from,
-                                // as in every other song list.
-                                if song.id != songs.last?.id {
-                                    Divider().padding(.leading, 76)
+                                // One view per element, so SwiftUI can take the
+                                // row identities from the ids.
+                                VStack(spacing: 0) {
+                                    ArtistSongRow(song: song, showsArtwork: true) {
+                                        play(song)
+                                    }
+                                    // The last row has nothing to separate it from,
+                                    // as in every other song list.
+                                    if song.id != songs.last?.id {
+                                        Divider().padding(.leading, 76)
+                                    }
                                 }
                             }
                         }

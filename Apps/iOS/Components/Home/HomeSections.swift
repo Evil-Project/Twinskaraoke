@@ -135,15 +135,19 @@ struct WideSongListPanel: View {
             )
             LazyVStack(spacing: 0) {
                 ForEach(songs) { song in
-                    Button {
-                        AppHaptic.selection.play()
-                        AudioPlayerManager.shared.play(song: song, context: songs)
-                    } label: {
-                        SongRow(song: song, size: .compact)
-                    }
-                    .buttonStyle(.plain)
-                    if song.id != songs.last?.id {
-                        Divider().padding(.leading, 56)
+                    // One view per element, so SwiftUI can take the row
+                    // identities from the ids.
+                    VStack(spacing: 0) {
+                        Button {
+                            AppHaptic.selection.play()
+                            AudioPlayerManager.shared.play(song: song, context: songs)
+                        } label: {
+                            SongRow(song: song, size: .compact)
+                        }
+                        .buttonStyle(.plain)
+                        if song.id != songs.last?.id {
+                            Divider().padding(.leading, 56)
+                        }
                     }
                 }
             }
