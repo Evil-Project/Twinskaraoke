@@ -30,7 +30,7 @@ private struct SplashReleaseEntryEditor: View {
 
     var body: some View {
         ForEach($entries) { $entry in
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: AM.Spacing.s) {
                 TextField("Headline", text: $entry.headline, axis: .vertical)
                 TextField("Details (one per line)", text: $entry.details, axis: .vertical)
                     .lineLimit(2...6)

@@ -8,7 +8,7 @@ struct SplashReleaseNotesView: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AM.Spacing.l) {
             if let title, !title.isEmpty {
                 Text(title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
             } else {
@@ -24,34 +24,36 @@ struct SplashReleaseNotesView: View {
             if !notes.general.isEmpty {
                 section(Text("General"), entries: notes.general)
             }
-            Button {
-                expanded.toggle()
-            } label: {
-                Text(expanded ? LocalizedStringKey("Show less") : LocalizedStringKey("Show full changelog"))
+            Button(action: toggleExpansion) {
+                Label(expanded ? LocalizedStringKey("Show less") : LocalizedStringKey("Show full changelog"),
+                      systemImage: expanded ? "chevron.up" : "chevron.down")
+                    .labelStyle(.titleAndIcon)
+                    .padding(.vertical, AM.Spacing.m)
+                    .contentShape(.rect)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .accessibilityIdentifier("Splash.Changelog.Toggle")
         }
         .frame(maxWidth: 680, alignment: .leading)
-        .padding(20)
+        .padding(AM.Spacing.xl)
         .frame(maxWidth: .infinity)
     }
 
     private func section(_ title: Text, entries: [SplashReleaseNotes.Entry]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AM.Spacing.s) {
             title.font(.headline).accessibilityAddTraits(.isHeader)
             if expanded {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { offset, entry in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                ForEach(entries.enumerated(), id: \.element.id) { offset, entry in
+                    VStack(alignment: .leading, spacing: AM.Spacing.xs) {
+                        HStack(alignment: .firstTextBaseline, spacing: AM.Spacing.s) {
                             Text("\(offset + 1).").monospacedDigit()
                             Text(entry.headline)
                         }
                         .accessibilityElement(children: .combine)
-                        ForEach(Array(entry.detailLines.enumerated()), id: \.offset) { _, line in
+                        ForEach(entry.detailLines.enumerated(), id: \.offset) { _, line in
                             Label(line, systemImage: "minus")
                                 .labelStyle(.titleAndIcon)
-                                .padding(.leading, 20)
+                                .padding(.leading, AM.Spacing.xl)
                         }
                     }
                 }
@@ -60,5 +62,13 @@ struct SplashReleaseNotesView: View {
                     .labelStyle(.titleAndIcon)
             }
         }
+    }
+
+    private func toggleExpansion() {
+        // The same control moves below the last note when the content changes.
+        // Keep that relayout immediate so the old pressed label cannot cover the notes.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { expanded.toggle() }
     }
 }
