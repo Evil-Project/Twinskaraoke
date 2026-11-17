@@ -631,17 +631,6 @@
         }
       }
     },
-    "%@ · %lld of %lld" : {
-      "comment" : "A label showing walkthrough progress. Argument 1 is the label, argument 2 is the current slide number, and argument 3 is the total number of slides.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld of %3$lld"
-          }
-        }
-      }
-    },
     "%@ / 2 GB" : {
       "extractionState" : "manual",
       "generatesSymbol" : false,
@@ -1355,58 +1344,6 @@
         }
       }
     },
-    "%@, %@ playlist" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, Playlist (%2$@)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@ playlist"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, soittolista (%2$@)"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, playlist %2$@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@、%2$@プレイリスト"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, плейлист (%2$@)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@ 歌单"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$@ 歌單"
-          }
-        }
-      }
-    },
     "%@, %@, %@" : {
       "localizations" : {
         "de" : {
@@ -1559,13 +1496,96 @@
         }
       }
     },
-    "%@, slide %lld of %lld" : {
-      "comment" : "A label that describes a splash walkthrough slide. Argument 1 is the walkthrough label (e.g. \"Welcome\" or \"Update\"), argument 2 is the current slide number, and argument 3 is the total number of slides.",
+    "%@, private playlist" : {
+      "comment" : "VoiceOver: the new playlist's name, then its visibility.",
       "localizations" : {
-        "en" : {
+        "de" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, slide %2$lld of %3$lld"
+            "state" : "translated",
+            "value" : "%@, private Playlist"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, yksityinen soittolista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, playlist privée"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@、非公開プレイリスト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, приватний плейлист"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，私密歌单"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，私密歌單"
+          }
+        }
+      }
+    },
+    "%@, public playlist" : {
+      "comment" : "VoiceOver: the new playlist's name, then its visibility.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, öffentliche Playlist"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, julkinen soittolista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, playlist publique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@、公開プレイリスト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, публічний плейлист"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，公开歌单"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，公開歌單"
           }
         }
       }
@@ -6256,6 +6276,98 @@
         }
       }
     },
+    "All artwork displayed on this site is used with explicit permission from the respective artists. The following artists have granted permission for their artwork to be used on this website:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle auf dieser Website gezeigten Artworks werden mit ausdrücklicher Erlaubnis der jeweiligen Künstler verwendet. Folgende Künstler haben der Verwendung ihrer Artworks auf dieser Website zugestimmt:"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaikkia tällä sivustolla näkyviä kuvituksia käytetään taiteilijoiden nimenomaisella luvalla. Seuraavat taiteilijat ovat antaneet luvan käyttää teoksiaan tällä sivustolla:"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les illustrations affichées sur ce site sont utilisées avec l’autorisation explicite de leurs artistes. Les artistes suivants ont autorisé l’utilisation de leurs œuvres sur ce site :"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このサイトに掲載しているアートワークはすべて、各アーティストの明示的な許可を得て使用しています。以下のアーティストから、このサイトでの作品の使用を許可していただいています："
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Усі ілюстрації на цьому сайті використано з явного дозволу їхніх авторів. Ці художники дозволили використовувати свої роботи на цьому сайті:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本站展示的所有作品均已获得各位艺术家的明确授权。以下艺术家已授权本站使用其作品："
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本站展示的所有作品均已獲得各位藝術家的明確授權。以下藝術家已授權本站使用其作品："
+          }
+        }
+      }
+    },
+    "All cover files dated November 26, 2025 and earlier are retrieved from the Unofficial Neuro Karaoke Archive (V3)." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Cover-Dateien bis einschließlich 26. November 2025 stammen aus dem Unofficial Neuro Karaoke Archive (V3)."
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaikki 26. marraskuuta 2025 tai sitä aiemmin päivätyt kansikuvat on haettu Unofficial Neuro Karaoke Archivesta (V3)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toutes les pochettes datées du 26 novembre 2025 ou avant proviennent de l’Unofficial Neuro Karaoke Archive (V3)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2025年11月26日以前の日付のカバー画像はすべて Unofficial Neuro Karaoke Archive (V3) から取得しています。"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Усі обкладинки, датовані 26 листопада 2025 року й раніше, взято з Unofficial Neuro Karaoke Archive (V3)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2025 年 11 月 26 日及以前的所有封面文件均取自 Unofficial Neuro Karaoke Archive (V3)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2025 年 11 月 26 日及以前的所有封面檔案均取自 Unofficial Neuro Karaoke Archive (V3)。"
+          }
+        }
+      }
+    },
     "All offline downloads on this device will be removed." : {
       "extractionState" : "manual",
       "generatesSymbol" : false,
@@ -8664,6 +8776,52 @@
       "comment" : "A label for the background image fit option in the splash screen editor.",
       "isCommentAutoGenerated" : true
     },
+    "Badge art editing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearbeitung der Abzeichen-Artworks"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merkkien kuvituksen muokkaus"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retouche des illustrations des badges"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バッジイラストの編集"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редагування зображень значків"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "徽章图像编辑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "徽章圖像編輯"
+          }
+        }
+      }
+    },
     "Badges" : {
       "localizations" : {
         "de" : {
@@ -8764,6 +8922,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "橫幅與視覺標識"
+          }
+        }
+      }
+    },
+    "Banner editing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner-Bearbeitung"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bannerin muokkaus"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retouche de la bannière"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バナーの編集"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редагування банера"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "横幅编辑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "橫幅編輯"
           }
         }
       }
@@ -8980,6 +9184,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "行為"
+          }
+        }
+      }
+    },
+    "Big thanks for assisting with internal testing, bug reporting, and maintaining accurate song metadata across the site:" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vielen Dank für die Hilfe beim internen Testen, beim Melden von Fehlern und beim Pflegen genauer Song-Metadaten auf der ganzen Website:"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suuret kiitokset avusta sisäisessä testauksessa, virheiden raportoinnissa ja kappaleiden metatietojen pitämisessä oikeina koko sivustolla:"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un grand merci pour votre aide aux tests internes, au signalement des bugs et au maintien de métadonnées exactes pour les chansons de tout le site :"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "社内テスト、不具合の報告、サイト全体の楽曲メタデータの正確な管理にご協力いただき、ありがとうございます："
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Щира подяка за допомогу з внутрішнім тестуванням, повідомленнями про помилки та підтриманням точних метаданих пісень на всьому сайті:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "衷心感谢以下成员协助内部测试、报告问题，并维护全站歌曲元数据的准确性："
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "衷心感謝以下成員協助內部測試、回報問題，並維護全站歌曲中繼資料的準確性："
           }
         }
       }
@@ -15275,6 +15525,98 @@
         }
       }
     },
+    "Creator & Developer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersteller & Entwickler"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luoja ja kehittäjä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créateur et développeur"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "制作者・開発者"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автор і розробник"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建者与开发者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "創建者與開發者"
+          }
+        }
+      }
+    },
+    "Creator and maintainer of the Karaoke App" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entwickler und Betreuer der Karaoke-App"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karaoke-sovelluksen luoja ja ylläpitäjä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créateur et mainteneur de l’application Karaoke"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karaoke アプリの制作者・メンテナー"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автор і супровідник застосунку Karaoke"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karaoke 应用的创建者与维护者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karaoke 應用程式的創建者與維護者"
+          }
+        }
+      }
+    },
     "Credits" : {
       "localizations" : {
         "de" : {
@@ -15683,6 +16025,53 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "目前使用者"
+          }
+        }
+      }
+    },
+    "Currently managed by: %@" : {
+      "comment" : "Credits. The argument is a list of social media handles, shown as written.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Derzeit betreut von: %@"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nykyiset ylläpitäjät: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actuellement géré par : %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在の管理者：%@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нині керують: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前管理者：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目前管理者：%@"
           }
         }
       }
@@ -22172,6 +22561,98 @@
     "Height: Fit to content" : {
 
     },
+    "Helped obtain artist permissions from B2" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hat geholfen, die Freigaben der Künstler von B2 einzuholen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auttoi hankkimaan taiteilijoiden luvat B2:lta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A aidé à obtenir les autorisations des artistes de B2"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "B2 からのアーティスト許諾の取得に協力"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Допоміг отримати дозволи художників від B2"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "协助从 B2 获得艺术家授权"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "協助從 B2 取得藝術家授權"
+          }
+        }
+      }
+    },
+    "Helped upload a large number of artworks" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hat beim Hochladen vieler Artworks geholfen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auttoi lataamaan suuren määrän kuvituksia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A aidé à mettre en ligne un grand nombre d’illustrations"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "大量のアートワークのアップロードに協力"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Допоміг завантажити велику кількість ілюстрацій"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "协助上传大量作品"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "協助上傳大量作品"
+          }
+        }
+      }
+    },
     "Hidden" : {
       "localizations" : {
         "de" : {
@@ -28011,6 +28492,98 @@
         }
       }
     },
+    "Main Developer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hauptentwickler"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pääkehittäjä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Développeur principal"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メイン開発者"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Головний розробник"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主要开发者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主要開發者"
+          }
+        }
+      }
+    },
+    "Maintainer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Betreuer"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ylläpitäjä"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mainteneur"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メンテナー"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Супровідник"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "维护者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "維護者"
+          }
+        }
+      }
+    },
     "Maximum" : {
       "extractionState" : "manual",
       "generatesSymbol" : false,
@@ -28703,6 +29276,52 @@
         }
       }
     },
+    "Neuro Coin, Evil Coin, and Twins Coin artwork" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artwork für Neuro Coin, Evil Coin und Twins Coin"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuro Coinin, Evil Coinin ja Twins Coinin kuvitus"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Illustrations des pièces Neuro Coin, Evil Coin et Twins Coin"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuro Coin、Evil Coin、Twins Coin のイラスト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ілюстрації для Neuro Coin, Evil Coin і Twins Coin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuro Coin、Evil Coin 和 Twins Coin 的设计"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuro Coin、Evil Coin 和 Twins Coin 的設計"
+          }
+        }
+      }
+    },
     "NEUROKARAOKE.COM • EVILKARAOKE.COM • TWINSKARAOKE.COM" : {
       "localizations" : {
         "de" : {
@@ -29094,6 +29713,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增不公開歌單"
+          }
+        }
+      }
+    },
+    "New public playlist" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neue öffentliche Playlist"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uusi julkinen soittolista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouvelle playlist publique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新規公開プレイリスト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новий публічний плейлист"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建公开歌单"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建公開歌單"
           }
         }
       }
@@ -32170,58 +32835,6 @@
         }
       }
     },
-    "Only you can edit this playlist" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nur du kannst diese Playlist bearbeiten"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only you can edit this playlist"
-          }
-        },
-        "fi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vain sinä voit muokata tätä soittolistaa"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous seul pouvez modifier cette playlist"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このプレイリストを編集できるのはあなただけです"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Лише ви можете редагувати цей плейлист"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仅您可编辑此歌单"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "僅您可編輯此歌單"
-          }
-        }
-      }
-    },
     "Only you can see it" : {
       "localizations" : {
         "de" : {
@@ -32264,6 +32877,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "僅自己可見"
+          }
+        }
+      }
+    },
+    "Only you can see this playlist" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur du kannst diese Playlist sehen"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vain sinä näet tämän soittolistan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous seul pouvez voir cette playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このプレイリストはあなただけに表示されます"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лише ви бачите цей плейлист"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此歌单仅您可见"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此歌單僅您可見"
           }
         }
       }
@@ -51416,6 +52075,52 @@
         }
       }
     },
+    "Soundbite creation and editing" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellung und Bearbeitung von Soundbites"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Äänileikkeiden luonti ja muokkaus"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Création et montage des extraits sonores"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サウンドバイトの制作と編集"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Створення та редагування саундбайтів"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频片段制作与编辑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音訊片段製作與編輯"
+          }
+        }
+      }
+    },
     "Source" : {
       "localizations" : {
         "de" : {
@@ -57952,6 +58657,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Twinskaraoke Top 100"
+          }
+        }
+      }
+    },
+    "Twitch poll vote retrieval; manages Neuro & Evil Quotes" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abruf der Stimmen aus Twitch-Umfragen; verwaltet Neuro & Evil Quotes"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twitch-äänestysten äänten haku; ylläpitää Neuro & Evil Quotesia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Récupération des votes des sondages Twitch ; gère Neuro & Evil Quotes"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twitch 投票結果の取得、Neuro & Evil Quotes の管理"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отримання голосів з опитувань Twitch; керує Neuro & Evil Quotes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "获取 Twitch 投票结果；管理 Neuro & Evil Quotes"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取得 Twitch 投票結果；管理 Neuro & Evil Quotes"
           }
         }
       }
@@ -68635,6 +69386,250 @@
         }
       }
     },
+    "Update · %lld of %lld" : {
+      "comment" : "What's New walkthrough progress: current slide and slide count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update · %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update · %1$lld of %2$lld"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Päivitys · %1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour · %1$lld sur %2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップデート · %1$lld/%2$lld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оновлення · %1$lld з %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新 · 第 %1$lld 页，共 %2$lld 页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新 · 第 %1$lld 頁，共 %2$lld 頁"
+          }
+        }
+      }
+    },
+    "Update, slide %lld of %lld" : {
+      "comment" : "VoiceOver: What's New walkthrough progress, current slide and slide count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update, Folie %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update, slide %1$lld of %2$lld"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Päivitys, dia %1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour, diapositive %1$lld sur %2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップデート、スライド %1$lld/%2$lld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оновлення, слайд %1$lld з %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新，第 %1$lld 张幻灯片，共 %2$lld 张"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新，第 %1$lld 張投影片，共 %2$lld 張"
+          }
+        }
+      }
+    },
+    "Video gallery editing and uploads" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearbeitung und Uploads der Videogalerie"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videogallerian muokkaus ja lataukset"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Montage et mise en ligne de la galerie vidéo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ビデオギャラリーの編集とアップロード"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редагування та завантаження відеогалереї"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频库编辑与上传"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "影片庫編輯與上傳"
+          }
+        }
+      }
+    },
+    "Website banner art" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner-Artwork der Website"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sivuston bannerikuvitus"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Illustration de la bannière du site"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サイトのバナーイラスト"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ілюстрація банера сайту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站横幅绘制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網站橫幅繪製"
+          }
+        }
+      }
+    },
+    "Website logo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Website-Logo"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sivuston logo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logo du site"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サイトのロゴ"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Логотип сайту"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站标志"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網站標誌"
+          }
+        }
+      }
+    },
     "Weekly" : {
       "localizations" : {
         "de" : {
@@ -68683,6 +69678,112 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每週"
+          }
+        }
+      }
+    },
+    "Welcome · %lld of %lld" : {
+      "comment" : "Welcome walkthrough progress: current slide and slide count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Willkommen · %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome · %1$lld of %2$lld"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tervetuloa · %1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenue · %1$lld sur %2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ようこそ · %1$lld/%2$lld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вітаємо · %1$lld з %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欢迎 · 第 %1$lld 页，共 %2$lld 页"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歡迎 · 第 %1$lld 頁，共 %2$lld 頁"
+          }
+        }
+      }
+    },
+    "Welcome, slide %lld of %lld" : {
+      "comment" : "VoiceOver: welcome walkthrough progress, current slide and slide count.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Willkommen, Folie %1$lld von %2$lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome, slide %1$lld of %2$lld"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tervetuloa, dia %1$lld/%2$lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenue, diapositive %1$lld sur %2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ようこそ、スライド %1$lld/%2$lld"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вітаємо, слайд %1$lld з %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欢迎，第 %1$lld 张幻灯片，共 %2$lld 张"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歡迎，第 %1$lld 張投影片，共 %2$lld 張"
           }
         }
       }
