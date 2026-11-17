@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import Twinskaraoke
 
-@Suite("AVEngine playback regressions", .serialized)
+@Suite("AVEngine playback regressions", .serialized, .timeLimit(.minutes(1)))
 @MainActor
 struct AVEnginePlaybackRegressionTests {
     @Test("AirPlay automatically routes only ordinary file-backed songs")
@@ -80,7 +80,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!session.isCurrent(latestSeek))
     }
 
-    @Test("AirPlay departure defers vocal effects until the destination engine is ready")
+    @Test(
+        "AirPlay departure defers vocal effects until the destination engine is ready",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func airPlayDepartureDefersEffectsUntilLocalEngineIsReady() async throws {
         let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
         let engine = AVEnginePlayback()
@@ -104,7 +107,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(engine.currentTime >= 4)
     }
 
-    @Test("An AirPlay song can play again after reaching the end of the queue")
+    @Test(
+        "An AirPlay song can play again after reaching the end of the queue",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func airPlaySampleSessionRestartsAfterEnding() async throws {
         let source = try makeSilentWaveFile(duration: 0.4, sampleRate: 48_000)
         var starts = 0
@@ -151,7 +157,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(await renderer.isMutedForTesting())
     }
 
-    @Test("The local clock holds its resume position while a song loads")
+    @Test(
+        "The local clock holds its resume position while a song loads",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func localClockHoldsResumePositionDuringLoad() async throws {
         let source = try makeSilentWaveFile(duration: 10, sampleRate: 48_000)
         let engine = AVEnginePlayback()
@@ -254,7 +263,10 @@ struct AVEnginePlaybackRegressionTests {
         engine.stop()
     }
 
-    @Test("Crossfade promotes the incoming track and clears transition state")
+    @Test(
+        "Crossfade promotes the incoming track and clears transition state",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func crossfadeCompletesHandoff() async throws {
         let sourceURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
         let incomingURL = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
@@ -284,7 +296,10 @@ struct AVEnginePlaybackRegressionTests {
         engine.stop()
     }
 
-    @Test("An unavailable incoming file leaves the outgoing song playing")
+    @Test(
+        "An unavailable incoming file leaves the outgoing song playing",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func crossfadeLoadFailureDoesNotEndOutgoingPlayback() async throws {
         let sourceURL = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
         defer { try? FileManager.default.removeItem(at: sourceURL) }
@@ -310,7 +325,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(engine.isPlaying)
     }
 
-    @Test("A late crossfade reuses the incoming load and keeps the mixer audible")
+    @Test(
+        "A late crossfade reuses the incoming load and keeps the mixer audible",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func lateCrossfadeReusesLoad() async throws {
         let outgoing = try makeSilentWaveFile(duration: 3, sampleRate: 48_000, tone: 440)
         let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000, tone: 660)
@@ -349,7 +367,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(capture.endsWithTone(660, rejecting: 440))
     }
 
-    @Test("A ready incoming deck can be promoted at natural end without scheduling a fade")
+    @Test(
+        "A ready incoming deck can be promoted at natural end without scheduling a fade",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func readyDeckAtNaturalEnd() async throws {
         let outgoing = try makeSilentWaveFile(duration: 1.5, sampleRate: 48_000)
         let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
@@ -374,7 +395,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!engine.isCrossfadePending)
     }
 
-    @Test("Natural end is delivered while the incoming load is pending and cancellation fences its result")
+    @Test(
+        "Natural end is delivered while the incoming load is pending and cancellation fences its result",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func lateLoadCanBeCancelledAtNaturalEnd() async throws {
         let outgoing = try makeSilentWaveFile(duration: 1.5, sampleRate: 48_000)
         let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
@@ -413,7 +437,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(advances == 1)
     }
 
-    @Test("An exhausted incoming deck cannot replace playable outgoing audio")
+    @Test(
+        "An exhausted incoming deck cannot replace playable outgoing audio",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func exhaustedIncomingDeckAbortsCrossfade() async throws {
         let outgoing = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
         let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
@@ -436,7 +463,10 @@ struct AVEnginePlaybackRegressionTests {
         #expect(!engine.finishPreparedCrossfade(to: incoming))
     }
 
-    @Test("Recovery ignores stale scheduled media and invalidates both old callbacks")
+    @Test(
+        "Recovery ignores stale scheduled media and invalidates both old callbacks",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
     func recoveryInvalidatesDeadlineAndWatchdog() async throws {
         let outgoing = try makeSilentWaveFile(duration: 4, sampleRate: 48_000)
         defer { try? FileManager.default.removeItem(at: outgoing) }
