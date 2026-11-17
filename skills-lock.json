@@ -1,6 +1,30 @@
 {
   "version": 2,
   "skills": {
+    "swift-concurrency": {
+      "source": "AvdLee/Swift-Concurrency-Agent-Skill",
+      "sourceType": "github",
+      "skillPath": "skills/swift-concurrency/SKILL.md",
+      "computedHash": "7977e699ad9eae2cccdb8de7520b5fb7701ed01a6bde52d47263bc30dec09482"
+    },
+    "swift-testing-expert": {
+      "source": "AvdLee/Swift-Testing-Agent-Skill",
+      "sourceType": "github",
+      "skillPath": "swift-testing-expert/SKILL.md",
+      "computedHash": "d21b78b1a320b96748144693762293ae9557a82ec574ab40f7037c58b5d6b339"
+    },
+    "swiftui-liquid-glass": {
+      "source": "Dimillian/Skills",
+      "sourceType": "github",
+      "skillPath": "swiftui-liquid-glass/SKILL.md",
+      "computedHash": "873b95095a16fb2acfa6dfbf0a5aa3fa24916b9bc2228829352b4c98554d8da4"
+    },
+    "swiftui-performance-audit": {
+      "source": "Dimillian/Skills",
+      "sourceType": "github",
+      "skillPath": "swiftui-performance-audit/SKILL.md",
+      "computedHash": "3f3609a42419b4917ce165ec46d0b60188202be18a1fcc5276d74ebe0bc0f064"
+    },
     "swiftui-pro": {
       "source": "twostraws/SwiftUI-Agent-Skill",
       "sourceType": "github",
