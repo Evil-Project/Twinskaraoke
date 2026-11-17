@@ -49,17 +49,17 @@ struct PendingPlaylistSongRemoval {
 
 extension View {
     /// The confirmation Add to Playlist shows before it removes a song, with
-    /// the same strings. Opening it ticks (the menu item plays `.selection`);
-    /// the removal itself plays `.dismiss`.
+    /// the same strings: a centred alert, as for the app's other deletions.
+    /// Opening it ticks (the menu item plays `.selection`); the removal itself
+    /// plays `.dismiss`.
     func playlistSongRemovalConfirmation(
         _ pending: Binding<PendingPlaylistSongRemoval>,
         playlistName: String,
         onConfirm: @escaping (Song) -> Void
     ) -> some View {
-        confirmationDialog(
+        alert(
             "Remove Song?",
             isPresented: pending.isPresented,
-            titleVisibility: .visible,
             presenting: pending.wrappedValue.song
         ) { song in
             Button("Remove", role: .destructive) {

@@ -104,8 +104,9 @@ struct AddToPlaylistSheet: View {
             .sheet(isPresented: $showCreatePlaylist) {
                 CreatePlaylistSheet()
             }
-            .confirmationDialog("Remove Song?", isPresented: $showRemovalConfirmation,
-                                titleVisibility: .visible, presenting: playlistToRemove) { playlist in
+            // A centred alert, as for the app's other deletions and the same
+            // confirmation from a playlist's song menu.
+            .alert("Remove Song?", isPresented: $showRemovalConfirmation, presenting: playlistToRemove) { playlist in
                 Button("Remove", role: .destructive) {
                     remove(from: playlist)
                 }
