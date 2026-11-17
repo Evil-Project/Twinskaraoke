@@ -15,9 +15,12 @@ it. Missing from captures, though present on device:
   subtitles capture with a black box);
 - a scrolling `MarqueeText` inside the tab bar accessory.
 
-For anything on or under glass, trust the accessibility tree (`isHittable`,
-labels, frames, `Disabled`) over pixels. Don't "fix" a layout because of how
-a capture looks.
+When a capture shows something on or under glass as missing, check the
+accessibility tree (`isHittable`, labels, frames, `Disabled`) before calling
+it a bug, and don't "fix" a layout only because of how a capture looks. The
+tree proves an element exists and can be hit; it doesn't prove it looks
+right. Clipping, legibility, contrast and the glass itself still need a
+device check, so list them in the PR as unverified.
 
 ## What only a device can confirm
 

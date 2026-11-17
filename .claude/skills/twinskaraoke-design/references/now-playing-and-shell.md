@@ -47,9 +47,12 @@ Files: `Apps/iOS/Screens/Player/NowPlaying/`.
 
 ## Other SwiftUI traps from this codebase
 
-- **Clipping inside an overlay:** `.frame(maxWidth: .infinity)` inside
-  `.overlay { }` is unbounded, so a following `.clipped()` does nothing and
-  the content draws over its neighbours. Clip against a measured width
+- **Clipping inside an overlay:** an overlay is proposed its host's size, but
+  a flexible frame inside it can still come out wider than the host. In
+  `MarqueeText`, `.frame(maxWidth: .infinity)` in an overlay came out
+  unbounded rather than the row's width, so the following `.clipped()` clipped nothing and the
+  title drew over its neighbours. When content overflows an overlay, check the
+  frame it actually got, then clip against a measured width
   (`onGeometryChange`). To tell a wrong frame from drawing that escapes a
   correct frame, add a temporary `.border(.red)`.
 - **Menu item subtitles:** the subtitle must be a second `Text` directly in

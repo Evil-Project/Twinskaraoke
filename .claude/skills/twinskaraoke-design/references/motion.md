@@ -32,8 +32,10 @@ Two environment flags, injected once at each app root by
 
 - `@Environment(\.appReduceMotion)`: the system Reduce Motion setting,
   unless the user switched off "respect reduced motion" in the app. Use it for
-  **interaction transitions**: swap the move for `AppMotion.crossFade` or no
-  animation.
+  **interaction transitions**: remove the movement itself (a change of
+  position, size or scale, a matched-geometry morph, a sliding transition)
+  and fade instead. `AppMotion.crossFade` is only the timing curve for that
+  fade; on its own it still animates any movement.
 - `@Environment(\.appReduceEffects)`: Reduce Motion **or** Low Power Mode
   **or** thermal state `.serious`/`.critical`. Use it for **perpetual
   decoration** only (equalizer, shimmer, ambient backdrop, pulses, marquee).
@@ -43,15 +45,29 @@ Two environment flags, injected once at each app root by
 Don't read `accessibilityReduceMotion` directly in a view; it ignores the
 in-app preference.
 
-The usual shape:
+The usual shape: under Reduce Motion, both the transition and the timing
+change, and anything matched or moving is switched off.
 
 ```swift
 @Environment(\.appReduceMotion) private var reduceMotion
 
-withOptionalAnimation(reduceMotion ? AppMotion.crossFade : AppMotion.standard) {
-    isExpanded.toggle()
+var body: some View {
+    if isExpanded {
+        DetailPanel()
+            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
+func toggle() {
+    withOptionalAnimation(reduceMotion ? AppMotion.crossFade : AppMotion.standard) {
+        isExpanded.toggle()
+    }
 }
 ```
+
+`PlayerSurfaceMorph` (`Apps/iOS/Screens/Player/PlayerSurfaceMorph.swift`) is
+the full version: its `.crossFade` style turns off the matched geometry,
+keeps `.opacity` transitions and uses `AppMotion.crossFade`.
 
 `withOptionalAnimation(nil) { … }` applies the change without an animation.
 

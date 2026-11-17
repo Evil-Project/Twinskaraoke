@@ -40,10 +40,16 @@ value or spring, translate it to the tokens below instead of copying it.
 
 ## Rules that apply to every UI change
 
-- **Tokens:** type, radius, spacing, layout and shadow come from `AM`
-  (`Apps/iOS/Components/Shared/AppTheme.swift`); colours from the `Color.app*`
-  tokens (`Packages/UI/Themes/iOS/AppThemePalette.swift`,
-  `Packages/UI/DesignSystem/Apple/AppAccent.swift`, `AppTheme.swift`).
+- **Tokens (iOS, iPadOS, Mac idiom):** type, radius, spacing, layout and
+  shadow come from `AM` (`Apps/iOS/Components/Shared/AppTheme.swift`);
+  colours from the `Color.app*` tokens
+  (`Packages/UI/Themes/iOS/AppThemePalette.swift`, `AppTheme.swift`).
+- **Tokens (watch, TV, Mac app, `Apple/` code):** `AM` doesn't exist there.
+  Use `Color.appAccent` (`Packages/UI/DesignSystem/Apple/AppAccent.swift`),
+  system text styles and semantic colours, and the default spacing of system
+  containers. Follow the spacing and type already used in that app's folder
+  instead of inventing values; propose a shared token in `Packages/UI/` when
+  one is missing.
 - **Never bulk-replace** font or radius literals across a file. Change each
   call site on purpose; the one real visual regression of the token migration
   came from a find-and-replace.

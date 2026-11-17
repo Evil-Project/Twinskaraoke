@@ -153,14 +153,25 @@ transitions, haptics, the mini or full-screen player.
 
 ## Topic skills
 
-Four more skills sit next to `swiftui-pro` in `.agents/skills/` (pinned in
-`skills-lock.json`, linked from `.claude/skills/`). Load the one that fits
+Four more skills live in `.claude/skills/<name>/`. Load the one that fits
 the task before you write the plan (Claude Code: invoke it; other tools: read
-its `SKILL.md`), then open only the references it routes you to. The same
-rules as for `swiftui-pro` apply: never edit their files, this file and a
-nearer `AGENTS.md` win every conflict (and `twinskaraoke-design` wins on how
-the app looks, moves or feels), and under "AI assistance" in the PR name the
+its `SKILL.md`), then open only the references it routes you to. This file
+and a nearer `AGENTS.md` win every conflict (and `twinskaraoke-design` wins on
+how the app looks, moves or feels). Under "AI assistance" in the PR, name the
 skills you applied and the rules you chose not to follow.
+
+They started as copies of third-party skills, but unlike `swiftui-pro` they
+are **repo-owned forks**: not pinned in `skills-lock.json`, and corrected here
+where upstream's examples or claims were wrong. Each folder has the upstream
+`LICENSE` and an `UPSTREAM.md` with the source, the commit it was forked
+from and every local change.
+
+- Their examples are illustrative. Check an API against the SDK or the
+  library before you copy it, as for any other code.
+- Found a wrong claim or example? Fix it in its own PR (not as a side effect
+  of a feature) and add the change to that skill's `UPSTREAM.md`.
+- Taking a newer upstream version is also its own PR: diff upstream against
+  the recorded commit, then re-apply every change listed in `UPSTREAM.md`.
 
 - `swift-concurrency` (AvdLee): any change to tasks, actors, `@MainActor`,
   `Sendable`, isolation, or a concurrency diagnostic. Don't ask for the build
