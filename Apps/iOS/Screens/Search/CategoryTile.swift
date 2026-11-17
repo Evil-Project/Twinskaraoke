@@ -5,6 +5,10 @@ struct CategoryTile: View {
     let gradient: [Color]
     var artworkURL: URL?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The tile's height grows with the headline title it holds; a fixed
+    /// height clipped the title at accessibility text sizes.
+    @ScaledMetric(relativeTo: .headline) private var compactHeight: CGFloat = 92
+    @ScaledMetric(relativeTo: .headline) private var regularHeight: CGFloat = 102
 
     private var isCompactWidth: Bool {
         horizontalSizeClass == .compact
@@ -44,7 +48,7 @@ struct CategoryTile: View {
                 .minimumScaleFactor(0.82)
                 .allowsHitTesting(false)
         }
-        .frame(height: isCompactWidth ? 92 : 102)
+        .frame(height: isCompactWidth ? compactHeight : regularHeight)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
     }
