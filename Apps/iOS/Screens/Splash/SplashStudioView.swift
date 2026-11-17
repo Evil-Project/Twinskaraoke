@@ -10,7 +10,10 @@ struct SplashJSONDocument: FileDocument {
     /// Wraps already encoded JSON bytes for export.
     init(data: Data) { self.data = data }
     /// Validates and encodes a self-contained walkthrough for export.
-    init(content: SplashContent) throws { data = try content.encoded() }
+    init(content: SplashContent) throws {
+        try content.validateForPresentation()
+        data = try content.encoded()
+    }
     /// Reads and validates imported JSON before creating the document.
     init(configuration: ReadConfiguration) throws {
         let bytes = configuration.file.regularFileContents ?? Data()
@@ -30,6 +33,7 @@ struct SplashJSONDocument: FileDocument {
         self.directory = directory
         draft = (try? SplashBundleLoader.load(kind)) ?? .placeholder(kind)
         loadDraft(kind)
+        reserveReleaseNotes()
     }
     /// Returns the local draft path for one walkthrough kind.
     private func file(_ kind: SplashKind) -> URL { directory.appendingPathComponent("\(kind.rawValue).json") }
@@ -56,12 +60,41 @@ struct SplashJSONDocument: FileDocument {
         guard kind != draft.kind, saveDraft(announce: false) else { return }
         draft = (try? SplashBundleLoader.load(kind)) ?? .placeholder(kind)
         message = nil; loadDraft(kind)
+        reserveReleaseNotes()
     }
     /// Replaces the draft only after the imported JSON validates for the selected kind.
-    func importData(_ data: Data) throws { draft = try SplashContent.decode(data, expectedKind: draft.kind) }
+    func importData(_ data: Data) throws {
+        draft = try SplashContent.decode(data, expectedKind: draft.kind)
+        reserveReleaseNotes()
+    }
+    func reserveReleaseNotes() {
+        guard draft.kind == .update, draft.slides.first?.releaseNotes == nil, draft.slides.count < 30 else { return }
+        draft.slides.insert(.releaseNotesPage(), at: 0)
+    }
+    func move(_ offsets: IndexSet, to destination: Int) {
+        if draft.slides.first?.releaseNotes != nil, offsets.contains(0) || destination == 0 { return }
+        draft.slides.move(fromOffsets: offsets, toOffset: destination)
+    }
+    func delete(_ offsets: IndexSet) {
+        let removable = offsets.filter { draft.slides[$0].releaseNotes == nil }
+        guard draft.slides.count > removable.count else { message = "Keep at least one slide."; return }
+        draft.slides.remove(atOffsets: IndexSet(removable))
+        reserveReleaseNotes()
+    }
+    func binding(for slide: SplashSlide) -> Binding<SplashSlide> {
+        var current = slide
+        return Binding(
+            get: { self.draft.slides.first { $0.id == current.id } ?? current },
+            set: { updated in
+                guard let index = self.draft.slides.firstIndex(where: { $0.id == current.id }) else { return }
+                self.draft.slides[index] = updated
+                current = updated
+            }
+        )
+    }
     /// Inserts a copy with a new slide ID without exceeding the thirty-slide limit.
     func duplicate(_ index: Int) {
-        guard draft.slides.count < 30 else { return }
+        guard draft.slides.count < 30, draft.slides[index].releaseNotes == nil else { return }
         var copy = draft.slides[index]; copy.id = UUID().uuidString
         draft.slides.insert(copy, at: index + 1)
     }
@@ -111,24 +144,29 @@ struct SplashStudioView: View {
                     }
                     Section("Slides — drag to reorder in Edit mode") {
                         ForEach(Array(model.draft.slides.enumerated()), id: \.element.id) { index, slide in
-                            NavigationLink {
-                                SplashSlideEditor(slide: $model.draft.slides[index])
-                            } label: {
-                                VStack(alignment: .leading) {
-                                    Text("\(index + 1). \(slide.title ?? "Untitled slide")")
-                                    Text(slide.id).font(.caption).foregroundStyle(.secondary)
+                            if slide.releaseNotes != nil {
+                                NavigationLink("Release notes") {
+                                    SplashReleaseNotesEditor(slide: model.binding(for: slide))
                                 }
+                                .moveDisabled(true)
+                                .deleteDisabled(true)
+                            } else {
+                                NavigationLink {
+                                    SplashSlideEditor(slide: model.binding(for: slide))
+                                } label: {
+                                    VStack(alignment: .leading) {
+                                        Text("\(index + 1). \(slide.title ?? "Untitled slide")")
+                                        Text(slide.id).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button("Duplicate") { model.duplicate(index) }.tint(.blue)
+                                }
+                                .contextMenu { Button("Duplicate") { model.duplicate(index) } }
                             }
-                            .swipeActions(edge: .leading) {
-                                Button("Duplicate") { model.duplicate(index) }.tint(.blue)
-                            }
-                            .contextMenu { Button("Duplicate") { model.duplicate(index) } }
                         }
-                        .onMove { model.draft.slides.move(fromOffsets: $0, toOffset: $1) }
-                        .onDelete { offsets in
-                            if model.draft.slides.count - offsets.count >= 1 { model.draft.slides.remove(atOffsets: offsets) }
-                            else { model.message = "Keep at least one slide." }
-                        }
+                        .onMove(perform: model.move)
+                        .onDelete(perform: model.delete)
                         Button("Add Slide") { model.draft.slides.append(SplashSlide()) }.disabled(model.draft.slides.count >= 30)
                     }
                     Section("Draft and preview") {
@@ -141,7 +179,7 @@ struct SplashStudioView: View {
                         }
                         Button("Import JSON") { importing = true }
                         Button("Preview") {
-                            do { try model.draft.validate(); preview = model.draft }
+                            do { try model.draft.validateForPresentation(); preview = model.draft }
                             catch { model.message = error.localizedDescription }
                         }.accessibilityIdentifier("SplashStudio.Preview")
                         Button("Export \(model.draft.kind.rawValue).json") {
@@ -168,8 +206,11 @@ struct SplashStudioView: View {
         }
         .confirmationDialog("Replace the current draft with bundled content?", isPresented: $confirmReload, titleVisibility: .visible) {
             Button("Load Bundled Content", role: .destructive) {
-                do { model.draft = try SplashBundleLoader.load(model.draft.kind); model.message = nil }
-                catch { model.message = error.localizedDescription }
+                do {
+                    model.draft = try SplashBundleLoader.load(model.draft.kind)
+                    model.reserveReleaseNotes()
+                    model.message = nil
+                } catch { model.message = error.localizedDescription }
             }
         }
         .background {

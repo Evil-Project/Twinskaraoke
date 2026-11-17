@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Twinskaraoke
 
-@MainActor private final class MemorySplashStore: SplashStateStoring {
+@MainActor final class MemorySplashStore: SplashStateStoring {
     var value = SplashState()
     var failRead = false
     var failWrite = false

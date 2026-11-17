@@ -21,17 +21,21 @@ struct SplashWalkthroughView: View {
     let complete: () -> Void
     let retry: () -> Void
     @AccessibilityFocusState private var titleFocused: Bool
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var slide: SplashSlide { content.slides[index] }
     private var foreground: Color { Color(splashHex: slide.textColor) }
-    private var textAlignment: TextAlignment {
-        switch slide.alignment { case .leading: .leading; case .center: .center; case .trailing: .trailing }
-    }
-    private var frameAlignment: Alignment {
-        switch slide.alignment { case .leading: .leading; case .center: .center; case .trailing: .trailing }
-    }
     var body: some View {
+        nativePage
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(foreground)
+            .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
+            .tint(foreground)
+            .interactiveDismissDisabled()
+            .onChange(of: index) { _, _ in titleFocused = true }
+            .onAppear { titleFocused = true }
+    }
+
+    private var nativePage: some View {
         VStack(spacing: 0) {
             Text("\(content.kind == .install ? "Welcome" : "Update") · \(index + 1) of \(content.slides.count)")
                 .font(.subheadline).padding()
@@ -39,8 +43,15 @@ struct SplashWalkthroughView: View {
                 .accessibilityIdentifier("Splash.Progress")
             GeometryReader { geometry in
                 SplashSlideScrollView {
-                    SplashSlideRenderer(slide: slide, viewport: geometry.size)
-                        .accessibilityFocused($titleFocused)
+                    Group {
+                        if let releaseNotes = slide.releaseNotes {
+                            SplashReleaseNotesView(notes: releaseNotes, title: slide.title,
+                                                   version: content.targetVersion, build: content.targetBuild)
+                        } else {
+                            SplashSlideRenderer(slide: slide, viewport: geometry.size)
+                        }
+                    }
+                    .accessibilityFocused($titleFocused)
                 }
                 .id("\(content.fingerprint)-\(index)")
             }
@@ -59,25 +70,24 @@ struct SplashWalkthroughView: View {
             }
             .frame(maxWidth: 680).padding(20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .foregroundStyle(foreground)
-        .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
-        .tint(foreground)
-        .interactiveDismissDisabled()
-        .onChange(of: index) { _, _ in titleFocused = true }
-        .onAppear { titleFocused = true }
     }
     @ViewBuilder private var navigationButtons: some View {
         if index > 0 {
             Button("Back", action: back).buttonStyle(.bordered)
                 .accessibilityIdentifier("Splash.Back")
         }
-        Button(index == content.slides.count - 1 ? content.finalLabel : content.nextLabel) {
-            index == content.slides.count - 1 ? complete() : next()
+        Button(index == content.slides.count - 1 ? content.finalLabel : content.nextLabel, action: advance)
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(Color(splashHex: slide.backgroundColor))
+            .accessibilityIdentifier(index == content.slides.count - 1 ? "Splash.Complete" : "Splash.Next")
+    }
+
+    private func advance() {
+        if index == content.slides.count - 1 {
+            complete()
+        } else {
+            next()
         }
-        .buttonStyle(.borderedProminent)
-        .foregroundStyle(Color(splashHex: slide.backgroundColor))
-        .accessibilityIdentifier(index == content.slides.count - 1 ? "Splash.Complete" : "Splash.Next")
     }
 }
 

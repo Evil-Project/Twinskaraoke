@@ -69,7 +69,10 @@ import Observation
         self.developerSelection = developerSelection
         self.developerStore = developerStore ?? SplashStateStore(directory: SplashStateStore.defaultDirectory.appendingPathComponent("DeveloperTesting", isDirectory: true))
         self.install = (try? install.validate(expectedKind: .install)) != nil ? install : .placeholder(.install)
-        self.update = update.flatMap { (try? $0.validate(expectedKind: .update)) != nil ? $0 : nil }
+        self.update = update.flatMap {
+            guard $0.kind == .update, (try? $0.validateForPresentation()) != nil else { return nil }
+            return $0
+        }
         self.version = version; self.build = build
     }
 
