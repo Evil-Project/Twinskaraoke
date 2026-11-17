@@ -787,8 +787,11 @@ struct PlaylistDetailView: View {
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         } else {
             PlaylistEmptyStateView(
-                isFavorites: playlist.isFavorites,
-                message: loader.emptyStateMessage
+                state: PlaylistDetailEmptyState(
+                    isFavorites: playlist.isFavorites,
+                    loadFailed: loader.loadFailed,
+                    message: loader.emptyStateMessage
+                )
             ) {
                 loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             }
@@ -898,25 +901,13 @@ private struct PlaylistLoadingRows: View {
 }
 
 private struct PlaylistEmptyStateView: View {
-    let isFavorites: Bool
-    let message: String
+    let state: PlaylistDetailEmptyState
     let onRefresh: () -> Void
-    private var title: String {
-        isFavorites ? String(localized: "No Favorites Yet") : String(localized: "No Songs")
-    }
-
-    private var resolvedMessage: String {
-        guard !message.hasPrefix("The playlist") else { return message }
-        if isFavorites {
-            return String(localized: "Favorite songs to build this playlist automatically.")
-        }
-        return message
-    }
 
     var body: some View {
         VStack(spacing: 16) {
-            MusicEmptyState(title: title, message: resolvedMessage)
-            MusicEmptyActionButton(title: String(localized: "Refresh")) {
+            MusicEmptyState(title: state.title, message: state.message)
+            MusicEmptyActionButton(title: state.actionTitle) {
                 onRefresh()
             }
         }
