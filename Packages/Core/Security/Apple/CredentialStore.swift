@@ -14,6 +14,10 @@ nonisolated enum CredentialStore {
     private static let tokenAccount = "nk.token"
     private static let legacyTokenKey = "nk.token"
 
+    // Safe: cachedToken, tokenCacheValid and cacheGeneration are only read
+    // or written while tokenCacheLock is held (readToken and
+    // setCachedToken). The Keychain read itself runs unlocked;
+    // cacheGeneration tells readToken whether a write landed meanwhile.
     private static let tokenCacheLock = NSLock()
     private nonisolated(unsafe) static var cachedToken: String?
     private nonisolated(unsafe) static var tokenCacheValid = false
