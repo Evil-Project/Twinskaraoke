@@ -615,6 +615,38 @@ struct BandleGameViewModelTests {
         #expect(fake.audioCalls == [1])
     }
 
+    /// The finished grid is a summary. VoiceOver can still activate its
+    /// played cells, and the view used to stop the revealed song and tick
+    /// before the model ignored the pick.
+    @Test("A finished game offers no clip to select")
+    func finishedGameSelectsNoClip() async {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(UITestFixtures.bandleAnswer)
+        await model.submitSelectedGuess()
+
+        #expect(model.phase == .completed)
+        #expect((0 ... 7).allSatisfy { !model.canSelectClip(number: $0) })
+    }
+
+    @Test("A running game offers only its unlocked clips")
+    func runningGameSelectsUnlockedClips() async throws {
+        let fake = FakeBandleGameService()
+        let model = BandleGameViewModel(service: fake.service)
+        await model.loadIfNeeded()
+        await model.start()
+        model.selectGuess(try #require(UITestFixtures.bandleGuessSongs.last))
+        await model.submitSelectedGuess()
+
+        #expect(model.currentAttemptNumber == 2)
+        #expect(model.canSelectClip(number: 1))
+        #expect(model.canSelectClip(number: 2))
+        #expect(!model.canSelectClip(number: 3))
+        #expect(!model.canSelectClip(number: 0))
+    }
+
     @Test("A lost game reveals the song too")
     func lossRevealsSong() async {
         let fake = FakeBandleGameService()

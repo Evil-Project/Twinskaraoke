@@ -128,6 +128,8 @@ struct BandleGameView: View {
     }
 
     private func selectClip(_ number: Int) {
+        // VoiceOver can activate a summary cell, which ignores hit testing.
+        guard model.canSelectClip(number: number) else { return }
         AppHaptic.selection.play()
         clipPlayer.stop()
         Task { await model.loadClip(number: number) }
