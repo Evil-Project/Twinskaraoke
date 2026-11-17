@@ -15,7 +15,7 @@ struct SplashWebsiteView: View {
                     .accessibilityHidden(session.loading)
             }
             if let failure = session.failure {
-                VStack(spacing: 16) {
+                VStack(spacing: AM.Spacing.l) {
                     if failure == .closed {
                         Text("This website has closed.").multilineTextAlignment(.center)
                     } else {
@@ -24,10 +24,10 @@ struct SplashWebsiteView: View {
                     }
                     Button("Continue to update", action: advance).buttonStyle(.borderedProminent)
                 }
-                .padding(20)
+                .padding(AM.Spacing.xl)
             } else if session.loading {
                 ProgressView("Loading website")
-                    .padding(20)
+                    .padding(AM.Spacing.xl)
                     .accessibilityIdentifier("Splash.Web.Loading")
             }
         }

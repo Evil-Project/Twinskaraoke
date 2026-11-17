@@ -72,9 +72,23 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Play saved songs offline."].exists)
         XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
         capture("Condensed changelog", in: app)
-        tap("Splash.Changelog.Toggle", app: app)
+        let changelogToggle = app.buttons["Splash.Changelog.Toggle"]
+        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
+        XCTAssertEqual(changelogToggle.label, "Show full changelog")
+        changelogToggle.tap()
         XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
+        XCTAssertEqual(changelogToggle.label, "Show less")
+        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
+        let lastDetail = app.staticTexts["See the song reveal after the round."]
+        XCTAssertGreaterThanOrEqual(changelogToggle.frame.minY, lastDetail.frame.maxY)
+        XCTAssertLessThanOrEqual(changelogToggle.frame.maxY, app.buttons["Splash.Next"].frame.minY)
         capture("Expanded changelog", in: app)
+        changelogToggle.tap()
+        XCTAssertEqual(changelogToggle.label, "Show full changelog")
+        XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
+        changelogToggle.tap()
+        XCTAssertEqual(changelogToggle.label, "Show less")
+        XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
         app.buttons["Splash.Next"].tap()
 
         let finish = app.webViews.buttons["Complete test page"]
