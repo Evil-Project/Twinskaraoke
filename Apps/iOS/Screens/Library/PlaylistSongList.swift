@@ -13,6 +13,39 @@ struct PlaylistSongList: View, Equatable {
     let songs: [Song]
     var rowHorizontalPadding: CGFloat = AM.Spacing.screenMargin
 
+    /// Not the synthesized `==`: `Song` and `Playlist` compare by id only, so
+    /// the detail fetch landing with the artists, durations and artwork that
+    /// the list DTOs lack would compare equal and leave the rows stale.
+    /// Compares what a row draws instead.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.playlist.id == rhs.playlist.id
+            && lhs.rowHorizontalPadding == rhs.rowHorizontalPadding
+            && lhs.songs.count == rhs.songs.count
+            && zip(lhs.songs, rhs.songs).allSatisfy { RowContent($0) == RowContent($1) }
+    }
+
+    private struct RowContent: Equatable {
+        let id: String
+        let title: String
+        let metadata: Song.RowMetadata
+        let absolutePath: String?
+        let cloudflareID: String?
+        let coverPath: String?
+        let coverCloudflareID: String?
+        let userUploaded: Bool?
+
+        init(_ song: Song) {
+            id = song.id
+            title = song.title
+            metadata = song.rowMetadata
+            absolutePath = song.absolutePath
+            cloudflareID = song.cloudflareID
+            coverPath = song.coverArt?.absolutePath
+            coverCloudflareID = song.coverArt?.cloudflareId
+            userUploaded = song.userUploaded
+        }
+    }
+
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(songs.enumerated().map { PositionedPlaylistSong(offset: $0.offset, song: $0.element) }) { item in

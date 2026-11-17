@@ -21,15 +21,38 @@ struct PlaylistSongListIdentityTests {
         #expect(shown != narrower)
     }
 
-    private static func song(_ id: String) -> Song {
+    /// `Song` compares by id only. The list DTOs a playlist opens with carry
+    /// no artists; when the detail fetch lands with the same ids and the
+    /// artists filled in, the list must not compare equal, or `.equatable()`
+    /// keeps the rows on "Unknown Artist".
+    @Test func metadataArrivingForTheSameSongsChangesTheList() {
+        let playlist = Playlist(id: "mine", name: "Mine", songCount: 1, mosaicMedia: nil, songListDTOs: nil)
+        let fromList = PlaylistSongList(playlist: playlist, songs: [Self.song("one")])
+        let fromDetail = PlaylistSongList(
+            playlist: playlist,
+            songs: [Self.song("one", artists: ["Wham!"], duration: 231, cover: "covers/one.jpg")]
+        )
+        let retitled = PlaylistSongList(playlist: playlist, songs: [Self.song("one", title: "One (Live)")])
+
+        #expect(fromList != fromDetail)
+        #expect(fromList != retitled)
+    }
+
+    private static func song(
+        _ id: String,
+        title: String? = nil,
+        artists: [String]? = nil,
+        duration: Int = 180,
+        cover: String? = nil
+    ) -> Song {
         Song(
             id: id,
-            title: id,
-            duration: 180,
+            title: title ?? id,
+            duration: duration,
             absolutePath: nil,
             cloudflareID: nil,
-            coverArt: nil,
-            originalArtists: nil,
+            coverArt: cover.map { Media(absolutePath: $0, cloudflareId: nil) },
+            originalArtists: artists,
             coverArtists: nil,
             userUploaded: false
         )
