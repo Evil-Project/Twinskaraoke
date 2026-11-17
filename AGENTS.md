@@ -126,6 +126,78 @@ state those views read.
   list the skill rules you chose not to follow, each with its reason. A PR
   without SwiftUI changes says so instead.
 
+## Design skill (mandatory)
+
+`twinskaraoke-design` in `.claude/skills/twinskaraoke-design/` is this
+project's own skill: the design tokens, themes, motion scale, perpetual
+animation pattern, haptic roles, the Now Playing shell and how to verify UI
+here. Use it for every task that changes or reviews how something looks,
+moves or feels: layout, typography, colour, spacing, glass, animation,
+transitions, haptics, the mini or full-screen player.
+
+- Load it before you write the plan, together with `swiftui-pro`. Claude
+  Code: invoke the `twinskaraoke-design` skill. Other tools: read its
+  `SKILL.md`, then the files in `references/` it routes you to.
+- Where it and a third-party skill (or Apple sample code) disagree on how the
+  app looks, moves or feels, it wins: translate their raw colours, fonts,
+  radii, spacing and springs into its tokens. This file and a nearer
+  `AGENTS.md` still win over it.
+- In the PR, write under "AI assistance" that it was applied, and under "How
+  it was tested" what still needs a device (its `references/verification.md`
+  lists what the simulator can't show).
+- Unlike `.agents/skills/`, it belongs to this repo: keep it true. When a PR
+  changes a token, motion role, haptic role or one of the patterns it
+  documents, update the skill in the same PR. When a reviewer corrects the
+  same kind of design mistake twice, add the rule there (rule 7 of the
+  workflow, for design).
+
+## Topic skills
+
+Four more skills live in `.claude/skills/<name>/`. Load the one that fits
+the task before you write the plan (Claude Code: invoke it; other tools: read
+its `SKILL.md`), then open only the references it routes you to. This file
+and a nearer `AGENTS.md` win every conflict (and `twinskaraoke-design` wins on
+how the app looks, moves or feels). Under "AI assistance" in the PR, name the
+skills you applied and the rules you chose not to follow.
+
+They started as copies of third-party skills, but unlike `swiftui-pro` they
+are **repo-owned forks**: not pinned in `skills-lock.json`, and corrected here
+where upstream's examples or claims were wrong. Each folder has the upstream
+`LICENSE` and an `UPSTREAM.md` with the source, the commit it was forked
+from and every local change.
+
+- Their examples are illustrative. Check an API against the SDK or the
+  library before you copy it, as for any other code.
+- Found a wrong claim or example? Fix it in its own PR (not as a side effect
+  of a feature) and add the change to that skill's `UPSTREAM.md`.
+- Taking a newer upstream version is also its own PR: diff upstream against
+  the recorded commit, then re-apply every change listed in `UPSTREAM.md`.
+
+- `swift-concurrency` (AvdLee): any change to tasks, actors, `@MainActor`,
+  `Sendable`, isolation, or a concurrency diagnostic. Don't ask for the build
+  settings it wants confirmed: Swift 6 language mode,
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and
+  `SWIFT_APPROACHABLE_CONCURRENCY = YES` for the app targets; check
+  `project.pbxproj` for the target you touch. Its escape-hatch rule matches
+  "Code rules" above, which stays the one that counts.
+- `swift-testing-expert` (AvdLee): writing or changing unit tests. New tests
+  use Swift Testing; UI tests stay on XCTest. `withKnownIssue`, `.disabled`,
+  `.serialized` or a looser `.timeLimit` never make a failing or flaky test
+  pass (see "Testing": never delete, skip or weaken a test).
+- `swiftui-performance-audit` (Dimillian): slow rendering, janky scrolling,
+  hangs, memory growth or broad view invalidation. Start code-first as it
+  describes; treat a suspicion as unproven until a device trace or
+  measurement backs it, and ask the person you work for to record one.
+- `swiftui-liquid-glass` (Dimillian): adding or reviewing glass effects.
+  Every deployment target is 26.0 or newer, so skip its `#available(iOS 26, *)`
+  gate and its pre-iOS 26 material fallback. On iOS, apply glass through
+  `appGlassBackground(in:)`, `GlassCircle` or `GlassRoundedRect`
+  (`Apps/iOS/Components/Shared/GlassComponents.swift`), which handle Reduce
+  Transparency and Increase Contrast, instead of a bare `.glassEffect`. Tints,
+  shapes and spacing come from `twinskaraoke-design`'s tokens, not from its
+  snippets. Check each API on watchOS, tvOS and macOS before using it in
+  `Apple/` code.
+
 ## Apple documentation
 
 Check an Apple API before you use it: that it exists on every platform the
@@ -146,8 +218,10 @@ answer that from memory.
 - Swift 6 concurrency: no new `@unchecked Sendable`, `nonisolated(unsafe)` or
   `MainActor.assumeIsolated` without a comment that explains why it is safe.
 - Prefer SwiftUI-native APIs over UIKit bridges.
-- Use the design system and themes in `Packages/UI/`; no ad-hoc colors, fonts
-  or spacing values.
+- Use the design system: the `AM` tokens and colour tokens in
+  `Apps/iOS/Components/Shared/AppTheme.swift`, the themes, motion and haptics
+  in `Packages/UI/` (`twinskaraoke-design` maps them); no ad-hoc colors,
+  fonts, radii, spacing values or animation curves.
 - User-facing text uses localizable SwiftUI strings and lands in
   `Resources/Localization/Apple/Localizable.xcstrings` (source language `en`;
   also de, fi, fr, ja, uk, zh-Hans, zh-Hant). Never build user-facing text by
