@@ -84,8 +84,7 @@ test page, and a final native page.
 
 Install comes first when both are pending, then Update, before the app opens.
 Native pages use Next, Back, and the final Done action. Website completion uses
-the same Next or Done action. A failed or closed website offers Continue to
-update. Progress is noninteractive and every slide is visited in sequence.
+the same Next or Done action. A temporary website load failure offers **Continue for now**. A closed website shows native continuation. Progress is noninteractive; an uninterrupted walkthrough visits its slides in sequence. Later website-only reminders can finish without showing the remaining native slides.
 Progress and completion are persisted atomically before advancing/unlocking. If content
 changes while unfinished, its fingerprint no longer matches and progress restarts
 at slide one. Completed install onboarding is independent of content/ID/version

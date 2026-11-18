@@ -74,11 +74,14 @@ import Observation
     let websiteSession = SplashWebsiteSession()
     private(set) var isBlocking = true
     var isDeveloperTesting: Bool { developerKind != nil }
-    private(set) var active: SplashContent?
+    private(set) var active: SplashContent? {
+        didSet { if oldValue != active { activeFingerprint = active?.fingerprint } }
+    }
+    private var activeFingerprint: String?
     private(set) var index = 0
     var currentWebsiteStatus: SplashWebsiteProgress.Status? {
-        guard let active, active.slides.indices.contains(index) else { return nil }
-        let fingerprint = active.fingerprint
+        guard let active, active.slides.indices.contains(index), active.slides[index].website != nil,
+              let fingerprint = activeFingerprint else { return nil }
         return state?.websites?.first {
             $0.matches(announcementID: active.id, fingerprint: fingerprint, slideID: active.slides[index].id)
         }?.status
@@ -161,6 +164,7 @@ import Observation
             return
         }
         if let developerKind {
+            if developerKind == .update, resumeWebsiteReminders() { return }
             prepare(developerKind == .install ? install : update ?? .placeholder(.update))
             return
         }
@@ -222,6 +226,10 @@ import Observation
         guard let active else { return }
         var candidate = state
         if developerKind != nil {
+            if pendingWebsiteIndices(in: candidate, content: active).isEmpty {
+                let fingerprint = activeFingerprint ?? active.fingerprint
+                candidate.websites?.removeAll { $0.announcementID == active.id && $0.fingerprint == fingerprint }
+            }
             candidate.pending = nil
             persist(candidate) { [weak self] in
                 guard let self else { return }
@@ -311,9 +319,11 @@ private extension SplashCoordinator {
         candidate.pending = SplashProgress(kind: .update, id: update.id, fingerprint: update.fingerprint,
                                            index: selected, highestVisited: max(selected, candidate.pending?.highestVisited ?? 0))
         isBlocking = true
-        persist(candidate) { [weak self] in
+        let publish = { [weak self] in
             self?.isWebsiteOnly = true; self?.isBlocking = true; self?.active = update; self?.index = selected
         }
+        if candidate.pending == state?.pending { publish() }
+        else { persist(candidate, success: publish) }
         return true
     }
 }
@@ -347,7 +357,13 @@ extension SplashCoordinator {
         if isWebsiteOnly {
             candidate.pending = nil
             let remaining = pendingWebsiteIndices(in: candidate, content: active)
-            if remaining.isEmpty { candidate.completedUpdateIDs.insert(active.id) }
+            if remaining.isEmpty {
+                candidate.completedUpdateIDs.insert(active.id)
+                if developerKind != nil {
+                    let fingerprint = activeFingerprint ?? active.fingerprint
+                    candidate.websites?.removeAll { $0.announcementID == active.id && $0.fingerprint == fingerprint }
+                }
+            }
             if action == .deferred, previousStatus == .pending {
                 persist(candidate) { [weak self] in self?.finishWebsitePresentation() }
             } else if let next = remaining.first {

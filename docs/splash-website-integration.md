@@ -8,10 +8,10 @@ stores only installation-local per-slide status, never form answers or handshake
 
 1. Open **Account → Settings → Developer → Splash Screen Studio → Update**.
 2. Open a slide after **Release notes**, select **Website**, and paste an HTTPS
-   address into **Website URL**. Save/export/import preserves the URL.
+   address into **Website URL**. Save/export/import preserves the URL. **Standard slide settings** remains available on website slides so any invalid native field can be repaired without clearing the URL.
 3. Choose **Preview**. A blank URL opens the bundled test page, with optional
    feedback and buttons for simulated submission failure, completion, and cancellation.
-   Preview keeps its status in memory and never schedules real reminders.
+   Preview keeps its status in memory and never schedules real reminders. Its recovery dialog describes advancing or closing Preview rather than promising a future reminder.
 
 A release-enabled website slide requires the exact app version and build number.
 The bundled example stays disabled. **Developer → Always Show Splash → Update**
@@ -107,3 +107,5 @@ repeats the same failed save without asking the website for another callback. Th
 app saves status and navigation together before advancing. Replaced, disabled, or
 version/build-ineligible announcements retire their old reminders. Status is local
 to this installation and is excluded from backups; there is no cross-device sync.
+
+Same-origin server redirects are classified using the final navigation response, including HTTP 410. Developer cold launches retain website-only continuation for pending forms; finishing a developer run clears that run’s resolved outcomes so the next forced run opens fresh forms. Unchanged background restoration does not write state or replace the live webpage. UI automation always uses synthetic website responses.

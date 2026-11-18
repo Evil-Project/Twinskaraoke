@@ -27,7 +27,8 @@ import WebKit
         loading = true
         var isFixture = website.url.isEmpty
         #if DEBUG
-        if AppRuntime.isUITestMode && website.httpsURL?.host() == "splash-fixture.invalid" { isFixture = true }
+        // UI automation must never contact a release endpoint, including through Studio drafts.
+        if AppRuntime.isUITestMode { isFixture = true }
         #endif
         let url = website.url.isEmpty ? URL(string: "https://splash-fixture.invalid/form") : website.httpsURL
         guard let url, let session = SplashWebsiteHandshake(url: url) else {
@@ -60,7 +61,7 @@ import WebKit
         var configuration = WebPage.Configuration()
         configuration.userContentController = controller
         configuration.websiteDataStore = .nonPersistent()
-        let decider = Navigation(origin: session.origin) { [weak self] error in
+        let decider = SplashWebsiteNavigationPolicy(origin: session.origin) { [weak self] error in
             self?.fail(error, sessionID: session.id)
         }
         let page = WebPage(configuration: configuration, navigationDecider: decider)
@@ -68,7 +69,9 @@ import WebKit
         let events = page.navigations
         observation = Task { [weak self] in
             do {
-                for try await event in events where event == .finished {
+                for try await event in events {
+                    if event == .receivedServerRedirect { decider.receivedServerRedirect() }
+                    guard event == .finished else { continue }
                     guard let self, self.handshake?.id == session.id else { return }
                     self.loading = false
                     self.timeout?.cancel()
@@ -168,44 +171,6 @@ import WebKit
         }
     }
 
-    private struct Navigation: WebPage.NavigationDeciding {
-        let origin: SplashWebsiteHandshake.Origin
-        let fail: (Failure) -> Void
-        private var mainURL: URL?
-
-        init(origin: SplashWebsiteHandshake.Origin, fail: @escaping (Failure) -> Void) {
-            self.origin = origin
-            self.fail = fail
-        }
-
-        mutating func decidePolicy(
-            for action: WebPage.NavigationAction,
-            preferences _: inout WebPage.NavigationPreferences
-        ) async -> WKNavigationActionPolicy {
-            guard let target = action.target else { return .cancel }
-            guard target.isMainFrame else { return .allow }
-            guard let url = action.request.url, SplashWebsiteHandshake.Origin(url) == origin, !action.shouldPerformDownload
-            else { return .cancel }
-            mainURL = withoutFragment(url)
-            return .allow
-        }
-
-        func decidePolicy(for response: WebPage.NavigationResponse) async -> WKNavigationResponsePolicy {
-            guard let url = response.response.url, withoutFragment(url) == mainURL else { return .allow }
-            if let failure = SplashWebsiteSession.failure(for: response.response, canShowMimeType: response.canShowMimeType) {
-                fail(failure)
-                return .cancel
-            }
-            return .allow
-        }
-
-        private func withoutFragment(_ url: URL) -> URL? {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            components?.fragment = nil
-            return components?.url
-        }
-    }
-
     private static let fixture = """
         <!doctype html>
         <html lang="en">
@@ -214,7 +179,9 @@ import WebKit
         <style>
           :root { color-scheme: dark; background: #101827; color: white; font: -apple-system-body; }
           body { margin: 1.25rem; }
-          button { font: inherit; padding: .65rem 1rem; }
+          button, input { font: inherit; box-sizing: border-box; max-inline-size: 100%; }
+          button { font: inherit; padding: .65rem 1rem; overflow-wrap: anywhere; }
+          input { display: block; width: 100%; }
         </style>
         <title>Website test</title>
         <h1>Website test</h1>

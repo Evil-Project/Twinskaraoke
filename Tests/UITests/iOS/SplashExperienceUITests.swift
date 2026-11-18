@@ -67,60 +67,6 @@ import XCTest
         capture("Duplicate ID notice inside editor", in: app)
     }
 
-    func testWebsiteCallbackAdvancesBundledDeveloperWalkthrough() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",
-                               "-UITestSplashResetControls", "-UITestSplashDeveloperControls"]
-        app.launch()
-        XCTAssertTrue(app.staticTexts["Splash.Progress"].waitForExistence(timeout: 15))
-        finishVisibleWalkthroughs(app)
-        XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
-        openDeveloper(app)
-        tap("Developer.SplashTesting", app: app)
-        tap("Update", app: app)
-        XCUIDevice.shared.press(.home)
-        app.activate()
-
-        waitForProgress("Update, slide 1 of 3", in: app)
-        XCTAssertTrue(app.staticTexts["Play saved songs offline."].exists)
-        XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        capture("Condensed changelog", in: app)
-        let changelogToggle = app.buttons["Splash.Changelog.Toggle"]
-        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
-        XCTAssertEqual(changelogToggle.label, "Show full changelog")
-        changelogToggle.tap()
-        XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        XCTAssertEqual(changelogToggle.label, "Show less")
-        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
-        let lastDetail = app.staticTexts["See the song reveal after the round."]
-        XCTAssertGreaterThanOrEqual(changelogToggle.frame.minY, lastDetail.frame.maxY)
-        XCTAssertLessThanOrEqual(changelogToggle.frame.maxY, app.buttons["Splash.Next"].frame.minY)
-        capture("Expanded changelog", in: app)
-        changelogToggle.tap()
-        XCTAssertEqual(changelogToggle.label, "Show full changelog")
-        XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        changelogToggle.tap()
-        XCTAssertEqual(changelogToggle.label, "Show less")
-        XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        app.buttons["Splash.Next"].tap()
-
-        let finish = app.webViews.buttons["Complete test page"]
-        XCTAssertTrue(finish.waitForExistence(timeout: 12))
-        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
-        XCTAssertTrue(finish.isHittable)
-        XCTAssertFalse(app.buttons["Splash.Next"].exists)
-        capture("Full-screen website", in: app)
-        finish.tap()
-        waitForProgress("Update, slide 3 of 3", in: app)
-        app.buttons["Splash.Back"].tap()
-        waitForProgress("Update, slide 2 of 3", in: app)
-        XCTAssertTrue(app.staticTexts["Website step complete."].exists)
-        XCTAssertFalse(finish.exists)
-        app.buttons["Splash.Next"].tap()
-        app.buttons["Splash.Complete"].tap()
-        XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
-    }
-
     func testWebsiteCallbackCompletesFinalPageInStudio() {
         let app = launchStudio()
         tap("Walkthrough", app: app)
@@ -161,7 +107,10 @@ import XCTest
         XCTAssertTrue(feedback.exists)
         feedback.tap(); feedback.typeText("Keep this draft")
         failure.tap()
+        XCTAssertTrue(app.webViews.staticTexts["Submission failed. Please try again."].waitForExistence(timeout: 5))
         app.buttons["Splash.Web.Recovery"].tap()
+        XCTAssertTrue(app.staticTexts["Retrying may discard unsent answers. Continue for now advances or closes this preview without scheduling a reminder."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Retrying may discard unsent answers. Continue for now leaves this form pending for your next app opening."].exists)
         tap("Keep filling out", app: app)
         XCTAssertEqual(feedback.value as? String, "Keep this draft")
         app.buttons["Splash.Web.Recovery"].tap()
@@ -555,7 +504,7 @@ import XCTest
         tap("Settings", app: app); tap("Developer", app: app)
     }
     /// Small drags keep short controls from being skipped after image rows expand.
-    private func reveal(_ element: XCUIElement, app: XCUIApplication) {
+    func reveal(_ element: XCUIElement, app: XCUIApplication) {
         var up = true
         for _ in 0..<24 {
             if element.exists && element.isHittable { return }

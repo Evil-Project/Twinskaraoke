@@ -19,6 +19,7 @@ struct SplashWalkthroughView: View {
     var websiteCompleted = false
     var websiteClosed = false
     var websiteOnly = false
+    var websiteIsPreview = false
     var websiteSession: SplashWebsiteSession?
     var websiteAction: ((SplashWebsiteAction) -> Void)?
     let back: () -> Void
@@ -32,7 +33,7 @@ struct SplashWalkthroughView: View {
     var body: some View {
         Group {
             if let website = slide.website, !websiteCompleted, errorMessage == nil {
-                SplashWebsiteView(website: website, session: websiteSession) { action in
+                SplashWebsiteView(website: website, session: websiteSession, isPreview: websiteIsPreview) { action in
                     if let websiteAction { websiteAction(action) }
                     else { advance() }
                 }

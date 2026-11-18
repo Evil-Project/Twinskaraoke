@@ -157,31 +157,25 @@ import WebKit
 
     @Test func localWebsiteReportsCompletionFromWebKit() async throws {
         let session = SplashWebsiteSession()
-        var advanced = false
+        let signals = SplashTestSignals()
         let owner = UUID()
-        session.open(.init(), owner: owner) { if $0 == .completed { advanced = true } }
+        session.open(.init(), owner: owner) { if $0 == .completed { signals.advanced = true } }
         defer { session.stop(owner: owner) }
-        for _ in 0..<120 where session.loading && session.failure == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await waitForSplashCondition { !(session.loading && session.failure == nil) }
         let page = try #require(session.page)
         let overscroll = try await page.callJavaScript("return document.documentElement.style.overscrollBehavior;") as? String
         #expect(overscroll == "none")
         let previousInteractions = session.interactionCount
         _ = try await page.callJavaScript("document.getElementById('feedback').click()")
-        for _ in 0..<20 where session.interactionCount == previousInteractions {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await waitForSplashCondition { !(session.interactionCount == previousInteractions) }
         #expect(session.interactionCount == previousInteractions + 1)
         let hasID = try await page.callJavaScript("return typeof id === 'string';") as? Bool
         let hasBridge = try await page.callJavaScript("return !!window.webkit?.messageHandlers?.splashCompletion;") as? Bool
         #expect(hasID == true)
         #expect(hasBridge == true)
         _ = try await page.callJavaScript("document.getElementById('complete').click()")
-        for _ in 0..<20 where !advanced {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        #expect(advanced)
+        try await waitForSplashCondition { !(!signals.advanced) }
+        #expect(signals.advanced)
     }
 
     private func websiteAnnouncement(count: Int = 1) -> SplashContent {
@@ -303,26 +297,22 @@ import WebKit
 
     @Test func nativeRecoveryWorksAfterThePageReportsASubmissionFailure() async throws {
         let session = SplashWebsiteSession(); let owner = UUID()
-        var actions: [SplashWebsiteAction] = []
-        session.open(.init(), owner: owner) { actions.append($0) }
+        let signals = SplashTestSignals()
+        session.open(.init(), owner: owner) { signals.actions.append($0) }
         defer { session.stop(owner: owner) }
-        for _ in 0..<120 where session.loading && session.failure == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        try await waitForSplashCondition { !(session.loading && session.failure == nil) }
         let page = try #require(session.page)
         let originalID = try await page.callJavaScript("return id;") as? String
         _ = try await page.callJavaScript("document.getElementById('feedback').value = 'Draft'; document.getElementById('fail').click();")
-        #expect(actions.isEmpty && session.failure == nil && !session.loading)
-        session.open(.init(), owner: owner) { actions.append($0) }
-        for _ in 0..<120 where session.loading && session.failure == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        #expect(signals.actions.isEmpty && session.failure == nil && !session.loading)
+        session.open(.init(), owner: owner) { signals.actions.append($0) }
+        try await waitForSplashCondition { !(session.loading && session.failure == nil) }
         let replacement = try #require(session.page)
         let newID = try await replacement.callJavaScript("return id;") as? String
         #expect(originalID != nil && newID != nil && originalID != newID)
         session.continueForNow(owner: owner)
         session.continueForNow(owner: owner)
-        #expect(actions == [.deferred] && session.page == nil)
+        #expect(signals.actions == [.deferred] && session.page == nil)
     }
 
     @Test func finalWebsiteUsesDoneButDeferralDoesNotCompleteAnnouncement() {
@@ -340,21 +330,19 @@ import WebKit
 
     @Test func anActiveSessionHasOnlyOneWindowOwner() async throws {
         let session = SplashWebsiteSession(); let owner = UUID(); let other = UUID()
-        var actions: [SplashWebsiteAction] = []
-        session.open(.init(), owner: owner) { actions.append($0) }
+        let signals = SplashTestSignals()
+        session.open(.init(), owner: owner) { signals.actions.append($0) }
         defer { session.stop(owner: owner) }
         let page = session.page
-        session.open(.init(), owner: other) { actions.append($0) }
+        session.open(.init(), owner: other) { signals.actions.append($0) }
         session.continueForNow(owner: other); session.stop(owner: other)
-        #expect(session.owner == owner && session.page === page && actions.isEmpty)
-        for _ in 0..<120 where session.loading && session.failure == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        #expect(session.owner == owner && session.page === page && signals.actions.isEmpty)
+        try await waitForSplashCondition { !(session.loading && session.failure == nil) }
         let activePage = try #require(session.page)
         _ = try await activePage.callJavaScript("document.getElementById('cancel').click()")
-        for _ in 0..<20 where actions.isEmpty { try await Task.sleep(for: .milliseconds(50)) }
+        try await waitForSplashCondition { !(signals.actions.isEmpty) }
         session.continueForNow(owner: owner)
-        #expect(actions == [.canceled] && session.page == nil)
+        #expect(signals.actions == [.canceled] && session.page == nil)
     }
 
     @Test func reminderPresentationSaveFailureKeepsNativeRetryVisible() {
@@ -415,11 +403,84 @@ import WebKit
         #expect(studio.draft == legacy)
         #expect(studio.saveDraft(announce: false))
         let reopened = SplashStudioModel(kind: .update, directory: directory)
-        #expect(reopened.draft == legacy)
+        try #require(reopened.draft == legacy)
         #expect(throws: SplashError.self) { try reopened.draft.validateForPresentation() }
         #expect(throws: SplashError.self) { try SplashJSONDocument(content: reopened.draft) }
         reopened.draft.slides[0].releaseNotes?.general[0].details = "Shortened detail"
         try reopened.draft.validateForPresentation()
         _ = try SplashJSONDocument(content: reopened.draft)
+    }
+
+    @Test func unchangedVisibleReminderSurvivesFailedStorage() {
+        let update = websiteAnnouncement()
+        let store = MemorySplashStore(); store.value.installCompleted = true
+        let splash = coordinator(store, update: update); splash.foreground(); splash.next()
+        store.failWrite = true
+        splash.background(); splash.foreground()
+        #expect(splash.isWebsiteOnly && splash.errorMessage == nil && splash.index == 1)
+    }
+
+    @Test func developerColdLaunchResumesOnlyPendingWebsitesAndResetsFinishedRuns() {
+        var update = websiteAnnouncement(); update.enabled = false
+        let real = MemorySplashStore(); real.value.installCompleted = true
+        let testing = MemorySplashStore()
+        func make() -> SplashCoordinator {
+            SplashCoordinator(store: real, install: .placeholder(.install), update: update,
+                              version: "2.0", build: "42", developerSelection: { .update }, developerStore: testing)
+        }
+        let first = make(); first.foreground(); #expect(first.isDeveloperTesting); first.next()
+        let resumed = make(); resumed.foreground()
+        #expect(resumed.isWebsiteOnly && resumed.index == 1)
+        send(.completed, to: resumed, update: update)
+        #expect(testing.value.websites?.isEmpty != false)
+        #expect(real.value.websites == nil)
+    }
+
+    @Test func redirectedGoneResponseClosesOnlyTheMainWebsite() throws {
+        let initial = try #require(URL(string: "https://survey.example.org/form"))
+        let retired = try #require(URL(string: "https://survey.example.org/retired"))
+        let origin = try #require(SplashWebsiteHandshake.Origin(initial))
+        let policy = SplashWebsiteNavigationPolicy(origin: origin) { _ in }
+        #expect(policy.recordMainNavigation(to: initial))
+        let response = try #require(HTTPURLResponse(url: retired, statusCode: 410, httpVersion: nil, headerFields: nil))
+        #expect(policy.failure(for: response, canShowMimeType: true) == nil)
+        policy.receivedServerRedirect()
+        let frameURL = try #require(URL(string: "https://survey.example.org/frame"))
+        policy.recordSubframeNavigation(to: frameURL)
+        let frameResponse = try #require(HTTPURLResponse(url: frameURL, statusCode: 410, httpVersion: nil, headerFields: nil))
+        #expect(policy.failure(for: frameResponse, canShowMimeType: true) == nil)
+        #expect(policy.failure(for: response, canShowMimeType: true) == .closed)
+        policy.receivedServerRedirect()
+        let foreignURL = try #require(URL(string: "https://other.example.org/retired"))
+        let foreignResponse = try #require(HTTPURLResponse(url: foreignURL, statusCode: 410, httpVersion: nil, headerFields: nil))
+        #expect(policy.failure(for: foreignResponse, canShowMimeType: true) == .unavailable)
+        #expect(!policy.recordMainNavigation(to: URL(string: "https://other.example.org/form")!))
+    }
+
+    @Test(arguments: [SplashWebsiteAction.completed, .canceled, .deferred, .closed])
+    func developerFinishedRunsKeepOnlyUnresolvedForms(_ outcome: SplashWebsiteAction) {
+        var update = websiteAnnouncement(); update.enabled = false
+        let real = MemorySplashStore(); real.value.installCompleted = true
+        let testing = MemorySplashStore()
+        func make() -> SplashCoordinator {
+            SplashCoordinator(store: real, install: .placeholder(.install), update: update,
+                              version: "2.0", build: "42", developerSelection: { .update }, developerStore: testing)
+        }
+        let first = make(); first.foreground(); first.next()
+        send(outcome, to: first, update: update)
+        if outcome == .closed { send(.deferred, to: first, update: update) }
+        first.complete()
+        #expect(!first.isBlocking)
+        #expect(real.value.websites == nil)
+        let nextRun = make(); nextRun.foreground()
+        if outcome == .deferred {
+            #expect(testing.value.websites?.first?.status == .pending)
+            #expect(nextRun.isWebsiteOnly && nextRun.index == 1)
+        } else {
+            #expect(testing.value.websites?.isEmpty != false)
+            #expect(!nextRun.isWebsiteOnly && nextRun.index == 0)
+            nextRun.next()
+            #expect(nextRun.currentWebsiteStatus == .pending)
+        }
     }
 }

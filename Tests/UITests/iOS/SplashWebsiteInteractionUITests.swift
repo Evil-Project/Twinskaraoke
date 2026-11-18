@@ -1,7 +1,7 @@
 import XCTest
 
 extension SplashExperienceUITests {
-    @objc func testWebsiteTapCollapsesRecoveryWithoutResizingOrZooming() async throws {
+    @objc func testWebsiteTapCollapsesRecoveryWithoutResizingOrZooming() {
         let app = launchStudio()
         tap("Walkthrough", app: app); tap("Update", app: app)
         tap("SplashStudio.Preview", app: app)
@@ -16,10 +16,11 @@ extension SplashExperienceUITests {
         tap("Keep filling out", app: app)
         XCTAssertEqual(recovery.frame.width, expandedWidth, accuracy: 1)
         title.tap()
-        for _ in 0..<100 {
-            if recovery.frame.width <= recovery.frame.height * 1.5 { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        let compact = XCTNSPredicateExpectation(predicate: NSPredicate { object, _ in
+            guard let button = object as? XCUIElement, button.exists, button.frame.height > 0 else { return false }
+            return button.frame.width <= button.frame.height * 1.5
+        }, object: recovery)
+        XCTAssertEqual(XCTWaiter.wait(for: [compact], timeout: 5), .completed)
         XCTAssertLessThanOrEqual(recovery.frame.width, recovery.frame.height * 1.5)
         // iPad can change the top status-bar inset. Verify bottom coverage, not raw height.
         XCTAssertGreaterThanOrEqual(web.frame.maxY, app.frame.maxY - 44,

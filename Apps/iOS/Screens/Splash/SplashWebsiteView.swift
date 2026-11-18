@@ -3,6 +3,7 @@ import WebKit
 
 struct SplashWebsiteView: View {
     let website: SplashWebsite
+    let isPreview: Bool
     let action: (SplashWebsiteAction) -> Void
     @State private var session: SplashWebsiteSession
     @State private var owner = UUID()
@@ -12,8 +13,9 @@ struct SplashWebsiteView: View {
     @Namespace private var recoveryTransition
     @Environment(\.appReduceMotion) private var reduceMotion
 
-    init(website: SplashWebsite, session: SplashWebsiteSession? = nil, action: @escaping (SplashWebsiteAction) -> Void) {
+    init(website: SplashWebsite, session: SplashWebsiteSession? = nil, isPreview: Bool = false, action: @escaping (SplashWebsiteAction) -> Void) {
         self.website = website
+        self.isPreview = isPreview
         self.action = action
         _session = State(initialValue: session ?? SplashWebsiteSession())
     }
@@ -95,8 +97,15 @@ struct SplashWebsiteView: View {
             Button("Continue for now") { session.continueForNow(owner: owner) }
             Button("Keep filling out") { recoveryPresented = false }
         } message: {
-            Text("Retrying may discard unsent answers. Continue for now leaves this form pending for your next app opening.")
+            Text(verbatim: recoveryMessage)
         }
+    }
+
+    private var recoveryMessage: String {
+        if isPreview {
+            return String(localized: "Retrying may discard unsent answers. Continue for now advances or closes this preview without scheduling a reminder.")
+        }
+        return String(localized: "Retrying may discard unsent answers. Continue for now leaves this form pending for your next app opening.")
     }
 
     private func collapseRecovery() {
