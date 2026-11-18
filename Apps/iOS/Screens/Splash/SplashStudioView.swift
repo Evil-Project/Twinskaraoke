@@ -156,7 +156,7 @@ struct SplashStudioView: View {
                                 .deleteDisabled(true)
                             } else {
                                 NavigationLink {
-                                    SplashSlideEditor(slide: model.binding(for: slide))
+                                    SplashSlideEditor(slide: model.binding(for: slide), studio: model)
                                 } label: {
                                     VStack(alignment: .leading) {
                                         Text("\(index + 1). \(slide.title ?? "Untitled slide")")
@@ -271,6 +271,7 @@ struct SplashPreviewView: View {
 
 struct SplashSlideEditor: View {
     @Binding var slide: SplashSlide
+    var studio: SplashStudioModel? = nil
     @State private var message: String?
     @State private var singlePreview = false
     @State private var arranging = false
@@ -368,7 +369,8 @@ struct SplashSlideEditor: View {
         }
         .accessibilityIdentifier("SplashStudio.SlideForm")
         .navigationTitle("Edit Slide")
-        .splashNotice($message)
+        .onChange(of: studio?.noticeRevision) { _, _ in message = studio?.message }
+        .splashNotice($message, revision: studio?.noticeRevision ?? 0)
         .fullScreenCover(isPresented: $singlePreview) {
             SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
         }

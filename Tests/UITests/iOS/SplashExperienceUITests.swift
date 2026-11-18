@@ -53,6 +53,19 @@ import XCTest
         app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
+    func testDuplicateSlideIDNoticeAppearsInsideEditor() {
+        let app = launchStudio()
+        tap("1. Slide title", app: app)
+        let field = app.textFields["Stable slide ID"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "install-slide-1")
+        field.doubleTap()
+        field.typeText("2\n")
+        XCTAssertTrue(app.staticTexts["Slide IDs must be unique."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Edit Slide"].exists)
+        recordReleaseNotes("Duplicate ID notice inside editor", in: app)
+    }
+
     func testStandaloneReleaseNotesExpandCollapseAndComplete() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",

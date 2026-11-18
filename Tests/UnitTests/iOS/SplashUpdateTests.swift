@@ -64,18 +64,21 @@ import Testing
         #expect(entry.detailLines.count <= 30)
         var notes = SplashReleaseNotes()
         notes.general = [entry]
-        #expect(throws: SplashError.self) { try notes.validate() }
+        #expect(throws: SplashError.self) { try notes.validateForPresentation() }
         notes.general[0].details = Array(repeating: "Detail", count: 30).joined(separator: "\n")
-        try notes.validate()
+        try notes.validateForPresentation()
         #expect(notes.general[0].detailLines.count == 30)
         notes.general[0].details += "\nOne too many"
-        #expect(throws: SplashError.self) { try notes.validate() }
+        #expect(throws: SplashError.self) { try notes.validateForPresentation() }
     }
 
     @Test func collidingSlideIDCannotRedirectRetainedBindingWrites() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let studio = SplashStudioModel(kind: .install, directory: directory)
+        studio.draft = SplashContent(kind: .install, id: "binding-fixture", slides: [
+            SplashSlide(id: "first-slide"), SplashSlide(id: "second-slide"),
+        ])
         let original = studio.draft
         let first = original.slides[0]
         let second = original.slides[1]
@@ -92,5 +95,33 @@ import Testing
         let afterDeletion = studio.draft
         binding.wrappedValue.title = "Deleted slide edit"
         #expect(studio.draft == afterDeletion)
+    }
+
+    @Test(arguments: ["\n", "\r", "\r\n", "\u{000B}", "\u{000C}", "\u{0085}", "\u{2028}", "\u{2029}"])
+    func everyNewlineSeparatesBoundedDetailRows(_ separator: String) {
+        let entry = SplashReleaseNotes.Entry(headline: "Improvement", details: " One \(separator) \(separator) Two ")
+        #expect(entry.detailLines == ["One", "Two"])
+        let overLimit = SplashReleaseNotes.Entry(headline: "Improvement", details: Array(repeating: "Detail", count: 31).joined(separator: separator))
+        #expect(overLimit.detailLines.count == 30)
+        #expect(overLimit.hasTooManyDetailLines)
+    }
+
+    @Test func oversizedLegacyDraftRemainsEditableUntilReadyForPresentation() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var legacy = announcement()
+        let details = Array(repeating: "Detail", count: 31).joined(separator: "\n")
+        legacy.slides[0].releaseNotes?.general = [.init(headline: "Improvement", details: details)]
+        let studio = SplashStudioModel(kind: .update, directory: directory)
+        try studio.importData(JSONEncoder().encode(legacy))
+        #expect(studio.draft == legacy)
+        #expect(studio.saveDraft(announce: false))
+        let reopened = SplashStudioModel(kind: .update, directory: directory)
+        #expect(reopened.draft == legacy)
+        #expect(throws: SplashError.self) { try reopened.draft.validateForPresentation() }
+        #expect(throws: SplashError.self) { try SplashJSONDocument(content: reopened.draft) }
+        reopened.draft.slides[0].releaseNotes?.general[0].details = "Shortened detail"
+        try reopened.draft.validateForPresentation()
+        _ = try SplashJSONDocument(content: reopened.draft)
     }
 }

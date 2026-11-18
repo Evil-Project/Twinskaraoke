@@ -19,10 +19,12 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
 
         private func detailLines(upTo limit: Int) -> [String] {
             var lines: [String] = []
-            details.enumerateLines { line, stop in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
+            var start = details.startIndex
+            while start < details.endIndex, lines.count < limit {
+                let end = details[start...].firstIndex(where: \.isNewline) ?? details.endIndex
+                let trimmed = details[start..<end].trimmingCharacters(in: .whitespaces)
                 if !trimmed.isEmpty { lines.append(trimmed) }
-                stop = lines.count >= limit
+                start = end < details.endIndex ? details.index(after: end) : end
             }
             return lines
         }
@@ -35,12 +37,17 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
             guard entries.count <= 30, Set(entries.map(\.id)).count == entries.count,
                   entries.allSatisfy({ SplashContent.validID($0.id) && $0.headline.count <= 300 && $0.details.count <= 12000 })
             else { throw SplashError(message: String(localized: "Invalid release notes. Each section can have up to 30 entries.")) }
-            guard entries.allSatisfy({ !$0.hasTooManyDetailLines }) else {
-                throw SplashError(message: String(localized: "Each release-note entry can have up to \(Entry.maximumDetailLines) detail lines."))
-            }
         }
         if !watchVersion.isEmpty, !SplashContent.validVersion(watchVersion) {
             throw SplashError(message: String(localized: "Enter a valid watchOS version for the release notes."))
+        }
+    }
+
+    /// Preserve editable drafts; enforce the detail-row limit only when presenting or exporting.
+    func validateForPresentation() throws {
+        try validate()
+        guard (watchOS + iOS + general).allSatisfy({ !$0.hasTooManyDetailLines }) else {
+            throw SplashError(message: String(localized: "Each release-note entry can have up to \(Entry.maximumDetailLines) detail lines."))
         }
     }
 
