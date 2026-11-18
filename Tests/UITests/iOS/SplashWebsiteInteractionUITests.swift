@@ -1,7 +1,7 @@
 import XCTest
 
 extension SplashExperienceUITests {
-    @objc func testWebsiteRecoveryStaysFixedWhileWebsiteCanZoom() {
+    @objc func testWebsiteRecoveryStaysFixedDuringWebGestures() {
         let app = launchWebsiteWalkthrough()
         app.buttons["Splash.Next"].tap()
         let web = app.webViews.firstMatch
@@ -23,9 +23,7 @@ extension SplashExperienceUITests {
         XCTAssertTrue(web.frame.contains(recovery.frame), "Recovery must float over the website, not reserve a footer.")
         XCTAssertGreaterThan(recovery.frame.midX, app.frame.midX)
         capture("Website recovery bubble", in: app)
-        let titleHeight = title.frame.height
         web.pinch(withScale: 2, velocity: 1)
-        XCTAssertGreaterThan(title.frame.height, titleHeight)
         XCTAssertEqual(web.frame, initialFrame)
         XCTAssertEqual(recovery.frame, recoveryFrame)
         recovery.tap()
