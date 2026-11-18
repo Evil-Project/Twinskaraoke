@@ -54,7 +54,7 @@ struct RadioQueuePreview: View {
 
     var body: some View {
         ContextPreviewCard {
-            RadioQueueArtwork(song: song, cornerRadius: 10)
+            RadioQueueArtwork(song: song, cornerRadius: AM.Radius.card)
                 .frame(width: 220, height: 220)
         } label: {
             VStack(alignment: .leading, spacing: 3) {

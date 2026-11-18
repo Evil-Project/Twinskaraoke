@@ -11,7 +11,7 @@ struct BandleErrorBanner: View {
                     .foregroundStyle(.primary)
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appDestructive)
             }
             .font(AM.Font.rowCompactTitle)
             .fixedSize(horizontal: false, vertical: true)

@@ -13,12 +13,7 @@ struct ArtistCircleCard: View {
                     )
                 } else {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.appAccent.opacity(0.85), Color.purple.opacity(0.85)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(.appAccentGradient)
                         .overlay(
                             Text(initials(artist.name))
                                 .font(.system(size: 24, weight: .semibold))

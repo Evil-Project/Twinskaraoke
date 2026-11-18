@@ -84,7 +84,7 @@ struct RadioQueueView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
-                    .animation(scheduleAnimation(response: 0.28), value: currentSong?.displayTitle)
+                    .animation(scheduleAnimation, value: currentSong?.displayTitle)
                 }
                 .smoothScrolling()
                 .refreshable {
@@ -168,7 +168,7 @@ struct RadioQueueView: View {
     {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.caption.bold())
+                .font(AM.Font.eyebrow)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
             content()
@@ -210,8 +210,8 @@ struct RadioQueueView: View {
         .transition(rowTransition)
     }
 
-    private func scheduleAnimation(response: Double) -> Animation? {
-        reduceMotion ? nil : AppMotion.spring(response: response, dampingFraction: 0.84)
+    private var scheduleAnimation: Animation? {
+        reduceMotion ? nil : AppMotion.quick
     }
 
     private var heroTransition: AnyTransition {

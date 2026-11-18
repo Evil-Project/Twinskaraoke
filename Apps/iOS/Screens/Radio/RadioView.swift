@@ -307,7 +307,7 @@ struct RadioView: View {
                     .padding(.vertical, 12)
                     .background(
                         Color.appControlInactiveFill,
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        in: RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous)
                     )
                 }
                 .buttonStyle(PressableButtonStyle(scale: 0.98, dim: 0.78))
@@ -609,7 +609,7 @@ private struct RadioRefreshBanner: View {
         .padding(.vertical, 10)
         .background(
             Color.appControlInactiveFill,
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous)
         )
     }
 }
