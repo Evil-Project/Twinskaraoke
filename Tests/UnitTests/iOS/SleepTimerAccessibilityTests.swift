@@ -24,7 +24,9 @@ struct SleepTimerAccessibilityTests {
         #expect(value == "0 seconds")
     }
 
+    /// The label comes from the catalog in the host's language, so compare
+    /// with the same lookup rather than with the English source.
     @Test func endOfSongKeepsItsValue() {
-        #expect(SleepTimerAccessibility.value(deadline: nil, now: now, locale: locale) == "End of Song")
+        #expect(SleepTimerAccessibility.value(deadline: nil, now: now, locale: locale) == String(localized: "End of Song"))
     }
 }
