@@ -10,58 +10,111 @@ struct RadioPlayerLayout: View {
     @Environment(\.appReduceMotion) private var reduceMotion
     @Binding var showingQueue: Bool
     let song: Song
-    let artSize: CGFloat
+    let metrics: PlayerLayoutMetrics
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
+        let style = RadioPlayerLayoutStyle(
+            usesPadLayout: metrics.usesPadLayout,
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
+        switch style.arrangement {
+        case .compact: compactLayout
+        case .wide: wideLayout
+        }
+    }
+
+    private var compactLayout: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 8)
-            PlayerArtworkView(song: song, size: artSize)
-                .contextMenu {
-                    radioActions
-                } preview: {
-                    SongContextPreview(song: song)
-                }
+            artwork(size: metrics.radioArtSize)
             Spacer(minLength: 28)
             headerRow
                 .padding(.horizontal, 32)
-                .contextMenu {
-                    radioActions
-                } preview: {
-                    SongContextPreview(song: song)
-                }
             Spacer(minLength: 10)
             playStopButton
             Spacer(minLength: 24)
             PlayerVolumeRow()
-            PlayerBottomToolbar(
-                showingQueue: $showingQueue,
-                song: song,
-                onLyricsToggle: {},
-                showLyrics: false
-            )
+            toolbar
             Spacer(minLength: 8)
         }
     }
 
+    /// The music player's lyrics-off iPad layout (`padArtworkLayout`) with the
+    /// radio's controls: the same artwork size, column width and paddings, so
+    /// switching between a song and the station doesn't resize the canvas.
+    private var wideLayout: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+            artwork(size: metrics.padArtworkSize)
+            headerRow
+                .padding(.top, 26)
+            Spacer(minLength: 18)
+            playStopButton
+            PlayerVolumeRow(horizontalPadding: 0)
+                .padding(.top, metrics.padVolumeTopPadding)
+            toolbar
+        }
+        .padding(.top, metrics.padTopInset)
+        .frame(maxWidth: metrics.padArtworkContentMaxWidth, maxHeight: .infinity)
+        .padding(.horizontal, metrics.padOuterPadding)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func artwork(size: CGFloat) -> some View {
+        PlayerArtworkView(song: song, size: size)
+            .contextMenu {
+                radioActions
+            } preview: {
+                SongContextPreview(song: song)
+            }
+    }
+
+    /// Pads itself to nothing in radio mode, so one call fits both layouts.
+    private var toolbar: some View {
+        PlayerBottomToolbar(
+            showingQueue: $showingQueue,
+            song: song,
+            onLyricsToggle: {},
+            showLyrics: false
+        )
+    }
+
+    /// At an accessibility size the live line moves above the title row and
+    /// takes the row's full width; beside the title buttons it only had a
+    /// third of the screen, where "LIVE RADIO" truncated or, wrapped, pushed
+    /// the toolbar off the bottom.
     private var headerRow: some View {
+        let liftsLiveMeta = RadioPlayerLayoutStyle.stacksLiveMeta(
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
+        return VStack(alignment: .leading, spacing: AM.Spacing.xs) {
+            if liftsLiveMeta {
+                liveMeta
+                    .accessibilityElement(children: .combine)
+            }
+            titleRow(includesLiveMeta: !liftsLiveMeta)
+        }
+        .contextMenu {
+            radioActions
+        } preview: {
+            SongContextPreview(song: song)
+        }
+    }
+
+    private var liveMeta: some View {
+        RadioLiveMeta(
+            listeners: radio.nowPlaying?.listeners?.unique,
+            isPlaying: audioManager.isPlaying,
+            isPaused: !presentation.isExpanded
+        )
+    }
+
+    private func titleRow(includesLiveMeta: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    RadioLiveDot(
-                        isPlaying: audioManager.isPlaying,
-                        isPaused: !presentation.isExpanded
-                    )
-                    Text("LIVE RADIO")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.appAccent)
-                        .tracking(1.2)
-                    if let listeners = radio.nowPlaying?.listeners {
-                        Text("·")
-                            .font(.caption.bold())
-                            .foregroundStyle(.tertiary)
-                        Text("\(listeners.unique) listening")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                if includesLiveMeta {
+                    liveMeta
                 }
                 MarqueeText(
                     text: song.title,
@@ -176,7 +229,7 @@ struct RadioPlayerLayout: View {
 /// opening the player while the stream was already playing left the dot sitting
 /// still. The clock also freezes the pulse while the app is backgrounded or the
 /// layout is parked below the screen, and resumes it in phase.
-private struct RadioLiveDot: View {
+struct RadioLiveDot: View {
     let isPlaying: Bool
     /// Set while the player is closed. The layout stays mounted below the
     /// screen then, so `onDisappear` never fires and visibility alone would
