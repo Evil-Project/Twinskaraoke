@@ -186,10 +186,11 @@ final class DownloadManager {
     private var deferredDownloadRequests: [String: Song] = [:]
     private var pendingRestoration: Task<Void, Never>?
     private var deferredCompletions: [(URLSessionTask, URL?, Error?)] = []
-    private var pendingJournalURL: URL {
+    private static var pendingJournalURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("pending-downloads.json")
     }
+    private let journalWriter = PendingDownloadJournalWriter(url: DownloadManager.pendingJournalURL)
     private let networkMonitor = NWPathMonitor()
     private let networkMonitorQueue = DispatchQueue(label: "DownloadManager.NetworkMonitor")
     private nonisolated static let deletionQueue = DispatchQueue(
@@ -210,6 +211,10 @@ final class DownloadManager {
         let downloadsParent = cacheDir.deletingLastPathComponent()
         Self.deletionQueue.async {
             Self.removePendingDeletionDirectories(in: downloadsParent)
+        }
+        journalWriter.entries = { [weak self] in
+            guard let self, pendingJournalLoaded else { return nil }
+            return Array(pendingDownloads.values)
         }
         startNetworkMonitoring()
         restoreManifest()
@@ -622,24 +627,15 @@ final class DownloadManager {
         }
     }
 
-    private func persistPendingDownloads() -> Bool {
-        guard pendingJournalLoaded else { return false }
-        do {
-            let url = pendingJournalURL
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(Array(pendingDownloads.values)).write(to: url, options: .atomic)
-            return true
-        } catch {
-            DebugLogger.log("Pending download journal write failed: \(error)", category: .cache)
-            return false
-        }
-    }
+    /// Puts every pending-journal change made so far on disk. A background
+    /// wake calls this before it reports its events handled.
+    func finishPendingJournalWrites() { journalWriter.flush() }
 
     private func restorePendingDownloadsIfNeeded() {
         guard !restoredPendingDownloads, pendingRestoration == nil,
               UIApplication.shared.isProtectedDataAvailable else { return }
         do {
-            let entries = try JSONDecoder().decode([PendingDownload].self, from: Data(contentsOf: pendingJournalURL))
+            let entries = try JSONDecoder().decode([PendingDownload].self, from: Data(contentsOf: Self.pendingJournalURL))
             pendingDownloads = Dictionary(entries.map { ($0.song.id, $0) }, uniquingKeysWith: { _, new in new })
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             pendingDownloads = [:]
@@ -650,7 +646,7 @@ final class DownloadManager {
         pendingJournalLoaded = true
         if discardPendingOnRestore { pendingDownloads.removeAll() }
         for id in cancelledBeforePendingRestore { pendingDownloads.removeValue(forKey: id) }
-        if discardPendingOnRestore || !cancelledBeforePendingRestore.isEmpty { _ = persistPendingDownloads() }
+        if discardPendingOnRestore || !cancelledBeforePendingRestore.isEmpty { journalWriter.writeNow() }
         discardPendingOnRestore = false
         cancelledBeforePendingRestore.removeAll()
         pendingRestoration = Task { [weak self] in
@@ -752,7 +748,7 @@ final class DownloadManager {
         for song in accepted {
             pendingDownloads[song.id] = PendingDownload(song: song, token: UUID())
         }
-        guard persistPendingDownloads() else {
+        guard journalWriter.writeNow() else {
             for song in accepted { pendingDownloads.removeValue(forKey: song.id) }
             return
         }
@@ -786,7 +782,7 @@ final class DownloadManager {
             guard inProgress.contains(songID) else { continue }
             if downloadedIDs.contains(songID), immediatelyPlayableURL(for: song) != nil {
                 pendingDownloads.removeValue(forKey: songID)
-                _ = persistPendingDownloads()
+                journalWriter.scheduleWrite()
                 updatePublishedState { $0.inProgress.remove(songID) }
                 continue
             }
@@ -1047,7 +1043,7 @@ final class DownloadManager {
             taskRegistry.cancel(songID: songID)
         }
         pendingDownloads.removeValue(forKey: songID)
-        _ = persistPendingDownloads()
+        journalWriter.scheduleWrite()
         tasks.removeValue(forKey: songID)
         cachePromotionTasks.removeValue(forKey: songID)
         resumeRetriedSongIDs.remove(songID)
@@ -1110,7 +1106,7 @@ final class DownloadManager {
         let ids = Set(songs.map(\.id))
         let active = inProgress.intersection(ids)
         for id in ids { cancelWork(songID: id, persist: false) }
-        _ = persistPendingDownloads()
+        journalWriter.writeNow()
         cancelledInCurrentQueue += active.count
         updatePublishedState { $0.inProgress.subtract(ids) }
         startQueuedDownloadsIfPossible()
@@ -1123,7 +1119,7 @@ final class DownloadManager {
         if !pendingJournalLoaded { cancelledBeforePendingRestore.insert(songID) }
         deferredDownloadRequests.removeValue(forKey: songID)
         pendingDownloads.removeValue(forKey: songID)
-        if persist { _ = persistPendingDownloads() }
+        if persist { journalWriter.writeNow() }
         taskRegistry.cancel(songID: songID)
         cachePromotionTasks[songID]?.cancel()
         cachePromotionTasks.removeValue(forKey: songID)
@@ -1148,7 +1144,7 @@ final class DownloadManager {
             validDownloadCache.removeValue(forKey: songID)
             downloadedMetadata.removeValue(forKey: songID)
         }
-        _ = persistPendingDownloads()
+        journalWriter.writeNow()
         stageDownloadsForDeletion(songIDs: uniqueSongIDs)
         updatePublishedState { state in
             state.inProgress.subtract(uniqueSongIDs)
@@ -1264,7 +1260,7 @@ final class DownloadManager {
         if !pendingJournalLoaded { discardPendingOnRestore = true }
         deferredDownloadRequests.removeAll()
         pendingDownloads.removeAll()
-        _ = persistPendingDownloads()
+        journalWriter.writeNow()
         queuedDownloads.removeAll()
         queuedDownloadOrder.removeAll()
         isLoggingDownloadQueue = false
@@ -1784,7 +1780,8 @@ final class DownloadManager {
     }
 
     private func removeBrokenAudioFiles(for song: Song) {
-        cancelWork(songID: song.id)
+        cancelWork(songID: song.id, persist: false)
+        journalWriter.scheduleWrite()
         let songFiles = files(for: song.id, sourceURL: song.audioURL)
         validDownloadCache.removeValue(forKey: song.id)
         downloadedMetadata.removeValue(forKey: song.id)
