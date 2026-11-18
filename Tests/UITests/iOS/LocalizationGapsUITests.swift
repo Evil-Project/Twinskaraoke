@@ -2,6 +2,7 @@ import XCTest
 
 /// Strings that used to reach the screen in English in every language, or
 /// named the wrong visibility.
+@MainActor
 final class LocalizationGapsUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false

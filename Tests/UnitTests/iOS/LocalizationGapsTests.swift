@@ -74,15 +74,45 @@ struct LocalizationGapsTests {
             #expect(unit?.state == "translated", "\(key) is not translated into \(language)")
             #expect(!value.isEmpty && value != key, "\(key) has no \(language) translation of its own")
             #expect(
-                Self.placeholderTypes(in: value) == Self.placeholderTypes(in: key),
+                Self.placeholders(in: value) == Self.placeholders(in: key),
                 "\(key) loses or changes a placeholder in \(language)"
             )
         }
     }
 
-    /// The format specifiers of a string by type, ignoring their positions.
-    nonisolated static func placeholderTypes(in string: String) -> [String] {
-        string.matches(of: /%(?:\d+\$)?(@|lld)/).map { String($0.output.1) }.sorted()
+    /// The format specifiers of a string as (argument, type) pairs in
+    /// argument order. `%1$lld` names its argument; an unpositioned one takes
+    /// the next, as `String(format:)` counts them. Comparing types alone let
+    /// a translation that uses `%1$lld` twice pass for `%lld of %lld`.
+    nonisolated static func placeholders(in string: String) -> [Placeholder] {
+        var nextArgument = 0
+        return string.matches(of: /%(?:(\d+)\$)?(@|lld)/).map { match in
+            let argument: Int
+            if let position = match.output.1.flatMap({ Int($0) }) {
+                argument = position
+            } else {
+                nextArgument += 1
+                argument = nextArgument
+            }
+            return Placeholder(argument: argument, type: String(match.output.2))
+        }
+        .sorted { ($0.argument, $0.type) < ($1.argument, $1.type) }
+    }
+
+    nonisolated struct Placeholder: Equatable, CustomStringConvertible {
+        let argument: Int
+        let type: String
+
+        var description: String { "%\(argument)$\(type)" }
+    }
+
+    @Test("Placeholders keep their argument, not just their type")
+    func placeholdersKeepTheirArgument() {
+        let key = "Welcome · %lld of %lld"
+        #expect(Self.placeholders(in: "Willkommen · %1$lld von %2$lld") == Self.placeholders(in: key))
+        #expect(Self.placeholders(in: "%2$lld / %1$lld") == Self.placeholders(in: key))
+        #expect(Self.placeholders(in: "Willkommen · %1$lld von %1$lld") != Self.placeholders(in: key))
+        #expect(Self.placeholders(in: "%@ · %lld") != Self.placeholders(in: key))
     }
 }
 
