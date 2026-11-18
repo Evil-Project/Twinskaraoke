@@ -53,6 +53,7 @@ import XCTest
         app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
+
     func testDuplicateSlideIDNoticeAppearsInsideEditor() {
         let app = launchStudio()
         tap("1. Slide title", app: app)
@@ -63,10 +64,10 @@ import XCTest
         field.typeText("2\n")
         XCTAssertTrue(app.staticTexts["Slide IDs must be unique."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.navigationBars["Edit Slide"].exists)
-        recordReleaseNotes("Duplicate ID notice inside editor", in: app)
+        capture("Duplicate ID notice inside editor", in: app)
     }
 
-    func testStandaloneReleaseNotesExpandCollapseAndComplete() {
+    func testWebsiteCallbackAdvancesBundledDeveloperWalkthrough() {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",
                                "-UITestSplashResetControls", "-UITestSplashDeveloperControls"]
@@ -80,34 +81,164 @@ import XCTest
         XCUIDevice.shared.press(.home)
         app.activate()
 
-        waitForProgress("Update, slide 1 of 1", in: app)
-        let toggle = app.buttons["Splash.Changelog.Toggle"]
-        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
-        XCTAssertEqual(toggle.label, "Show full changelog")
+        waitForProgress("Update, slide 1 of 3", in: app)
         XCTAssertTrue(app.staticTexts["Play saved songs offline."].exists)
         XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        recordReleaseNotes("Condensed release notes", in: app)
-        toggle.tap()
-        XCTAssertEqual(toggle.label, "Show less")
+        capture("Condensed changelog", in: app)
+        let changelogToggle = app.buttons["Splash.Changelog.Toggle"]
         XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
+        XCTAssertEqual(changelogToggle.label, "Show full changelog")
+        changelogToggle.tap()
         XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
-        XCTAssertGreaterThanOrEqual(toggle.frame.minY, app.staticTexts["See the song reveal after the round."].frame.maxY)
-        XCTAssertLessThanOrEqual(toggle.frame.maxY, app.buttons["Splash.Complete"].frame.minY)
-        recordReleaseNotes("Expanded release notes", in: app)
-        toggle.tap()
-        XCTAssertEqual(toggle.label, "Show full changelog")
+        XCTAssertEqual(changelogToggle.label, "Show less")
+        XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
+        let lastDetail = app.staticTexts["See the song reveal after the round."]
+        XCTAssertGreaterThanOrEqual(changelogToggle.frame.minY, lastDetail.frame.maxY)
+        XCTAssertLessThanOrEqual(changelogToggle.frame.maxY, app.buttons["Splash.Next"].frame.minY)
+        capture("Expanded changelog", in: app)
+        changelogToggle.tap()
+        XCTAssertEqual(changelogToggle.label, "Show full changelog")
         XCTAssertFalse(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
+        changelogToggle.tap()
+        XCTAssertEqual(changelogToggle.label, "Show less")
+        XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
+        app.buttons["Splash.Next"].tap()
+
+        let finish = app.webViews.buttons["Complete test page"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 12))
+        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
+        XCTAssertTrue(finish.isHittable)
+        XCTAssertFalse(app.buttons["Splash.Next"].exists)
+        capture("Full-screen website", in: app)
+        finish.tap()
+        waitForProgress("Update, slide 3 of 3", in: app)
+        app.buttons["Splash.Back"].tap()
+        waitForProgress("Update, slide 2 of 3", in: app)
+        XCTAssertTrue(app.staticTexts["Website step complete."].exists)
+        XCTAssertFalse(finish.exists)
+        app.buttons["Splash.Next"].tap()
         app.buttons["Splash.Complete"].tap()
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
 
-    private func recordReleaseNotes(_ name: String, in app: XCUIApplication) {
+    func testWebsiteCallbackCompletesFinalPageInStudio() {
+        let app = launchStudio()
+        tap("Walkthrough", app: app)
+        tap("Update", app: app)
+
+        tap("Website", app: app)
+        XCTAssertTrue(app.textFields["Website URL"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        let finalSlide = app.cells.containing(.staticText, identifier: "3. You’re up to date.").firstMatch
+        reveal(finalSlide, app: app)
+        XCTAssertTrue(finalSlide.isHittable)
+        finalSlide.swipeLeft()
+        tap("Delete", app: app)
+
+        tap("SplashStudio.Preview", app: app)
+        waitForProgress("Update, slide 1 of 2", in: app)
+        app.buttons["Splash.Next"].tap()
+        let finish = app.webViews.buttons["Complete test page"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 12))
+        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
+        XCTAssertTrue(finish.isHittable)
+        XCTAssertFalse(app.buttons["Splash.Complete"].exists)
+        finish.tap()
+        XCTAssertTrue(app.navigationBars["Splash Screen Studio"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Exit Preview"].exists)
+    }
+
+    func testLoadedWebsiteHasNativeRecoveryInStudio() throws {
+        let app = launchStudio(large: true)
+        tap("Walkthrough", app: app); tap("Update", app: app)
+        tap("SplashStudio.Preview", app: app)
+        app.buttons["Splash.Next"].tap()
+        let failure = app.webViews.buttons["Simulate failed submission"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
+        let feedback = app.webViews.textFields["Optional feedback"]
+        XCTAssertTrue(feedback.exists)
+        feedback.tap(); feedback.typeText("Keep this draft")
+        failure.tap()
+        app.buttons["Splash.Web.Recovery"].tap()
+        tap("Keep filling out", app: app)
+        XCTAssertEqual(feedback.value as? String, "Keep this draft")
+        app.buttons["Splash.Web.Recovery"].tap()
+        try app.performAccessibilityAudit(for: .sufficientElementDescription)
+        capture("Native recovery after failed submission", in: app)
+        tap("Retry website", app: app)
+        XCTAssertTrue(app.webViews.buttons["Complete test page"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
+        XCTAssertEqual(feedback.value as? String, "")
+        app.buttons["Splash.Web.Recovery"].tap()
+        tap("Continue for now", app: app)
+        waitForProgress("Update, slide 3 of 3", in: app)
+    }
+
+    func testMultipleWebsiteRemindersReopenAloneAndResolveIndependently() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",
+                               "-UITestSplashResetControls", "-UITestSplashWebsites"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Splash.Next"].waitForExistence(timeout: 15))
+        app.buttons["Splash.Next"].tap(); app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
+        waitForProgress("Update, slide 1 of 4", in: app)
+        app.buttons["Splash.Next"].tap()
+        for _ in 0..<2 {
+            XCTAssertTrue(app.webViews.buttons["Complete test page"].waitForExistence(timeout: 15))
+            app.buttons["Splash.Web.Recovery"].tap()
+            tap("Continue for now", app: app)
+        }
+        waitForProgress("Update, slide 4 of 4", in: app)
+        app.buttons["Splash.Complete"].tap()
+        XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
+        XCUIDevice.shared.press(.home); app.activate()
+        let finish = app.webViews.buttons["Complete test page"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
+        capture("Website-only reminder", in: app)
+        finish.tap()
+        XCTAssertTrue(app.webViews.buttons["Cancel test form"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["AccountToolbarButton"].exists)
+        app.terminate()
+        app.launchArguments.removeAll { ["-UITestSplashReset", "-UITestSplashResetControls"].contains($0) }
+        app.launch()
+        XCTAssertTrue(app.webViews.buttons["Cancel test form"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
+        app.webViews.buttons["Cancel test form"].tap()
+        XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.webViews.firstMatch.exists)
+    }
+
+    func testInterruptedWebsiteKeepsLiveFormAndSkipsRemainingNativePages() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",
+                               "-UITestSplashResetControls", "-UITestSplashWebsites"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Splash.Next"].waitForExistence(timeout: 15))
+        app.buttons["Splash.Next"].tap(); app.buttons["Splash.Next"].tap(); app.buttons["Splash.Complete"].tap()
+        waitForProgress("Update, slide 1 of 4", in: app)
+        app.buttons["Splash.Next"].tap()
+        let feedback = app.webViews.textFields["Optional feedback"]
+        XCTAssertTrue(feedback.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.descendants(matching: .any)["Splash.Web.Loading"].firstMatch.waitForNonExistence(timeout: 8))
+        feedback.tap(); feedback.typeText("Retain this answer")
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertEqual(feedback.value as? String, "Retain this answer")
+        app.webViews.buttons["Complete test page"].tap()
+        XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
+    }
+
+    func capture(_ name: String, in app: XCUIApplication) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
-
     /// Verifies that long light content scrolls and RTL navigation stays sequential.
     func testLongLightContentScrollsAndRTLNavigationStaysSequential() {
         let app = XCUIApplication()
@@ -202,7 +333,7 @@ import XCTest
         picker.tap(); app.buttons["Off"].firstMatch.tap()
     }
     /// Waits for persisted slide navigation to appear before sending another action.
-    private func waitForProgress(_ label: String, in app: XCUIApplication) {
+    func waitForProgress(_ label: String, in app: XCUIApplication) {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: app.staticTexts["Splash.Progress"])
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 5), .completed)
     }
@@ -213,9 +344,10 @@ import XCTest
         for _ in 0..<10 { version.tap() }
     }
     /// Launches the isolated Studio fixture without changing real walkthrough history.
-    private func launchStudio() -> XCUIApplication {
+    func launchStudio(large: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplashStudio", "-UITestSplashStudioReset"]
+        if large { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
         XCTAssertTrue(app.navigationBars["Splash Screen Studio"].waitForExistence(timeout: 15))
         return app
@@ -409,7 +541,7 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
     }
     /// Completes each visible fixture walkthrough using its sequential navigation buttons.
-    private func finishVisibleWalkthroughs(_ app: XCUIApplication) {
+    func finishVisibleWalkthroughs(_ app: XCUIApplication) {
         for _ in 0..<8 {
             if app.buttons["AccountToolbarButton"].firstMatch.exists { break }
             if app.buttons["Splash.Next"].exists { app.buttons["Splash.Next"].tap() }
@@ -418,7 +550,7 @@ import XCTest
         XCTAssertTrue(app.buttons["AccountToolbarButton"].firstMatch.waitForExistence(timeout: 15))
     }
     /// Navigates from Account settings to the Developer menu.
-    private func openDeveloper(_ app: XCUIApplication) {
+    func openDeveloper(_ app: XCUIApplication) {
         app.buttons["AccountToolbarButton"].firstMatch.tap()
         tap("Settings", app: app); tap("Developer", app: app)
     }
@@ -448,7 +580,7 @@ import XCTest
         if up { form.swipeUp(velocity: .slow) } else { form.swipeDown(velocity: .slow) }
     }
     /// Finds and taps the named control in the active inspector or slide form.
-    private func tap(_ label: String, app: XCUIApplication) {
+    func tap(_ label: String, app: XCUIApplication) {
         for _ in 0..<10 {
             let inspector = app.descendants(matching: .any)["SplashStudio.CanvasInspector"].firstMatch
             let scope: XCUIElement = inspector.exists ? inspector : app

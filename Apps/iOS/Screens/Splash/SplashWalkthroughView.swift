@@ -16,6 +16,11 @@ struct SplashWalkthroughView: View {
     let index: Int
     var errorMessage: String? = nil
     var busy = false
+    var websiteCompleted = false
+    var websiteClosed = false
+    var websiteOnly = false
+    var websiteSession: SplashWebsiteSession?
+    var websiteAction: ((SplashWebsiteAction) -> Void)?
     let back: () -> Void
     let next: () -> Void
     let complete: () -> Void
@@ -25,28 +30,48 @@ struct SplashWalkthroughView: View {
     private var slide: SplashSlide { content.slides[index] }
     private var foreground: Color { Color(splashHex: slide.textColor) }
     var body: some View {
-        nativePage
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .foregroundStyle(foreground)
-            .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
-            .tint(foreground)
-            .interactiveDismissDisabled()
-            .onChange(of: index) { _, _ in titleFocused = true }
-            .onAppear { titleFocused = true }
+        Group {
+            if let website = slide.website, !websiteCompleted, errorMessage == nil {
+                SplashWebsiteView(website: website, session: websiteSession) { action in
+                    if let websiteAction { websiteAction(action) }
+                    else { advance() }
+                }
+                .id(slide.id)
+            } else {
+                nativePage
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(foreground)
+        .background(SplashSlideBackground(slide: slide).ignoresSafeArea())
+        .tint(foreground)
+        .interactiveDismissDisabled()
+        .onChange(of: index) { _, _ in titleFocused = true }
+        .onAppear { titleFocused = true }
     }
 
     private var nativePage: some View {
         VStack(spacing: 0) {
-            progressText
-                .font(.subheadline).padding()
-                .accessibilityLabel(progressAccessibilityLabel)
-                .accessibilityIdentifier("Splash.Progress")
+            if !websiteOnly {
+                progressText
+                    .font(.subheadline).padding()
+                    .accessibilityLabel(progressAccessibilityLabel)
+                    .accessibilityIdentifier("Splash.Progress")
+            }
             GeometryReader { geometry in
                 SplashSlideScrollView {
                     Group {
                         if let releaseNotes = slide.releaseNotes {
                             SplashReleaseNotesView(notes: releaseNotes, title: slide.title,
                                                    version: content.targetVersion, build: content.targetBuild)
+                        } else if slide.website != nil {
+                            Group {
+                                if websiteClosed { Text("This website has closed.") }
+                                else if websiteCompleted { Text("Website step complete.") }
+                                else { Text("Saving website progress.") }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(AM.Spacing.xl)
                         } else {
                             SplashSlideRenderer(slide: slide, viewport: geometry.size)
                         }
@@ -88,17 +113,23 @@ struct SplashWalkthroughView: View {
         }
     }
     @ViewBuilder private var navigationButtons: some View {
-        if index > 0 {
+        if index > 0 && !websiteOnly {
             Button("Back", action: back).buttonStyle(.bordered)
                 .accessibilityIdentifier("Splash.Back")
         }
-        Button(index == content.slides.count - 1 ? content.finalLabel : content.nextLabel, action: advance)
+        Button(forwardLabel, action: advance)
             .buttonStyle(.borderedProminent)
             .foregroundStyle(Color(splashHex: slide.backgroundColor))
             .accessibilityIdentifier(index == content.slides.count - 1 ? "Splash.Complete" : "Splash.Next")
     }
 
+    private var forwardLabel: String {
+        if websiteOnly { return String(localized: "Continue to app") }
+        return index == content.slides.count - 1 ? content.finalLabel : content.nextLabel
+    }
+
     private func advance() {
+        if websiteOnly { websiteAction?(.deferred); return }
         if index == content.slides.count - 1 {
             complete()
         } else {
@@ -170,6 +201,13 @@ struct SplashRootView: View {
                     let renderedIndex = coordinator.index
                     SplashWalkthroughView(content: active, index: renderedIndex,
                                           errorMessage: coordinator.errorMessage, busy: coordinator.isSaving,
+                                          websiteCompleted: coordinator.hasPassedCurrentSlide,
+                                          websiteClosed: coordinator.currentWebsiteStatus == .closed,
+                                          websiteOnly: coordinator.isWebsiteOnly,
+                                          websiteSession: coordinator.websiteSession,
+                                          websiteAction: {
+                                              coordinator.websiteAction($0, expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex)
+                                          },
                                           back: { coordinator.back(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },
                                           next: { coordinator.next(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },
                                           complete: { coordinator.complete(expectedFingerprint: active.fingerprint, expectedIndex: renderedIndex) },
@@ -199,6 +237,9 @@ struct SplashRootView: View {
             if scenePhase != .background { coordinator.foreground() }
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { coordinator.foreground() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            coordinator.background()
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
             coordinator.foreground()
         }

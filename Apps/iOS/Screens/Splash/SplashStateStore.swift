@@ -12,6 +12,8 @@ nonisolated struct SplashState: Codable, Equatable {
     var installCompleted = false
     var completedUpdateIDs: Set<String> = []
     var pending: SplashProgress?
+    // Optional for compatibility with saved history from before website reminders.
+    var websites: [SplashWebsiteProgress]?
 }
 
 @MainActor protocol SplashStateStoring {
@@ -41,6 +43,11 @@ nonisolated struct SplashState: Codable, Equatable {
         let state = try JSONDecoder().decode(SplashState.self, from: data)
         guard state.schemaVersion == 1,
               state.completedUpdateIDs.allSatisfy(SplashContent.validID),
+              state.websites.map({ records in
+                  records.count <= 30 && records.allSatisfy {
+                      SplashContent.validID($0.announcementID) && SplashContent.validID($0.slideID) && $0.fingerprint.count == 64
+                  } && Set(records.map { "\($0.announcementID)/\($0.fingerprint)/\($0.slideID)" }).count == records.count
+              }) ?? true,
               state.pending.map({ $0.index >= 0 && $0.highestVisited >= $0.index && $0.highestVisited < 30 && SplashContent.validID($0.id) && $0.fingerprint.count == 64 }) ?? true
         else { throw SplashError(message: "Walkthrough state is invalid or uses an unsupported schema. Retry when app data is available.") }
         try excludeFromBackup(directory); try excludeFromBackup(file)
