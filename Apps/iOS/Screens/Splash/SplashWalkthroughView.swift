@@ -33,9 +33,9 @@ struct SplashWalkthroughView: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            Text("\(content.kind == .install ? "Welcome" : "Update") · \(index + 1) of \(content.slides.count)")
+            progressText
                 .font(.subheadline).padding()
-                .accessibilityLabel("\(content.kind == .install ? "Welcome" : "Update"), slide \(index + 1) of \(content.slides.count)")
+                .accessibilityLabel(progressAccessibilityLabel)
                 .accessibilityIdentifier("Splash.Progress")
             GeometryReader { geometry in
                 SplashSlideScrollView {
@@ -66,6 +66,22 @@ struct SplashWalkthroughView: View {
         .interactiveDismissDisabled()
         .onChange(of: index) { _, _ in titleFocused = true }
         .onAppear { titleFocused = true }
+    }
+    /// One whole phrase per walkthrough kind, so translators never see the kind
+    /// as a word dropped into a sentence.
+    private var progressText: Text {
+        let slide = index + 1, total = content.slides.count
+        return switch content.kind {
+        case .install: Text("Welcome · \(slide) of \(total)", comment: "Welcome walkthrough progress: current slide and slide count.")
+        case .update: Text("Update · \(slide) of \(total)", comment: "What's New walkthrough progress: current slide and slide count.")
+        }
+    }
+    private var progressAccessibilityLabel: Text {
+        let slide = index + 1, total = content.slides.count
+        return switch content.kind {
+        case .install: Text("Welcome, slide \(slide) of \(total)", comment: "VoiceOver: welcome walkthrough progress, current slide and slide count.")
+        case .update: Text("Update, slide \(slide) of \(total)", comment: "VoiceOver: What's New walkthrough progress, current slide and slide count.")
+        }
     }
     @ViewBuilder private var navigationButtons: some View {
         if index > 0 {
