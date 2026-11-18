@@ -67,6 +67,13 @@ struct PlaylistsGridContentTests {
     @Test func loadingAndSearchStatesAreUnchanged() {
         #expect(resolve(isLoading: true, hasPlaylists: false, hasMatches: false) == .loading)
         #expect(resolve(isLoading: true) == .playlists(showsLoadNotice: false))
-        #expect(resolve(hasMatches: false) == .noResults)
+        #expect(resolve(hasMatches: false) == .noResults(showsLoadNotice: false))
+    }
+
+    /// A search over the local playlists alone finds nothing, but the
+    /// account's playlists never loaded: "No Results" on its own would hide
+    /// that the missing ones may hold a match.
+    @Test func aSearchWithoutMatchesAfterAFailedLoadKeepsTheNotice() {
+        #expect(resolve(hasMatches: false, loadFailed: true) == .noResults(showsLoadNotice: true))
     }
 }

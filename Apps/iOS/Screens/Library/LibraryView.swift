@@ -683,12 +683,21 @@ struct PlaylistsGridScreen: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.top, 48)
-                case .noPlaylists, .noResults:
+                case .noPlaylists:
                     MusicEmptyState(
-                        title: content == .noPlaylists ? String(localized: "No Playlists") : String(localized: "No Results"),
-                        message: content == .noPlaylists
-                            ? String(localized: "Playlists you add will appear here.")
-                            : String(localized: "Try another playlist name.")
+                        title: String(localized: "No Playlists"),
+                        message: String(localized: "Playlists you add will appear here.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.top, 48)
+                case let .noResults(showsLoadNotice):
+                    if showsLoadNotice, let message = viewModel.errorMessage {
+                        LibraryLoadNotice(message: message)
+                            .padding(.top, AM.Spacing.s)
+                    }
+                    MusicEmptyState(
+                        title: String(localized: "No Results"),
+                        message: String(localized: "Try another playlist name.")
                     )
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.top, 48)
@@ -723,8 +732,9 @@ struct PlaylistsGridScreen: View {
         .smoothScrolling()
         // The failure copy promises a pull to refresh.
         .refreshableWithTick {
-            userManager.fetchPlaylists()
-            await viewModel.refreshAll()
+            async let accountPlaylists: Void = userManager.refreshPlaylists()
+            async let playlists: Void = viewModel.refreshAll()
+            _ = await (accountPlaylists, playlists)
         }
         .navigationTitle("Playlists")
         // Inline, matching PlaylistListView. A large title has to collapse into

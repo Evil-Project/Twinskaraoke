@@ -10,7 +10,9 @@ enum PlaylistsGridContent: Equatable {
     case signInRequired
     case loadFailed
     case noPlaylists
-    case noResults
+    /// `showsLoadNotice`: as for `playlists`. A search that finds nothing
+    /// locally may still have matches among the playlists that didn't load.
+    case noResults(showsLoadNotice: Bool)
     /// `showsLoadNotice`: the playlists request failed, so the grid holds
     /// only what is known locally (Favourite Songs, saved playlists).
     case playlists(showsLoadNotice: Bool)
@@ -31,7 +33,7 @@ enum PlaylistsGridContent: Equatable {
         // the way forward rather than retrying.
         if !hasPlaylists, !isSignedIn { return .signInRequired }
         if !hasPlaylists, loadFailed { return .loadFailed }
-        if !hasMatches { return hasPlaylists ? .noResults : .noPlaylists }
+        if !hasMatches { return hasPlaylists ? .noResults(showsLoadNotice: loadFailed) : .noPlaylists }
         return .playlists(showsLoadNotice: loadFailed)
     }
 }
