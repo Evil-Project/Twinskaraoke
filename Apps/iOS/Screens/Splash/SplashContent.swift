@@ -32,6 +32,16 @@ nonisolated struct SplashSlide: Codable, Equatable, Identifiable {
     var design: SplashSlideDesign?
     var features: [SplashDemoFeature]?
     var demonstration: SplashDemonstration?
+    var releaseNotes: SplashReleaseNotes?
+
+    static func releaseNotesPage() -> Self {
+        var slide = Self()
+        slide.title = nil
+        slide.body = nil
+        slide.symbol = nil
+        slide.releaseNotes = SplashReleaseNotes()
+        return slide
+    }
 }
 
 nonisolated struct SplashContent: Codable, Equatable {
@@ -49,11 +59,17 @@ nonisolated struct SplashContent: Codable, Equatable {
     static let maxImageBytes = 2 * 1024 * 1024
     /// Creates the safe fallback walkthrough for the requested install or update kind.
     static func placeholder(_ kind: SplashKind) -> Self {
-        Self(kind: kind, id: kind == .install ? "install-placeholder" : "update-placeholder",
-             enabled: kind == .install, targetVersion: kind == .update ? "1.0.14" : nil,
-             slides: (0..<(kind == .install ? 3 : 2)).map { index in
-                 var slide = SplashSlide(); slide.id = "\(kind.rawValue)-slide-\(index + 1)"; return slide
-             })
+        var slides = (0..<(kind == .install ? 3 : 2)).map { index in
+            var slide = SplashSlide(); slide.id = "\(kind.rawValue)-slide-\(index + 1)"; return slide
+        }
+        if kind == .update {
+            var page = SplashSlide.releaseNotesPage()
+            page.id = slides[0].id
+            page.releaseNotes?.general = [.init(id: "example", headline: String(localized: "Example release notes"))]
+            slides[0] = page
+        }
+        return Self(kind: kind, id: kind == .install ? "install-placeholder" : "update-placeholder",
+                    enabled: kind == .install, targetVersion: kind == .update ? "1.0.14" : nil, slides: slides)
     }
 
     /// Rejects unsupported or out-of-range content before it can be presented or exported.
@@ -77,6 +93,11 @@ nonisolated struct SplashContent: Codable, Equatable {
         for (index, slide) in slides.enumerated() {
             let prefix = "Slide \(index + 1): "
             try require(Self.validID(slide.id), prefix + "invalid slide ID.")
+            if let notes = slide.releaseNotes {
+                try require(kind == .update && index == 0,
+                            String(localized: "Release notes belong on the first update slide."))
+                try notes.validate()
+            }
             try require((slide.title?.count ?? 0) <= 300 && (slide.body?.count ?? 0) <= 12000, prefix + "text exceeds the limit (title 300, body 12000).")
             try require(Self.validColor(slide.backgroundColor) && Self.validColor(slide.textColor), prefix + "colors must use #RRGGBB.")
             try require(slide.imageDescription.count <= 1000, prefix + "image description exceeds 1000 characters.")
@@ -96,6 +117,16 @@ nonisolated struct SplashContent: Codable, Equatable {
             if let data = slide.imageData {
                 try Self.validateImage(data, description: slide.imageDescription, prefix: prefix)
             }
+        }
+    }
+
+    /// Drafts can be saved and imported before they have publishable release notes.
+    func validateForPresentation() throws {
+        try validate()
+        guard kind == .update else { return }
+        try slides.first?.releaseNotes?.validateForPresentation()
+        guard slides.first?.releaseNotes?.isReady == true else {
+            throw SplashError(message: String(localized: "Add release notes with a headline for each entry and a version for watchOS notes."))
         }
     }
     /// Checks image bytes, dimensions, and the required accessible description.
@@ -172,8 +203,11 @@ enum SplashBundleLoader {
     }
     /// Returns validated bundled content, using an install fallback and skipping invalid updates.
     static func runtimeContent(_ kind: SplashKind) -> SplashContent? {
-        do { return try load(kind) }
-        catch {
+        do {
+            let content = try load(kind)
+            try content.validateForPresentation()
+            return content
+        } catch {
             NSLog("Splash %@: %@", kind.rawValue, error.localizedDescription)
             return kind == .install ? .placeholder(.install) : nil
         }

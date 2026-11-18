@@ -8,28 +8,37 @@
   "slides": [
     {
       "id": "update-slide-1",
-      "title": "Slide title",
-      "body": "Description placeholder",
-      "symbol": "photo",
-      "imageDescription": "Image placeholder",
+      "title": "Twinkaraoke TestFlight Beta",
+      "imageDescription": "",
       "backgroundColor": "#101827",
       "textColor": "#FFFFFF",
-      "layout": "imageAbove",
-      "alignment": "center",
-      "typography": "standard"
-    },
-    {
-      "id": "update-slide-2",
-      "title": "Slide title",
-      "body": "Description placeholder",
-      "symbol": "photo",
-      "imageDescription": "Image placeholder",
-      "backgroundColor": "#101827",
-      "textColor": "#FFFFFF",
-      "layout": "imageAbove",
-      "alignment": "center",
-      "typography": "standard"
+      "layout": "textOnly",
+      "alignment": "leading",
+      "typography": "standard",
+      "releaseNotes": {
+        "watchVersion": "1.1.0",
+        "watchOS": [
+          {
+            "id": "watch-offline",
+            "headline": "Play saved songs offline.",
+            "details": "Start a downloaded song on Apple Watch."
+          },
+          {
+            "id": "watch-volume",
+            "headline": "See the Watch volume level as you adjust it.",
+            "details": ""
+          }
+        ],
+        "iOS": [
+          {
+            "id": "bandle",
+            "headline": "Play the daily Bandle challenge.",
+            "details": "Find it on the Home screen.\nSee the song reveal after the round."
+          }
+        ],
+        "general": []
+      }
     }
   ],
-  "targetVersion": "1.0.14"
+  "targetVersion": "1.1.0"
 }

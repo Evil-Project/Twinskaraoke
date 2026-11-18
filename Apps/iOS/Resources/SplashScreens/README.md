@@ -18,6 +18,14 @@ the dimension and JPEG quality controls. Images are embedded in the JSON.
 
 Add slides with Add Slide. Swipe right or use the context menu to duplicate;
 use Edit to delete and drag to reorder. At least one slide must remain.
+For Update, **Release notes** is the fixed first page. Add entries under
+watchOS, iOS, or General. Each entry has a headline and optional detail lines.
+The condensed view uses the first headline per section. The expanded view uses
+all entries. Delete any optional pages to make a changelog-only update.
+Older update drafts retain their existing slides and need release notes before
+preview or export. If a legacy draft already has 30 slides, delete one to make
+room for the changelog.
+
 Edit Next and final button labels in the main form. Save Local Draft stores an
 installation-local draft independently of runtime completion state. Switching
 modes saves the current valid draft; backgrounding or leaving Studio also saves.
@@ -61,14 +69,12 @@ that ID. Completion IDs survive updates and downgrades. Only the currently bundl
 enabled, matching announcement is considered; no missed-release backlog is shown.
 For an ordinary update, leave **Show Update Walkthrough for This Release** off,
 export the disabled `update.json`, replace its source file, then rebuild. The
-shipped update is disabled with two placeholder slides; install has three
-placeholder slides.
+shipped update example is disabled and contains a single release notes page.
 
 Install comes first when both are pending, then Update, before the app opens.
-Next and Back are the only runtime navigation. Progress is noninteractive; there
-is no skip or dismiss action. Every slide must be visited in sequence. Progress
-and completion are persisted atomically before advancing/unlocking. If content
-changes while unfinished, its fingerprint no longer matches and progress restarts
+Next and Back navigate between pages. Done completes the final page.
+Progress and completion are persisted atomically before advancing or unlocking.
+If content changes while unfinished, its fingerprint no longer matches and progress restarts
 at slide one. Completed install onboarding is independent of content/ID/version
 and stays completed when install content changes. Malformed install content uses
 three built-in placeholder slides; malformed update content is logged and skipped
@@ -214,3 +220,5 @@ an error and keep the app open. Reopen the app to exercise ordinary eligibility.
 A disabled or nonmatching update still does not appear after a reset.
 Login, credentials, account data, caches, and drafts are not cleared. This is an
 explicit hidden Developer action, available in developer-enabled release builds.
+
+Release-note entries allow up to 30 nonempty detail lines for preview, export, and runtime. Older over-limit drafts remain importable and saveable with their full text so they can be shortened in Studio.
