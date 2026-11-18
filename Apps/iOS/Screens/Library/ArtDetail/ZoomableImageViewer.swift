@@ -179,7 +179,7 @@ struct ZoomableImageViewer: View {
         if reduceMotion {
             offset = clamped
         } else {
-            withAnimation(.spring()) { offset = clamped }
+            withAnimation(AppMotion.gentle) { offset = clamped }
         }
         lastOffset = clamped
     }
@@ -213,7 +213,7 @@ struct ZoomableImageViewer: View {
         if reduceMotion {
             update()
         } else {
-            withAnimation(.spring()) {
+            withAnimation(AppMotion.gentle) {
                 update()
             }
         }
