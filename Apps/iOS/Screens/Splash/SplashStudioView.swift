@@ -279,7 +279,7 @@ struct SplashPreviewView: View {
 
 struct SplashSlideEditor: View {
     @Binding var slide: SplashSlide
-    var studio: SplashStudioModel? = nil
+    var studio: SplashStudioModel?
     var allowsWebsite = false
     @State private var message: String?
     @State private var singlePreview = false
@@ -293,7 +293,8 @@ struct SplashSlideEditor: View {
         }
         .accessibilityIdentifier("SplashStudio.SlideForm")
         .navigationTitle("Edit Slide")
-        .splashNotice($message)
+        .onChange(of: studio?.noticeRevision) { _, _ in message = studio?.message }
+        .splashNotice($message, revision: studio?.noticeRevision ?? 0)
         .fullScreenCover(isPresented: $singlePreview) {
             SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
         }
@@ -391,14 +392,6 @@ struct SplashSlideEditor: View {
                 }
             }
         }
-        .accessibilityIdentifier("SplashStudio.SlideForm")
-        .navigationTitle("Edit Slide")
-        .onChange(of: studio?.noticeRevision) { _, _ in message = studio?.message }
-        .splashNotice($message, revision: studio?.noticeRevision ?? 0)
-        .fullScreenCover(isPresented: $singlePreview) {
-            SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
-        }
-        .fullScreenCover(isPresented: $arranging) { SplashCanvasEditor(slide: $slide) }
     }
 
     /// Binds an optional slide design field through its resolved default design.

@@ -22,7 +22,7 @@ struct SplashWebsiteView: View {
                         Text("The website could not load.").multilineTextAlignment(.center)
                         Button("Retry", action: open).buttonStyle(.bordered)
                     }
-                    Button("Continue to update", action: advance).buttonStyle(.borderedProminent)
+                    Button("Continue to update", action: continueWithoutWebsite).buttonStyle(.borderedProminent)
                 }
                 .padding(AM.Spacing.xl)
             } else if session.loading {
@@ -32,8 +32,29 @@ struct SplashWebsiteView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottomTrailing) {
+            if session.page != nil, !session.loading {
+                Menu {
+                    Button("Keep filling out") {}
+                    Button("Continue for now", action: continueWithoutWebsite)
+                } label: {
+                    Label("Website help", systemImage: "questionmark")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.circle)
+                .controlSize(.large)
+                .accessibilityIdentifier("Splash.Web.Recovery")
+                .padding(AM.Spacing.l)
+            }
+        }
         .onAppear(perform: open)
         .onDisappear(perform: session.stop)
+    }
+
+    private func continueWithoutWebsite() {
+        session.stop()
+        advance()
     }
 
     private func open() {

@@ -28,8 +28,7 @@ room for the changelog.
 
 For an additional update slide, open **Edit Slide**, choose **Website** as
 the slide type, and enter its HTTPS URL. Use **Preview** to test it on the
-current device. A blank URL loads the local test page when previewing or
-testing the disabled bundled walkthrough. A webpage can also be the final slide.
+current device. A blank URL loads the local test page when previewing a Studio draft. A webpage can also be the final slide.
 The [website integration blueprint](../../../../docs/splash-website-integration.md)
 describes the request and completion message.
 Edit Next and final button labels in the main form. Save Local Draft stores an
@@ -77,8 +76,8 @@ that ID. Completion IDs survive updates and downgrades. Only the currently bundl
 enabled, matching announcement is considered; no missed-release backlog is shown.
 For an ordinary update, leave **Show Update Walkthrough for This Release** off,
 export the disabled `update.json`, replace its source file, then rebuild. The
-shipped update example is disabled and includes release notes, a local website
-test page, and a final native page.
+bundled 1.1.0 build 36 update is enabled and includes release notes followed by
+a hosted survey as the final slide.
 
 Install comes first when both are pending, then Update, before the app opens.
 Native pages use Next, Back, and the final Done action. Website completion uses

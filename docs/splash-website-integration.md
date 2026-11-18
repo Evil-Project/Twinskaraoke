@@ -17,8 +17,9 @@ advancing or opening the app.
 
 The local draft keeps the URL when saved or exported. An enabled announcement
 with a website requires both the target version and exact build number. The
-bundled example is disabled. **Developer → Always Show Splash → Update**
-lets you run that example locally with separate test progress.
+bundled 1.1.0 build 36 update is enabled and ends with a hosted survey after
+the release notes. **Developer → Always Show Splash → Update** opens the
+bundled walkthrough with separate test progress.
 
 ## HTTPS request and completion message
 
@@ -63,8 +64,11 @@ the main frame, configured HTTPS origin, and current UUID. `postMessage`
 goes to WebKit in the app. This connection requires only the initial HTTPS
 page request.
 
-## Closed pages and retries
+## Leaving a website and retrying
 
+- While a website is open, the **?** menu offers **Keep filling out** and
+  **Continue for now**. Continuing closes the website session and advances
+  the walkthrough without a completion message from the page.
 - Return HTTP `410 Gone` for the embedded page if the website is closed.
   The app shows **Continue to update**.
 - On a temporary page-load failure, the app offers **Retry** and **Continue

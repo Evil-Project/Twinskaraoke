@@ -18,7 +18,9 @@ import Observation
             let directory = SplashStateStore.defaultDirectory.appendingPathComponent("UITest", isDirectory: true)
             if arguments.contains("-UITestSplashReset") { try? FileManager.default.removeItem(at: directory) }
             var update: SplashContent?
-            if arguments.contains("-UITestSplashUpdate") {
+            if arguments.contains("-UITestSplashWebsite") {
+                update = SplashStudioTestingFixtures.websiteWalkthrough
+            } else if arguments.contains("-UITestSplashUpdate") {
                 update = .placeholder(.update); update?.enabled = true; update?.targetVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             }
             // Navigation fixtures must remain stable when release content is edited.

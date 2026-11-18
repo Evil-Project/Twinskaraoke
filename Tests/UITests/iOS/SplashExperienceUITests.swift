@@ -66,10 +66,10 @@ import XCTest
         capture("Duplicate ID notice inside editor", in: app)
     }
 
-    func testStandaloneReleaseNotesExpandCollapseAndComplete() {
+    func launchWebsiteWalkthrough() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode", "1", "-UITestSplash", "-UITestSplashReset",
-                               "-UITestSplashResetControls", "-UITestSplashDeveloperControls"]
+                               "-UITestSplashResetControls", "-UITestSplashDeveloperControls", "-UITestSplashWebsite"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Splash.Progress"].waitForExistence(timeout: 15))
         finishVisibleWalkthroughs(app)
@@ -80,7 +80,12 @@ import XCTest
         XCUIDevice.shared.press(.home)
         app.activate()
 
-        waitForProgress("Update, slide 1 of 1", in: app)
+        waitForProgress("Update, slide 1 of 3", in: app)
+        return app
+    }
+
+    func testReleaseNotesExpandCollapseAndWebsiteCompletes() {
+        let app = launchWebsiteWalkthrough()
         let toggle = app.buttons["Splash.Changelog.Toggle"]
         XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
         XCTAssertEqual(toggle.label, "Show full changelog")
@@ -92,7 +97,7 @@ import XCTest
         XCTAssertEqual(app.buttons.matching(identifier: "Splash.Changelog.Toggle").count, 1)
         XCTAssertTrue(app.staticTexts["Start a downloaded song on Apple Watch."].exists)
         XCTAssertGreaterThanOrEqual(toggle.frame.minY, app.staticTexts["See the song reveal after the round."].frame.maxY)
-        XCTAssertLessThanOrEqual(toggle.frame.maxY, app.buttons["Splash.Complete"].frame.minY)
+        XCTAssertLessThanOrEqual(toggle.frame.maxY, app.buttons["Splash.Next"].frame.minY)
         capture("Expanded release notes", in: app)
         toggle.tap()
         XCTAssertEqual(toggle.label, "Show full changelog")
