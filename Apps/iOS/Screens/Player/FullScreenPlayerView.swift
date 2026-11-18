@@ -4,7 +4,7 @@ import SwiftUI
     import UIKit
 #endif
 
-private struct PlayerLayoutMetrics {
+struct PlayerLayoutMetrics {
     let containerSize: CGSize
     let safeTop: CGFloat
     let safeBottom: CGFloat
@@ -151,7 +151,7 @@ private struct PlayerLayoutMetrics {
     }
 
     var radioArtSize: CGFloat {
-        min(containerSize.width - 44, contentHeight * 0.50, isWidePhone ? 390 : 360)
+        min(containerSize.width - 44, contentHeight * (usesAccessibilityText ? 0.34 : 0.50), isWidePhone ? 390 : 360)
     }
 
     var artworkTopSpacer: CGFloat {
@@ -234,128 +234,6 @@ private struct PlayerLayoutMetrics {
     }
 }
 
-/// The soft filled circle the player's actions sit on, Apple Music's treatment
-/// for favorite, more and the queue-mode badge on Playing Next. It is a theme
-/// token rather than a literal grey here so the three title surfaces and the
-/// badge in ``PlayerBottomToolbar`` cannot drift apart.
-///
-/// Computed, not a `let`: a global `let` is initialised once, on first use,
-/// and would keep whichever theme was active then.
-private var playerTitleButtonBackground: Color {
-    Color.appPlayerActionFill
-}
-
-/// A website theme lights an active action — a saved favourite — in its
-/// primary. Every other theme keeps the glyph white either way.
-private func playerTitleIconColor(isActive: Bool = false) -> Color {
-    guard isActive, let primary = AppThemeStore.shared.palette?.primary else { return .primary }
-    return primary
-}
-
-/// How far the filled circle sits inside the button's hit target. The tap area
-/// stays a full 44pt; only the circle shrinks, so it hugs the glyph the way
-/// Apple Music's does instead of filling the whole target.
-private let playerTitleButtonChromeInset: CGFloat = 10
-
-private extension View {
-    /// The circular background worn by the player's title-surface buttons, and
-    /// the hit target underneath it. The iPad control bar sits on its own glass
-    /// and skips the circle, but keeps the target.
-    @ViewBuilder
-    func playerTitleButtonChrome(_ isVisible: Bool, size: CGFloat) -> some View {
-        if isVisible {
-            playerControlGlyphScaling().frame(
-                width: size - playerTitleButtonChromeInset,
-                height: size - playerTitleButtonChromeInset
-            )
-            .background(playerTitleButtonBackground, in: Circle())
-            .frame(width: size, height: size)
-            .contentShape(Rectangle())
-        } else {
-            playerControlGlyphScaling().frame(width: size, height: size)
-                .contentShape(Rectangle())
-        }
-    }
-}
-
-/// The favorite toggle shared by the player's three title surfaces: the compact
-/// title row, the compact lyrics header and the iPad landscape control bar.
-/// They differ only in metrics and chrome, so the toggle, haptics, symbol
-/// effect and accessibility live here rather than in triplicate.
-private struct PlayerFavoriteButton: View {
-    let song: Song
-    var font: Font = .title3
-    var size: CGFloat = 44
-    var showsChrome: Bool = true
-
-    private let favorites = FavoritesManager.shared
-    @Environment(\.appReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let isFavorite = favorites.isFavorite(song.id)
-        Button {
-            let wasFavorite = favorites.isFavorite(song.id)
-            favorites.toggle(songID: song.id)
-            if wasFavorite {
-                AppHaptic.selection.play()
-            } else {
-                AppHaptic.success.play()
-            }
-        } label: {
-            Group {
-                if !reduceMotion {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.bounce, value: isFavorite)
-                } else {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                }
-            }
-            .font(font)
-            .foregroundStyle(playerTitleIconColor(isActive: isFavorite))
-            .playerTitleButtonChrome(showsChrome, size: size)
-        }
-        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-        // Signed out there is nothing to save a favorite to. Dimmed rather
-        // than hidden, so the title row keeps its shape.
-        .disabled(!favorites.isAvailable)
-        .opacity(favorites.isAvailable ? 1 : 0.4)
-        .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
-        .accessibilityValue(song.title)
-        .accessibilityHint(
-            favorites.isAvailable
-                ? String(localized: "Updates favorites for the current song.")
-                : String(localized: "Sign in to use favorites.")
-        )
-    }
-}
-
-/// The overflow menu paired with ``PlayerFavoriteButton`` on the same three
-/// surfaces.
-private struct PlayerMoreMenu: View {
-    let song: Song
-    var font: Font = AM.Font.playerGlyph
-    var size: CGFloat = 44
-    var showsChrome: Bool = true
-    let onAddToPlaylist: () -> Void
-
-    var body: some View {
-        Menu {
-            SleepTimerMenu()
-            Divider()
-            SongActionsMenuItems(song: song, onAddToPlaylist: onAddToPlaylist)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(font)
-                .foregroundStyle(playerTitleIconColor())
-                .playerTitleButtonChrome(showsChrome, size: size)
-        }
-        .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6, haptic: .selection))
-        .accessibilityLabel("More")
-        .accessibilityValue(song.title)
-    }
-}
-
 struct FullScreenPlayerView: View {
     @Environment(AudioPlayerManager.self) var audioManager
     private let presentation = NowPlayingPresentation.shared
@@ -373,7 +251,7 @@ struct FullScreenPlayerView: View {
     @State private var showKaraokeControls = false
     @State private var showTranslatedLyrics = false
     @State private var showCoverArt = false
-    @State private var showAddToPlaylist = false
+    @State private var addToPlaylist = AddToPlaylistPresenter()
     @State private var coverArtSaveStatus: ArtworkSaveStatus = .idle
     @State private var coverArtSaveGeneration = 0
     @State private var easterEggImageURL: URL?
@@ -410,7 +288,7 @@ struct FullScreenPlayerView: View {
                                     favorites: favorites,
                                     showingQueue: $showingQueue,
                                     song: song,
-                                    artSize: metrics.radioArtSize
+                                    metrics: metrics
                                 )
                             } else {
                                 musicLayout(song: song, metrics: metrics)
@@ -479,15 +357,10 @@ struct FullScreenPlayerView: View {
             .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showAddToPlaylist) {
-            if let song {
-                AddToPlaylistSheet(song: song)
-            }
-        }
+        .addToPlaylistSheet($addToPlaylist)
         .onChange(of: audioManager.currentSong?.id) { _, newId in
             showTranslatedLyrics = false
             showKaraokeControls = false
-            showAddToPlaylist = false
             coverArtArtistName = nil
             coverArtArtistLink = nil
             if let id = newId {
@@ -845,7 +718,7 @@ struct FullScreenPlayerView: View {
 
     private func padMoreMenu(song: Song) -> some View {
         PlayerMoreMenu(song: song, font: .title3, showsChrome: false) {
-            showAddToPlaylist = true
+            addToPlaylist.present(song)
         }
     }
 
@@ -966,7 +839,7 @@ struct FullScreenPlayerView: View {
             PlayerFavoriteButton(song: song)
 
             PlayerMoreMenu(song: song) {
-                showAddToPlaylist = true
+                addToPlaylist.present(song)
             }
         }
         .padding(.horizontal, metrics.horizontalPadding)
@@ -1040,7 +913,7 @@ struct FullScreenPlayerView: View {
             )
 
             PlayerMoreMenu(song: song, size: max(metrics.titleButtonSize, 44)) {
-                showAddToPlaylist = true
+                addToPlaylist.present(song)
             }
         }
         .contextMenu {
@@ -1254,7 +1127,7 @@ struct FullScreenPlayerView: View {
 
     private func songActions(song: Song) -> some View {
         SongActionsMenuItems(song: song) {
-            showAddToPlaylist = true
+            addToPlaylist.present(song)
         }
     }
 
@@ -1268,29 +1141,14 @@ struct FullScreenPlayerView: View {
                 AppHaptic.selection.play()
                 showTranslatedLyrics.toggle()
             } else {
-                AppHaptic.boundary.play()
+                AppHaptic.commit.play()
                 lyricsViewModel.requestTranslation()
             }
         } label: {
             ZStack {
                 if lyricsViewModel.translationState == .translating {
-                    if reduceMotion {
-                        Circle()
-                            .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .padding(3)
-                            .transition(.opacity)
-                    } else {
-                        TimelineView(
-                            .animation(minimumInterval: DisplayRefreshRate.lightweightAnimationInterval)
-                        ) { context in
-                            Circle()
-                                .trim(from: 0, to: 0.82)
-                                .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                .rotationEffect(.degrees(translationSpinnerDegrees(for: context.date)))
-                                .padding(3)
-                        }
-                        .transition(.scale(scale: 0.82).combined(with: .opacity))
-                    }
+                    LyricsTranslationSpinner(isPaused: !presentation.isExpanded)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.82).combined(with: .opacity))
                 }
                 Image(systemName: showTranslatedLyrics ? "globe.badge.chevron.backward" : "globe")
                     .font(AM.Font.playerGlyph)
@@ -1312,12 +1170,6 @@ struct FullScreenPlayerView: View {
             reduceMotion ? nil : AppMotion.quick,
             value: lyricsViewModel.translationState
         )
-    }
-
-    private func translationSpinnerDegrees(for date: Date) -> Double {
-        let cycle = 1.12
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
-        return phase * 360 - 90
     }
 
     private var lyricsTranslationAccessibilityLabel: String {

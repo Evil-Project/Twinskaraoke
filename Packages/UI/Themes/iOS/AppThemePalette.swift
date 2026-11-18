@@ -135,4 +135,33 @@ extension Color {
     static var appPlayerActionFill: Color {
         AppThemeStore.shared.palette.map { $0.elevatedBackground.opacity(0.6) } ?? .standardPlayerActionFill
     }
+
+    /// The far end of `appAccentGradient`: a website theme's `--*-accent`,
+    /// otherwise the purple the standard themes have always faded into.
+    static var appAccentGradientEnd: Color {
+        AppThemeStore.shared.palette?.accent ?? .purple
+    }
+}
+
+extension ShapeStyle where Self == AnyShapeStyle {
+    /// Fill for artwork that has no image yet (artist initials, a radio track
+    /// without a cover): the theme's primary into its accent, so the
+    /// placeholder follows the theme instead of fading into a fixed purple
+    /// that matches some themes' primary and goes flat there.
+    ///
+    /// Interpolated in the device colour space, as `AppThemePalette.gradient`
+    /// is, so two saturated ends don't meet in a grey middle.
+    ///
+    /// Erased because a device-space gradient is an `AnyGradient`, whose
+    /// `linearGradient` style has no nameable type.
+    static var appAccentGradient: AnyShapeStyle {
+        AnyShapeStyle(.linearGradient(
+            Gradient(colors: [
+                Color.appAccent.opacity(0.85),
+                Color.appAccentGradientEnd.opacity(0.85),
+            ]).colorSpace(.device),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        ))
+    }
 }

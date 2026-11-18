@@ -67,7 +67,11 @@ struct AppIconSettingsView: View {
         )) {
             Button("OK", role: .cancel) { manager.clearError() }
         } message: {
-            Text(manager.errorMessage ?? "Please try again.")
+            if let message = manager.errorMessage {
+                Text(verbatim: message)
+            } else {
+                Text("Please try again.")
+            }
         }
     }
 

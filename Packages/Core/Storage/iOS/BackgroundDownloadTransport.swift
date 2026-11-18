@@ -112,9 +112,11 @@ nonisolated final class BackgroundDownloadTransport: NSObject, URLSessionDownloa
         lock.unlock()
         Task {
             await DownloadManager.shared.receiveBackgroundDownload(task: task, file: url, error: failure)
-            // The manifest is written on a background queue. Finishing the
+            // The manifest and the pending journal are written on background
+            // queues, the journal after a short coalescing delay. Finishing the
             // delivery lets the app-delegate completion run, after which iOS
-            // may suspend the app, so let the write land first.
+            // may suspend the app, so let both writes land first.
+            await DownloadManager.shared.finishPendingJournalWrites()
             await DownloadManager.manifestWritesFinished()
             deliveryFinished(taskID: task.taskIdentifier)
         }

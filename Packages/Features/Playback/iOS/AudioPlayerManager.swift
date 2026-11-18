@@ -3190,26 +3190,6 @@ final class AudioPlayerManager {
 
     private func setupRemoteCommands() {
         let cc = MPRemoteCommandCenter.shared()
-        func performOnMain(
-            _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus
-        ) -> MPRemoteCommandHandlerStatus {
-            if Thread.isMainThread {
-                return MainActor.assumeIsolated { action() }
-            }
-            // MediaPlayer can deliver remote-command callbacks off the main thread.
-            // Return only after the playback state and Now Playing info have changed;
-            // returning .success before the main actor update lets Control Center redraw
-            // from stale state and can leave the play/pause button out of sync.
-            // Apple documents the public integration path as MPRemoteCommandCenter
-            // handlers plus MPNowPlayingInfoCenter metadata/rate updates:
-            // https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/MediaPlaybackGuide/Contents/Resources/en.lproj/RefiningTheUserExperience/RefiningTheUserExperience.html
-            var status: MPRemoteCommandHandlerStatus = .commandFailed
-            DispatchQueue.main.sync {
-                status = MainActor.assumeIsolated { action() }
-            }
-            return status
-        }
-
         cc.playCommand.removeTarget(nil)
         cc.pauseCommand.removeTarget(nil)
         cc.togglePlayPauseCommand.removeTarget(nil)
@@ -3217,85 +3197,73 @@ final class AudioPlayerManager {
         cc.previousTrackCommand.removeTarget(nil)
         cc.changePlaybackPositionCommand.removeTarget(nil)
 
-        cc.playCommand.addTarget { [weak self] _ in
+        cc.playCommand.addTarget(handler: RemoteCommandHandler.make { [weak self] in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                DebugLogger.log("Remote play command received", category: .playback)
-                if self.isPlaybackRequested {
-                    self.updateNowPlayingInfo(reloadArtwork: false)
-                    return .success
-                }
-                let resumed = self.resumeCurrentPlayback(source: "remote.play")
-                // In-app play/pause buttons carry their own `.commit`; the
-                // remote surfaces had none. iOS suppresses haptics while
-                // backgrounded, so in practice this is felt when the app is
-                // foreground and the command comes from headphones or
-                // Control Center.
+            DebugLogger.log("Remote play command received", category: .playback)
+            if self.isPlaybackRequested {
+                self.updateNowPlayingInfo(reloadArtwork: false)
+                return .success
+            }
+            let resumed = self.resumeCurrentPlayback(source: "remote.play")
+            // In-app play/pause buttons carry their own `.commit`; the
+            // remote surfaces had none. iOS suppresses haptics while
+            // backgrounded, so in practice this is felt when the app is
+            // foreground and the command comes from headphones or
+            // Control Center.
+            if resumed { AppHaptic.commit.play() }
+            return resumed ? .success : .commandFailed
+        })
+        cc.pauseCommand.addTarget(handler: RemoteCommandHandler.make { [weak self] in
+            guard let self else { return .commandFailed }
+            DebugLogger.log("Remote pause command received", category: .playback)
+            if !self.isPlaybackRequested {
+                // Some iOS surfaces can send pauseCommand from a stale paused
+                // visual state even when the user is pressing the center play
+                // button. Treat that stale pause as resume; removing this
+                // fallback made lock-screen/control state diverge in device
+                // testing, so this intentionally preserves the working
+                // system-integration behavior over strict command semantics.
+                let resumed = self.resumeCurrentPlayback(source: "remote.pauseAsPlay")
                 if resumed { AppHaptic.commit.play() }
                 return resumed ? .success : .commandFailed
             }
-        }
-        cc.pauseCommand.addTarget { [weak self] _ in
+            let paused = self.pauseCurrentPlayback(source: "remote.pause")
+            if paused { AppHaptic.commit.play() }
+            return paused ? .success : .commandFailed
+        })
+        cc.togglePlayPauseCommand.addTarget(handler: RemoteCommandHandler.make { [weak self] in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                DebugLogger.log("Remote pause command received", category: .playback)
-                if !self.isPlaybackRequested {
-                    // Some iOS surfaces can send pauseCommand from a stale paused
-                    // visual state even when the user is pressing the center play
-                    // button. Treat that stale pause as resume; removing this
-                    // fallback made lock-screen/control state diverge in device
-                    // testing, so this intentionally preserves the working
-                    // system-integration behavior over strict command semantics.
-                    let resumed = self.resumeCurrentPlayback(source: "remote.pauseAsPlay")
-                    if resumed { AppHaptic.commit.play() }
-                    return resumed ? .success : .commandFailed
-                }
-                let paused = self.pauseCurrentPlayback(source: "remote.pause")
-                if paused { AppHaptic.commit.play() }
-                return paused ? .success : .commandFailed
-            }
-        }
-        cc.togglePlayPauseCommand.addTarget { [weak self] _ in
+            DebugLogger.log("Remote toggle command received", category: .playback)
+            let toggled = self.togglePlayPause(source: "remote.toggle")
+            if toggled { AppHaptic.commit.play() }
+            return toggled ? .success : .commandFailed
+        })
+        cc.nextTrackCommand.addTarget(handler: RemoteCommandHandler.make { [weak self] in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                DebugLogger.log("Remote toggle command received", category: .playback)
-                let toggled = self.togglePlayPause(source: "remote.toggle")
-                if toggled { AppHaptic.commit.play() }
-                return toggled ? .success : .commandFailed
-            }
-        }
-        cc.nextTrackCommand.addTarget { [weak self] _ in
+            DebugLogger.log("Remote next command received", category: .playback)
+            self.skipToNext()
+            return .success
+        })
+        cc.previousTrackCommand.addTarget(handler: RemoteCommandHandler.make { [weak self] in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                DebugLogger.log("Remote next command received", category: .playback)
-                self.skipToNext()
-                return .success
-            }
-        }
-        cc.previousTrackCommand.addTarget { [weak self] _ in
+            DebugLogger.log("Remote previous command received", category: .playback)
+            self.playPrevious()
+            return .success
+        })
+        cc.changePlaybackPositionCommand.addTarget(handler: RemoteCommandHandler.make(extracting: { (event: MPRemoteCommandEvent) -> TimeInterval? in
+            guard let time = (event as? MPChangePlaybackPositionCommandEvent)?.positionTime, time.isFinite else { return nil }
+            return time
+        }, perform: { [weak self] positionTime in
             guard let self else { return .commandFailed }
-            return performOnMain {
-                DebugLogger.log("Remote previous command received", category: .playback)
-                self.playPrevious()
-                return .success
-            }
-        }
-        cc.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let self,
-                  let positionEvent = event as? MPChangePlaybackPositionCommandEvent,
-                  positionEvent.positionTime.isFinite
-            else { return .commandFailed }
-            return performOnMain {
-                let dur = self.playbackDuration
-                guard dur.isFinite, dur > 0 else { return .commandFailed }
-                DebugLogger.log(
-                    "Remote seek command received: \(positionEvent.positionTime)",
-                    category: .playback
-                )
-                self.seek(to: positionEvent.positionTime / dur)
-                return .success
-            }
-        }
+            let dur = self.playbackDuration
+            guard dur.isFinite, dur > 0 else { return .commandFailed }
+            DebugLogger.log(
+                "Remote seek command received: \(positionTime)",
+                category: .playback
+            )
+            self.seek(to: positionTime / dur)
+            return .success
+        }))
         updateRemoteCommandAvailability()
     }
 

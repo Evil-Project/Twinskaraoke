@@ -33,6 +33,7 @@ struct PlaylistDetailView: View {
     /// Latched once the pull completes, so the field stays put instead of
     /// collapsing the moment the finger lifts.
     @State private var isSearchLatched = false
+    @State private var scrollPosition = ScrollPosition()
 
     private static let searchAnchor = "playlist.search"
     private static let contentAnchor = "playlist.content"
@@ -44,6 +45,7 @@ struct PlaylistDetailView: View {
     @State private var warmedSongIDs: [String] = []
     @State private var prefetchTask: Task<Void, Never>?
     @State private var removalErrorSong: Song?
+    @State private var pendingRemoval = PendingPlaylistSongRemoval()
     @State private var isEditing = false
     /// Everything that starts playback — song rows *and* Play/Shuffle — ignores
     /// touches until the push has settled. The zoom transition does not gate
@@ -138,6 +140,20 @@ struct PlaylistDetailView: View {
         }
     }
 
+    /// The way to the field that needs no pull, which VoiceOver, Switch
+    /// Control and a hardware keyboard can't make: the More menu and ⌘F.
+    /// Jumps to the top first, so the field opens where it can be seen. Not
+    /// animated: mid-scroll, `updateSearchReveal` would read the list as
+    /// scrolled down and put the field away before it has focus.
+    private func revealSearch() {
+        scrollPosition.scrollTo(edge: .top)
+        isSearchLatched = true
+        withOptionalAnimation(reduceMotion ? nil : AppMotion.snap) {
+            searchRevealHeight = Self.searchFieldExtent
+        }
+        isSearchFocused = true
+    }
+
     /// Held back until the transition has run: warmCollection derives a URL for
     /// every song, and doing that inside the transition window competes with the
     /// animation.
@@ -181,6 +197,14 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         detailContent
+            .background {
+                // Carries ⌘F: the More menu's item exists only while the
+                // menu is open, so a shortcut on it would only work then.
+                Button("Find in Playlist", action: revealSearch)
+                    .keyboardShortcut("f")
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
             // A cover, not a push. Pushed, the editor's bottom bar sits behind
             // the tab bar, and hiding that is not enough on its own: the
             // LNPopup mini player merges into the tab bar's metrics and would
@@ -379,6 +403,7 @@ struct PlaylistDetailView: View {
             updateSearchReveal(pull: pull)
         }
         .scrollIndicators(.hidden)
+        .scrollPosition($scrollPosition)
         // Same threshold and wiring as BrowseSongCollectionView, ArtistsView and
         // DownloadedSongsView: the name belongs in the bar once its own heading
         // has scrolled away, and the bar stays transparent over the artwork until
@@ -403,6 +428,7 @@ struct PlaylistDetailView: View {
                     playlist: playlist,
                     songs: songs,
                     onRefresh: refresh,
+                    onFind: revealSearch,
                     onEdit: editAction
                 )
             }
@@ -419,6 +445,7 @@ struct PlaylistDetailView: View {
         } message: { song in
             Text("\(song.title) is still in \(playlist.name). Check your connection and try again.")
         }
+        .playlistSongRemovalConfirmation($pendingRemoval, playlistName: playlist.name, onConfirm: remove)
         .onAppear {
             // Per-appear, deliberately outside the one-shot guard below.
             // onDisappear disarms the rows, so gating this on `hasStartedVisit`
@@ -751,25 +778,12 @@ struct PlaylistDetailView: View {
                 if showsActionButtons, !isWideOverview {
                     actionButtons(songs: displayedSongs)
                 }
-                LazyVStack(spacing: 0) {
-                    ForEach(displayedSongs.enumerated().map { PositionedPlaylistSong(offset: $0.offset, song: $0.element) }) { item in
-                        Button {
-                            play(item.song, context: displayedSongs)
-                        } label: {
-                            PlaylistRow(song: item.song, showsArtwork: true, horizontalPadding: rowHorizontalPadding)
-                                .contentShape(Rectangle())
-                                .songRowAccessibility(song: item.song) {
-                                    play(item.song, context: displayedSongs)
-                                }
-                        }
-                        .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
-                        .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("PlaylistDetail.song.\(item.offset).\(item.song.id)")
-                        if item.offset < displayedSongs.count - 1 {
-                            Divider().padding(.leading, rowHorizontalPadding + 60)
-                        }
-                    }
-                }
+                PlaylistSongList(
+                    playlist: playlist,
+                    songs: displayedSongs,
+                    rowHorizontalPadding: rowHorizontalPadding
+                )
+                .equatable()
                 .allowsHitTesting(playbackTapsArmed)
             }
             .environment(\.playlistSongRemoval, songRemovalContext)
@@ -787,8 +801,11 @@ struct PlaylistDetailView: View {
             .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
         } else {
             PlaylistEmptyStateView(
-                isFavorites: playlist.isFavorites,
-                message: loader.emptyStateMessage
+                state: PlaylistDetailEmptyState(
+                    isFavorites: playlist.isFavorites,
+                    loadFailed: loader.loadFailed,
+                    message: loader.emptyStateMessage
+                )
             ) {
                 loader.reload(playlistID: playlist.id, fallback: playlist.songListDTOs)
             }
@@ -827,11 +844,6 @@ struct PlaylistDetailView: View {
         .allowsHitTesting(playbackTapsArmed)
     }
 
-    private func play(_ song: Song, context: [Song]) {
-        AppHaptic.selection.play()
-        PlaylistPlayback.play(song, from: playlist, context: context)
-    }
-
     /// Non-nil only for a playlist the signed-in user owns. Favorites is
     /// excluded: its membership is owned by the star action, which the same
     /// menu already offers.
@@ -848,7 +860,7 @@ struct PlaylistDetailView: View {
         return PlaylistSongRemovalContext(
             playlistID: playlist.id,
             playlistName: playlist.name,
-            remove: { song in remove(song) }
+            requestRemoval: { song in pendingRemoval.request(song) }
         )
     }
 
@@ -863,32 +875,6 @@ struct PlaylistDetailView: View {
     }
 }
 
-/// Row identity for the playlist song list. The offset keeps IDs unique when
-/// a playlist contains the same song twice (duplicate ForEach IDs can hang
-/// AttributeGraph). The content fields make the ID change when metadata
-/// (artist, duration) arrives after a row was first composed: with purely
-/// positional identity, an already-composed row keeps showing the stale
-/// "Unknown Artist" from the artist-less list DTOs even after the detail
-/// fetch lands, until the whole list is torn down and rebuilt.
-private struct PositionedPlaylistSong: Identifiable {
-    struct ID: Hashable {
-        let offset: Int
-        let songID: String
-        let metadata: Song.RowMetadata
-    }
-
-    let offset: Int
-    let song: Song
-
-    var id: ID {
-        ID(
-            offset: offset,
-            songID: song.id,
-            metadata: song.rowMetadata
-        )
-    }
-}
-
 private struct PlaylistLoadingRows: View {
     var horizontalPadding: CGFloat = AM.Spacing.screenMargin
 
@@ -898,25 +884,13 @@ private struct PlaylistLoadingRows: View {
 }
 
 private struct PlaylistEmptyStateView: View {
-    let isFavorites: Bool
-    let message: String
+    let state: PlaylistDetailEmptyState
     let onRefresh: () -> Void
-    private var title: String {
-        isFavorites ? String(localized: "No Favorites Yet") : String(localized: "No Songs")
-    }
-
-    private var resolvedMessage: String {
-        guard !message.hasPrefix("The playlist") else { return message }
-        if isFavorites {
-            return String(localized: "Favorite songs to build this playlist automatically.")
-        }
-        return message
-    }
 
     var body: some View {
         VStack(spacing: 16) {
-            MusicEmptyState(title: title, message: resolvedMessage)
-            MusicEmptyActionButton(title: String(localized: "Refresh")) {
+            MusicEmptyState(title: state.title, message: state.message)
+            MusicEmptyActionButton(title: state.actionTitle) {
                 onRefresh()
             }
         }
@@ -958,6 +932,7 @@ private struct PlaylistMoreMenu: View {
     let playlist: Playlist
     let songs: [Song]
     let onRefresh: () -> Void
+    let onFind: () -> Void
     /// Nil on a playlist the signed-in user cannot edit, which hides the item.
     var onEdit: (() -> Void)?
     var body: some View {
@@ -972,6 +947,12 @@ private struct PlaylistMoreMenu: View {
             }
             PlaylistActionsMenuItems(playlist: playlist, songs: songs)
             Divider()
+            Button {
+                onFind()
+            } label: {
+                Label("Find in Playlist", systemImage: "magnifyingglass")
+            }
+            .accessibilityIdentifier("PlaylistDetail.find")
             Button {
                 onRefresh()
             } label: {

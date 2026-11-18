@@ -245,6 +245,7 @@ private struct VideoInlinePlaceholder: View {
 /// Picture), and reaching through an unobserved model would leave `error` and
 /// `playbackState` changes unnoticed.
 private struct VideoPlayerSurface: View {
+    @Environment(\.appReduceMotion) private var reduceMotion
     @ObservedObject var player: Player
     @ObservedObject var progressTracker: ProgressTracker
     @ObservedObject var visibilityTracker: VisibilityTracker
@@ -276,7 +277,7 @@ private struct VideoPlayerSurface: View {
                 ProgressView()
                     .tint(.white)
                     .opacity(isBuffering ? 1 : 0)
-                    .animation(.linear(duration: 0.1), value: isBuffering)
+                    .animation(AppMotion.linear(duration: 0.1), value: isBuffering)
 
                 VideoPlayerOverlay(
                     player: player,
@@ -303,10 +304,10 @@ private struct VideoPlayerSurface: View {
                     onDismiss: onDismissResume
                 )
                 .padding(isFullScreen ? 28 : 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(AppMotion.quick, value: resumedFrom)
+        .animation(reduceMotion ? AppMotion.crossFade : AppMotion.quick, value: resumedFrom)
     }
 }
 

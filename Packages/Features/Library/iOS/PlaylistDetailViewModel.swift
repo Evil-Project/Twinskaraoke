@@ -20,7 +20,9 @@ class PlaylistDetailViewModel {
     var songs: [Song]?
     var isLoading = false
     private(set) var hasAuthoritativeSongs = false
-    private var loadFailed = false
+    /// The request failed with no songs to show. The empty state reads this
+    /// rather than the wording of `emptyStateMessage`.
+    private(set) var loadFailed = false
     private var loadedID: String?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     var emptyStateMessage: String {

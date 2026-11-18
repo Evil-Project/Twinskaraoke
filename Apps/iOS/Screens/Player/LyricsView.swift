@@ -75,7 +75,7 @@ struct LyricsView: View {
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel("Intro")
                                 .accessibilityValue(introAccessibilityValue(startTime: first.time))
-                                .accessibilityHint("Double tap to restart the song.")
+                                .accessibilityHint("Moves playback to the start of the song.")
                                 .accessibilityAddTraits(isIntro ? .isSelected : [])
                                 .accessibilityAction {
                                     AppHaptic.selection.play()
@@ -84,15 +84,19 @@ struct LyricsView: View {
                         }
                         ForEach(lyrics.indices, id: \.self) { index in
                             let line = lyrics[index]
+                            // Index first: `isInstrumental` lowercases and trims
+                            // the text on every call, and this runs per row on
+                            // every playback tick.
                             LyricLineRow(
                                 line: line,
                                 index: index,
                                 currentIndex: currentIndex,
-                                currentTime: line.isInstrumental && index == currentIndex
+                                currentTime: index == currentIndex && line.isInstrumental
                                     ? currentTime
                                     : nil,
                                 animatesLineChanges: animatesLineChanges,
                                 showTranslation: showTranslations,
+                                isLive: isLive,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
                                     scrollTo(line.id, proxy: proxy, animated: false)
@@ -150,12 +154,14 @@ private struct InstrumentalDots: View {
     let isPast: Bool
     let distance: Int
     let gapProgress: Double?
+    let isPaused: Bool
     var body: some View {
         LyricsBouncingDots(
             isActive: isActive,
             progress: isActive ? gapProgress : nil,
             dotSize: isActive ? 12 : 9,
-            color: dotColor
+            color: dotColor,
+            isPaused: isPaused
         )
     }
 
@@ -175,6 +181,9 @@ struct LyricLineRow: View, Equatable {
     /// layout: scale, colour, blur and opacity.
     static let lineFontSize: CGFloat = 30
     static let translationFontSize: CGFloat = 18
+    /// None: a style haptic fires on touch-down, so a scroll that starts on
+    /// a line ticked without seeking. The seek plays the tick instead.
+    static let pressHaptic: AppHaptic? = nil
 
     let line: LyricLine
     let index: Int
@@ -182,6 +191,8 @@ struct LyricLineRow: View, Equatable {
     let currentTime: TimeInterval?
     let animatesLineChanges: Bool
     let showTranslation: Bool
+    /// False while the player is closed; its looping dots stop then.
+    var isLive = true
     let nextLineTime: TimeInterval?
     let onSeek: (TimeInterval) -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
@@ -215,11 +226,13 @@ struct LyricLineRow: View, Equatable {
             && lhs.currentTime == rhs.currentTime
             && lhs.animatesLineChanges == rhs.animatesLineChanges
             && lhs.showTranslation == rhs.showTranslation
+            && lhs.isLive == rhs.isLive
             && lhs.nextLineTime == rhs.nextLineTime
     }
 
     var body: some View {
         Button {
+            AppHaptic.selection.play()
             onSeek(line.time)
         } label: {
             Group {
@@ -228,7 +241,8 @@ struct LyricLineRow: View, Equatable {
                         isActive: isCurrent,
                         isPast: isPast,
                         distance: distance,
-                        gapProgress: gapProgress
+                        gapProgress: gapProgress,
+                        isPaused: !isLive
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, isCurrent ? 10 : 6)
@@ -260,14 +274,14 @@ struct LyricLineRow: View, Equatable {
             .padding(.horizontal, 4)
             .blur(radius: lineBlur)
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+        .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: Self.pressHaptic))
         .scaleEffect(reduceMotion ? 1.0 : (isCurrent ? 1.0 : 0.92), anchor: .leading)
         .opacity(lineOpacity)
         .animation(lineAnimation, value: currentIndex)
         .animation(translationAnimation, value: showTranslation)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Double tap to jump to this lyric.")
+        .accessibilityHint("Moves playback to this lyric.")
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
         .accessibilityAction(named: "Jump to Lyric") {
             AppHaptic.selection.play()
@@ -410,14 +424,16 @@ private extension LyricsView {
                 systemImage: "quote.bubble"
             )
         } else {
-            LyricsLoadingSkeleton()
+            LyricsLoadingSkeleton(isPaused: !isLive)
         }
     }
 }
 
 private struct LyricsLoadingSkeleton: View {
+    let isPaused: Bool
+
     var body: some View {
-        LyricsBouncingDots(isActive: true, dotSize: 12, color: .primary.opacity(0.6))
+        LyricsBouncingDots(isActive: true, dotSize: 12, color: .primary.opacity(0.6), isPaused: isPaused)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Loading lyrics")

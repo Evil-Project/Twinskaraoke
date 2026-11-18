@@ -209,12 +209,13 @@ struct MiniPlayerBar: View {
     }
 }
 
-/// Play/pause and next, as their own hit targets.
+/// Play/pause and next, as their own hit targets. Internal so tests can
+/// render it.
 ///
 /// `Equatable` on just the two flags that change what is drawn: the closures
 /// are recreated on every rebuild of the parent and would otherwise defeat
 /// SwiftUI's own equality check, redrawing the buttons on every snapshot tick.
-private struct MiniPlayerTransportControls: View, Equatable {
+struct MiniPlayerTransportControls: View, Equatable {
     let isPlaying: Bool
     let isRadioMode: Bool
     let showsNext: Bool
@@ -259,6 +260,8 @@ private struct MiniPlayerTransportControls: View, Equatable {
                 .accessibilityHint("Skips to the next song.")
             }
         }
+        // Fixed 44pt targets in a clipped bar, as in the full player.
+        .playerControlGlyphScaling()
     }
 
     private var playPauseAccessibilityLabel: String {

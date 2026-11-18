@@ -155,19 +155,13 @@ private struct HeroArtwork: View {
             if let art, let url = art.imageURL {
                 RemoteArtworkImage(
                     url: url,
-                    cornerRadius: 18,
+                    cornerRadius: AM.Radius.hero,
                     lowResURL: art.blurPreviewURL,
                     transparentBackground: true
                 )
             } else {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.appAccent.opacity(0.85), Color.pink.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous)
+                    .fill(.appAccentGradient)
                     .overlay(
                         Text(initial(artistName))
                             .font(.system(size: 70, weight: .bold))
@@ -176,7 +170,7 @@ private struct HeroArtwork: View {
             }
         }
         .frame(width: 230, height: 230)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AM.Radius.hero, style: .continuous))
         .shadow(color: Color.appHeroShadowPlaying, radius: 20, y: 10)
     }
 

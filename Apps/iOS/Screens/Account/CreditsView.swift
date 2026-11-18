@@ -58,13 +58,15 @@ struct CreditsView: View {
                 creditRow(name: "Emuz", detail: "Badge art editing", url: "https://x.com/possiblyemuz")
             }
             Section("Internal Testing & Metadata") {
-                Text(
-                    "Big thanks for assisting with internal testing, bug reporting, and maintaining "
-                        + "accurate song metadata across the site:\n\n"
-                        + "flashfire8 • promote. • emuz • germaninfantry • magnettileman • waya13 • "
-                        + "kyarashard • ttsuyuki • nyss_7 • isrlygood • rachinova • ninjakai03 • "
-                        + "czadymny • gbritannia • sir_recker • dodo8071795"
-                )
+                VStack(alignment: .leading, spacing: AM.Spacing.m) {
+                    Text(
+                        """
+                        Big thanks for assisting with internal testing, bug reporting, and maintaining \
+                        accurate song metadata across the site:
+                        """
+                    )
+                    Text(verbatim: Self.metadataTesters)
+                }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
@@ -80,20 +82,29 @@ struct CreditsView: View {
                 )
             }
             Section("Historical Archive Source") {
-                Text(
-                    "All cover files dated November 26, 2025 and earlier are retrieved from the "
-                        + "Unofficial Neuro Karaoke Archive (V3).\n\n"
-                        + "Currently managed by: @ninjakai03 (mm2wood), @turuumgl, @nyss_7, @inforno_fire"
-                )
+                VStack(alignment: .leading, spacing: AM.Spacing.m) {
+                    Text(
+                        """
+                        All cover files dated November 26, 2025 and earlier are retrieved from the \
+                        Unofficial Neuro Karaoke Archive (V3).
+                        """
+                    )
+                    Text(
+                        "Currently managed by: \(Self.archiveManagers)",
+                        comment: "Credits. The argument is a list of social media handles, shown as written."
+                    )
+                }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
             }
             Section("Community Artwork") {
                 Text(
-                    "All artwork displayed on this site is used with explicit permission from the "
-                        + "respective artists. The following artists have granted permission for their "
-                        + "artwork to be used on this website:"
+                    """
+                    All artwork displayed on this site is used with explicit permission from the \
+                    respective artists. The following artists have granted permission for their \
+                    artwork to be used on this website:
+                    """
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -105,9 +116,21 @@ struct CreditsView: View {
         }
     }
 
-    private func creditRow(name: String, detail: String, url: String? = nil) -> some View {
+    /// Handles of the people who test and keep song metadata accurate, shown
+    /// as written in every language.
+    private static let metadataTesters = [
+        "flashfire8", "promote.", "emuz", "germaninfantry", "magnettileman", "waya13",
+        "kyarashard", "ttsuyuki", "nyss_7", "isrlygood", "rachinova", "ninjakai03",
+        "czadymny", "gbritannia", "sir_recker", "dodo8071795",
+    ].joined(separator: " • ")
+
+    /// Handles of the archive's maintainers, shown as written in every language.
+    private static let archiveManagers = "@ninjakai03 (mm2wood), @turuumgl, @nyss_7, @inforno_fire"
+
+    /// One credit: the name is drawn as written, the role is translated.
+    private func creditRow(name: String, detail: LocalizedStringKey, url: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(name).font(.body.bold())
+            Text(verbatim: name).font(.body.bold())
             Text(detail).font(.subheadline).foregroundStyle(.secondary)
             if let url, let u = URL(string: url) {
                 Link(url, destination: u).font(.caption).lineLimit(1)

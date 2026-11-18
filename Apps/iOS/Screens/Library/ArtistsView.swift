@@ -192,13 +192,17 @@ struct ArtistDetailView: View {
                         actionButtons
                         LazyVStack(spacing: 0) {
                             ForEach(songs) { song in
-                                ArtistSongRow(song: song, showsArtwork: true) {
-                                    play(song)
-                                }
-                                // The last row has nothing to separate it from,
-                                // as in every other song list.
-                                if song.id != songs.last?.id {
-                                    Divider().padding(.leading, 76)
+                                // One view per element, so SwiftUI can take the
+                                // row identities from the ids.
+                                VStack(spacing: 0) {
+                                    ArtistSongRow(song: song, showsArtwork: true) {
+                                        play(song)
+                                    }
+                                    // The last row has nothing to separate it from,
+                                    // as in every other song list.
+                                    if song.id != songs.last?.id {
+                                        Divider().padding(.leading, 76)
+                                    }
                                 }
                             }
                         }
@@ -440,70 +444,5 @@ private struct ArtistDetailHintRow: View {
         .padding(.horizontal, AM.Spacing.m)
         .padding(.vertical, AM.Spacing.s)
         .background(Color.appSecondaryBackground, in: RoundedRectangle(cornerRadius: AM.Radius.card, style: .continuous))
-    }
-}
-
-private struct ArtistActionsMenu: View {
-    let songs: [Song]
-    private let pendingDownloads: [Song]
-    private let downloadingCount: Int
-
-    private var allDownloaded: Bool {
-        !songs.isEmpty && pendingDownloads.isEmpty && downloadingCount == 0
-    }
-
-    private var downloadTitle: String {
-        let downloadedCount = songs.count - pendingDownloads.count - downloadingCount
-        return downloadedCount > 0 ? String(localized: "Download Remaining") : String(localized: "Download")
-    }
-
-    init(songs: [Song]) {
-        self.songs = songs
-
-        let downloads = DownloadManager.shared
-        pendingDownloads = songs.filter { !downloads.isDownloaded($0.id) && !downloads.isDownloading($0.id) }
-        downloadingCount = songs.filter { downloads.isDownloading($0.id) }.count
-    }
-
-    var body: some View {
-        if songs.isEmpty {
-            Text("No Songs")
-        } else {
-            Button {
-                AppHaptic.selection.play()
-                if let first = songs.first {
-                    AudioPlayerManager.shared.playInOrder(song: first, context: songs)
-                }
-            } label: {
-                Label("Play", systemImage: "play.fill")
-            }
-
-            Button {
-                AppHaptic.selection.play()
-                AudioPlayerManager.shared.playShuffled(from: songs)
-            } label: {
-                Label("Shuffle", systemImage: "shuffle")
-            }
-
-            Divider()
-
-            if downloadingCount > 0 {
-                Label("Downloading \(downloadingCount)...", systemImage: "arrow.down.circle")
-            } else if allDownloaded {
-                Button(role: .destructive) {
-                    AppHaptic.dismiss.play()
-                    DownloadManager.shared.remove(songIDs: songs.map(\.id))
-                } label: {
-                    Label("Remove Downloads", systemImage: "trash")
-                }
-            } else {
-                Button {
-                    AppHaptic.success.play()
-                    DownloadManager.shared.download(songs: pendingDownloads)
-                } label: {
-                    Label(downloadTitle, systemImage: "arrow.down.circle")
-                }
-            }
-        }
     }
 }

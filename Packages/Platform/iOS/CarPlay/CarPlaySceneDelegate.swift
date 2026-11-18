@@ -1024,8 +1024,10 @@ private final class CarPlayArtworkLoader {
             progress: nil
         ) { [weak self] image, _, _, _, _, _ in
             Task { @MainActor [weak self] in
+                guard self?.generation == requestGeneration else { return }
+                let processedImage = await CarPlayArtworkProcessing.squareArtwork(image, maxPixel: maxPixel)
+                // cancelAll() may have run while the image was processed.
                 guard let self, self.generation == requestGeneration else { return }
-                let processedImage = image?.croppedToSquare().downscaled(maxPixel: maxPixel)
                 self.finishLoading(cacheKey, image: processedImage)
             }
         }

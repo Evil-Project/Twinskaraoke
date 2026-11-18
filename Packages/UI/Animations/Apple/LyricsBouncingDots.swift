@@ -5,11 +5,22 @@ struct LyricsBouncingDots: View {
     var progress: Double?
     var dotSize: CGFloat = 9
     var color: Color = .primary
+    /// For dots that stay mounted while nobody can see them, such as the
+    /// lyrics of the closed full-screen player. A flag from the caller rather
+    /// than a read here: this view also builds for watchOS, tvOS and macOS,
+    /// which have no Now Playing presentation.
+    var isPaused = false
     @Environment(\.appReduceMotion) private var reduceMotion
-    @State private var loopPhase: Date = .now
+    @Environment(\.appReduceEffects) private var reduceEffects
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var animationClock = ActiveAnimationClock()
+    @State private var isVisible = false
     private let loopCycle: TimeInterval = 1.6
     var body: some View {
-        if reduceMotion {
+        // The looping dots are perpetual decoration, so Low Power Mode and a
+        // hot device stop them too. The progress-driven dots follow playback
+        // instead and keep moving under those.
+        if reduceMotion || (reduceEffects && !showsSyncedProgress) {
             HStack(spacing: dotSize * 0.55) {
                 ForEach(0 ..< 3, id: \.self) { _ in
                     Circle()
@@ -33,10 +44,10 @@ struct LyricsBouncingDots: View {
             TimelineView(
                 .animation(
                     minimumInterval: DisplayRefreshRate.lightweightAnimationInterval,
-                    paused: !isActive
+                    paused: !shouldAnimateLoop
                 )
             ) { context in
-                let t = context.date.timeIntervalSince(loopPhase)
+                let t = animationClock.elapsed(at: context.date)
                     .truncatingRemainder(dividingBy: loopCycle)
                 HStack(spacing: dotSize * 0.55) {
                     ForEach(0 ..< 3, id: \.self) { i in
@@ -47,7 +58,42 @@ struct LyricsBouncingDots: View {
                     }
                 }
             }
+            .onAppear {
+                isVisible = true
+            }
+            .onDisappear {
+                isVisible = false
+                animationClock.setRunning(false, at: .now)
+            }
+            .onChange(of: shouldAnimateLoop, initial: true) { _, running in
+                animationClock.setRunning(running, at: .now)
+            }
         }
+    }
+
+    private var showsSyncedProgress: Bool {
+        progress != nil && isActive
+    }
+
+    private var shouldAnimateLoop: Bool {
+        Self.shouldAnimateLoop(
+            isActive: isActive,
+            isPaused: isPaused,
+            isVisible: isVisible,
+            reduceEffects: reduceEffects,
+            scenePhase: scenePhase
+        )
+    }
+
+    /// The looping dots tick only while someone can see them move.
+    static func shouldAnimateLoop(
+        isActive: Bool,
+        isPaused: Bool,
+        isVisible: Bool,
+        reduceEffects: Bool,
+        scenePhase: ScenePhase
+    ) -> Bool {
+        isActive && !isPaused && isVisible && !reduceEffects && scenePhase == .active
     }
 
     private func syncedOpacity(for i: Int, progress: Double) -> Double {

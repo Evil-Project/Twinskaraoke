@@ -1,6 +1,8 @@
 import CarPlay
 import Foundation
+import Synchronization
 import Testing
+import UIKit
 @testable import Twinskaraoke
 
 @MainActor
@@ -187,6 +189,20 @@ struct CarPlayPresentationTests {
 
     private func texts(_ template: CPListTemplate) -> [String] {
         template.sections.flatMap(\.items).compactMap { ($0 as? CPListItem)?.text }
+    }
+
+    @Test("Row artwork is cropped and scaled off the main actor")
+    func artworkProcessingRunsOffMain() async throws {
+        let renderedOnMain = Mutex<Bool?>(nil)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 20)).image { _ in }
+        let processed = await CarPlayArtworkProcessing.squareArtwork(image, maxPixel: 10) { image, maxPixel in
+            renderedOnMain.withLock { $0 = Thread.isMainThread }
+            return image.croppedToSquare().downscaled(maxPixel: maxPixel)
+        }
+
+        #expect(renderedOnMain.withLock { $0 } == false)
+        let size = try #require(processed).size
+        #expect(size.width == size.height)
     }
 
     private func fixtures(_ count: Int) -> [Song] {

@@ -12,16 +12,13 @@ struct RadioQueueArtwork: View {
                     cornerRadius: cornerRadius
                 )
             } else {
-                LinearGradient(
-                    colors: [Color.appAccent.opacity(0.85), Color.purple.opacity(0.85)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .overlay {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.title3.bold())
-                        .foregroundStyle(.white.secondary)
-                }
+                Rectangle()
+                    .fill(.appAccentGradient)
+                    .overlay {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.title3.bold())
+                            .foregroundStyle(.white.secondary)
+                    }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

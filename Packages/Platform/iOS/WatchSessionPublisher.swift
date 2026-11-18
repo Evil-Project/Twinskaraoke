@@ -2,6 +2,9 @@ import Foundation
 import WatchConnectivity
 import UIKit
 
+// Safe: the box only holds an immutable reference to WatchConnectivity's
+// reply handler, so it has no state to race on. Each message's handler is
+// called exactly once, from the single main-actor task that answers it.
 private nonisolated final class WatchReplyBox: @unchecked Sendable {
     let send: ([String: Any]) -> Void
     init(_ send: @escaping ([String: Any]) -> Void) { self.send = send }

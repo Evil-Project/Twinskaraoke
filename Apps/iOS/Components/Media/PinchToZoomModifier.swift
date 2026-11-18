@@ -32,7 +32,7 @@ struct PinchToZoomModifier: ViewModifier {
                 offset = clamped
                 lastOffset = clamped
             } else {
-                withAnimation(.spring()) {
+                withAnimation(AppMotion.gentle) {
                     offset = clamped
                     lastOffset = clamped
                 }
@@ -42,7 +42,7 @@ struct PinchToZoomModifier: ViewModifier {
                 offset = .zero
                 lastOffset = .zero
             } else {
-                withAnimation(.spring()) {
+                withAnimation(AppMotion.gentle) {
                     offset = .zero
                     lastOffset = .zero
                 }
