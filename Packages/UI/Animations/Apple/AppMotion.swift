@@ -129,17 +129,10 @@ private struct ReduceMotionInjector<Content: View>: View {
                     thermalState: thermalState
                 )
             )
-            .onReceive(
-                NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
-            ) { _ in
+            .onReceive(AppMotion.mainThreadPublisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
                 lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
             }
-            // The posting thread is undocumented; hop before touching state.
-            .onReceive(
-                NotificationCenter.default
-                    .publisher(for: ProcessInfo.thermalStateDidChangeNotification)
-                    .receive(on: DispatchQueue.main)
-            ) { _ in
+            .onReceive(AppMotion.mainThreadPublisher(for: ProcessInfo.thermalStateDidChangeNotification)) { _ in
                 thermalState = ProcessInfo.processInfo.thermalState
             }
             // Neither notification is queued for a suspended app, so a change
@@ -155,6 +148,19 @@ private struct ReduceMotionInjector<Content: View>: View {
 // MARK: - AppMotion
 
 enum AppMotion {
+    /// ProcessInfo doesn't document which thread posts its power-state and
+    /// thermal notifications. The handlers write view state, which is
+    /// main-actor isolated, so a post from another thread would trap: hop to
+    /// the main queue before delivering.
+    nonisolated static func mainThreadPublisher(
+        for name: Notification.Name,
+        center: NotificationCenter = .default
+    ) -> AnyPublisher<Notification, Never> {
+        center.publisher(for: name)
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }
+
     static func reduceMotion(systemReduceMotion: Bool, respectPreference: Bool) -> Bool {
         respectPreference && systemReduceMotion
     }
