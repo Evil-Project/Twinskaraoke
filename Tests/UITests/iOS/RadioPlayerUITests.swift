@@ -24,6 +24,27 @@ final class RadioPlayerUITests: XCTestCase {
                        "The two title actions must share one row.")
     }
 
+    /// At the largest accessibility text size the radio player used to keep
+    /// its full-size artwork, which pushed the toolbar off the bottom of the
+    /// screen and squeezed "LIVE RADIO · 24 listening" down to "LIV… · 24…".
+    func testRadioPlayerFitsTheScreenAtAccessibilitySizes() throws {
+        let app = launchIntoRadioPlayer(arguments: [
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ])
+        let screen = app.windows.firstMatch.frame
+
+        let schedule = app.buttons["PlayerToolbar.PlayingNext"].firstMatch
+        XCTAssertTrue(schedule.waitForExistence(timeout: 8), "Expected the radio player's toolbar.")
+        XCTAssertLessThanOrEqual(schedule.frame.maxY, screen.maxY,
+                                 "The toolbar must stay on screen at an accessibility text size.")
+        XCTAssertTrue(schedule.isHittable)
+        for label in ["Add to Favorites", "More"] {
+            let button = app.buttons[label].firstMatch
+            XCTAssertTrue(button.exists, "Expected \(label) in the title row.")
+            XCTAssertLessThanOrEqual(button.frame.maxX, screen.maxX, "\(label) was pushed off screen.")
+        }
+    }
+
     // MARK: - Helpers
 
     private func launchIntoRadioPlayer(arguments: [String] = []) -> XCUIApplication {

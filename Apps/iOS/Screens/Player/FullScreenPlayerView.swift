@@ -4,7 +4,7 @@ import SwiftUI
     import UIKit
 #endif
 
-private struct PlayerLayoutMetrics {
+struct PlayerLayoutMetrics {
     let containerSize: CGSize
     let safeTop: CGFloat
     let safeBottom: CGFloat
@@ -151,7 +151,7 @@ private struct PlayerLayoutMetrics {
     }
 
     var radioArtSize: CGFloat {
-        min(containerSize.width - 44, contentHeight * 0.50, isWidePhone ? 390 : 360)
+        min(containerSize.width - 44, contentHeight * (usesAccessibilityText ? 0.34 : 0.50), isWidePhone ? 390 : 360)
     }
 
     var artworkTopSpacer: CGFloat {
@@ -288,7 +288,7 @@ struct FullScreenPlayerView: View {
                                     favorites: favorites,
                                     showingQueue: $showingQueue,
                                     song: song,
-                                    artSize: metrics.radioArtSize
+                                    metrics: metrics
                                 )
                             } else {
                                 musicLayout(song: song, metrics: metrics)
