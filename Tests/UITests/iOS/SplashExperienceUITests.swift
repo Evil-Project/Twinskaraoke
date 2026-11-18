@@ -147,7 +147,15 @@ import XCTest
         XCTAssertTrue(finish.waitForExistence(timeout: 15))
         XCTAssertFalse(app.staticTexts["Splash.Progress"].exists)
         capture("Website-only reminder", in: app)
+        let feedback = app.webViews.textFields["Optional feedback"]
+        XCTAssertTrue(feedback.waitForExistence(timeout: 15))
+        feedback.tap(); feedback.typeText("First reminder draft")
         finish.tap()
+        let secondReminder = XCTNSPredicateExpectation(predicate: NSPredicate { object, _ in
+            guard let input = object as? XCUIElement, input.exists else { return false }
+            return input.value as? String == ""
+        }, object: feedback)
+        XCTAssertEqual(XCTWaiter.wait(for: [secondReminder], timeout: 15), .completed)
         XCTAssertTrue(app.webViews.buttons["Cancel test form"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["AccountToolbarButton"].exists)
         app.terminate()
