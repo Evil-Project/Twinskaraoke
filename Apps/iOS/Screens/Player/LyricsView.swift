@@ -75,7 +75,7 @@ struct LyricsView: View {
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel("Intro")
                                 .accessibilityValue(introAccessibilityValue(startTime: first.time))
-                                .accessibilityHint("Restarts the song.")
+                                .accessibilityHint("Moves playback to the start of the song.")
                                 .accessibilityAddTraits(isIntro ? .isSelected : [])
                                 .accessibilityAction {
                                     AppHaptic.selection.play()
@@ -267,7 +267,7 @@ struct LyricLineRow: View, Equatable {
         .animation(translationAnimation, value: showTranslation)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint("Plays the song from this lyric.")
+        .accessibilityHint("Moves playback to this lyric.")
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
         .accessibilityAction(named: "Jump to Lyric") {
             AppHaptic.selection.play()
