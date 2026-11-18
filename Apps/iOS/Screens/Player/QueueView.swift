@@ -275,7 +275,7 @@ struct QueueView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Now Playing")
         .accessibilityValue("\(current.title), \(current.displayArtist)")
-        .accessibilityHint("Double tap to return to the player. More actions are available.")
+        .accessibilityHint("Returns to the player controls.")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: "Return to Player") {
             AppHaptic.selection.play()
