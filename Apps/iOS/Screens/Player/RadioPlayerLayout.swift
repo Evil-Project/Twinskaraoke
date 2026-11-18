@@ -84,37 +84,14 @@ struct RadioPlayerLayout: View {
             // splitting the free width — the title scrolled from about half the
             // row while the other half sat empty.
             .padding(.trailing, 8)
-            Menu {
-                SleepTimerMenu()
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 44, height: 44)
+            // The music player's order and chrome: favourite, then More.
+            // A station ident or jingle has no catalogue id, so there is no
+            // favourite to offer. Signed out, the shared button dims instead.
+            if let songID = radioFavoriteID {
+                PlayerFavoriteButton(song: song, favoriteID: songID, font: .title2)
             }
-            .accessibilityLabel("More")
-            if canFavoriteRadioSong, let songID = radioFavoriteID {
-                Button {
-                    toggleRadioFavorite(songID)
-                } label: {
-                    Group {
-                        let isFav = favorites.isFavorite(songID)
-                        if !reduceMotion {
-                            Image(systemName: isFav ? "star.fill" : "star")
-                                .contentTransition(.symbolEffect(.replace))
-                        } else {
-                            Image(systemName: isFav ? "star.fill" : "star")
-                        }
-                    }
-                    .font(.title2)
-                    .foregroundStyle(favorites.isFavorite(songID) ? Color.appAccent : .primary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableButtonStyle(scale: 0.88, dim: 0.6))
-                .accessibilityLabel(
-                    favorites.isFavorite(songID) ? "Remove from Favorites" : "Add to Favorites"
-                )
-                .accessibilityValue(song.title)
-                .accessibilityHint("Updates favorites for the current radio song.")
+            PlayerTitleMenu(song: song) {
+                SleepTimerMenu()
             }
         }
     }
