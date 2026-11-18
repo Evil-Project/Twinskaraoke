@@ -84,11 +84,14 @@ struct LyricsView: View {
                         }
                         ForEach(lyrics.indices, id: \.self) { index in
                             let line = lyrics[index]
+                            // Index first: `isInstrumental` lowercases and trims
+                            // the text on every call, and this runs per row on
+                            // every playback tick.
                             LyricLineRow(
                                 line: line,
                                 index: index,
                                 currentIndex: currentIndex,
-                                currentTime: line.isInstrumental && index == currentIndex
+                                currentTime: index == currentIndex && line.isInstrumental
                                     ? currentTime
                                     : nil,
                                 animatesLineChanges: animatesLineChanges,

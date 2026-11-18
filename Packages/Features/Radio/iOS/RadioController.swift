@@ -114,7 +114,12 @@ final class RadioController {
                 let data = try await loadMetadata()
                 try Task.checkCancellation()
                 let np = try JSONDecoder().decode(RadioNowPlaying.self, from: data)
-                nowPlaying = np
+                // Most polls return what is already shown. Writing it anyway
+                // notified every reader, including the radio player layout
+                // that stays mounted inside the closed full-screen player.
+                // `lastUpdated` below is still written: it is the "Updated …"
+                // label, and the poll did succeed.
+                if nowPlaying != np { nowPlaying = np }
                 prefetchArtwork(from: np)
                 refreshErrorMessage = nil
                 lastUpdated = Date()
