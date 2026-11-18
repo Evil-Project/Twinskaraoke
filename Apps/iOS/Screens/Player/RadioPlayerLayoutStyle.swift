@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// How the radio player arranges itself for a canvas and a text size.
 ///
 /// The canvas decision is the music player's own (`PlayerLayoutMetrics.usesPadLayout`),
@@ -34,5 +36,23 @@ nonisolated struct RadioPlayerLayoutStyle: Equatable, Sendable {
 
     static func stacksLiveMeta(isAccessibilitySize: Bool) -> Bool {
         isAccessibilitySize
+    }
+
+    /// The wide layout keeps the music player's pad artwork size, except at
+    /// an accessibility text size: the title, stop button, volume and toolbar
+    /// grow there, and on a short canvas (landscape, Stage Manager) the pad
+    /// size pushed them below the screen. It then shrinks to the compact
+    /// layout's size, which takes the music player's accessibility share of
+    /// the height.
+    @MainActor
+    static func artworkSize(for arrangement: Arrangement, metrics: PlayerLayoutMetrics) -> CGFloat {
+        switch arrangement {
+        case .compact:
+            metrics.radioArtSize
+        case .wide:
+            metrics.usesAccessibilityText
+                ? min(metrics.padArtworkSize, metrics.radioArtSize)
+                : metrics.padArtworkSize
+        }
     }
 }

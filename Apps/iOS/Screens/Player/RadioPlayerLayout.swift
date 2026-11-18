@@ -27,7 +27,7 @@ struct RadioPlayerLayout: View {
     private var compactLayout: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 8)
-            artwork(size: metrics.radioArtSize)
+            artwork(size: RadioPlayerLayoutStyle.artworkSize(for: .compact, metrics: metrics))
             Spacer(minLength: 28)
             headerRow
                 .padding(.horizontal, 32)
@@ -46,7 +46,7 @@ struct RadioPlayerLayout: View {
     private var wideLayout: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 12)
-            artwork(size: metrics.padArtworkSize)
+            artwork(size: RadioPlayerLayoutStyle.artworkSize(for: .wide, metrics: metrics))
             headerRow
                 .padding(.top, 26)
             Spacer(minLength: 18)
