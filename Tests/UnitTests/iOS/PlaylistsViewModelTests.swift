@@ -121,8 +121,17 @@ struct PlaylistsViewModelTests {
         model.startObserving()
 
         model.playlists = [playlist]
-        await Task.yield()
+        // `observeContinuously` delivers in a main-actor task of its own, so
+        // one yield doesn't guarantee it has run yet.
+        await waitUntil { model.combinedPlaylists.contains { $0.id == playlist.id } }
 
         #expect(model.combinedPlaylists.contains { $0.id == playlist.id })
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 }
