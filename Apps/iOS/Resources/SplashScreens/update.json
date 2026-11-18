@@ -38,6 +38,26 @@
         ],
         "general": []
       }
+    },
+    {
+      "id": "update-slide-2",
+      "imageDescription": "",
+      "backgroundColor": "#101827",
+      "textColor": "#FFFFFF",
+      "layout": "textOnly",
+      "alignment": "center",
+      "typography": "standard",
+      "website": { "url": "" }
+    },
+    {
+      "id": "update-slide-3",
+      "title": "You’re up to date.",
+      "imageDescription": "",
+      "backgroundColor": "#101827",
+      "textColor": "#FFFFFF",
+      "layout": "textOnly",
+      "alignment": "center",
+      "typography": "standard"
     }
   ],
   "targetVersion": "1.1.0"
