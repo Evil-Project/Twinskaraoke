@@ -1269,23 +1269,8 @@ struct FullScreenPlayerView: View {
         } label: {
             ZStack {
                 if lyricsViewModel.translationState == .translating {
-                    if reduceMotion {
-                        Circle()
-                            .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .padding(3)
-                            .transition(.opacity)
-                    } else {
-                        TimelineView(
-                            .animation(minimumInterval: DisplayRefreshRate.lightweightAnimationInterval)
-                        ) { context in
-                            Circle()
-                                .trim(from: 0, to: 0.82)
-                                .stroke(Color.appAccent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                                .rotationEffect(.degrees(translationSpinnerDegrees(for: context.date)))
-                                .padding(3)
-                        }
-                        .transition(.scale(scale: 0.82).combined(with: .opacity))
-                    }
+                    LyricsTranslationSpinner(isPaused: !presentation.isExpanded)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.82).combined(with: .opacity))
                 }
                 Image(systemName: showTranslatedLyrics ? "globe.badge.chevron.backward" : "globe")
                     .font(AM.Font.playerGlyph)
@@ -1307,12 +1292,6 @@ struct FullScreenPlayerView: View {
             reduceMotion ? nil : AppMotion.quick,
             value: lyricsViewModel.translationState
         )
-    }
-
-    private func translationSpinnerDegrees(for date: Date) -> Double {
-        let cycle = 1.12
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
-        return phase * 360 - 90
     }
 
     private var lyricsTranslationAccessibilityLabel: String {

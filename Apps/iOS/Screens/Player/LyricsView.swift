@@ -93,6 +93,7 @@ struct LyricsView: View {
                                     : nil,
                                 animatesLineChanges: animatesLineChanges,
                                 showTranslation: showTranslations,
+                                isLive: isLive,
                                 nextLineTime: index + 1 < lyrics.count ? lyrics[index + 1].time : nil,
                                 onSeek: { time in
                                     scrollTo(line.id, proxy: proxy, animated: false)
@@ -150,12 +151,14 @@ private struct InstrumentalDots: View {
     let isPast: Bool
     let distance: Int
     let gapProgress: Double?
+    let isPaused: Bool
     var body: some View {
         LyricsBouncingDots(
             isActive: isActive,
             progress: isActive ? gapProgress : nil,
             dotSize: isActive ? 12 : 9,
-            color: dotColor
+            color: dotColor,
+            isPaused: isPaused
         )
     }
 
@@ -182,6 +185,8 @@ struct LyricLineRow: View, Equatable {
     let currentTime: TimeInterval?
     let animatesLineChanges: Bool
     let showTranslation: Bool
+    /// False while the player is closed; its looping dots stop then.
+    var isLive = true
     let nextLineTime: TimeInterval?
     let onSeek: (TimeInterval) -> Void
     @Environment(\.appReduceMotion) private var reduceMotion
@@ -215,6 +220,7 @@ struct LyricLineRow: View, Equatable {
             && lhs.currentTime == rhs.currentTime
             && lhs.animatesLineChanges == rhs.animatesLineChanges
             && lhs.showTranslation == rhs.showTranslation
+            && lhs.isLive == rhs.isLive
             && lhs.nextLineTime == rhs.nextLineTime
     }
 
@@ -228,7 +234,8 @@ struct LyricLineRow: View, Equatable {
                         isActive: isCurrent,
                         isPast: isPast,
                         distance: distance,
-                        gapProgress: gapProgress
+                        gapProgress: gapProgress,
+                        isPaused: !isLive
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, isCurrent ? 10 : 6)
@@ -410,14 +417,16 @@ private extension LyricsView {
                 systemImage: "quote.bubble"
             )
         } else {
-            LyricsLoadingSkeleton()
+            LyricsLoadingSkeleton(isPaused: !isLive)
         }
     }
 }
 
 private struct LyricsLoadingSkeleton: View {
+    let isPaused: Bool
+
     var body: some View {
-        LyricsBouncingDots(isActive: true, dotSize: 12, color: .primary.opacity(0.6))
+        LyricsBouncingDots(isActive: true, dotSize: 12, color: .primary.opacity(0.6), isPaused: isPaused)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Loading lyrics")
