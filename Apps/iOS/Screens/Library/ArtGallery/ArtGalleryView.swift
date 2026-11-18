@@ -71,16 +71,20 @@ struct ArtGalleryView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         GallerySectionHeader(title: String(localized: "All Artists"))
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(viewModel.artists.enumerated()), id: \.element.id) { idx, artist in
-                                NavigationLink {
-                                    DeferredView { ArtistArtsView(artist: artist) }
-                                } label: {
-                                    ArtistListRow(artist: artist)
-                                }
-                                .buttonStyle(.plain)
-                                .simultaneousGesture(TapGesture().onEnded { AppHaptic.selection.play() })
-                                if idx < viewModel.artists.count - 1 {
-                                    Divider().padding(.leading, 78)
+                            // One view per element, so SwiftUI can take the
+                            // row identities from the ids.
+                            ForEach(viewModel.artists.enumerated(), id: \.element.id) { idx, artist in
+                                VStack(spacing: 0) {
+                                    NavigationLink {
+                                        DeferredView { ArtistArtsView(artist: artist) }
+                                    } label: {
+                                        ArtistListRow(artist: artist)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .simultaneousGesture(TapGesture().onEnded { AppHaptic.selection.play() })
+                                    if idx < viewModel.artists.count - 1 {
+                                        Divider().padding(.leading, 78)
+                                    }
                                 }
                             }
                         }

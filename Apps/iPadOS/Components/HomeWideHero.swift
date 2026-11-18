@@ -222,6 +222,7 @@ private struct WideHeroModuleTitle: View {
             .font(AM.Font.groupHeader)
             .foregroundStyle(.primary)
             .padding(.bottom, 2)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

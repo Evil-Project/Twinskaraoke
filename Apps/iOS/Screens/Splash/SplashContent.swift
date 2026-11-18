@@ -130,6 +130,7 @@ nonisolated struct SplashContent: Codable, Equatable {
     func validateForPresentation(forRelease: Bool = false) throws {
         try validate()
         guard kind == .update else { return }
+        try slides.first?.releaseNotes?.validateForPresentation()
         guard slides.first?.releaseNotes?.isReady == true else {
             throw SplashError(message: String(localized: "Add release notes with a headline for each entry and a version for watchOS notes."))
         }

@@ -157,25 +157,29 @@ struct RandomSongsView: View {
                 }
 
                 LazyVStack(spacing: 0) {
+                    // One view per element (row and separator in a VStack),
+                    // so SwiftUI can take the row identities from the ids.
                     ForEach(songs.enumerated().map { PositionedRandomSong(offset: $0.offset, song: $0.element) }) { item in
-                        Button {
-                            play(item.song, context: songs)
-                        } label: {
-                            PlaylistRow(
-                                song: item.song,
-                                showsArtwork: true,
-                                horizontalPadding: rowHorizontalPadding
-                            )
-                            .contentShape(Rectangle())
-                            .songRowAccessibility(song: item.song) {
+                        VStack(spacing: 0) {
+                            Button {
                                 play(item.song, context: songs)
+                            } label: {
+                                PlaylistRow(
+                                    song: item.song,
+                                    showsArtwork: true,
+                                    horizontalPadding: rowHorizontalPadding
+                                )
+                                .contentShape(Rectangle())
+                                .songRowAccessibility(song: item.song) {
+                                    play(item.song, context: songs)
+                                }
                             }
-                        }
-                        .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
-                        .accessibilityHint("Starts playback.")
-                        .accessibilityIdentifier("RandomSongs.song.\(item.offset).\(item.song.id)")
-                        if item.offset < songs.count - 1 {
-                            Divider().padding(.leading, rowHorizontalPadding + 60)
+                            .buttonStyle(PressableButtonStyle(scale: 0.985, dim: 0.78, haptic: .selection))
+                            .accessibilityHint("Starts playback.")
+                            .accessibilityIdentifier("RandomSongs.song.\(item.offset).\(item.song.id)")
+                            if item.offset < songs.count - 1 {
+                                Divider().padding(.leading, rowHorizontalPadding + 60)
+                            }
                         }
                     }
                 }

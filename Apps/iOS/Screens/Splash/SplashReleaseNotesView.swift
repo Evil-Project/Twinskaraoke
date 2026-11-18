@@ -8,11 +8,11 @@ struct SplashReleaseNotesView: View {
     @State private var expanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.l) {
+        LazyVStack(alignment: .leading, spacing: AM.Spacing.l) {
             if let title, !title.isEmpty {
-                Text(title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                Text(title).font(AM.Font.screenTitle).accessibilityAddTraits(.isHeader)
             } else {
-                Text("What’s new").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                Text("What’s new").font(AM.Font.screenTitle).accessibilityAddTraits(.isHeader)
             }
             if let build { Text("Build \(build)").font(.subheadline) }
             if !notes.watchOS.isEmpty {
@@ -40,8 +40,8 @@ struct SplashReleaseNotesView: View {
     }
 
     private func section(_ title: Text, entries: [SplashReleaseNotes.Entry]) -> some View {
-        VStack(alignment: .leading, spacing: AM.Spacing.s) {
-            title.font(.headline).accessibilityAddTraits(.isHeader)
+        LazyVStack(alignment: .leading, spacing: AM.Spacing.s) {
+            title.font(AM.Font.sectionHeader).accessibilityAddTraits(.isHeader)
             if expanded {
                 ForEach(entries.enumerated(), id: \.element.id) { offset, entry in
                     VStack(alignment: .leading, spacing: AM.Spacing.xs) {

@@ -11,10 +11,22 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
         var headline = ""
         var details = ""
 
-        var detailLines: [String] {
-            details.split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
+        static let maximumDetailLines = 30
+
+        /// Bounds even unvalidated/legacy content before the view creates any detail rows.
+        var detailLines: [String] { detailLines(upTo: Self.maximumDetailLines) }
+        var hasTooManyDetailLines: Bool { detailLines(upTo: Self.maximumDetailLines + 1).count > Self.maximumDetailLines }
+
+        private func detailLines(upTo limit: Int) -> [String] {
+            var lines: [String] = []
+            var start = details.startIndex
+            while start < details.endIndex, lines.count < limit {
+                let end = details[start...].firstIndex(where: \.isNewline) ?? details.endIndex
+                let trimmed = details[start..<end].trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty { lines.append(trimmed) }
+                start = end < details.endIndex ? details.index(after: end) : end
+            }
+            return lines
         }
     }
 
@@ -31,8 +43,18 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
         }
     }
 
+    /// Preserve editable drafts; enforce the detail-row limit only when presenting or exporting.
+    func validateForPresentation() throws {
+        try validate()
+        guard (watchOS + iOS + general).allSatisfy({ !$0.hasTooManyDetailLines }) else {
+            throw SplashError(message: String(localized: "Each release-note entry can have up to \(Entry.maximumDetailLines) detail lines."))
+        }
+    }
+
     var isReady: Bool {
         hasEntries && (watchOS.isEmpty || SplashContent.validVersion(watchVersion)) &&
-            (watchOS + iOS + general).allSatisfy { !$0.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            (watchOS + iOS + general).allSatisfy {
+                !$0.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.hasTooManyDetailLines
+            }
     }
 }

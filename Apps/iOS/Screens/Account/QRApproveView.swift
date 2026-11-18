@@ -42,7 +42,8 @@ struct QRApproveView: View {
                         AppHaptic.dismiss.play()
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
+                        Label("Close", systemImage: "xmark")
+                            .labelStyle(.iconOnly)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Color.appGlassForeground)
                     }
@@ -810,6 +811,10 @@ private final class QRCameraPreviewView: UIView {
     }
 }
 
+// Safe: Sendable only so configure() can hand it to the session queue.
+// `controller` is written once, in init on the main actor, and only read in
+// metadataOutput, which AVFoundation calls on the main queue
+// (setMetadataObjectsDelegate(_:queue: .main) in configure()).
 private final class QRCameraMetadataDelegate: NSObject, AVCaptureMetadataOutputObjectsDelegate, @unchecked Sendable {
     nonisolated(unsafe) weak var controller: QRCameraController?
 
@@ -835,8 +840,14 @@ private final class QRCameraMetadataDelegate: NSObject, AVCaptureMetadataOutputO
 
 private final class QRCameraController: UIViewController {
     weak var delegate: QRCameraControllerDelegate?
+    // Safe: the reference never changes, and the session is configured,
+    // started and stopped only on the serial sessionQueue. The main actor only
+    // hands it to the preview layer in viewDidLoad, before any work is queued,
+    // and uses it as the runtime-error notification's object.
     private nonisolated(unsafe) let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "org.evilneuro.Twinskaraoke.qr-camera-session", qos: .userInitiated)
+    // Safe: written once, in viewDidLoad on the main actor, and read only in
+    // the nonisolated deinit, which can't overlap any other access.
     private nonisolated(unsafe) var runtimeErrorObserver: NSObjectProtocol?
     private var hasReported = false
     private var isSessionConfigured = false

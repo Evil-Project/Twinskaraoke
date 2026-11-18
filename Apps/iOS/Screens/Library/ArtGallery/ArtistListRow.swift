@@ -13,12 +13,7 @@ struct ArtistListRow: View {
                     )
                 } else {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.appAccent.opacity(0.85), Color.purple.opacity(0.85)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(.appAccentGradient)
                         .overlay(
                             Text(String(artist.name.first ?? "?").uppercased())
                                 .font(.system(size: 16, weight: .semibold))

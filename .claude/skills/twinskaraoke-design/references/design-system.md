@@ -9,7 +9,7 @@ a raw value next to a token is how the interface drifts.
 | --- | --- |
 | `AM` type, radius, spacing, layout, shadow tokens; `AMSectionHeader`, `InsetGroupedList`, `trackingWidth(into:)`, `withOptionalAnimation`, `scaledSystemFont` | `Apps/iOS/Components/Shared/AppTheme.swift` |
 | Fixed colour tokens (`appGlassFill`, `appDivider`, `appShadow`, placeholders, …) | `Apps/iOS/Components/Shared/AppTheme.swift` (`extension Color`) |
-| Theme-driven colours (`appAccent`, `appBackground`, `appGroupedBackground`, `appSecondaryBackground`, `appSheetGradient*`, `appPlayerActionFill`, `appDestructive`) | `Packages/UI/Themes/iOS/AppThemePalette.swift` |
+| Theme-driven colours (`appAccent`, `appAccentGradientEnd`, `appBackground`, `appGroupedBackground`, `appSecondaryBackground`, `appSheetGradient*`, `appPlayerActionFill`, `appDestructive`) and the `appAccentGradient` fill for imageless artwork | `Packages/UI/Themes/iOS/AppThemePalette.swift` |
 | Accent for watch, TV and Mac | `Packages/UI/DesignSystem/Apple/AppAccent.swift` |
 | Glass surfaces (`appGlassBackground(in:)`, `GlassCircle`, `GlassRoundedRect`) | `Apps/iOS/Components/Shared/GlassComponents.swift` |
 | Press feedback | `Packages/UI/Components/Apple/PressableButtonStyle.swift` |
@@ -89,6 +89,10 @@ between idle and playing shadows; don't hand-roll a shadow next to them.
   `static let` or a `nonisolated` constant freezes it at the launch theme.
 - `appAccent` is the theme's primary colour: cyan or purple under some
   themes. Anything destructive uses `appDestructive`, which stays red.
+- Artwork with no image (artist initials, a radio track without a cover)
+  fills with `.appAccentGradient`: the theme's primary into its accent.
+  Don't fade `appAccent` into a fixed colour; that goes flat under a theme
+  whose primary is that colour.
 - Screen backgrounds: `musicScreenBackground()` or
   `groupedScreenBackground()`, never `Color.appBackground` painted directly
   (the aurora theme needs its own opaque backdrop per screen).

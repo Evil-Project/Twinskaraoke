@@ -77,7 +77,7 @@ struct SplashJSONDocument: FileDocument {
     }
     func delete(_ offsets: IndexSet) {
         let removable = offsets.filter { draft.slides[$0].releaseNotes == nil }
-        guard draft.slides.count > removable.count else { message = "Keep at least one slide."; return }
+        guard draft.slides.count > removable.count else { message = String(localized: "Keep at least one slide."); return }
         draft.slides.remove(atOffsets: IndexSet(removable))
         reserveReleaseNotes()
     }
@@ -87,6 +87,10 @@ struct SplashJSONDocument: FileDocument {
             get: { self.draft.slides.first { $0.id == current.id } ?? current },
             set: { updated in
                 guard let index = self.draft.slides.firstIndex(where: { $0.id == current.id }) else { return }
+                guard !self.draft.slides.enumerated().contains(where: { $0.offset != index && $0.element.id == updated.id }) else {
+                    self.message = String(localized: "Slide IDs must be unique.")
+                    return
+                }
                 self.draft.slides[index] = updated
                 current = updated
             }
@@ -152,7 +156,7 @@ struct SplashStudioView: View {
                                 .deleteDisabled(true)
                             } else {
                                 NavigationLink {
-                                    SplashSlideEditor(slide: model.binding(for: slide), allowsWebsite: model.draft.kind == .update)
+                                    SplashSlideEditor(slide: model.binding(for: slide), studio: model)
                                 } label: {
                                     VStack(alignment: .leading) {
                                         if slide.website != nil {
@@ -275,7 +279,7 @@ struct SplashPreviewView: View {
 
 struct SplashSlideEditor: View {
     @Binding var slide: SplashSlide
-    var allowsWebsite = false
+    var studio: SplashStudioModel? = nil
     @State private var message: String?
     @State private var singlePreview = false
     @State private var arranging = false
@@ -386,6 +390,14 @@ struct SplashSlideEditor: View {
                 }
             }
         }
+        .accessibilityIdentifier("SplashStudio.SlideForm")
+        .navigationTitle("Edit Slide")
+        .onChange(of: studio?.noticeRevision) { _, _ in message = studio?.message }
+        .splashNotice($message, revision: studio?.noticeRevision ?? 0)
+        .fullScreenCover(isPresented: $singlePreview) {
+            SplashPreviewView(content: SplashContent(kind: .install, id: "single-preview", slides: [slide]))
+        }
+        .fullScreenCover(isPresented: $arranging) { SplashCanvasEditor(slide: $slide) }
     }
 
     /// Binds an optional slide design field through its resolved default design.

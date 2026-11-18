@@ -231,3 +231,5 @@ an error and keep the app open. Reopen the app to exercise ordinary eligibility.
 A disabled or nonmatching update still does not appear after a reset.
 Login, credentials, account data, caches, and drafts are not cleared. This is an
 explicit hidden Developer action, available in developer-enabled release builds.
+
+Release-note entries allow up to 30 nonempty detail lines for preview, export, and runtime. Older over-limit drafts remain importable and saveable with their full text so they can be shortened in Studio.

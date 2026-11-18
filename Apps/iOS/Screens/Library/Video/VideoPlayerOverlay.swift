@@ -103,6 +103,7 @@ struct VideoPlayerOverlay: View {
                 Slider(progressTracker: progressTracker)
                     .sliderThumbVisibility(.hidden)
                     .tint(.white)
+                    .accessibilityLabel("Playback position")
             }
             HStack(spacing: 12) {
                 Text(elapsedText)

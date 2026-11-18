@@ -22,6 +22,9 @@ nonisolated enum AudioCacheStore {
     // (header validation + duration), each opening a fresh AVAudioFile. Memoize
     // per (path, modificationDate); `touch` bumps the modification date, so
     // entries invalidate conservatively whenever the file changes.
+    // Safe: durationMemo and validityMemo are only read or written while
+    // probeMemoLock is held; the file probes between lookup and store run
+    // unlocked and only work on local values.
     private static let probeMemoLock = NSLock()
     private static let probeMemoLimit = 256
     private nonisolated(unsafe) static var durationMemo: [String: (modified: Date, duration: TimeInterval)] = [:]

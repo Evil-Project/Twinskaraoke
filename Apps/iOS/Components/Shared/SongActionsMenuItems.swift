@@ -52,8 +52,9 @@ struct SongActionsMenuItems: View {
         // longer write anything.
         if let playlistRemoval, UserPlaylistsManager.shared.isAvailable {
             Button(role: .destructive) {
-                AppHaptic.warning.play()
-                playlistRemoval.remove(song)
+                // Only opens the confirmation; the removal plays its own.
+                AppHaptic.selection.play()
+                playlistRemoval.requestRemoval(song)
             } label: {
                 Label("Remove from Playlist", systemImage: "minus.circle")
             }

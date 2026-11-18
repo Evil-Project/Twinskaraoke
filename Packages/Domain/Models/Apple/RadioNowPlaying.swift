@@ -10,14 +10,16 @@ nonisolated enum RadioStation {
     )!
 }
 
-nonisolated struct RadioNowPlaying: Decodable, Sendable {
+/// Equatable so the 15 s poll can skip a write that changes nothing; see
+/// `RadioController.performRefresh`.
+nonisolated struct RadioNowPlaying: Decodable, Equatable, Sendable {
     let station: Station
     let listeners: Listeners?
     let nowPlaying: NowPlayingItem?
     let playingNext: NowPlayingItem?
     let songHistory: [HistoryItem]?
 
-    struct Station: Decodable, Sendable {
+    struct Station: Decodable, Equatable, Sendable {
         let name: String
         let description: String?
         let listenUrl: String
@@ -28,20 +30,20 @@ nonisolated struct RadioNowPlaying: Decodable, Sendable {
         }
     }
 
-    struct Listeners: Decodable, Sendable {
+    struct Listeners: Decodable, Equatable, Sendable {
         let total: Int
         let unique: Int
     }
 
-    struct NowPlayingItem: Decodable, Sendable {
+    struct NowPlayingItem: Decodable, Equatable, Sendable {
         let song: SongInfo
     }
 
-    struct HistoryItem: Decodable, Sendable {
+    struct HistoryItem: Decodable, Equatable, Sendable {
         let song: SongInfo
     }
 
-    struct SongInfo: Decodable, Sendable {
+    struct SongInfo: Decodable, Equatable, Sendable {
         let id: String
         let art: String?
         let text: String?
@@ -55,7 +57,7 @@ nonisolated struct RadioNowPlaying: Decodable, Sendable {
         }
     }
 
-    struct CustomFields: Decodable, Sendable {
+    struct CustomFields: Decodable, Equatable, Sendable {
         let songID: String?
 
         enum CodingKeys: String, CodingKey {

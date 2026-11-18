@@ -149,7 +149,11 @@ final class SimpleAudioPlayer {
         playerNode.scheduleSegment(
             file, startingFrame: startFrame, frameCount: remaining, at: time,
             completionCallbackType: .dataPlayedBack
-        ) { [weak self] _ in
+        ) { @Sendable [weak self] _ in
+            // AVAudioPlayerNode calls this off the main thread, and its block
+            // type isn't annotated. Without @Sendable the closure inherits
+            // main-actor isolation, and Swift may check that on entry, which
+            // traps there. The stale-generation check runs after the hop.
             Task { @MainActor [weak self] in
                 self?.deliverCompletion(for: generation)
             }

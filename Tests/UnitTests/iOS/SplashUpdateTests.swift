@@ -64,76 +64,69 @@ import WebKit
         #expect(studio.draft.slides.count == 2)
     }
 
-    @Test func websiteHandshakeAcceptsOnlyItsCurrentOriginAndIDOnce() throws {
-        let url = try #require(SplashWebsite(url: "https://survey.example.org/form?language=en").httpsURL)
-        var session = try #require(SplashWebsiteHandshake(url: url))
-        let replacement = try #require(SplashWebsiteHandshake(url: url))
-        #expect(session.requestURL.fragment == "splashSession=\(session.id)")
-        #expect(session.requestURL.query() == "language=en")
-        let stale = session.consume(type: "completed", id: replacement.id, isMainFrame: true, origin: session.origin)
-        #expect(!stale)
-        let subframe = session.consume(type: "completed", id: session.id, isMainFrame: false, origin: session.origin)
-        #expect(!subframe)
-        let wrongType = session.consume(type: "finished", id: session.id, isMainFrame: true, origin: session.origin)
-        #expect(!wrongType)
-        let otherPort = SplashWebsiteHandshake.Origin(scheme: "https", host: "survey.example.org", port: 444)
-        let wrongPort = session.consume(type: "completed", id: session.id, isMainFrame: true, origin: otherPort)
-        #expect(!wrongPort)
-        let accepted = session.consume(type: "completed", id: session.id, isMainFrame: true, origin: session.origin)
-        #expect(accepted)
-        let duplicate = session.consume(type: "completed", id: session.id, isMainFrame: true, origin: session.origin)
-        #expect(!duplicate)
-        #expect(SplashWebsite(url: "http://survey.example.org").httpsURL == nil)
-        #expect(SplashWebsite(url: "https://user@survey.example.org").httpsURL == nil)
-        #expect(SplashWebsite(url: "https://survey.example.org#already-set").httpsURL == nil)
+    @Test func excessiveDetailLinesAreRejectedAndLegacyRenderingIsBounded() throws {
+        let entry = SplashReleaseNotes.Entry(headline: "Improvement", details: String(repeating: "x\n", count: 5000))
+        #expect(entry.detailLines.count <= 30)
+        var notes = SplashReleaseNotes()
+        notes.general = [entry]
+        #expect(throws: SplashError.self) { try notes.validateForPresentation() }
+        notes.general[0].details = Array(repeating: "Detail", count: 30).joined(separator: "\n")
+        try notes.validateForPresentation()
+        #expect(notes.general[0].detailLines.count == 30)
+        notes.general[0].details += "\nOne too many"
+        #expect(throws: SplashError.self) { try notes.validateForPresentation() }
     }
 
-    @Test func websiteProgressUsesExistingSaveRetryAndResume() {
-        var update = announcement()
-        update.slides[1].website = .init(url: "https://survey.example.org/form")
-        update.targetBuild = "42"
-        update.slides.append(SplashSlide())
-        let store = MemorySplashStore()
-        store.value.installCompleted = true
-        let splash = coordinator(store, update: update)
-        splash.foreground()
-        splash.next()
-
-        store.failWrite = true
-        splash.next(expectedFingerprint: update.fingerprint, expectedIndex: 1)
-        #expect(splash.index == 1 && splash.errorMessage != nil)
-        #expect(!splash.hasPassedCurrentSlide && store.value.pending?.index == 1)
-        store.failWrite = false
-        splash.retry()
-        #expect(splash.index == 2 && store.value.pending?.index == 2)
-        splash.back()
-        #expect(splash.hasPassedCurrentSlide)
-
-        let reopened = coordinator(store, update: update)
-        reopened.foreground()
-        #expect(reopened.index == 1 && reopened.hasPassedCurrentSlide)
-        reopened.next()
-        reopened.complete()
-        #expect(!reopened.isBlocking && store.value.completedUpdateIDs == [update.id])
+    @Test func collidingSlideIDCannotRedirectRetainedBindingWrites() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let studio = SplashStudioModel(kind: .install, directory: directory)
+        studio.draft = SplashContent(kind: .install, id: "binding-fixture", slides: [
+            SplashSlide(id: "first-slide"), SplashSlide(id: "second-slide"),
+        ])
+        let original = studio.draft
+        let first = original.slides[0]
+        let second = original.slides[1]
+        let binding = studio.binding(for: second)
+        binding.wrappedValue.id = first.id
+        #expect(studio.draft == original)
+        #expect(binding.wrappedValue.id == second.id)
+        binding.wrappedValue.id = "renamed-slide"
+        binding.wrappedValue.title = "Edited second slide"
+        #expect(studio.draft.slides[0] == first)
+        #expect(studio.draft.slides[1].id == "renamed-slide")
+        #expect(studio.draft.slides[1].title == "Edited second slide")
+        studio.delete(IndexSet(integer: 1))
+        let afterDeletion = studio.draft
+        binding.wrappedValue.title = "Deleted slide edit"
+        #expect(studio.draft == afterDeletion)
     }
 
-    @Test func localWebsiteReportsCompletionFromWebKit() async throws {
-        let session = SplashWebsiteSession()
-        var advanced = false
-        session.open(.init()) { advanced = true }
-        defer { session.stop() }
-        for _ in 0..<120 where session.loading && session.failure == nil {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        let page = try #require(session.page)
-        let hasID = try await page.callJavaScript("return typeof id === 'string';") as? Bool
-        let hasBridge = try await page.callJavaScript("return !!window.webkit?.messageHandlers?.splashCompletion;") as? Bool
-        #expect(hasID == true)
-        #expect(hasBridge == true)
-        _ = try await page.callJavaScript("document.getElementById('complete').click()")
-        for _ in 0..<20 where !advanced {
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        #expect(advanced)
+    @Test(arguments: ["\n", "\r", "\r\n", "\u{000B}", "\u{000C}", "\u{0085}", "\u{2028}", "\u{2029}"])
+    func everyNewlineSeparatesBoundedDetailRows(_ separator: String) {
+        let entry = SplashReleaseNotes.Entry(headline: "Improvement", details: " One \(separator) \(separator) Two ")
+        #expect(entry.detailLines == ["One", "Two"])
+        let overLimit = SplashReleaseNotes.Entry(headline: "Improvement", details: Array(repeating: "Detail", count: 31).joined(separator: separator))
+        #expect(overLimit.detailLines.count == 30)
+        #expect(overLimit.hasTooManyDetailLines)
+    }
+
+    @Test func oversizedLegacyDraftRemainsEditableUntilReadyForPresentation() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var legacy = announcement()
+        let details = Array(repeating: "Detail", count: 31).joined(separator: "\n")
+        legacy.slides[0].releaseNotes?.general = [.init(headline: "Improvement", details: details)]
+        let studio = SplashStudioModel(kind: .update, directory: directory)
+        try studio.importData(JSONEncoder().encode(legacy))
+        #expect(studio.draft == legacy)
+        #expect(studio.saveDraft(announce: false))
+        let reopened = SplashStudioModel(kind: .update, directory: directory)
+        #expect(reopened.draft == legacy)
+        #expect(throws: SplashError.self) { try reopened.draft.validateForPresentation() }
+        #expect(throws: SplashError.self) { try SplashJSONDocument(content: reopened.draft) }
+        reopened.draft.slides[0].releaseNotes?.general[0].details = "Shortened detail"
+        try reopened.draft.validateForPresentation()
+        _ = try SplashJSONDocument(content: reopened.draft)
     }
 }

@@ -4,6 +4,7 @@ struct KaraokeRightDock: View {
     @Environment(AudioPlayerManager.self) var audioManager
     private let vocalSeparator = VocalSeparator.shared
     @Environment(\.appReduceMotion) private var reduceMotion
+    @Environment(\.locale) private var locale
     @Binding var showKaraokeControls: Bool
 
     private var currentSongID: String? {
@@ -24,7 +25,7 @@ struct KaraokeRightDock: View {
     }
 
     private var processingPercentText: String {
-        "\(Int((processingFraction * 100).rounded()))%"
+        percentText(Double(processingFraction))
     }
 
     private var shouldShowProcessingIndicator: Bool {
@@ -37,6 +38,16 @@ struct KaraokeRightDock: View {
 
     private var vocalRemovalPercent: Int {
         Int((Double(audioManager.aiVocalStrength) * 100).rounded())
+    }
+
+    private var vocalRemovalPercentText: String {
+        percentText(Double(audioManager.aiVocalStrength))
+    }
+
+    /// A whole-number percentage in the current locale ("42 %" in German and
+    /// French), rather than a number with a hard-coded "%" after it.
+    private func percentText(_ fraction: Double) -> String {
+        fraction.formatted(.percent.precision(.fractionLength(0)).locale(locale))
     }
 
     private var dockAccessibilityValue: String {
@@ -99,7 +110,7 @@ struct KaraokeRightDock: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.9, dim: 0.7))
         .disabled(!canActivateKaraoke)
-        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: processingFraction)
+        .animation(reduceMotion ? nil : AppMotion.linear(duration: 0.2), value: processingFraction)
         .accessibilityLabel(audioManager.karaokeMode ? "Turn Off Vocal Removal" : "Vocal Removal")
         .accessibilityValue(karaokeButtonAccessibilityValue)
         .accessibilityHint(karaokeButtonAccessibilityHint)
@@ -122,7 +133,7 @@ struct KaraokeRightDock: View {
             )
             .frame(width: 28, height: 180)
             .accessibilityLabel("Vocal removal level")
-            .accessibilityValue("\(vocalRemovalPercent)%")
+            .accessibilityValue(vocalRemovalPercentText)
             .accessibilityHint("Swipe up or down to adjust vocal removal.")
             .accessibilityAdjustableAction { direction in
                 adjustVocalRemoval(direction)
@@ -133,7 +144,7 @@ struct KaraokeRightDock: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
-        .modifier(GlassRoundedRect(cornerRadius: 18))
+        .modifier(GlassRoundedRect(cornerRadius: AM.Radius.sheet))
     }
 
     private var processingIndicator: some View {

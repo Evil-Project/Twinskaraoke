@@ -87,4 +87,51 @@ struct PlaylistsViewModelTests {
         #expect(model.favoritesErrorMessage == nil)
         #expect(model.errorMessage == nil)
     }
+
+    /// `LibraryView` holds the model in `@State`, whose initial value is
+    /// built again on every re-init of the view; SwiftUI keeps only the
+    /// first. The shared stores' observation registrars must not keep the
+    /// discarded ones alive.
+    @Test func aDiscardedModelIsReleased() async {
+        weak var released: PlaylistsViewModel?
+        do {
+            let model = PlaylistsViewModel(service: FakeLibraryService().service)
+            released = model
+        }
+        await Task.yield()
+        #expect(released == nil)
+    }
+
+    /// The instance SwiftUI kept observes from the view's appear; once the
+    /// view is gone, that registration must not hold it either.
+    @Test func aModelThatObservedIsReleasedWhenDiscarded() async {
+        weak var released: PlaylistsViewModel?
+        do {
+            let model = PlaylistsViewModel(service: FakeLibraryService().service)
+            model.startObserving()
+            released = model
+        }
+        await Task.yield()
+        #expect(released == nil)
+    }
+
+    @Test func anObservingModelFollowsItsSources() async {
+        let playlist = UITestFixtures.playlist(id: "observed", name: "Observed", songs: [song])
+        let model = PlaylistsViewModel(service: FakeLibraryService().service)
+        model.startObserving()
+
+        model.playlists = [playlist]
+        // `observeContinuously` delivers in a main-actor task of its own, so
+        // one yield doesn't guarantee it has run yet.
+        await waitUntil { model.combinedPlaylists.contains { $0.id == playlist.id } }
+
+        #expect(model.combinedPlaylists.contains { $0.id == playlist.id })
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
 }

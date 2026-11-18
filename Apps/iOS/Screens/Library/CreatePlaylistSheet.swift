@@ -50,7 +50,8 @@ struct CreatePlaylistSheet: View {
                             title: String(localized: "Description"),
                             prompt: String(localized: "Optional"),
                             text: $playlistDescription,
-                            axis: .vertical
+                            axis: .vertical,
+                            autocapitalization: .sentences
                         )
                         .focused($focusedField, equals: .description)
                         .lineLimit(2 ... 4)
@@ -168,11 +169,17 @@ private struct CreatePlaylistArtworkPreview: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Text(name.isEmpty ? "New Playlist" : name)
-                .scaledSystemFont(size: 28, weight: .bold)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+            Group {
+                if name.isEmpty {
+                    Text("New Playlist")
+                } else {
+                    Text(verbatim: name)
+                }
+            }
+            .scaledSystemFont(size: 28, weight: .bold)
+            .foregroundStyle(.primary)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
 
             Label(isPublic ? "Public Playlist" : "Private Playlist", systemImage: isPublic ? "person.2.fill" : "lock.fill")
                 .scaledSystemFont(size: 15, weight: .medium)
@@ -180,7 +187,18 @@ private struct CreatePlaylistArtworkPreview: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(name.isEmpty ? "New private playlist" : "\(name), \(isPublic ? "public" : "private") playlist")
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// A whole phrase per visibility, so no translated word is dropped into
+    /// another sentence.
+    private var accessibilityLabel: Text {
+        switch (name.isEmpty, isPublic) {
+        case (true, true): Text("New public playlist")
+        case (true, false): Text("New private playlist")
+        case (false, true): Text("\(name), public playlist", comment: "VoiceOver: the new playlist's name, then its visibility.")
+        case (false, false): Text("\(name), private playlist", comment: "VoiceOver: the new playlist's name, then its visibility.")
+        }
     }
 }
 
@@ -189,6 +207,7 @@ private struct CreatePlaylistTextField: View {
     let prompt: String
     @Binding var text: String
     var axis: Axis = .horizontal
+    var autocapitalization: TextInputAutocapitalization = .words
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -198,7 +217,7 @@ private struct CreatePlaylistTextField: View {
                 .textCase(.uppercase)
             TextField(prompt, text: $text, axis: axis)
                 .scaledSystemFont(size: 17)
-                .textInputAutocapitalization(.words)
+                .textInputAutocapitalization(autocapitalization)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -221,7 +240,7 @@ private struct CreatePlaylistPrivacyLabel: View {
                 Text(isPublic ? "Public" : "Private")
                     .scaledSystemFont(size: 16, weight: .semibold)
                     .foregroundStyle(.primary)
-                Text(isPublic ? "Visible to other listeners" : "Only you can edit this playlist")
+                Text(isPublic ? "Visible to other listeners" : "Only you can see this playlist")
                     .scaledSystemFont(size: 13)
                     .foregroundStyle(.secondary)
             }
