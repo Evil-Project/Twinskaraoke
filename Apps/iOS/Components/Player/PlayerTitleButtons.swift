@@ -47,9 +47,14 @@ extension View {
 /// The favorite toggle shared by the player's three title surfaces: the compact
 /// title row, the compact lyrics header and the iPad landscape control bar.
 /// They differ only in metrics and chrome, so the toggle, haptics, symbol
-/// effect and accessibility live here rather than in triplicate.
+/// effect and accessibility live here rather than in triplicate. The radio
+/// player's title row uses it too.
 struct PlayerFavoriteButton: View {
     let song: Song
+    /// The catalogue id to favourite when it isn't `song.id`: a radio song's
+    /// `Song` carries the station's id, and its catalogue id is resolved
+    /// from the station metadata.
+    var favoriteID: String?
     var font: Font = .title3
     var size: CGFloat = 44
     var showsChrome: Bool = true
@@ -57,11 +62,15 @@ struct PlayerFavoriteButton: View {
     private let favorites = FavoritesManager.shared
     @Environment(\.appReduceMotion) private var reduceMotion
 
+    private var songID: String {
+        favoriteID ?? song.id
+    }
+
     var body: some View {
-        let isFavorite = favorites.isFavorite(song.id)
+        let isFavorite = favorites.isFavorite(songID)
         Button {
-            let wasFavorite = favorites.isFavorite(song.id)
-            favorites.toggle(songID: song.id)
+            let wasFavorite = favorites.isFavorite(songID)
+            favorites.toggle(songID: songID)
             if wasFavorite {
                 AppHaptic.selection.play()
             } else {
@@ -106,10 +115,27 @@ struct PlayerMoreMenu: View {
     let onAddToPlaylist: () -> Void
 
     var body: some View {
-        Menu {
+        PlayerTitleMenu(song: song, font: font, size: size, showsChrome: showsChrome) {
             SleepTimerMenu()
             Divider()
             SongActionsMenuItems(song: song, onAddToPlaylist: onAddToPlaylist)
+        }
+    }
+}
+
+/// The "More" button of the player's title surfaces with the items left to the
+/// caller: ``PlayerMoreMenu`` fills it with the song's actions, the radio
+/// player with the actions that make sense for a live station.
+struct PlayerTitleMenu<Items: View>: View {
+    let song: Song
+    var font: Font = AM.Font.playerGlyph
+    var size: CGFloat = 44
+    var showsChrome: Bool = true
+    @ViewBuilder let items: Items
+
+    var body: some View {
+        Menu {
+            items
         } label: {
             Image(systemName: "ellipsis")
                 .font(font)
