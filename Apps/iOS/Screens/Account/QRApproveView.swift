@@ -42,7 +42,8 @@ struct QRApproveView: View {
                         AppHaptic.dismiss.play()
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
+                        Label("Close", systemImage: "xmark")
+                            .labelStyle(.iconOnly)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Color.appGlassForeground)
                     }

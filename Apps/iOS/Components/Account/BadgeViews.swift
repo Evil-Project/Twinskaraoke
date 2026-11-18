@@ -104,7 +104,8 @@ struct BadgeDetailSheet: View {
                 AppHaptic.dismiss.play()
                 dismiss()
             } label: {
-                Image(systemName: "xmark")
+                Label("Close", systemImage: "xmark")
+                    .labelStyle(.iconOnly)
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)

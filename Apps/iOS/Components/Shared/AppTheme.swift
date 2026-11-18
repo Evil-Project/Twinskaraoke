@@ -531,6 +531,9 @@ struct AMSectionHeader<Destination: View>: View {
                 headerRow(showChevron: false)
             }
         }
+        // On the link itself when there is one, so VoiceOver reads it as a
+        // heading that opens See All, and the headings rotor finds it.
+        .accessibilityAddTraits(.isHeader)
         .padding(.horizontal, horizontalPadding)
     }
 
