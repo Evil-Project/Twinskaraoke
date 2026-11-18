@@ -1263,7 +1263,7 @@ struct FullScreenPlayerView: View {
                 AppHaptic.selection.play()
                 showTranslatedLyrics.toggle()
             } else {
-                AppHaptic.boundary.play()
+                AppHaptic.commit.play()
                 lyricsViewModel.requestTranslation()
             }
         } label: {

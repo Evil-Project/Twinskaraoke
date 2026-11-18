@@ -87,7 +87,7 @@ struct BandleGameView: View {
             }
         }
         .task { await model.loadIfNeeded() }
-        .refreshable { await model.reload() }
+        .refreshableWithTick { await model.reload() }
         // One player serves both: the clip while playing, the revealed song
         // once the game is over.
         .onChange(of: model.playbackURL) { _, url in

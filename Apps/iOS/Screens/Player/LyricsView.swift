@@ -181,6 +181,9 @@ struct LyricLineRow: View, Equatable {
     /// layout: scale, colour, blur and opacity.
     static let lineFontSize: CGFloat = 30
     static let translationFontSize: CGFloat = 18
+    /// None: a style haptic fires on touch-down, so a scroll that starts on
+    /// a line ticked without seeking. The seek plays the tick instead.
+    static let pressHaptic: AppHaptic? = nil
 
     let line: LyricLine
     let index: Int
@@ -229,6 +232,7 @@ struct LyricLineRow: View, Equatable {
 
     var body: some View {
         Button {
+            AppHaptic.selection.play()
             onSeek(line.time)
         } label: {
             Group {
@@ -270,7 +274,7 @@ struct LyricLineRow: View, Equatable {
             .padding(.horizontal, 4)
             .blur(radius: lineBlur)
         }
-        .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: .selection))
+        .buttonStyle(PressableButtonStyle(scale: 0.97, dim: 0.82, haptic: Self.pressHaptic))
         .scaleEffect(reduceMotion ? 1.0 : (isCurrent ? 1.0 : 0.92), anchor: .leading)
         .opacity(lineOpacity)
         .animation(lineAnimation, value: currentIndex)
