@@ -6,6 +6,10 @@ struct SearchFeaturedShortcutTile: View {
     let gradient: [Color]
     var artworkURL: URL?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// The tile's height grows with the headline title it holds; a fixed
+    /// height clipped the title at accessibility text sizes.
+    @ScaledMetric(relativeTo: .headline) private var compactHeight: CGFloat = 124
+    @ScaledMetric(relativeTo: .headline) private var regularHeight: CGFloat = 144
 
     private var isCompactWidth: Bool {
         horizontalSizeClass == .compact
@@ -43,7 +47,7 @@ struct SearchFeaturedShortcutTile: View {
             .padding(AM.Spacing.l)
             .allowsHitTesting(false)
         }
-        .frame(height: isCompactWidth ? 124 : 144)
+        .frame(height: isCompactWidth ? compactHeight : regularHeight)
         .clipShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: AM.Radius.tile, style: .continuous))
     }
