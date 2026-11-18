@@ -121,6 +121,7 @@ struct LoginSheet: View {
                     .frame(width: 22)
                     .accessibilityHidden(true)
                 TextField("Username", text: $username)
+                    .textContentType(.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .focused($focus, equals: .username)
@@ -128,7 +129,8 @@ struct LoginSheet: View {
                     .onSubmit { focus = .password }
             }
             .padding(.horizontal, 16)
-            .frame(height: 52)
+            .padding(.vertical, AM.Spacing.xs)
+            .frame(minHeight: 52)
             Divider().padding(.leading, 50)
             HStack(spacing: 12) {
                 Image(systemName: "lock.fill")
@@ -143,6 +145,7 @@ struct LoginSheet: View {
                         SecureField("Password", text: $password)
                     }
                 }
+                .textContentType(.password)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .focused($focus, equals: .password)
@@ -164,7 +167,8 @@ struct LoginSheet: View {
                 .accessibilityValue(showPassword ? "Visible" : "Hidden")
             }
             .padding(.horizontal, 16)
-            .frame(height: 52)
+            .padding(.vertical, AM.Spacing.xs)
+            .frame(minHeight: 52)
         }
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -217,7 +221,8 @@ struct LoginSheet: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .padding(.vertical, AM.Spacing.m)
+            .frame(minHeight: 50)
             .background(ProfileTheme.gradient)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .opacity(hasEnteredCredentials ? 1 : 0.5)
@@ -252,7 +257,8 @@ struct LoginSheet: View {
                     .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .padding(.vertical, AM.Spacing.m)
+            .frame(minHeight: 50)
             .background(Color(hex: "5865F2"))
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
