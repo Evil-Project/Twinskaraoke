@@ -77,7 +77,7 @@ struct SplashJSONDocument: FileDocument {
     }
     func delete(_ offsets: IndexSet) {
         let removable = offsets.filter { draft.slides[$0].releaseNotes == nil }
-        guard draft.slides.count > removable.count else { message = "Keep at least one slide."; return }
+        guard draft.slides.count > removable.count else { message = String(localized: "Keep at least one slide."); return }
         draft.slides.remove(atOffsets: IndexSet(removable))
         reserveReleaseNotes()
     }
@@ -87,6 +87,10 @@ struct SplashJSONDocument: FileDocument {
             get: { self.draft.slides.first { $0.id == current.id } ?? current },
             set: { updated in
                 guard let index = self.draft.slides.firstIndex(where: { $0.id == current.id }) else { return }
+                guard !self.draft.slides.enumerated().contains(where: { $0.offset != index && $0.element.id == updated.id }) else {
+                    self.message = String(localized: "Slide IDs must be unique.")
+                    return
+                }
                 self.draft.slides[index] = updated
                 current = updated
             }

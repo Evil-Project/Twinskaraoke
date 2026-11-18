@@ -58,4 +58,39 @@ import Testing
         binding.wrappedValue.title = "Deleted"
         #expect(studio.draft.slides.count == 2)
     }
+
+    @Test func excessiveDetailLinesAreRejectedAndLegacyRenderingIsBounded() throws {
+        let entry = SplashReleaseNotes.Entry(headline: "Improvement", details: String(repeating: "x\n", count: 5000))
+        #expect(entry.detailLines.count <= 30)
+        var notes = SplashReleaseNotes()
+        notes.general = [entry]
+        #expect(throws: SplashError.self) { try notes.validate() }
+        notes.general[0].details = Array(repeating: "Detail", count: 30).joined(separator: "\n")
+        try notes.validate()
+        #expect(notes.general[0].detailLines.count == 30)
+        notes.general[0].details += "\nOne too many"
+        #expect(throws: SplashError.self) { try notes.validate() }
+    }
+
+    @Test func collidingSlideIDCannotRedirectRetainedBindingWrites() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let studio = SplashStudioModel(kind: .install, directory: directory)
+        let original = studio.draft
+        let first = original.slides[0]
+        let second = original.slides[1]
+        let binding = studio.binding(for: second)
+        binding.wrappedValue.id = first.id
+        #expect(studio.draft == original)
+        #expect(binding.wrappedValue.id == second.id)
+        binding.wrappedValue.id = "renamed-slide"
+        binding.wrappedValue.title = "Edited second slide"
+        #expect(studio.draft.slides[0] == first)
+        #expect(studio.draft.slides[1].id == "renamed-slide")
+        #expect(studio.draft.slides[1].title == "Edited second slide")
+        studio.delete(IndexSet(integer: 1))
+        let afterDeletion = studio.draft
+        binding.wrappedValue.title = "Deleted slide edit"
+        #expect(studio.draft == afterDeletion)
+    }
 }

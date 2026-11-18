@@ -11,10 +11,20 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
         var headline = ""
         var details = ""
 
-        var detailLines: [String] {
-            details.split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
+        static let maximumDetailLines = 30
+
+        /// Bounds even unvalidated/legacy content before the view creates any detail rows.
+        var detailLines: [String] { detailLines(upTo: Self.maximumDetailLines) }
+        var hasTooManyDetailLines: Bool { detailLines(upTo: Self.maximumDetailLines + 1).count > Self.maximumDetailLines }
+
+        private func detailLines(upTo limit: Int) -> [String] {
+            var lines: [String] = []
+            details.enumerateLines { line, stop in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty { lines.append(trimmed) }
+                stop = lines.count >= limit
+            }
+            return lines
         }
     }
 
@@ -25,6 +35,9 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
             guard entries.count <= 30, Set(entries.map(\.id)).count == entries.count,
                   entries.allSatisfy({ SplashContent.validID($0.id) && $0.headline.count <= 300 && $0.details.count <= 12000 })
             else { throw SplashError(message: String(localized: "Invalid release notes. Each section can have up to 30 entries.")) }
+            guard entries.allSatisfy({ !$0.hasTooManyDetailLines }) else {
+                throw SplashError(message: String(localized: "Each release-note entry can have up to \(Entry.maximumDetailLines) detail lines."))
+            }
         }
         if !watchVersion.isEmpty, !SplashContent.validVersion(watchVersion) {
             throw SplashError(message: String(localized: "Enter a valid watchOS version for the release notes."))
@@ -33,6 +46,8 @@ nonisolated struct SplashReleaseNotes: Codable, Equatable {
 
     var isReady: Bool {
         hasEntries && (watchOS.isEmpty || SplashContent.validVersion(watchVersion)) &&
-            (watchOS + iOS + general).allSatisfy { !$0.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            (watchOS + iOS + general).allSatisfy {
+                !$0.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !$0.hasTooManyDetailLines
+            }
     }
 }
