@@ -156,7 +156,7 @@ struct SplashStudioView: View {
                                 .deleteDisabled(true)
                             } else {
                                 NavigationLink {
-                                    SplashSlideEditor(slide: model.binding(for: slide), studio: model)
+                                    SplashSlideEditor(slide: model.binding(for: slide), studio: model, allowsWebsite: model.draft.kind == .update)
                                 } label: {
                                     VStack(alignment: .leading) {
                                         if slide.website != nil {
@@ -280,6 +280,7 @@ struct SplashPreviewView: View {
 struct SplashSlideEditor: View {
     @Binding var slide: SplashSlide
     var studio: SplashStudioModel? = nil
+    var allowsWebsite = false
     @State private var message: String?
     @State private var singlePreview = false
     @State private var arranging = false

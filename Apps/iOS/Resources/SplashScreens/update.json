@@ -1,64 +1,96 @@
 {
-  "schemaVersion": 1,
-  "kind": "update",
-  "id": "update-placeholder",
-  "enabled": false,
-  "nextLabel": "Next",
-  "finalLabel": "Done",
-  "slides": [
+  "enabled" : true,
+  "finalLabel" : "Done",
+  "id" : "16C5664D-5840-49A4-A110-90BA31623AB6",
+  "kind" : "update",
+  "nextLabel" : "Next",
+  "schemaVersion" : 1,
+  "slides" : [
     {
-      "id": "update-slide-1",
-      "title": "Twinkaraoke TestFlight Beta",
-      "imageDescription": "",
-      "backgroundColor": "#101827",
-      "textColor": "#FFFFFF",
-      "layout": "textOnly",
-      "alignment": "leading",
-      "typography": "standard",
-      "releaseNotes": {
-        "watchVersion": "1.1.0",
-        "watchOS": [
+      "alignment" : "center",
+      "backgroundColor" : "#101827",
+      "id" : "EC14AC8F-96E4-42D7-A501-F416C4339520",
+      "imageDescription" : "Image placeholder",
+      "layout" : "imageAbove",
+      "releaseNotes" : {
+        "general" : [
           {
-            "id": "watch-offline",
-            "headline": "Play saved songs offline.",
-            "details": "Start a downloaded song on Apple Watch."
+            "details" : "General Test 1.1\nGeneral Test 1.2",
+            "headline" : "General Test 1",
+            "id" : "9D57E4ED-93B2-4690-8F13-A2F66383CB8E"
           },
           {
-            "id": "watch-volume",
-            "headline": "See the Watch volume level as you adjust it.",
-            "details": ""
+            "details" : "General Test 2.1",
+            "headline" : "General Test 2",
+            "id" : "C3B92EB1-A48C-4066-B0AB-DF44BE6F7817"
           }
         ],
-        "iOS": [
+        "iOS" : [
           {
-            "id": "bandle",
-            "headline": "Play the daily Bandle challenge.",
-            "details": "Find it on the Home screen.\nSee the song reveal after the round."
+            "details" : "iPhone Test 1.1\niPhone Test 1.2\niPhone Test 1.3",
+            "headline" : "iPhone Test 1",
+            "id" : "A47EDCC4-6243-46A4-A7D6-5475E43EB0E0"
+          },
+          {
+            "details" : "iPhone Test 2.1\niPhone Test 2.2\niPhone Test 2.3\niPhone Test 2.4",
+            "headline" : "iPhone Test 2",
+            "id" : "9DC83EFD-5002-4A11-803B-BC1D6FAA1667"
+          },
+          {
+            "details" : "iPhone Test 3.1\niPhone Test 3.2\niPhone Test 3.3\niPhone Test 3.4",
+            "headline" : "iPhone Test 3",
+            "id" : "088FC2F2-410E-43CD-B748-D9ECFEEA129A"
+          },
+          {
+            "details" : "iPhone Test 4.1",
+            "headline" : "iPhone Test 4",
+            "id" : "AC03081E-7857-4352-92ED-A3B44AF6FF0F"
+          },
+          {
+            "details" : "iPhone Test 5.1\niPhone Test 5.2",
+            "headline" : "iPhone Test 5",
+            "id" : "4E9A8826-1E00-4F07-8A6C-795CA8FBA9F5"
           }
         ],
-        "general": []
+        "watchOS" : [
+          {
+            "details" : "Watch Test 1.1\nWatch Test 1.2\nWatch Test 1.3",
+            "headline" : "Watch Test 1",
+            "id" : "213CF6EC-DDB8-457C-BB0D-C16825C0C900"
+          },
+          {
+            "details" : "Watch Test 2.1\nWatch Test 2.2",
+            "headline" : "Watch Test 2",
+            "id" : "112641D1-D3A8-43D7-A21A-BE67D32C0BF2"
+          },
+          {
+            "details" : "Watch Test 3.1\nWatch Test 3.2\nWatch Test 3.3\nWatch Test 3.4",
+            "headline" : "Watch Test 3",
+            "id" : "E785DE59-66BC-4303-B199-950AF964C2CA"
+          }
+        ],
+        "watchVersion" : "1.1.0"
+      },
+      "textColor" : "#FFFFFF",
+      "title" : "Twinskaraoke TestFlight Beta (Build: 36)",
+      "typography" : "standard"
+    },
+    {
+      "alignment" : "center",
+      "backgroundColor" : "#101827",
+      "body" : "Description placeholder",
+      "id" : "update-slide-1",
+      "imageDescription" : "Image placeholder",
+      "layout" : "imageAbove",
+      "symbol" : "photo",
+      "textColor" : "#FFFFFF",
+      "title" : "Slide title test",
+      "typography" : "standard",
+      "website" : {
+        "url" : "https:\/\/survey.742918.xyz\/test\/db79b122-1cd7-41bf-9343-0863ac2f14ab\/form"
       }
-    },
-    {
-      "id": "update-slide-2",
-      "imageDescription": "",
-      "backgroundColor": "#101827",
-      "textColor": "#FFFFFF",
-      "layout": "textOnly",
-      "alignment": "center",
-      "typography": "standard",
-      "website": { "url": "" }
-    },
-    {
-      "id": "update-slide-3",
-      "title": "You’re up to date.",
-      "imageDescription": "",
-      "backgroundColor": "#101827",
-      "textColor": "#FFFFFF",
-      "layout": "textOnly",
-      "alignment": "center",
-      "typography": "standard"
     }
   ],
-  "targetVersion": "1.1.0"
+  "targetBuild" : "36",
+  "targetVersion" : "1.1.0"
 }
