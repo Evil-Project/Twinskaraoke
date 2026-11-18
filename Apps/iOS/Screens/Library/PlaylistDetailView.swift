@@ -33,6 +33,7 @@ struct PlaylistDetailView: View {
     /// Latched once the pull completes, so the field stays put instead of
     /// collapsing the moment the finger lifts.
     @State private var isSearchLatched = false
+    @State private var scrollPosition = ScrollPosition()
 
     private static let searchAnchor = "playlist.search"
     private static let contentAnchor = "playlist.content"
@@ -138,6 +139,20 @@ struct PlaylistDetailView: View {
         }
     }
 
+    /// The way to the field that needs no pull, which VoiceOver, Switch
+    /// Control and a hardware keyboard can't make: the More menu and ⌘F.
+    /// Jumps to the top first, so the field opens where it can be seen. Not
+    /// animated: mid-scroll, `updateSearchReveal` would read the list as
+    /// scrolled down and put the field away before it has focus.
+    private func revealSearch() {
+        scrollPosition.scrollTo(edge: .top)
+        isSearchLatched = true
+        withOptionalAnimation(reduceMotion ? nil : AppMotion.snap) {
+            searchRevealHeight = Self.searchFieldExtent
+        }
+        isSearchFocused = true
+    }
+
     /// Held back until the transition has run: warmCollection derives a URL for
     /// every song, and doing that inside the transition window competes with the
     /// animation.
@@ -181,6 +196,14 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         detailContent
+            .background {
+                // Carries ⌘F: the More menu's item exists only while the
+                // menu is open, so a shortcut on it would only work then.
+                Button("Find in Playlist", action: revealSearch)
+                    .keyboardShortcut("f")
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
             // A cover, not a push. Pushed, the editor's bottom bar sits behind
             // the tab bar, and hiding that is not enough on its own: the
             // LNPopup mini player merges into the tab bar's metrics and would
@@ -379,6 +402,7 @@ struct PlaylistDetailView: View {
             updateSearchReveal(pull: pull)
         }
         .scrollIndicators(.hidden)
+        .scrollPosition($scrollPosition)
         // Same threshold and wiring as BrowseSongCollectionView, ArtistsView and
         // DownloadedSongsView: the name belongs in the bar once its own heading
         // has scrolled away, and the bar stays transparent over the artwork until
@@ -403,6 +427,7 @@ struct PlaylistDetailView: View {
                     playlist: playlist,
                     songs: songs,
                     onRefresh: refresh,
+                    onFind: revealSearch,
                     onEdit: editAction
                 )
             }
@@ -949,6 +974,7 @@ private struct PlaylistMoreMenu: View {
     let playlist: Playlist
     let songs: [Song]
     let onRefresh: () -> Void
+    let onFind: () -> Void
     /// Nil on a playlist the signed-in user cannot edit, which hides the item.
     var onEdit: (() -> Void)?
     var body: some View {
@@ -963,6 +989,12 @@ private struct PlaylistMoreMenu: View {
             }
             PlaylistActionsMenuItems(playlist: playlist, songs: songs)
             Divider()
+            Button {
+                onFind()
+            } label: {
+                Label("Find in Playlist", systemImage: "magnifyingglass")
+            }
+            .accessibilityIdentifier("PlaylistDetail.find")
             Button {
                 onRefresh()
             } label: {
