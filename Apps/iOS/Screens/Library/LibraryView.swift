@@ -650,11 +650,19 @@ struct PlaylistsGridScreen: View {
         let displayed = query.isEmpty ? all : all.filter { playlist in
             playlist.name.localizedCaseInsensitiveContains(query)
         }
+        let content = PlaylistsGridContent.resolve(
+            isLoading: viewModel.isLoading || userManager.isLoading,
+            hasPlaylists: !all.isEmpty,
+            hasMatches: !displayed.isEmpty,
+            isSignedIn: favorites.isAvailable,
+            loadFailed: viewModel.errorMessage != nil
+        )
         ScrollView {
             Group {
-                if (viewModel.isLoading || userManager.isLoading), all.isEmpty {
+                switch content {
+                case .loading:
                     PlaylistsSkeletonView()
-                } else if all.isEmpty, !favorites.isAvailable {
+                case .signInRequired:
                     // Signed out, "playlists you add will appear here" promises
                     // something this screen cannot do: creating one needs an
                     // account. Same wording as Add to Playlist.
@@ -664,16 +672,41 @@ struct PlaylistsGridScreen: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.top, 48)
-                } else if displayed.isEmpty {
+                case .loadFailed:
+                    VStack(spacing: AM.Spacing.l) {
+                        MusicEmptyState(
+                            title: String(localized: "Couldn't Load Playlists"),
+                            message: viewModel.errorMessage ?? String(localized: "Check your connection and try again.")
+                        )
+                        MusicEmptyActionButton(title: String(localized: "Try Again")) {
+                            viewModel.fetchPlaylists(force: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.top, 48)
+                case .noPlaylists:
                     MusicEmptyState(
-                        title: searchText.isEmpty ? String(localized: "No Playlists") : String(localized: "No Results"),
-                        message: searchText.isEmpty
-                            ? String(localized: "Playlists you add will appear here.")
-                            : String(localized: "Try another playlist name.")
+                        title: String(localized: "No Playlists"),
+                        message: String(localized: "Playlists you add will appear here.")
                     )
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.top, 48)
-                } else {
+                case let .noResults(showsLoadNotice):
+                    if showsLoadNotice, let message = viewModel.errorMessage {
+                        LibraryLoadNotice(message: message)
+                            .padding(.top, AM.Spacing.s)
+                    }
+                    MusicEmptyState(
+                        title: String(localized: "No Results"),
+                        message: String(localized: "Try another playlist name.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.top, 48)
+                case let .playlists(showsLoadNotice):
+                    if showsLoadNotice, let message = viewModel.errorMessage {
+                        LibraryLoadNotice(message: message)
+                            .padding(.top, AM.Spacing.s)
+                    }
                     LazyVGrid(columns: cols, spacing: AM.Spacing.l) {
                         ForEach(displayed) { playlist in
                             ZoomNavigationLink(id: playlist.id, in: zoomNamespace) {
@@ -698,6 +731,12 @@ struct PlaylistsGridScreen: View {
             }
         }
         .smoothScrolling()
+        // The failure copy promises a pull to refresh.
+        .refreshableWithTick {
+            async let accountPlaylists: Void = userManager.refreshPlaylists()
+            async let playlists: Void = viewModel.refreshAll()
+            _ = await (accountPlaylists, playlists)
+        }
         .navigationTitle("Playlists")
         // Inline, matching PlaylistListView. A large title has to collapse into
         // the bar when this screen pushes, and the zoom transition leaves the

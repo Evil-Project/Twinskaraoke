@@ -18,12 +18,27 @@ final class UserPlaylistsManager {
     private var stateGeneration = 0
     private var forcedReloadPending = false
 
+    /// The request `fetchPlaylists` started last, for `refreshPlaylists`.
+    @ObservationIgnored private var fetchTask: Task<Void, Never>?
+
     @ObservationIgnored private var songCountGenerations: [String: Int] = [:]
 
     @ObservationIgnored private let songMutations = PlaylistSongMutationCoordinator()
 
     func loadIfNeeded() {
         fetchPlaylists(force: false)
+    }
+
+    /// `fetchPlaylists(force: true)` that returns once the playlists have
+    /// loaded (or failed), for pull to refresh. A fetch already in flight
+    /// queues the forced one behind it, so this waits for both.
+    func refreshPlaylists() async {
+        fetchPlaylists(force: true)
+        var awaited: Task<Void, Never>?
+        while isLoading, let task = fetchTask, task != awaited {
+            awaited = task
+            await task.value
+        }
     }
 
     func fetchPlaylists(force: Bool = true) {
@@ -44,7 +59,7 @@ final class UserPlaylistsManager {
 
         isLoading = true
         let generation = stateGeneration
-        Task { [weak self] in
+        fetchTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 if self.stateGeneration == generation {
