@@ -284,9 +284,17 @@ final class BandleGameViewModel {
         await performAttempt(guess: nil, isSkip: true)
     }
 
+    /// Whether picking attempt `number` should do anything: only an unlocked
+    /// clip of a game still running. The view checks it before it ticks or
+    /// stops the player, because once the game is over that player is
+    /// playing the revealed song.
+    func canSelectClip(number: Int) -> Bool {
+        phase != .completed && number >= 1 && number <= currentAttemptNumber
+    }
+
     func loadClip(number: Int) async {
         // Once the game is over the full song replaces the clips.
-        guard phase != .completed, number >= 1, number <= currentAttemptNumber else { return }
+        guard canSelectClip(number: number) else { return }
         clipRequest += 1
         let request = clipRequest
         isLoadingClip = true

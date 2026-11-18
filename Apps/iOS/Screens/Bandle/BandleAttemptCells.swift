@@ -17,7 +17,9 @@ struct BandleAttemptCells: View {
                 let isUnlocked = !isCompleted && number <= currentAttempt
                 let isPlayedSummary = isCompleted && attempt != nil
                 Button {
-                    onSelect(number)
+                    // A summary cell stays a Button for its look, and
+                    // VoiceOver activation ignores `allowsHitTesting`.
+                    if isUnlocked { onSelect(number) }
                 } label: {
                     VStack(spacing: AM.Spacing.xs) {
                         Image(systemName: attempt?.status?.systemImage ?? (isUnlocked || isUnneeded ? "waveform" : "lock.fill"))
