@@ -38,12 +38,30 @@ struct PlaylistSongListIdentityTests {
         #expect(fromList != retitled)
     }
 
+    /// A row's Play closure captures the `Song` it was built with, so
+    /// `.equatable()` keeping an old row keeps playing the old value. A
+    /// refresh that only fills `oss` gives the song its audio URL; the list
+    /// must compare unequal, or Play still hands the player a song with none.
+    @Test func anAudioSourceArrivingForTheSameSongChangesTheList() {
+        let playlist = Playlist(id: "mine", name: "Mine", songCount: 1, mosaicMedia: nil, songListDTOs: nil)
+        let withoutAudio = PlaylistSongList(playlist: playlist, songs: [Self.song("one")])
+        let withOSS = PlaylistSongList(playlist: playlist, songs: [Self.song("one", oss: "audio/one.mp3")])
+        let reordered = PlaylistSongList(playlist: playlist, songs: [Self.song("one", order: 3)])
+
+        #expect(Self.song("one").audioURL == nil)
+        #expect(Self.song("one", oss: "audio/one.mp3").audioURL != nil)
+        #expect(withoutAudio != withOSS)
+        #expect(withoutAudio != reordered)
+    }
+
     private static func song(
         _ id: String,
         title: String? = nil,
         artists: [String]? = nil,
         duration: Int = 180,
-        cover: String? = nil
+        cover: String? = nil,
+        oss: String? = nil,
+        order: Int? = nil
     ) -> Song {
         Song(
             id: id,
@@ -54,7 +72,9 @@ struct PlaylistSongListIdentityTests {
             coverArt: cover.map { Media(absolutePath: $0, cloudflareId: nil) },
             originalArtists: artists,
             coverArtists: nil,
-            userUploaded: false
+            userUploaded: false,
+            oss: oss,
+            order: order
         )
     }
 }

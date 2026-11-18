@@ -16,7 +16,9 @@ struct PlaylistSongList: View, Equatable {
     /// Not the synthesized `==`: `Song` and `Playlist` compare by id only, so
     /// the detail fetch landing with the artists, durations and artwork that
     /// the list DTOs lack would compare equal and leave the rows stale.
-    /// Compares what a row draws instead.
+    /// Compares every `Song` field instead: a row draws some of them, and its
+    /// Play closure hands the captured `Song` (and the whole list as context)
+    /// to the player, which reads the rest — `audioURL` falls back to `oss`.
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.playlist.id == rhs.playlist.id
             && lhs.rowHorizontalPadding == rhs.rowHorizontalPadding
@@ -33,6 +35,8 @@ struct PlaylistSongList: View, Equatable {
         let coverPath: String?
         let coverCloudflareID: String?
         let userUploaded: Bool?
+        let oss: String?
+        let order: Int?
 
         init(_ song: Song) {
             id = song.id
@@ -43,6 +47,8 @@ struct PlaylistSongList: View, Equatable {
             coverPath = song.coverArt?.absolutePath
             coverCloudflareID = song.coverArt?.cloudflareId
             userUploaded = song.userUploaded
+            oss = song.oss
+            order = song.order
         }
     }
 
