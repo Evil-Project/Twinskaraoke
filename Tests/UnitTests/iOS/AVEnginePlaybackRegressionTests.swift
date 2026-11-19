@@ -77,7 +77,7 @@ struct AVEnginePlaybackRegressionTests {
         let outgoing = try makeSilentWaveFile(duration: 60, sampleRate: 48_000)
         let incoming = try makeSilentWaveFile(duration: 45, sampleRate: 48_000)
         let playing = Mutex(false)
-        let renderer = AirPlaySampleRenderer { _, event in
+        let renderer = AirPlaySampleRenderer(mixBufferLead: 0.5) { _, event in
             if case .playing = event { playing.withLock { $0 = true } }
         } time: { _, _ in }
         defer {
@@ -93,6 +93,7 @@ struct AVEnginePlaybackRegressionTests {
         try await waitUntil { playing.withLock { $0 } }
         let initial = await renderer.stateForTesting()
         #expect(initial.rate == 1)
+        #expect(initial.bufferedThrough - initial.position < 0.75)
         #expect(await !renderer.splice(mix, generation: 0))
         #expect(await !renderer.splice(song, generation: 1))
         #expect(await renderer.splice(mix, generation: 1))
@@ -103,6 +104,14 @@ struct AVEnginePlaybackRegressionTests {
         let spliceTime = try #require(installed.spliceTime)
         #expect(spliceTime >= initial.position)
         #expect(spliceTime < 58)
+        let deadline = ContinuousClock.now + .seconds(3)
+        var refilled = await renderer.stateForTesting()
+        while refilled.bufferedThrough <= spliceTime + 0.5, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(30))
+            refilled = await renderer.stateForTesting()
+        }
+        #expect(refilled.bufferedThrough > spliceTime + 0.5)
+        #expect(refilled.flushCount == initial.flushCount)
 
         renderer.load(song, position: 59, autoplay: false, generation: 2)
         let late = await renderer.stateForTesting()

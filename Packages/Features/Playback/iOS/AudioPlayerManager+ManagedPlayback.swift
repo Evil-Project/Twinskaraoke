@@ -11,7 +11,7 @@ extension AudioPlayerManager {
     func startAirPlaySamples(_ url: URL, position: TimeInterval) {
         cancelPendingTransitionWork()
         loadedEngine?.stop()
-        let samples = AirPlaySampleSession { [weak self] event in
+        let samples = AirPlaySampleSession(mixingEnabled: crossfadeEnabled || autoMixEnabled) { [weak self] event in
             self?.handleAirPlaySampleEvent(event)
         } onTime: { [weak self] time, plan in
             self?.updateAirPlaySampleTime(time, promoting: plan)
