@@ -43,7 +43,12 @@ final class TransitionCoordinator {
         }
     }
 
+    private let resolveAudioFile: @Sendable (Song) async -> URL?
     private var bpmTask: Task<Void, Never>?
+
+    init(resolveAudioFile: (@Sendable (Song) async -> URL?)? = nil) {
+        self.resolveAudioFile = resolveAudioFile ?? { await Self.audioFileURL(for: $0) }
+    }
     private var predownloadSession: PredownloadSession?
     // Retry-storm guard: when preparing the upcoming song fails, poll ticks
     // would otherwise restart prepare+download every 250 ms for the rest of
@@ -104,11 +109,18 @@ final class TransitionCoordinator {
         autoMixEnabled: Bool,
         crossfadeEnabled: Bool,
         crossfadeSeconds: Double,
-        aiEffectActive: Bool
+        aiEffectActive: Bool,
+        airPlay: Bool = false,
+        onIneligible: (() -> Void)? = nil
     ) {
         guard totalDuration >= Self.minimumMixTrackDuration else {
-            // The loaded asset can correct the initial duration while preparation is in flight.
-            if state.isPreparing { reset() }
+            // A corrected duration can invalidate both the task and a scheduled fade.
+            switch state {
+            case .preparing, .ready:
+                if let onIneligible { onIneligible() } else { reset() }
+            case .idle, .crossfading:
+                break
+            }
             return
         }
         guard let currentSong else { return }
@@ -122,15 +134,14 @@ final class TransitionCoordinator {
         }
 
         let remaining = totalDuration - currentTime
-        let prepareAt = min(prepareLeadTime, totalDuration * prepareLeadFraction)
+        // AirPlay needs room for a 15-second fade plus its queued audio.
+        let prepareAt = airPlay ? prepareLeadTime : min(prepareLeadTime, totalDuration * prepareLeadFraction)
 
         switch state {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
             if let target = target() {
-                let incomingDuration = TimeInterval(target.song.duration)
-                guard failedPreparationNextSongID != target.song.id,
-                      incomingDuration <= 0 || incomingDuration >= Self.minimumMixTrackDuration else { return }
+                guard failedPreparationNextSongID != target.song.id else { return }
                 beginPreparing(
                     target: target, currentSong: currentSong,
                     autoMixEnabled: autoMixEnabled, crossfadeSeconds: crossfadeSeconds,
@@ -172,22 +183,22 @@ final class TransitionCoordinator {
         // (AudioCacheStore.playableMainURL), blocking file I/O that must not
         // run on this @MainActor class's executor; results are applied back
         // on the main actor below.
-        bpmTask = Task.detached(priority: .utility) { [weak self] in
+        bpmTask = Task.detached(priority: .utility) { [weak self, resolveAudioFile] in
             guard let self else { return }
 
-            let currentURL = await Self.audioFileURL(for: currentSong)
-            let nextURL = await Self.audioFileURL(for: nextSong)
-
-            if nextURL == nil, let remoteURL = nextSong.audioURL {
+            let currentURL = await resolveAudioFile(currentSong)
+            guard !Task.isCancelled else { return }
+            var nextURL = await resolveAudioFile(nextSong)
+            if !Task.isCancelled, nextURL == nil, let remoteURL = nextSong.audioURL {
                 DebugLogger.log(
                     "Predownloading next transition track \(nextSong.id) from \(remoteURL.lastPathComponent)",
                     category: .playback
                 )
                 await predownload(song: nextSong, from: remoteURL)
+                nextURL = await resolveAudioFile(nextSong)
             }
-
             // Verify the actual asset duration in case metadata was missing or stale.
-            guard let fileURL = await Self.audioFileURL(for: nextSong),
+            guard !Task.isCancelled, let fileURL = nextURL,
                   AudioCacheStore.audioDuration(at: fileURL) >= Self.minimumMixTrackDuration
             else {
                 await MainActor.run { [weak self] in

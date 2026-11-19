@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 import Testing
 @testable import Twinskaraoke
 
@@ -11,7 +12,7 @@ struct TransitionCoordinatorTests {
     )
     @MainActor
     func shortTracksDoNotPrepareMixes(autoMixEnabled: Bool) throws {
-        for (outgoingDuration, incomingDuration, shouldPrepare) in [(44.9, 60, false), (60, 44, false), (45, 45, true)] {
+        for (outgoingDuration, incomingDuration, shouldPrepare) in [(44.9, 60, false), (45, 45, true)] {
             let coordinator = TransitionCoordinator()
             defer { coordinator.reset() }
             let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing","duration":60}"#.utf8))
@@ -29,25 +30,40 @@ struct TransitionCoordinatorTests {
 
     @Test("A duration correction cancels a mix already in preparation", arguments: [false, true])
     @MainActor
-    func correctedOutgoingDurationCancelsMix(autoMixEnabled: Bool) throws {
-        let coordinator = TransitionCoordinator()
-        defer { coordinator.reset() }
+    func correctedOutgoingDurationCancelsMix(autoMixEnabled: Bool) async throws {
+        let (gate, continuation) = AsyncStream<Void>.makeStream()
+        let status = Mutex((started: false, cancelled: false))
+        let coordinator = TransitionCoordinator { _ in
+            status.withLock { $0.started = true }
+            for await _ in gate {}
+            status.withLock { $0.cancelled = Task.isCancelled }
+            return nil
+        }
+        defer {
+            coordinator.reset()
+            continuation.finish()
+        }
         let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing"}"#.utf8))
         let incoming = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"incoming","title":"Incoming"}"#.utf8))
         let target = PlaybackQueueState.Entry(song: incoming)
 
-        for duration in [45.0, 44.9] {
-            coordinator.poll(
-                currentTime: 39, totalDuration: duration, currentSong: outgoing, target: target,
-                autoMixEnabled: autoMixEnabled, crossfadeEnabled: !autoMixEnabled,
-                crossfadeSeconds: 6, aiEffectActive: false
-            )
-            #expect(coordinator.state.isPreparing == (duration == 45))
-        }
+        coordinator.poll(
+            currentTime: 39, totalDuration: 45, currentSong: outgoing, target: target, autoMixEnabled: autoMixEnabled,
+            crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
+        )
+        try await waitForPreparation { status.withLock { $0.started } }
+        try #require(coordinator.state.isPreparing)
+
+        coordinator.poll(
+            currentTime: 39, totalDuration: 44.9, currentSong: outgoing, target: target, autoMixEnabled: autoMixEnabled,
+            crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
+        )
+        try await waitForPreparation { status.withLock { $0.cancelled } }
+        #expect(!coordinator.state.isPreparing)
         #expect(coordinator.pendingPlan == nil)
     }
 
-    @Test("Incoming audio length determines eligibility without duration metadata", arguments: [false, true], [44.9, 45.0])
+    @Test("Incoming audio length determines eligibility despite stale duration metadata", arguments: [false, true], [44.9, 45.0])
     @MainActor
     func actualIncomingDurationDeterminesEligibility(autoMixEnabled: Bool, incomingDuration: Double) async throws {
         let coordinator = TransitionCoordinator()
@@ -59,20 +75,51 @@ struct TransitionCoordinatorTests {
             AudioCacheStore.removeSongCache(for: id)
         }
         try writeSilentWave(to: file, frames: Int(incomingDuration * 8_000))
-        let incoming = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"\#(id)","title":"Incoming"}"#.utf8))
+        let incoming = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"\#(id)","title":"Incoming","duration":5}"#.utf8))
         let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing","duration":60}"#.utf8))
-        try #require(incoming.duration == 0)
+        try #require(incoming.duration == 5)
         coordinator.poll(
             currentTime: 40, totalDuration: 60, currentSong: outgoing, target: PlaybackQueueState.Entry(song: incoming),
             autoMixEnabled: autoMixEnabled, crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
         )
         try #require(coordinator.state.isPreparing)
+        try await waitForPreparation { !coordinator.state.isPreparing }
+        #expect(coordinator.pendingPlan?.nextFileURL == (incomingDuration == 45 ? file : nil))
+        if incomingDuration == 45 {
+            var cancelled = false
+            coordinator.poll(
+                currentTime: 40, totalDuration: 44.9, currentSong: outgoing, target: PlaybackQueueState.Entry(song: incoming),
+                autoMixEnabled: autoMixEnabled, crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
+            ) {
+                cancelled = true
+                coordinator.reset()
+            }
+            #expect(cancelled)
+            #expect(coordinator.pendingPlan == nil)
+        }
+    }
+
+    @MainActor
+    private func waitForPreparation(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(5)
-        while coordinator.state.isPreparing, ContinuousClock.now < deadline {
+        while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
-        try #require(!coordinator.state.isPreparing)
-        #expect(coordinator.pendingPlan?.nextFileURL == (incomingDuration == 45 ? file : nil))
+        try #require(condition())
+    }
+
+    @Test("AirPlay schedules preparation before a 15-second fade and eight seconds of queued audio")
+    @MainActor
+    func airPlayReservesLongestFade() throws {
+        let coordinator = TransitionCoordinator()
+        defer { coordinator.reset() }
+        let song = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing","duration":45}"#.utf8))
+        coordinator.poll(
+            currentTime: 15, totalDuration: 45, currentSong: song, target: PlaybackQueueState.Entry(song: song),
+            autoMixEnabled: false, crossfadeEnabled: true, crossfadeSeconds: 15, aiEffectActive: false,
+            airPlay: true
+        )
+        #expect(coordinator.state.isPreparing)
     }
 
     @Test("Auto Mix uses a beat-aligned equal-power fade for close tempos")

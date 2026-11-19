@@ -294,6 +294,7 @@ final class AirPlaySampleSession {
     private static let mixBufferLead: TimeInterval = 8
     private let operations = AirPlaySongOperations()
     private var source: AirPlaySampleSource?
+    private var currentSongURL: URL?
     private var loading: Task<Void, Never>?
     private var preparation: Task<Void, Never>?
     private var submittingTransition = false
@@ -327,6 +328,8 @@ final class AirPlaySampleSession {
     }
 
     func setMixingEnabled(_ enabled: Bool) {
+        // This limits future enqueues. An overlap already queued while mixing
+        // was disabled plays through naturally instead of flushing AirPlay.
         renderer?.setMixBufferLead(enabled ? Self.mixBufferLead : nil)
     }
 
@@ -337,6 +340,7 @@ final class AirPlaySampleSession {
         timeout?.cancel()
         source = nil
         pendingPlan = nil
+        currentSongURL = url
         offset = 0
         position = time
         wantsPlayback = autoplay
@@ -393,7 +397,9 @@ final class AirPlaySampleSession {
 
     func cancelTransition(url: URL?) {
         preparation?.cancel()
-        guard let url, submittingTransition || pendingPlan != nil else { return }
+        let needsReload = submittingTransition || pendingPlan != nil
+        submittingTransition = false
+        guard needsReload, let url = url ?? currentSongURL else { return }
         loadSong(url, at: position, autoplay: wantsPlayback)
     }
 
@@ -418,6 +424,7 @@ final class AirPlaySampleSession {
 
     func stop(completion: (@Sendable () -> Void)? = nil) {
         operations.invalidate()
+        currentSongURL = nil
         preparation?.cancel()
         submittingTransition = false
         loading?.cancel()
@@ -453,6 +460,7 @@ final class AirPlaySampleSession {
         if let timing = source?.timing, let pendingPlan, time >= timing.promotionTime {
             promoted = pendingPlan
             self.pendingPlan = nil
+            currentSongURL = pendingPlan.nextFileURL
             offset = timing.overlapStart
             duration = timing.incomingDuration
         }

@@ -186,6 +186,40 @@ struct AVEnginePlaybackRegressionTests {
         #expect(session.pendingPlan == nil)
     }
 
+    @Test(
+        "AirPlay can cancel an installed mix without a manager URL and prepare another",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func airPlayCancelsMixWithoutManagerURL() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 30, sampleRate: 48_000)
+        let incoming = try makeSilentWaveFile(duration: 30, sampleRate: 48_000)
+        let nextSong = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"next","title":"Next"}"#.utf8))
+        let plan = TransitionCoordinator.TransitionPlan(
+            target: PlaybackQueueState.Entry(song: nextSong), nextFileURL: incoming,
+            outgoingBPM: nil, incomingBPM: nil, fadeDuration: 2, rampStyle: .equalPower
+        )
+        var starts = 0
+        let session = AirPlaySampleSession(mixingEnabled: true) { event in
+            if case .playing = event { starts += 1 }
+        } onTime: { _, _ in }
+        defer {
+            session.stop()
+            try? FileManager.default.removeItem(at: outgoing)
+            try? FileManager.default.removeItem(at: incoming)
+        }
+
+        session.loadSong(outgoing, at: 0, autoplay: true)
+        try await waitUntil { starts == 1 }
+        session.prepareTransition(from: outgoing, plan: plan) { true }
+        try await waitUntil { session.pendingPlan?.id == plan.id }
+
+        session.cancelTransition(url: nil)
+        #expect(session.pendingPlan == nil)
+        try await waitUntil { starts == 2 }
+        session.prepareTransition(from: outgoing, plan: plan) { true }
+        try await waitUntil { session.pendingPlan?.id == plan.id }
+    }
+
     @Test("AirPlay accepts only the latest seek or handoff completion")
     func airPlayRejectsObsoleteOperations() {
         let session = AirPlaySongOperations()
