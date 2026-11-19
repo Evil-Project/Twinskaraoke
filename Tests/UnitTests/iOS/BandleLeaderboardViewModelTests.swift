@@ -30,7 +30,6 @@ private final class FakeBandleLeaderboardService {
                 return UITestFixtures.bandleUserData
             },
             history: { _ in UITestFixtures.bandleHistory },
-            globalStats: { UITestFixtures.bandleGlobalStats },
             playStatus: { _ in BandlePlayStatus(userId: self.userId, hasPlayed: false, inProgress: false) },
             isSignedIn: { self.isSignedIn },
             ranks: { userId in

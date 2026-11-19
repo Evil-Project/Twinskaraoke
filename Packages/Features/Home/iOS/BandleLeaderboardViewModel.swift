@@ -9,7 +9,6 @@ final class BandleLeaderboardViewModel {
     private(set) var leaderboard: BandleLeaderboard?
     private(set) var userData: BandleUserData?
     private(set) var history: [BandleHistoryEntry] = []
-    private(set) var globalStats: BandleGlobalStats?
     private(set) var ranks: BandleUserRanks?
     private(set) var isLoading = false
     private(set) var errorMessage: String?
@@ -53,12 +52,10 @@ final class BandleLeaderboardViewModel {
             async let boardRequest = service.leaderboard(period, mode)
             async let userRequest = service.userData(mode)
             async let historyRequest = service.history(mode)
-            async let globalRequest = service.globalStats()
             async let statusRequest = service.playStatus(mode)
             leaderboard = try await boardRequest
             userData = try await userRequest
             history = try await historyRequest
-            globalStats = try await globalRequest
             let status = try await statusRequest
             rankedUserId = service.isSignedIn() ? status.userId : nil
             ranks = await loadRanks(userId: rankedUserId)

@@ -1,16 +1,6 @@
 import Foundation
 
 nonisolated extension UITestFixtures {
-    static let bandleGlobalStats = BandleGlobalStats(
-        date: "2026-11-15T00:00:00Z",
-        totalPlayers: 42,
-        totalWinners: 35,
-        winRate: 83.3,
-        averageAttempt: 2.4,
-        perfectScores: 8,
-        attemptDistribution: ["1": 8, "2": 12, "3": 8, "4": 5, "5": 1, "6": 1]
-    )
-
     static let bandleHistory = [
         BandleHistoryEntry(
             gameID: "bandle-game-2",

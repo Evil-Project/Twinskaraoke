@@ -165,11 +165,6 @@ nonisolated extension KaraokeAPIClient {
         return try JSONDecoder().decode([BandleHistoryEntry].self, from: data)
     }
 
-    static func bandleGlobalStatsToday() async throws -> BandleGlobalStats {
-        let data = try await data(for: request(path: "\(bandlePath)/stats/global/today"))
-        return try JSONDecoder().decode(BandleGlobalStats.self, from: data)
-    }
-
     static func bandleLeaderboard(
         period: BandleLeaderboardPeriod = .today,
         limit: Int = 100,

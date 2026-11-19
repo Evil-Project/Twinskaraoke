@@ -24,10 +24,6 @@ struct BandleStatsView: View {
                     BandleAttemptDistribution(values: values, title: String(localized: "Your Guess Distribution"))
                 }
 
-                if let stats = model.globalStats {
-                    BandleGlobalStatsCard(stats: stats)
-                }
-
                 if let message = model.errorMessage {
                     BandleErrorBanner(message: message, onRetry: retry)
                 }
