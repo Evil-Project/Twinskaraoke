@@ -416,12 +416,13 @@ final class TransitionCoordinator {
 }
 
 // URLSession delegates must be Sendable; cross-thread state is guarded by stateLock.
-private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+// swiftlint:disable:next unchecked_sendable
+final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     /// Shared by every predownload so the next song reuses the warm
     /// connection to storage. Each download attaches itself as its task's
     /// delegate, which receives the data callbacks; cancelling one task
     /// leaves the session serving the next.
-    private static let session: URLSession = {
+    private static let sharedSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
@@ -431,6 +432,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         return URLSession(configuration: configuration)
     }()
 
+    private let session: URLSession
     private let songID: String
     private let expectedDuration: TimeInterval?
     private let partialURL: URL
@@ -443,7 +445,8 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     private var isCancelled = false
     var onCompletion: (() -> Void)?
 
-    init(songID: String, expectedDuration: TimeInterval?, remoteURL: URL) {
+    init(songID: String, expectedDuration: TimeInterval?, remoteURL: URL, session: URLSession? = nil) {
+        self.session = session ?? Self.sharedSession
         self.songID = songID
         self.expectedDuration = expectedDuration
         finalURL = AudioCacheStore.mainAudioURL(for: songID, sourceURL: remoteURL)
@@ -470,6 +473,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             return
         }
         DebugLogger.log("Predownload start for \(songID) from \(remoteURL.lastPathComponent)", category: .playback)
+        _ = AudioCacheStore.ensureSongDirectory(for: songID)
         try? FileManager.default.removeItem(at: partialURL)
         FileManager.default.createFile(atPath: partialURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: partialURL) else {
@@ -477,7 +481,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             finish()
             return
         }
-        let newTask = Self.session.dataTask(with: remoteURL)
+        let newTask = session.dataTask(with: remoteURL)
         newTask.delegate = self
 
         // Re-check and publish atomically. cancel() may have run during the
