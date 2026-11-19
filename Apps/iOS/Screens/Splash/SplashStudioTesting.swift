@@ -21,6 +21,21 @@ enum SplashStudioTestingFixtures {
         content.slides[0] = slide
         return content
     }
+    /// A local website between release notes and a final native slide, independent of the release bundle.
+    static var websiteWalkthrough: SplashContent {
+        var content = SplashContent.placeholder(.update)
+        content.slides[0].releaseNotes = SplashReleaseNotes(
+            watchVersion: "1.1.0",
+            watchOS: [.init(id: "watch-offline", headline: "Play saved songs offline.", details: "Start a downloaded song on Apple Watch.")],
+            iOS: [.init(id: "bandle", headline: "Play the daily Bandle challenge.",
+                        details: "Find it on the Home screen.\nSee the song reveal after the round.")]
+        )
+        var website = SplashSlide()
+        website.id = "ui-test-website"
+        website.website = SplashWebsite()
+        content.slides.insert(website, at: 1)
+        return content
+    }
     static let model: SplashStudioModel = {
         DeveloperMode.isEnabled = true
         let directory = SplashStateStore.defaultDirectory.appendingPathComponent("UITest/DesignStudioDrafts")

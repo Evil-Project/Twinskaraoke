@@ -18,7 +18,9 @@ import Observation
             let directory = SplashStateStore.defaultDirectory.appendingPathComponent("UITest", isDirectory: true)
             if arguments.contains("-UITestSplashReset") { try? FileManager.default.removeItem(at: directory) }
             var update: SplashContent?
-            if arguments.contains("-UITestSplashUpdate") {
+            if arguments.contains("-UITestSplashWebsite") {
+                update = SplashStudioTestingFixtures.websiteWalkthrough
+            } else if arguments.contains("-UITestSplashUpdate") {
                 update = .placeholder(.update); update?.enabled = true; update?.targetVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             }
             // Navigation fixtures must remain stable when release content is edited.
@@ -56,6 +58,7 @@ import Observation
     var isDeveloperTesting: Bool { developerKind != nil }
     private(set) var active: SplashContent?
     private(set) var index = 0
+    var hasPassedCurrentSlide: Bool { (state?.pending?.highestVisited ?? index) > index }
     private(set) var errorMessage: String?
     private(set) var isSaving = false
 
@@ -70,7 +73,7 @@ import Observation
         self.developerStore = developerStore ?? SplashStateStore(directory: SplashStateStore.defaultDirectory.appendingPathComponent("DeveloperTesting", isDirectory: true))
         self.install = (try? install.validate(expectedKind: .install)) != nil ? install : .placeholder(.install)
         self.update = update.flatMap {
-            guard $0.kind == .update, (try? $0.validateForPresentation()) != nil else { return nil }
+            guard $0.kind == .update, (try? $0.validateForPresentation(forRelease: true)) != nil else { return nil }
             return $0
         }
         self.version = version; self.build = build

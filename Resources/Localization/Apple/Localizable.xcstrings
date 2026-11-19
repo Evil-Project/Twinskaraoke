@@ -4,6 +4,9 @@
     "" : {
 
     },
+    "Continue for now" : {
+      "comment" : "Leave a website slide and advance the update walkthrough."
+    },
     "Choose a saved download or return to iPhone playback." : {
       "localizations" : {
         "de" : {
@@ -44365,6 +44368,12 @@
           }
         }
       }
+    },
+    "Keep filling out" : {
+      "comment" : "Dismiss website help and stay on the current website slide."
+    },
+    "Website help" : {
+      "comment" : "Accessibility label for the question mark menu on a website slide."
     },
     "Retry" : {
       "localizations" : {

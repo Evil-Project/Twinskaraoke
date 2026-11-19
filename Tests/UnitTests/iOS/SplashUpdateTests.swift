@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import WebKit
 @testable import Twinskaraoke
 
 @MainActor @Suite("Update splash") struct SplashUpdateTests {
@@ -48,8 +49,12 @@ import Testing
         studio.delete(IndexSet(integer: 0))
         #expect(studio.draft.slides == [notes] + legacy.slides)
         studio.draft.slides[0].releaseNotes?.general = [.init(headline: "Shared improvement")]
+        studio.draft.slides[1].website = .init(url: "https://survey.example.org/form")
+        #expect(throws: SplashError.self) { try SplashJSONDocument(content: studio.draft) }
+        studio.draft.targetBuild = "42"
         let exported = try SplashJSONDocument(content: studio.draft)
         #expect(try SplashContent.decode(exported.data) == studio.draft)
+        #expect(!studio.draft.eligible(version: "2.0", build: "43"))
 
         let last = studio.draft.slides[2]
         let binding = studio.binding(for: last)
