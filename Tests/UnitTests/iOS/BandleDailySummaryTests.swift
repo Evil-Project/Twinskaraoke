@@ -59,9 +59,12 @@ struct BandleDailySummaryTests {
         )
         let summary = BandleDailyStats(board: board)
 
-        let time = try #require(summary.averageTime).components
-        let seconds = Double(time.seconds) + Double(time.attoseconds) / 1e18
-        #expect(abs(seconds - 66) < 0.001)
+        let time = try #require(summary.averageTime)
+        let format = BandleDailyStats.timeFormat.locale(Locale(identifier: "en_US"))
+        // The three times add up to exactly 198 s; a value parsed through
+        // Double landed just below 66 s and read 01:05.
+        #expect(time == .seconds(66))
+        #expect(time.formatted(format) == "01:06")
     }
 
     @Test("Without the guest total, players and rates come from wins and losses")

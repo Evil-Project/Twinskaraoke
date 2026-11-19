@@ -91,6 +91,8 @@ struct BandleModelDecodingTests {
             ("00:01:12", Duration.seconds(72)),
             ("00:00:09.5000000", Duration.milliseconds(9500)),
             ("1.02:03:04", Duration.seconds(93784)),
+            // .NET's 100 ns ticks, kept exactly rather than through Double.
+            ("00:00:06.1007907", Duration.nanoseconds(6_100_790_700)),
         ]
     )
     func parsesTimeSpan(text: String, expected: Duration) {
