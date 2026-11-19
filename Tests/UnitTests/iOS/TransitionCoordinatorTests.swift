@@ -27,6 +27,54 @@ struct TransitionCoordinatorTests {
         }
     }
 
+    @Test("A duration correction cancels a mix already in preparation", arguments: [false, true])
+    @MainActor
+    func correctedOutgoingDurationCancelsMix(autoMixEnabled: Bool) throws {
+        let coordinator = TransitionCoordinator()
+        defer { coordinator.reset() }
+        let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing"}"#.utf8))
+        let incoming = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"incoming","title":"Incoming"}"#.utf8))
+        let target = PlaybackQueueState.Entry(song: incoming)
+
+        for duration in [45.0, 44.9] {
+            coordinator.poll(
+                currentTime: 39, totalDuration: duration, currentSong: outgoing, target: target,
+                autoMixEnabled: autoMixEnabled, crossfadeEnabled: !autoMixEnabled,
+                crossfadeSeconds: 6, aiEffectActive: false
+            )
+            #expect(coordinator.state.isPreparing == (duration == 45))
+        }
+        #expect(coordinator.pendingPlan == nil)
+    }
+
+    @Test("Incoming audio length determines eligibility without duration metadata", arguments: [false, true], [44.9, 45.0])
+    @MainActor
+    func actualIncomingDurationDeterminesEligibility(autoMixEnabled: Bool, incomingDuration: Double) async throws {
+        let coordinator = TransitionCoordinator()
+        let id = "transition-duration-\(UUID())"
+        let directory = AudioCacheStore.ensureSongDirectory(for: id)
+        let file = directory.appendingPathComponent("main.wav")
+        defer {
+            coordinator.reset()
+            AudioCacheStore.removeSongCache(for: id)
+        }
+        try writeSilentWave(to: file, frames: Int(incomingDuration * 8_000))
+        let incoming = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"\#(id)","title":"Incoming"}"#.utf8))
+        let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing","duration":60}"#.utf8))
+        try #require(incoming.duration == 0)
+        coordinator.poll(
+            currentTime: 40, totalDuration: 60, currentSong: outgoing, target: PlaybackQueueState.Entry(song: incoming),
+            autoMixEnabled: autoMixEnabled, crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
+        )
+        try #require(coordinator.state.isPreparing)
+        let deadline = ContinuousClock.now + .seconds(5)
+        while coordinator.state.isPreparing, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(!coordinator.state.isPreparing)
+        #expect(coordinator.pendingPlan?.nextFileURL == (incomingDuration == 45 ? file : nil))
+    }
+
     @Test("Auto Mix uses a beat-aligned equal-power fade for close tempos")
     func autoMixFadeForCloseTempos() {
         let result = TransitionCoordinator.computeFade(outBPM: 120, inBPM: 124)
@@ -67,12 +115,7 @@ struct TransitionCoordinatorTests {
             try? FileManager.default.removeItem(at: fixture)
         }
 
-        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 8_000, channels: 1))
-        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16_000))
-        buffer.frameLength = 16_000
-        let samples = try #require(buffer.floatChannelData?[0])
-        samples.initialize(repeating: 0, count: Int(buffer.frameLength))
-        try AVAudioFile(forWriting: fixture, settings: format.settings).write(from: buffer)
+        try writeSilentWave(to: fixture, frames: 16_000)
         try #require(!FileManager.default.fileExists(atPath: cache.path))
 
         let predownload = PredownloadSession(songID: songID, expectedDuration: 2, remoteURL: remoteURL, session: session)
@@ -98,6 +141,15 @@ struct TransitionCoordinatorTests {
     func harmonicBPMDifferenceUsesDoubleTime() {
         #expect(TransitionCoordinator.harmonicBPMDifference(90, 180) == 0)
         #expect(TransitionCoordinator.harmonicBPMDifference(120, 62) == 4)
+    }
+
+    private func writeSilentWave(to url: URL, frames: Int) throws {
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 8_000, channels: 1))
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)))
+        buffer.frameLength = AVAudioFrameCount(frames)
+        let samples = try #require(buffer.floatChannelData?[0])
+        samples.initialize(repeating: 0, count: frames)
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
     }
 
     private func isEqualPower(_ style: AVEnginePlayback.RampStyle) -> Bool {

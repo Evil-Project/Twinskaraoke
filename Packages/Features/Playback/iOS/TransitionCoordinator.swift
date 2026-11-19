@@ -106,7 +106,12 @@ final class TransitionCoordinator {
         crossfadeSeconds: Double,
         aiEffectActive: Bool
     ) {
-        guard totalDuration >= Self.minimumMixTrackDuration, let currentSong else { return }
+        guard totalDuration >= Self.minimumMixTrackDuration else {
+            // The loaded asset can correct the initial duration while preparation is in flight.
+            if state.isPreparing { reset() }
+            return
+        }
+        guard let currentSong else { return }
         if failedPreparationCurrentSongID != nil, failedPreparationCurrentSongID != currentSong.id {
             failedPreparationCurrentSongID = nil
             failedPreparationNextSongID = nil
