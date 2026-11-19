@@ -33,7 +33,7 @@ struct BandleLeaderboardView: View {
                 }
 
                 if model.period == .today {
-                    BandleDailySummary(board: board)
+                    BandleDailySummary(stats: BandleDailyStats(board: board))
                 }
 
                 if let values = board.attemptDistribution {

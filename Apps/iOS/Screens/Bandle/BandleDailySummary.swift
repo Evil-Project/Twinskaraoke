@@ -1,24 +1,29 @@
 import SwiftUI
 
 struct BandleDailySummary: View {
-    let board: BandleLeaderboard
+    let stats: BandleDailyStats
 
     var body: some View {
         VStack(spacing: AM.Spacing.m) {
             LabeledContent(String(localized: "Players")) {
-                Text(board.totalPlayers ?? 0, format: .number)
+                Text(stats.players ?? 0, format: .number)
             }
             LabeledContent(String(localized: "Wins")) {
-                Text(board.totalWins ?? 0, format: .number)
+                BandleCountWithRate(count: stats.wins, rate: stats.winRate)
             }
             LabeledContent(String(localized: "Losses")) {
-                Text(board.totalLosses ?? 0, format: .number)
+                BandleCountWithRate(count: stats.losses, rate: stats.lossRate)
             }
             LabeledContent(String(localized: "Average Attempt")) {
-                Text(board.averageAttempt ?? 0, format: .number.precision(.fractionLength(1)))
+                Text(stats.averageAttempt ?? 0, format: .number.precision(.fractionLength(1)))
+            }
+            if let time = stats.averageTime {
+                LabeledContent(String(localized: "Average Time")) {
+                    Text(time, format: BandleDailyStats.timeFormat)
+                }
             }
             LabeledContent(String(localized: "Perfect Scores")) {
-                Text(board.perfectScoreCount ?? 0, format: .number)
+                Text(stats.perfectScores ?? 0, format: .number)
             }
         }
         .padding(AM.Spacing.l)
