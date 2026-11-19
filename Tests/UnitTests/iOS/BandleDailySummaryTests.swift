@@ -48,7 +48,15 @@ struct BandleDailySummaryTests {
 
     @Test("Average time is the mean of the entries' time spent")
     func averageTimeFromEntries() throws {
-        let board = try JSONDecoder().decode(BandleLeaderboard.self, from: Self.today)
+        // The three entries of the live response, as a complete board.
+        let board = BandleLeaderboard(
+            totalPlayers: 3,
+            entries: [
+                BandleLeaderboardEntry(userId: "a", timeSpent: "00:00:06.1007907"),
+                BandleLeaderboardEntry(userId: "b", timeSpent: "00:00:08.8531380"),
+                BandleLeaderboardEntry(userId: "c", timeSpent: "00:03:03.0460713"),
+            ]
+        )
         let summary = BandleDailyStats(board: board)
 
         let time = try #require(summary.averageTime).components
@@ -64,6 +72,33 @@ struct BandleDailySummaryTests {
         #expect(summary.players == 4)
         #expect(summary.winRate == 0.75)
         #expect(summary.lossRate == 0.25)
+    }
+
+    @Test("Rates aren't divided by the ranked-only player count")
+    func noRateFromRankedPlayers() {
+        // Without a total of all plays, wins can include guests the ranked
+        // count leaves out: 4 wins over 3 ranked players would read 133%.
+        let board = BandleLeaderboard(totalPlayers: 3, totalWins: 4)
+        let summary = BandleDailyStats(board: board)
+
+        #expect(summary.players == 3)
+        #expect(summary.winRate == nil)
+        #expect(summary.lossRate == nil)
+    }
+
+    @Test("A board cut off by the request limit leaves the average time out")
+    func noAverageTimeFromPartialBoard() {
+        // Only the top entries came back, so their mean isn't the day's.
+        let board = BandleLeaderboard(
+            totalPlayers: 150,
+            totalPlaysIncludingGuests: 160,
+            entries: [
+                BandleLeaderboardEntry(userId: "a", timeSpent: "00:00:06"),
+                BandleLeaderboardEntry(userId: "b", timeSpent: "00:00:08"),
+            ]
+        )
+
+        #expect(BandleDailyStats(board: board).averageTime == nil)
     }
 
     @Test("Entries without a readable time leave the average time out")
