@@ -5,6 +5,28 @@ import Testing
 
 @Suite("Transition coordinator")
 struct TransitionCoordinatorTests {
+    @Test(
+        "Crossfade and Auto Mix skip transitions involving tracks under 45 seconds",
+        arguments: [false, true]
+    )
+    @MainActor
+    func shortTracksDoNotPrepareMixes(autoMixEnabled: Bool) throws {
+        for (outgoingDuration, incomingDuration, shouldPrepare) in [(44.9, 60, false), (60, 44, false), (45, 45, true)] {
+            let coordinator = TransitionCoordinator()
+            defer { coordinator.reset() }
+            let outgoing = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"outgoing","title":"Outgoing","duration":60}"#.utf8))
+            let incoming = try JSONDecoder().decode(
+                Song.self, from: Data(#"{"id":"incoming","title":"Incoming","duration":\#(incomingDuration)}"#.utf8)
+            )
+            coordinator.poll(
+                currentTime: outgoingDuration - 5, totalDuration: outgoingDuration, currentSong: outgoing,
+                target: PlaybackQueueState.Entry(song: incoming), autoMixEnabled: autoMixEnabled,
+                crossfadeEnabled: !autoMixEnabled, crossfadeSeconds: 6, aiEffectActive: false
+            )
+            #expect(coordinator.state.isPreparing == shouldPrepare)
+        }
+    }
+
     @Test("Auto Mix uses a beat-aligned equal-power fade for close tempos")
     func autoMixFadeForCloseTempos() {
         let result = TransitionCoordinator.computeFade(outBPM: 120, inBPM: 124)

@@ -58,6 +58,10 @@ final class TransitionCoordinator {
 
     var onUpcomingSongDetermined: ((Song?) -> Void)?
 
+    // Short clips play through normally. Reserving time for both the renderer's
+    // buffered audio and a fade would consume too much of a short track.
+    nonisolated private static let minimumMixTrackDuration: TimeInterval = 45
+
     private let prepareLeadTime: TimeInterval = 30
 
     private let prepareLeadFraction: Double = 0.5
@@ -102,7 +106,7 @@ final class TransitionCoordinator {
         crossfadeSeconds: Double,
         aiEffectActive: Bool
     ) {
-        guard totalDuration > 0, let currentSong else { return }
+        guard totalDuration >= Self.minimumMixTrackDuration, let currentSong else { return }
         if failedPreparationCurrentSongID != nil, failedPreparationCurrentSongID != currentSong.id {
             failedPreparationCurrentSongID = nil
             failedPreparationNextSongID = nil
@@ -119,7 +123,9 @@ final class TransitionCoordinator {
         case .idle:
             guard remaining <= prepareAt, remaining > 0 else { return }
             if let target = target() {
-                guard failedPreparationNextSongID != target.song.id else { return }
+                let incomingDuration = TimeInterval(target.song.duration)
+                guard failedPreparationNextSongID != target.song.id,
+                      incomingDuration <= 0 || incomingDuration >= Self.minimumMixTrackDuration else { return }
                 beginPreparing(
                     target: target, currentSong: currentSong,
                     autoMixEnabled: autoMixEnabled, crossfadeSeconds: crossfadeSeconds,
@@ -175,12 +181,26 @@ final class TransitionCoordinator {
                 await predownload(song: nextSong, from: remoteURL)
             }
 
-            let nextFileURL = await Self.audioFileURL(for: nextSong)
-            let shouldAnalyzeBPM = autoMixEnabled && !aiEffectActive
+            // Verify the actual asset duration in case metadata was missing or stale.
+            guard let fileURL = await Self.audioFileURL(for: nextSong),
+                  AudioCacheStore.audioDuration(at: fileURL) >= Self.minimumMixTrackDuration
+            else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // Only record the failure (and reset) if this preparation
+                    // is still the active one.
+                    guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
+                    failedPreparationCurrentSongID = currentSong.id
+                    failedPreparationNextSongID = nextSong.id
+                    reset()
+                }
+                return
+            }
+
             let bpm: (Double?, Double?)
-            if shouldAnalyzeBPM {
+            if autoMixEnabled, !aiEffectActive {
                 async let outBPMResult = detectBPM(for: currentSong, fileURL: currentURL)
-                async let inBPMResult = detectBPM(for: nextSong, fileURL: nextFileURL)
+                async let inBPMResult = detectBPM(for: nextSong, fileURL: fileURL)
                 bpm = await (outBPMResult, inBPMResult)
             } else {
                 bpm = (nil, nil)
@@ -205,19 +225,6 @@ final class TransitionCoordinator {
             } else {
                 fadeDuration = crossfadeSeconds
                 rampStyle = .equalPower
-            }
-
-            guard let fileURL = await Self.audioFileURL(for: nextSong) else {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    // Only record the failure (and reset) if this preparation
-                    // is still the active one.
-                    guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
-                    failedPreparationCurrentSongID = currentSong.id
-                    failedPreparationNextSongID = nextSong.id
-                    reset()
-                }
-                return
             }
 
             let plan = TransitionPlan(
