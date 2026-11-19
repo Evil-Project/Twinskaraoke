@@ -1,5 +1,5 @@
 {
-  "enabled" : true,
+  "enabled" : false,
   "finalLabel" : "Done",
   "id" : "16C5664D-5840-49A4-A110-90BA31623AB6",
   "kind" : "update",
@@ -74,21 +74,6 @@
       "textColor" : "#FFFFFF",
       "title" : "Twinskaraoke TestFlight Beta (Build: 36)",
       "typography" : "standard"
-    },
-    {
-      "alignment" : "center",
-      "backgroundColor" : "#101827",
-      "body" : "Description placeholder",
-      "id" : "update-slide-1",
-      "imageDescription" : "Image placeholder",
-      "layout" : "imageAbove",
-      "symbol" : "photo",
-      "textColor" : "#FFFFFF",
-      "title" : "Slide title test",
-      "typography" : "standard",
-      "website" : {
-        "url" : "https:\/\/survey.742918.xyz\/test\/db79b122-1cd7-41bf-9343-0863ac2f14ab\/form"
-      }
     }
   ],
   "targetBuild" : "36",

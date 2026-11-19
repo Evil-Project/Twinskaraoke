@@ -1515,8 +1515,8 @@ final class AudioPlayerManager {
         transitionCoordinator.poll(
             currentTime: time, totalDuration: duration, currentSong: currentSong, target: crossfadeTarget,
             autoMixEnabled: autoMixEnabled, crossfadeEnabled: crossfadeEnabled, crossfadeSeconds: crossfadeSeconds,
-            aiEffectActive: anyAIEffectActive
-        )
+            aiEffectActive: anyAIEffectActive, airPlay: usesAirPlaySongPlayer
+        ) { self.cancelPendingTransitionWork() }
     }
 
     func play(song: Song, context: [Song] = [], playlistID: String? = nil) {

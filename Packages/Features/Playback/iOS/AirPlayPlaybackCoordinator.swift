@@ -1,6 +1,7 @@
 @MainActor
 enum AirPlayPlaybackCoordinator {
     static func cancelTransition(in manager: AudioPlayerManager) {
+        manager.airPlaySamples?.setMixingEnabled(manager.crossfadeEnabled || manager.autoMixEnabled)
         manager.airPlaySamples?.cancelTransition(url: manager.currentPlaybackURL)
     }
 

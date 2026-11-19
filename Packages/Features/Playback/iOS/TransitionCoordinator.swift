@@ -43,7 +43,12 @@ final class TransitionCoordinator {
         }
     }
 
+    private let resolveAudioFile: @Sendable (Song) async -> URL?
     private var bpmTask: Task<Void, Never>?
+
+    init(resolveAudioFile: (@Sendable (Song) async -> URL?)? = nil) {
+        self.resolveAudioFile = resolveAudioFile ?? { await Self.audioFileURL(for: $0) }
+    }
     private var predownloadSession: PredownloadSession?
     // Retry-storm guard: when preparing the upcoming song fails, poll ticks
     // would otherwise restart prepare+download every 250 ms for the rest of
@@ -57,6 +62,10 @@ final class TransitionCoordinator {
     var onTransitionPrepared: ((TransitionPlan) -> Void)?
 
     var onUpcomingSongDetermined: ((Song?) -> Void)?
+
+    // Short clips play through normally. Reserving time for both the renderer's
+    // buffered audio and a fade would consume too much of a short track.
+    nonisolated private static let minimumMixTrackDuration: TimeInterval = 45
 
     private let prepareLeadTime: TimeInterval = 30
 
@@ -100,9 +109,21 @@ final class TransitionCoordinator {
         autoMixEnabled: Bool,
         crossfadeEnabled: Bool,
         crossfadeSeconds: Double,
-        aiEffectActive: Bool
+        aiEffectActive: Bool,
+        airPlay: Bool = false,
+        onIneligible: (() -> Void)? = nil
     ) {
-        guard totalDuration > 0, let currentSong else { return }
+        guard totalDuration >= Self.minimumMixTrackDuration else {
+            // A corrected duration can invalidate both the task and a scheduled fade.
+            switch state {
+            case .preparing, .ready:
+                if let onIneligible { onIneligible() } else { reset() }
+            case .idle, .crossfading:
+                break
+            }
+            return
+        }
+        guard let currentSong else { return }
         if failedPreparationCurrentSongID != nil, failedPreparationCurrentSongID != currentSong.id {
             failedPreparationCurrentSongID = nil
             failedPreparationNextSongID = nil
@@ -113,7 +134,8 @@ final class TransitionCoordinator {
         }
 
         let remaining = totalDuration - currentTime
-        let prepareAt = min(prepareLeadTime, totalDuration * prepareLeadFraction)
+        // AirPlay needs room for a 15-second fade plus its queued audio.
+        let prepareAt = airPlay ? prepareLeadTime : min(prepareLeadTime, totalDuration * prepareLeadFraction)
 
         switch state {
         case .idle:
@@ -161,26 +183,40 @@ final class TransitionCoordinator {
         // (AudioCacheStore.playableMainURL), blocking file I/O that must not
         // run on this @MainActor class's executor; results are applied back
         // on the main actor below.
-        bpmTask = Task.detached(priority: .utility) { [weak self] in
+        bpmTask = Task.detached(priority: .utility) { [weak self, resolveAudioFile] in
             guard let self else { return }
 
-            let currentURL = await Self.audioFileURL(for: currentSong)
-            let nextURL = await Self.audioFileURL(for: nextSong)
-
-            if nextURL == nil, let remoteURL = nextSong.audioURL {
+            let currentURL = await resolveAudioFile(currentSong)
+            guard !Task.isCancelled else { return }
+            var nextURL = await resolveAudioFile(nextSong)
+            if !Task.isCancelled, nextURL == nil, let remoteURL = nextSong.audioURL {
                 DebugLogger.log(
                     "Predownloading next transition track \(nextSong.id) from \(remoteURL.lastPathComponent)",
                     category: .playback
                 )
                 await predownload(song: nextSong, from: remoteURL)
+                nextURL = await resolveAudioFile(nextSong)
+            }
+            // Verify the actual asset duration in case metadata was missing or stale.
+            guard !Task.isCancelled, let fileURL = nextURL,
+                  AudioCacheStore.audioDuration(at: fileURL) >= Self.minimumMixTrackDuration
+            else {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // Only record the failure (and reset) if this preparation
+                    // is still the active one.
+                    guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
+                    failedPreparationCurrentSongID = currentSong.id
+                    failedPreparationNextSongID = nextSong.id
+                    reset()
+                }
+                return
             }
 
-            let nextFileURL = await Self.audioFileURL(for: nextSong)
-            let shouldAnalyzeBPM = autoMixEnabled && !aiEffectActive
             let bpm: (Double?, Double?)
-            if shouldAnalyzeBPM {
+            if autoMixEnabled, !aiEffectActive {
                 async let outBPMResult = detectBPM(for: currentSong, fileURL: currentURL)
-                async let inBPMResult = detectBPM(for: nextSong, fileURL: nextFileURL)
+                async let inBPMResult = detectBPM(for: nextSong, fileURL: fileURL)
                 bpm = await (outBPMResult, inBPMResult)
             } else {
                 bpm = (nil, nil)
@@ -205,19 +241,6 @@ final class TransitionCoordinator {
             } else {
                 fadeDuration = crossfadeSeconds
                 rampStyle = .equalPower
-            }
-
-            guard let fileURL = await Self.audioFileURL(for: nextSong) else {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    // Only record the failure (and reset) if this preparation
-                    // is still the active one.
-                    guard !Task.isCancelled, case let .preparing(entry) = state, entry.id == target.id else { return }
-                    failedPreparationCurrentSongID = currentSong.id
-                    failedPreparationNextSongID = nextSong.id
-                    reset()
-                }
-                return
             }
 
             let plan = TransitionPlan(
@@ -416,12 +439,13 @@ final class TransitionCoordinator {
 }
 
 // URLSession delegates must be Sendable; cross-thread state is guarded by stateLock.
-private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+// swiftlint:disable:next unchecked_sendable
+final class PredownloadSession: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     /// Shared by every predownload so the next song reuses the warm
     /// connection to storage. Each download attaches itself as its task's
     /// delegate, which receives the data callbacks; cancelling one task
     /// leaves the session serving the next.
-    private static let session: URLSession = {
+    private static let sharedSession: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
@@ -431,6 +455,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
         return URLSession(configuration: configuration)
     }()
 
+    private let session: URLSession
     private let songID: String
     private let expectedDuration: TimeInterval?
     private let partialURL: URL
@@ -443,7 +468,8 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
     private var isCancelled = false
     var onCompletion: (() -> Void)?
 
-    init(songID: String, expectedDuration: TimeInterval?, remoteURL: URL) {
+    init(songID: String, expectedDuration: TimeInterval?, remoteURL: URL, session: URLSession? = nil) {
+        self.session = session ?? Self.sharedSession
         self.songID = songID
         self.expectedDuration = expectedDuration
         finalURL = AudioCacheStore.mainAudioURL(for: songID, sourceURL: remoteURL)
@@ -470,6 +496,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             return
         }
         DebugLogger.log("Predownload start for \(songID) from \(remoteURL.lastPathComponent)", category: .playback)
+        _ = AudioCacheStore.ensureSongDirectory(for: songID)
         try? FileManager.default.removeItem(at: partialURL)
         FileManager.default.createFile(atPath: partialURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: partialURL) else {
@@ -477,7 +504,7 @@ private final class PredownloadSession: NSObject, URLSessionDataDelegate, @unche
             finish()
             return
         }
-        let newTask = Self.session.dataTask(with: remoteURL)
+        let newTask = session.dataTask(with: remoteURL)
         newTask.delegate = self
 
         // Re-check and publish atomically. cancel() may have run during the

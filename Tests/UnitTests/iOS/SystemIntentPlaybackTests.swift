@@ -162,7 +162,7 @@ struct SystemIntentPlaybackTests {
         let player = AudioPlayerManager.shared
         let downloads = DownloadManager.shared
         let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
-        let songs = try (0..<2).map { try cachedSong(index: $0, seconds: 4) }
+        let songs = try (0..<2).map { try cachedSong(index: $0, seconds: 45) }
         defer {
             player.pauseIfPlaying()
             player.setSleepTimer()
@@ -192,6 +192,7 @@ struct SystemIntentPlaybackTests {
         player.repeatMode = .all
         player.setSleepTimer(minutes: 5)
         player.playInOrder(song: songs[1], context: songs)
+        try await seekNearEnd(player, remaining: 4)
 
         try await waitForPlayback { player.hasAudibleCrossfadeForTesting && player.currentSong?.id == songs[1].id }
         let wrapDeadline = ContinuousClock.now + .seconds(8)
@@ -203,6 +204,7 @@ struct SystemIntentPlaybackTests {
         #expect(player.sleepTimer.deadline != nil)
 
         player.startSleepTimerAtEndOfSong()
+        try await seekNearEnd(player, remaining: 4)
         let stopDeadline = ContinuousClock.now + .seconds(8)
         while player.isPlaying, ContinuousClock.now < stopDeadline {
             try await Task.sleep(for: .milliseconds(15))
@@ -265,7 +267,7 @@ struct SystemIntentPlaybackTests {
     func removesAudibleCrossfadeTarget() async throws {
         let player = AudioPlayerManager.shared
         let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
-        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 5) }
+        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 45) }
         defer {
             player.pauseIfPlaying()
             player.repeatMode = .off
@@ -277,6 +279,7 @@ struct SystemIntentPlaybackTests {
         player.crossfadeSeconds = 2
         player.repeatMode = .all
         player.playInOrder(song: songs[0], context: songs)
+        try await seekNearEnd(player, remaining: 5)
         try await waitForPlayback { player.currentSong?.id == songs[0].id && player.hasAudibleCrossfadeForTesting }
         try #require(player.upcomingSong?.id == songs[1].id)
         player.removeFromUpNext(at: IndexSet(integer: 0))
@@ -292,7 +295,7 @@ struct SystemIntentPlaybackTests {
     func naturalEndRespectsCurrentQueueTarget(removeTarget: Bool) async throws {
         let player = AudioPlayerManager.shared
         let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
-        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 6) }
+        let songs = try (0..<3).map { try cachedSong(index: $0, seconds: 45) }
         defer {
             player.pauseIfPlaying()
             player.repeatMode = .off
@@ -304,7 +307,9 @@ struct SystemIntentPlaybackTests {
         player.crossfadeSeconds = 1
         player.repeatMode = .off
         player.playInOrder(song: songs[0], context: songs)
-        try await waitForPlayback { player.hasPreparedCrossfadeForTesting }
+        try await seekNearEnd(player, remaining: 6)
+        // Let the seek's stale completion suppression expire before simulating the natural end.
+        try await waitForPlayback { player.hasPreparedCrossfadeForTesting && player.playbackTime > 40.25 }
         #expect(!player.hasAudibleCrossfadeForTesting)
         if removeTarget { player.removeFromUpNext(at: [0]) }
         player.finishOutgoingDeckForTesting()
@@ -335,7 +340,7 @@ struct SystemIntentPlaybackTests {
     func shufflePinsAudibleCrossfade() async throws {
         let player = AudioPlayerManager.shared
         let previous = (player.aiEnabled, player.autoMixEnabled, player.crossfadeEnabled, player.crossfadeSeconds)
-        let songs = try (0..<4).map { try cachedSong(index: $0, seconds: 5) }
+        let songs = try (0..<4).map { try cachedSong(index: $0, seconds: 45) }
         defer {
             player.pauseIfPlaying()
             if player.isShuffled { player.toggleShuffle() }
@@ -348,6 +353,7 @@ struct SystemIntentPlaybackTests {
         player.crossfadeSeconds = 2
         player.repeatMode = .all
         player.playInOrder(song: songs[3], context: songs)
+        try await seekNearEnd(player, remaining: 5)
         try await waitForPlayback { player.hasAudibleCrossfadeForTesting }
 
         player.toggleShuffle()
@@ -360,6 +366,12 @@ struct SystemIntentPlaybackTests {
         try await waitForPlayback { player.currentSong?.id == songs[0].id }
         #expect(player.queue == shuffled)
         #expect(player.upNextEntries.map(\.song) == Array(shuffled.dropFirst(2)))
+    }
+
+    // Mix tests use eligible 45-second tracks and seek into the fade window.
+    private func seekNearEnd(_ player: AudioPlayerManager, remaining: TimeInterval) async throws {
+        try await waitForPlayback { player.loadedEngine?.hasPlayableMainMedia == true && player.playbackDuration >= 45 }
+        player.seek(to: 1 - remaining / player.playbackDuration)
     }
 
     private func waitForPlayback(_ condition: () -> Bool) async throws {
