@@ -74,6 +74,15 @@ struct BandleDailySummaryTests {
         #expect(summary.lossRate == 0.25)
     }
 
+    @Test("Average time drops partial seconds, as the website does")
+    func averageTimeTruncates() {
+        // 63.92 s read 01:04 in the app and 01:03 on twinskaraoke.com.
+        let format = BandleDailyStats.timeFormat.locale(Locale(identifier: "en_US"))
+
+        #expect(Duration.milliseconds(63917).formatted(format) == "01:03")
+        #expect(Duration.milliseconds(66168).formatted(format) == "01:06")
+    }
+
     @Test("Rates aren't divided by the ranked-only player count")
     func noRateFromRankedPlayers() {
         // Without a total of all plays, wins can include guests the ranked

@@ -20,6 +20,12 @@ nonisolated struct BandleDailyStats: Equatable, Sendable {
     let averageTime: Duration?
     let perfectScores: Int?
 
+    /// Minutes and seconds, padded: "01:03". Partial seconds are dropped,
+    /// not rounded, as on twinskaraoke.com (63.9 s reads 01:03 there).
+    static let timeFormat: Duration.TimeFormatStyle = .time(
+        pattern: .minuteSecond(padMinuteToLength: 2, roundFractionalSeconds: .towardZero)
+    )
+
     init(board: BandleLeaderboard) {
         let wins = board.totalWins
         let losses = board.totalLosses

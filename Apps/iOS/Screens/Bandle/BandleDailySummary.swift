@@ -19,7 +19,7 @@ struct BandleDailySummary: View {
             }
             if let time = stats.averageTime {
                 LabeledContent(String(localized: "Average Time")) {
-                    Text(time, format: .time(pattern: .minuteSecond(padMinuteToLength: 2)))
+                    Text(time, format: BandleDailyStats.timeFormat)
                 }
             }
             LabeledContent(String(localized: "Perfect Scores")) {
