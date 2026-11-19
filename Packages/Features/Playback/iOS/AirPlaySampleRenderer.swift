@@ -18,6 +18,8 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
     private let event: @Sendable (Int, Event) -> Void
     private let time: @Sendable (Int, Double) -> Void
     private var cursor: AirPlaySampleSource.Cursor?
+    private var firstSpliceBuffer: CMSampleBuffer?
+    private var nextEnqueueTime = CMTime.invalid
     private var source: AirPlaySampleSource?
     private var observation: Any?
     private var flushObserver: NSObjectProtocol?
@@ -26,6 +28,11 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
     private var generation = 0
     private var retirementCallbacks: [@Sendable () -> Void]?
     private var didRetire = false
+
+    #if DEBUG
+        private var flushCount = 0
+        private var spliceTime: Double?
+    #endif
 
     init(event: @escaping @Sendable (Int, Event) -> Void, time: @escaping @Sendable (Int, Double) -> Void) {
         self.event = event
@@ -53,6 +60,45 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
     func load(_ source: AirPlaySampleSource, position: Double, autoplay: Bool, generation: Int) {
         queue.async {
             self.replace(source, at: CMTime(seconds: position, preferredTimescale: 48_000), autoplay: autoplay, generation: generation)
+        }
+    }
+
+    func splice(_ source: AirPlaySampleSource, generation: Int) async -> Bool {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: self.spliceOnQueue(source, generation: generation))
+            }
+        }
+    }
+
+    private func spliceOnQueue(_ source: AirPlaySampleSource, generation: Int) -> Bool {
+        guard self.generation == generation, cursor != nil, let timing = source.timing,
+              nextEnqueueTime.isNumeric, nextEnqueueTime >= timing.outgoingStart,
+              nextEnqueueTime.seconds <= timing.overlapStart else { return false }
+        do {
+            // Open and prime the replacement before touching the current reader.
+            let replacement = try source.makeCursor(at: nextEnqueueTime)
+            guard let first = try replacement.nextBuffer(),
+                  first.outputPresentationTimeStamp == nextEnqueueTime,
+                  nextEnqueueTime >= clock.currentTime() else {
+                replacement.cancel()
+                return false
+            }
+            cursor?.cancel()
+            cursor = replacement
+            firstSpliceBuffer = first
+            self.source = source
+            #if DEBUG
+                spliceTime = first.outputPresentationTimeStamp.seconds
+            #endif
+            if reachedEnd {
+                reachedEnd = false
+                requestMediaData()
+            }
+            return true
+        } catch {
+            DebugLogger.log("AirPlay sample splice failed: \(error)", category: .playback)
+            return false
         }
     }
 
@@ -100,6 +146,14 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
     }
 
     #if DEBUG
+        func stateForTesting() async -> (position: Double, rate: Float, flushCount: Int, spliceTime: Double?) {
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    continuation.resume(returning: (self.clock.currentTime().seconds, self.clock.rate, self.flushCount, self.spliceTime))
+                }
+            }
+        }
+
         func isMutedForTesting() async -> Bool {
             await withCheckedContinuation { continuation in
                 queue.async { continuation.resume(returning: self.renderer.isMuted) }
@@ -114,12 +168,17 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
         reachedEnd = false
         self.generation = generation
         clock.setRate(0, time: position)
+        nextEnqueueTime = position
         do {
             cursor = try source.makeCursor(at: position)
-            renderer.requestMediaDataWhenReady(on: queue) { [weak self] in self?.feed() }
+            requestMediaData()
         } catch {
             fail()
         }
+    }
+
+    private func requestMediaData() {
+        renderer.requestMediaDataWhenReady(on: queue) { [weak self] in self?.feed() }
     }
 
     private func stopReading() {
@@ -127,6 +186,12 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
         clock.rate = 0
         renderer.stopRequestingMediaData()
         renderer.flush()
+        #if DEBUG
+            flushCount += 1
+            spliceTime = nil
+        #endif
+        nextEnqueueTime = .invalid
+        firstSpliceBuffer = nil
         cursor?.cancel()
         cursor = nil
     }
@@ -135,12 +200,15 @@ nonisolated final class AirPlaySampleRenderer: @unchecked Sendable {
         guard let cursor else { return }
         do {
             while renderer.isReadyForMoreMediaData {
-                guard let buffer = try cursor.nextBuffer() else {
+                let next = try firstSpliceBuffer ?? cursor.nextBuffer()
+                firstSpliceBuffer = nil
+                guard let buffer = next else {
                     reachedEnd = true
                     renderer.stopRequestingMediaData()
                     break
                 }
                 renderer.enqueue(buffer)
+                nextEnqueueTime = buffer.outputPresentationTimeStamp + buffer.outputDuration
                 if requested, clock.rate == 0 {
                     clock.rate = 1
                     event(generation, .playing)
@@ -182,6 +250,7 @@ final class AirPlaySampleSession {
     private var source: AirPlaySampleSource?
     private var loading: Task<Void, Never>?
     private var preparation: Task<Void, Never>?
+    private var submittingTransition = false
     private var timeout: Task<Void, Never>?
     private var renderer: AirPlaySampleRenderer?
     private(set) var position: Double = 0
@@ -189,7 +258,7 @@ final class AirPlaySampleSession {
     private(set) var pendingPlan: TransitionCoordinator.TransitionPlan?
     var isOverlapping: Bool {
         guard let timing = source?.timing, pendingPlan != nil else { return false }
-        return position >= timing.overlapStart
+        return position + offset >= timing.overlapStart
     }
     private var offset: Double = 0
     private var wantsPlayback = false
@@ -212,6 +281,7 @@ final class AirPlaySampleSession {
 
     func loadSong(_ url: URL, at time: Double, autoplay: Bool) {
         preparation?.cancel()
+        submittingTransition = false
         loading?.cancel()
         timeout?.cancel()
         source = nil
@@ -238,14 +308,29 @@ final class AirPlaySampleSession {
     }
 
     func prepareTransition(from outgoing: URL, plan: TransitionCoordinator.TransitionPlan, canInstall: @escaping @MainActor () -> Bool) {
+        guard !submittingTransition, pendingPlan == nil else { return }
         preparation?.cancel()
         preparation = Task {
+            let generation = operations.generation
             do {
                 guard let source = try await AirPlaySampleSource.transition(
-                    outgoing: outgoing, incoming: plan.nextFileURL, fade: plan.fadeDuration,
-                    equalPower: plan.rampStyle == .equalPower
-                ), !Task.isCancelled, canInstall() else { return }
-                install(source, plan: plan)
+                          outgoing: outgoing, incoming: plan.nextFileURL, fade: plan.fadeDuration,
+                          equalPower: plan.rampStyle == .equalPower, startingAt: offset
+                      ), !Task.isCancelled, operations.isCurrent(generation), canInstall(),
+                      let timing = source.timing, wantsPlayback, !awaitingStart,
+                      position + offset < timing.overlapStart, let renderer else { return }
+                submittingTransition = true
+                let installed = await renderer.splice(source, generation: generation)
+                guard !Task.isCancelled, operations.isCurrent(generation) else { return }
+                submittingTransition = false
+                guard installed else { return }
+                guard canInstall() else {
+                    loadSong(outgoing, at: position, autoplay: wantsPlayback)
+                    return
+                }
+                pendingPlan = plan
+                duration = timing.promotionTime - offset
+                self.source = source
             } catch {
                 DebugLogger.log("AirPlay sample transition failed: \(error)", category: .playback)
             }
@@ -254,20 +339,8 @@ final class AirPlaySampleSession {
 
     func cancelTransition(url: URL?) {
         preparation?.cancel()
-        if pendingPlan != nil, let url { loadSong(url, at: position, autoplay: wantsPlayback) }
-    }
-
-    private func install(_ source: AirPlaySampleSource, plan: TransitionCoordinator.TransitionPlan) {
-        guard let timing = source.timing, wantsPlayback, !awaitingStart,
-              position < timing.overlapStart else { return }
-        pendingPlan = plan
-        offset = 0
-        duration = timing.promotionTime
-        self.source = source
-        let generation = operations.begin()
-        awaitingStart = true
-        armTimeout(generation: generation)
-        renderer?.load(source, position: position, autoplay: true, generation: generation)
+        guard let url, submittingTransition || pendingPlan != nil else { return }
+        loadSong(url, at: position, autoplay: wantsPlayback)
     }
 
     func pause() {
@@ -292,6 +365,7 @@ final class AirPlaySampleSession {
     func stop(completion: (@Sendable () -> Void)? = nil) {
         operations.invalidate()
         preparation?.cancel()
+        submittingTransition = false
         loading?.cancel()
         timeout?.cancel()
         renderer?.retire(completion: completion)

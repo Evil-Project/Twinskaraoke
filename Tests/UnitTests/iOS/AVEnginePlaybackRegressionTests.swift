@@ -69,6 +69,114 @@ struct AVEnginePlaybackRegressionTests {
         }
     }
 
+    @Test(
+        "AirPlay splices a prepared mix onto the queued audio timeline",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func airPlaySplicePreservesQueuedAudio() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 60, sampleRate: 48_000)
+        let incoming = try makeSilentWaveFile(duration: 45, sampleRate: 48_000)
+        let playing = Mutex(false)
+        let renderer = AirPlaySampleRenderer { _, event in
+            if case .playing = event { playing.withLock { $0 = true } }
+        } time: { _, _ in }
+        defer {
+            renderer.stop()
+            try? FileManager.default.removeItem(at: outgoing)
+            try? FileManager.default.removeItem(at: incoming)
+        }
+
+        let song = try await AirPlaySampleSource.song(outgoing)
+        let prepared = try await AirPlaySampleSource.transition(outgoing: outgoing, incoming: incoming, fade: 2, equalPower: true)
+        let mix = try #require(prepared)
+        renderer.load(song, position: 20, autoplay: true, generation: 1)
+        try await waitUntil { playing.withLock { $0 } }
+        let initial = await renderer.stateForTesting()
+        #expect(initial.rate == 1)
+        #expect(await !renderer.splice(mix, generation: 0))
+        #expect(await !renderer.splice(song, generation: 1))
+        #expect(await renderer.splice(mix, generation: 1))
+        let installed = await renderer.stateForTesting()
+        #expect(installed.position >= initial.position)
+        #expect(installed.rate == initial.rate)
+        #expect(installed.flushCount == initial.flushCount)
+        let spliceTime = try #require(installed.spliceTime)
+        #expect(spliceTime >= initial.position)
+        #expect(spliceTime < 58)
+
+        renderer.load(song, position: 59, autoplay: false, generation: 2)
+        let late = await renderer.stateForTesting()
+        #expect(await !renderer.splice(mix, generation: 2))
+        let rejected = await renderer.stateForTesting()
+        #expect(rejected.position == late.position)
+        #expect(rejected.flushCount == late.flushCount)
+        #expect(rejected.spliceTime == nil)
+    }
+
+    @Test("Consecutive AirPlay mixes keep the renderer timeline and incoming track time aligned")
+    func airPlayConsecutiveMixTimeline() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 6, sampleRate: 48_000)
+        let incoming = try makeSilentWaveFile(duration: 5, sampleRate: 48_000)
+        defer {
+            try? FileManager.default.removeItem(at: outgoing)
+            try? FileManager.default.removeItem(at: incoming)
+        }
+
+        let first = try #require(try await AirPlayTransition.prepare(
+            outgoing: outgoing, incoming: incoming, fade: 2, equalPower: false
+        ))
+        let second = try #require(try await AirPlaySampleSource.transition(
+            outgoing: incoming, incoming: outgoing, fade: 1, equalPower: true,
+            startingAt: first.timing.overlapStart
+        ))
+        let timing = try #require(second.timing)
+        #expect(timing.overlapStart == 8)
+        #expect(timing.promotionTime == 9)
+        #expect(timing.incomingTime(at: 9) == 1)
+        #expect(second.duration == 14)
+        let position = CMTime(value: 7 * 48_000 + 1, timescale: 48_000)
+        let cursor = try second.makeCursor(at: position)
+        let firstBuffer = try #require(try cursor.nextBuffer())
+        #expect(firstBuffer.presentationTimeStamp == position)
+    }
+
+    @Test(
+        "Cancelling AirPlay mix preparation leaves the current song playing",
+        .enabled(if: audioOutputAvailable, "Needs an audio output device.")
+    )
+    func airPlayCancelsMixPreparation() async throws {
+        let outgoing = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        let incoming = try makeSilentWaveFile(duration: 2, sampleRate: 48_000)
+        let nextSong = try JSONDecoder().decode(Song.self, from: Data(#"{"id":"next","title":"Next"}"#.utf8))
+        let plan = TransitionCoordinator.TransitionPlan(
+            target: PlaybackQueueState.Entry(song: nextSong), nextFileURL: incoming,
+            outgoingBPM: nil, incomingBPM: nil, fadeDuration: 0.25, rampStyle: .equalPower
+        )
+        var starts = 0
+        var ended = false
+        let session = AirPlaySampleSession { event in
+            if case .playing = event { starts += 1 }
+            if case .ended = event { ended = true }
+        } onTime: { _, plan in
+            #expect(plan == nil)
+        }
+        defer {
+            session.stop()
+            try? FileManager.default.removeItem(at: outgoing)
+            try? FileManager.default.removeItem(at: incoming)
+        }
+        session.loadSong(outgoing, at: 0, autoplay: true)
+        try await waitUntil { starts == 1 }
+        session.prepareTransition(from: outgoing, plan: plan) {
+            Issue.record("Cancelled preparation reached the installation check")
+            return false
+        }
+        session.cancelTransition(url: outgoing)
+        try await waitUntil { ended }
+        #expect(starts == 1)
+        #expect(session.pendingPlan == nil)
+    }
+
     @Test("AirPlay accepts only the latest seek or handoff completion")
     func airPlayRejectsObsoleteOperations() {
         let session = AirPlaySongOperations()

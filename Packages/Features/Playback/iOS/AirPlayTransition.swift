@@ -2,16 +2,18 @@ import AVFoundation
 import Foundation
 
 nonisolated struct AirPlayTransitionTiming {
+    let outgoingStart: CMTime
     let overlapStart: TimeInterval
     let promotionTime: TimeInterval
     let fade: TimeInterval
     let incomingDuration: TimeInterval
 
-    init?(outgoing: TimeInterval, incoming: TimeInterval, fade: TimeInterval) {
+    init?(outgoing: TimeInterval, incoming: TimeInterval, fade: TimeInterval, startingAt: TimeInterval = 0) {
         guard outgoing.isFinite, incoming.isFinite, fade.isFinite, fade > 0,
-              outgoing > fade, incoming > fade else { return nil }
-        overlapStart = outgoing - fade
-        promotionTime = outgoing
+              outgoing > fade, incoming > fade, startingAt.isFinite, startingAt >= 0 else { return nil }
+        outgoingStart = CMTime(seconds: startingAt, preferredTimescale: 48_000)
+        promotionTime = outgoingStart.seconds + outgoing
+        overlapStart = CMTime(seconds: promotionTime - fade, preferredTimescale: 48_000).seconds
         self.fade = fade
         incomingDuration = incoming
     }
@@ -24,7 +26,7 @@ nonisolated struct AirPlayTransitionTiming {
 @MainActor
 final class AirPlaySongOperations {
     var retiringSamples: AirPlaySampleSession?
-    private var generation = 0
+    private(set) var generation = 0
     private(set) var isPending = false
 
     func begin() -> Int {
@@ -56,7 +58,9 @@ struct AirPlayTransition {
     let mix: AVAudioMix
     let timing: AirPlayTransitionTiming
 
-    static func prepare(outgoing: URL, incoming: URL, fade: TimeInterval, equalPower: Bool) async throws -> Self? {
+    static func prepare(
+        outgoing: URL, incoming: URL, fade: TimeInterval, equalPower: Bool, startingAt: TimeInterval = 0
+    ) async throws -> Self? {
         let outgoing = AVURLAsset(url: outgoing)
         let incoming = AVURLAsset(url: incoming)
         guard let first = try await outgoing.loadTracks(withMediaType: .audio).first,
@@ -64,7 +68,7 @@ struct AirPlayTransition {
         let firstRange = try await first.load(.timeRange)
         let secondRange = try await second.load(.timeRange)
         guard let timing = AirPlayTransitionTiming(
-            outgoing: firstRange.duration.seconds, incoming: secondRange.duration.seconds, fade: fade
+            outgoing: firstRange.duration.seconds, incoming: secondRange.duration.seconds, fade: fade, startingAt: startingAt
         ) else { return nil }
 
         let composition = AVMutableComposition()
@@ -72,7 +76,7 @@ struct AirPlayTransition {
               let right = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         else { return nil }
         let start = CMTime(seconds: timing.overlapStart, preferredTimescale: 48000)
-        try left.insertTimeRange(firstRange, of: first, at: .zero)
+        try left.insertTimeRange(firstRange, of: first, at: timing.outgoingStart)
         try right.insertTimeRange(secondRange, of: second, at: start)
 
         let mix = AVMutableAudioMix()

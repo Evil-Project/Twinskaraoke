@@ -20,9 +20,11 @@ nonisolated struct AirPlaySampleSource: @unchecked Sendable {
     }
 
     @MainActor
-    static func transition(outgoing: URL, incoming: URL, fade: TimeInterval, equalPower: Bool) async throws -> Self? {
+    static func transition(
+        outgoing: URL, incoming: URL, fade: TimeInterval, equalPower: Bool, startingAt: TimeInterval = 0
+    ) async throws -> Self? {
         guard let prepared = try await AirPlayTransition.prepare(
-            outgoing: outgoing, incoming: incoming, fade: fade, equalPower: equalPower
+            outgoing: outgoing, incoming: incoming, fade: fade, equalPower: equalPower, startingAt: startingAt
         ) else { return nil }
         return Self(
             asset: prepared.asset, tracks: prepared.tracks, mix: prepared.mix,
