@@ -23,3 +23,36 @@
 /.coderabbit.yaml                       @Mag1cByt3s
 /.swiftformat                           @Mag1cByt3s
 /.swiftlint.yml                         @Mag1cByt3s
+
+# iOS splash and release notes
+/Apps/iOS/Screens/Splash/                                       @MagnetTileMan
+/Apps/iOS/Resources/SplashScreens/update.json                   @MagnetTileMan
+/docs/splash-website-integration.md                             @MagnetTileMan
+/Tests/UITests/iOS/SplashExperienceUITests.swift                @MagnetTileMan
+/Tests/UITests/iOS/SplashWebsiteInteractionUITests.swift        @MagnetTileMan
+/Tests/UnitTests/iOS/SplashUpdateTests.swift                     @MagnetTileMan
+
+# AirPlay and crossfade
+/Packages/Features/Playback/iOS/AirPlay*.swift                  @Mag1cByt3s @MagnetTileMan
+/Packages/Features/Playback/iOS/AudioPlayerManager.swift        @Mag1cByt3s @MagnetTileMan
+/Packages/Features/Playback/iOS/AudioPlayerManager+ManagedPlayback.swift  @Mag1cByt3s @MagnetTileMan
+/Packages/Features/Playback/iOS/TransitionCoordinator.swift     @Mag1cByt3s @MagnetTileMan
+
+# Watch playback and downloads
+/Packages/Features/Playback/watchOS/AudioManager.swift                  @Mag1cByt3s @MagnetTileMan
+/Packages/Features/Playback/watchOS/WatchAudioSessionCoordinator.swift   @Mag1cByt3s @MagnetTileMan
+/Packages/Features/Library/watchOS/WatchDownloads.swift                  @MagnetTileMan
+/Tests/UnitTests/watchOS/WatchPlaybackRegressionTests.swift             @MagnetTileMan
+/Tests/UnitTests/watchOS/WatchDownloadsTests.swift                       @MagnetTileMan
+
+# Now Playing queue
+/Apps/iOS/Screens/Player/QueueView.swift                        @MagnetTileMan
+/Packages/Features/Playback/iOS/PlaybackQueueState.swift         @Mag1cByt3s @MagnetTileMan
+/Tests/UnitTests/iOS/PlaybackQueueStateTests.swift                @MagnetTileMan
+
+# CarPlay and iOS widgets
+/Packages/Platform/iOS/CarPlay/CarPlaySceneDelegate.swift        @MagnetTileMan
+/Resources/Localization/iOS/CarPlay.xcstrings                    @MagnetTileMan
+/Extensions/WidgetExtension/iOS/PlaybackControls.swift           @MagnetTileMan
+/Extensions/WidgetExtension/iOS/TwinskaraokeWidgets.swift        @MagnetTileMan
+/Extensions/WidgetExtension/Shared/WidgetSnapshots.swift         @MagnetTileMan
